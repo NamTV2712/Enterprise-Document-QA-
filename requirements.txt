@@ -1,0 +1,17 @@
+# Core
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+
+# Ingestion
+pypdf>=4.0.0
+langchain>=0.1.0
+
+# Retrieval
+chromadb>=0.4.0
+sentence-transformers>=2.2.0
+
+# Generation
+openai>=1.0.0
+
+# Evaluation
+pytest>=7.0.0

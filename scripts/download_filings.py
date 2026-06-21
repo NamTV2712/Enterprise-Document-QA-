@@ -17,7 +17,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 TICKERS = ["AAPL", "MSFT", "AMZN"]   
-USER_AGENT = "TenBan email@cuaban.com"  
+USER_AGENT = "Li Back cauvang2172@gmail.com"  
 
 
 def process_ticker(client: SECEdgarClient, ticker: str) -> None:
@@ -53,7 +53,7 @@ def process_ticker(client: SECEdgarClient, ticker: str) -> None:
     processed_path.write_text(
         json.dumps(output, indent=2, ensure_ascii=False), encoding="utf-8"
     )
-    logger.info("Hoàn thành %s -> %s", ticker, processed_path)
+    logger.info("Processed %s -> %s", ticker, processed_path)
 
 
 def main() -> None:

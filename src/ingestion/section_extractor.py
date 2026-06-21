@@ -6,16 +6,17 @@ Purpose: Convert HTML filing into clean text and extract the 4 sections containi
 import logging
 import re
 from dataclasses import dataclass, field
-
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
+import warnings
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 logger = logging.getLogger(__name__)
 
-SECTION_PATTERNS: dict[str, str] = {
-    "business": r"item\s+1[\.\:\-\s]+business",
-    "risk_factors": r"item\s+1a[\.\:\-\s]+risk\s+factors",
-    "mdna": r"item\s+7[\.\:\-\s]+management.?s\s+discussion",
-    "financial_statements": r"item\s+8[\.\:\-\s]+financial\s+statements",
+SECTION_PATTERNS = {
+    "business": r"part\s+i\s+item\s+1\b",
+    "risk_factors": r"item\s+1a\.?\s+risk\s+factors",
+    "mdna": r"item\s+7\.?\s+management[’']?s\s+discussion\s+and\s+analysis",
+    "financial_statements": r"item\s+8\.?\s+financial\s+statements",
 }
 
 MIN_VALID_SECTION_LENGTH = 500  # The character indicates a warning threshold, not a rejection threshold
@@ -41,16 +42,25 @@ def html_to_text(html_content: bytes) -> str:
 
 
 def _find_section_starts(text_lower: str) -> dict[str, int]:
-    starts: dict[str, int] = {}
-    for name, pattern in SECTION_PATTERNS.items():
-        matches = [m.start() for m in re.finditer(pattern, text_lower)]
-        if matches:
-            # Heuristic: Last occurrence = actual content, because the table of contents is always at the beginning of the file
-            starts[name] = matches[-1]
-        else:
-            logger.warning("No match found for section '%s'", name)
-    return starts
+    all_matches: list[tuple[int, str]] = []
 
+    for name, pattern in SECTION_PATTERNS.items():
+        for m in re.finditer(pattern, text_lower):
+            all_matches.append((m.start(), name))
+
+    all_matches.sort(key=lambda x: x[0])
+
+    MIN_GAP_TO_BE_REAL_CONTENT = 300
+    starts: dict[str, int] = {}
+
+    for i, (pos, name) in enumerate(all_matches):
+        next_pos = all_matches[i + 1][0] if i + 1 < len(all_matches) else len(text_lower)
+        gap = next_pos - pos
+
+        if gap >= MIN_GAP_TO_BE_REAL_CONTENT:
+            starts[name] = pos
+
+    return starts
 
 def extract_sections(text: str) -> ExtractionResult:
     text_lower = text.lower()

@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     # LLM API keys
     openai_api_key: str = ""
     anthropic_api_key: str = ""
+    gemini_api_key: str = ""
+    groq_api_key: str = ""
 
     # Data path (relative path to run on any machine)
     data_raw_dir: Path = Path("data/raw")

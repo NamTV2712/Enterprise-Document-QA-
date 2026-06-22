@@ -6,3 +6,4 @@ lxml==5.3.0
 tiktoken==0.13.0
 sentence-transformers==5.6.0
 einops==0.8.2
+qdrant-client==1.18.0

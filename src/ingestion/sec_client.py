@@ -93,7 +93,7 @@ class SECEdgarClient:
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": user_agent})
         self._last_request_time: float = 0.0
-        self._ticker_to_cik: Optional[dict[str, int]] = None  # Cache, load once.
+        self._ticker_to_cik: Optional[dict[str, int]] = None  # Cache, load once
 
     def _throttled_get(self, url: str, timeout: int = 15) -> requests.Response:
         """All outgoing requests MUST go through this function — do not call
@@ -133,7 +133,7 @@ class SECEdgarClient:
     def get_filings(
         self, ticker: str, form_type: str = "10-K", limit: int = 1
     ) -> list[FilingMetadata]:
-        """Get the N most recent filings for a company, filtered by form type."""
+        """Get the N most recent filings for a company, filtered by form type"""
         cik = self.get_cik(ticker)
         url = self.SUBMISSIONS_URL_TEMPLATE.format(cik=str(cik).zfill(10))
         submissions = self._throttled_get(url).json()

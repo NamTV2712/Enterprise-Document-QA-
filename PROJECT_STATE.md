@@ -2,17 +2,19 @@
 
 ## Current Milestone
 
-Steps 1-8 are complete for the MVP Enterprise Document QA / SEC 10-K RAG pipeline.
+Steps 1-10 are complete for the MVP Enterprise Document QA / SEC 10-K RAG pipeline.
 
 Latest completed milestone commit:
 
 ```text
-d2dc7f2 Add RAG generation pipeline
+ee6c3f6 Add FastAPI RAG service
 ```
 
 Recent completed commits:
 
 ```text
+ee6c3f6 Add FastAPI RAG service
+a5c4d39 Add RAG evaluation framework
 d2dc7f2 Add RAG generation pipeline
 cb48532 Add retrieval pipeline wrapper
 268c36e Add Qdrant vector indexing
@@ -56,6 +58,12 @@ The system answers finance/document questions using retrieved filing context and
   LLM wrapper for RAG answer generation with strict anti-hallucination prompt. Current default provider is Groq.
 - `src/generation/rag_pipeline.py`
   End-to-end RAG pipeline combining Retriever + Generator.
+- `src/evaluation/evaluator.py`
+  LLM-as-judge evaluation for faithfulness, answer relevancy, and context precision.
+- `src/evaluation/test_set.py`
+  Fixed evaluation set covering numeric, risk, business/cloud, and out-of-corpus fallback questions.
+- `src/api/app.py`
+  FastAPI service exposing `/health`, `/query`, `/supported-tickers`, and Swagger UI at `/docs`.
 - `scripts/download_filings.py`
   Download and section extraction script.
 - `scripts/chunk_filings.py`
@@ -410,6 +418,88 @@ Groq free-tier behavior:
 - Groq SDK automatically retried after ~14 seconds and completed successfully.
 - Document this in README as a known free-tier limitation.
 
+### Step 9: Evaluation Framework
+
+RAG evaluation framework is complete and committed as:
+
+```text
+a5c4d39 Add RAG evaluation framework
+```
+
+Implemented files:
+
+- `src/evaluation/test_set.py`
+- `src/evaluation/evaluator.py`
+- `scripts/run_evaluation.py`
+
+Evaluation design:
+
+- Uses a fixed six-question test set.
+- Uses Groq LLM-as-judge for faithfulness, answer relevancy, and context precision.
+- Separates generation quality from retrieval quality.
+- Saves local output to `data/evaluation_results.json`, ignored by git.
+
+Latest evaluation averages:
+
+| Metric | Score |
+|---|---:|
+| Faithfulness | 0.9000 |
+| Answer relevancy | 0.9167 |
+| Context precision | 0.3833 |
+| Overall | 0.7333 |
+
+Main evaluation insight:
+
+- Answers are mostly faithful and relevant when the right evidence is retrieved.
+- Context precision is weak because semantic retrieval often returns related but non-answer chunks, especially for broad/no-filter cloud questions and verticalized financial tables.
+- Tesla/no-corpus fallback correctly returns insufficient-context behavior; context precision is expected to be 0 for that case.
+
+### Step 10: FastAPI Service
+
+FastAPI service is complete and committed as:
+
+```text
+ee6c3f6 Add FastAPI RAG service
+```
+
+Implemented files:
+
+- `src/api/app.py`
+- `src/api/__init__.py`
+
+API endpoints:
+
+- `GET /health`: service status and `pipeline_ready` flag.
+- `POST /query`: RAG answer with model name, retrieved source previews, and chunk count.
+- `GET /supported-tickers`: currently supported tickers and sections.
+- `GET /docs`: Swagger UI.
+
+Validation:
+
+- `/health` returned `pipeline_ready: true`.
+- `/docs` returned Swagger UI successfully.
+- `/query` was tested with ticker+section filter, ticker-only filter, and no filter.
+
+Measured endpoint latency:
+
+| Request | Filter | Latency |
+|---|---|---:|
+| Apple revenue | `ticker=AAPL`, `section=financial_statements` | 1.2503s |
+| Microsoft cybersecurity risks | `ticker=MSFT` | 1.2090s |
+| AWS revenue growth | no filter | 5.8362s |
+
+Latency insight:
+
+- Query embedding plus vector search took about 0.14-0.18s.
+- End-to-end latency was dominated by the Groq LLM API call.
+- With Groq free tier, expected end-to-end latency is provider-dependent, often around 2-5s, and can spike when Groq returns `429 Too Many Requests` and retries.
+
+No-filter retrieval issue observed:
+
+- The AWS revenue-growth query returned an MSFT MD&A chunk as Source 1 with score 0.7576, above the relevant AMZN chunks.
+- The LLM still answered correctly from AMZN Sources 2-4, but MSFT Sources 1 and 5 were retrieval noise.
+- This directly explains the low Step 9 context precision score and motivates Step 11: Hybrid Search + Re-ranking.
+
 ## Current Data Artifacts
 
 These are generated locally and ignored by git because `data/` is ignored:
@@ -419,6 +509,7 @@ These are generated locally and ignored by git because `data/` is ignored:
 - Chunks: `data/processed/{TICKER}/*_chunks.jsonl`
 - Embedded chunks: `data/processed/{TICKER}/*_chunks_embedded.jsonl`
 - Qdrant local index: `data/processed/qdrant`
+- Evaluation results: `data/evaluation_results.json`
 
 If a new session starts without these local artifacts, regenerate in order:
 
@@ -428,6 +519,7 @@ python -m scripts.chunk_filings
 python -m scripts.embed_chunks
 python -m scripts.index_chunks
 python -m scripts.test_rag
+python -m scripts.run_evaluation
 ```
 
 ## Environment Variables
@@ -461,6 +553,8 @@ anthropic==0.111.0
 google-genai==2.9.0
 openai==2.43.0
 groq==1.5.0
+fastapi==0.115.0
+uvicorn==0.32.0
 ```
 
 ## Validation Summary
@@ -493,24 +587,27 @@ Note: the `Characters` column is character count, not token count.
 - Financial statements are verticalized, so exact numeric retrieval can be weaker than prose retrieval.
 - Semantic search can return related financial/accounting chunks above the exact numeric table.
 - Amazon AWS revenue growth query did not retrieve the exact numeric context even though relevant data may exist in the corpus.
+- No-filter cloud questions can retrieve generic MSFT cloud chunks above relevant AMZN AWS chunks, lowering context precision.
 - Groq free tier can return `429 Too Many Requests`; SDK retries can recover, but latency may spike.
 - Gemini Flash Lite may return temporary `503 UNAVAILABLE` under high demand.
 - OpenAI key in the current environment was not a valid OpenAI Platform key during testing.
 
 ## Next Step
 
-Step 9: Evaluation Framework.
+Step 11: Hybrid Search + Re-ranking.
 
 Recommended priorities:
 
-1. Create a small golden QA set covering numeric, risk-factor, business, and out-of-scope questions.
-2. Evaluate retrieval quality separately from generation quality.
-3. Add checks for citation presence and answer faithfulness.
-4. Add regression cases for known failures, especially Amazon AWS revenue growth retrieval.
-5. Document known limitations in README, including financial table retrieval and free-tier provider limits.
+1. Improve context precision beyond the current 0.3833 baseline.
+2. Add lexical/BM25-style retrieval to complement dense semantic search.
+3. Add a re-ranking stage so no-filter cloud queries prefer AMZN AWS evidence over generic MSFT cloud text.
+4. Preserve current high faithfulness and answer relevancy.
+5. Re-run `python -m scripts.run_evaluation` after changes.
 
-Suggested Step 9 files:
+Step 12: Docker packaging.
 
-- `src/evaluation/evaluator.py`
-- `scripts/evaluate_rag.py`
-- `data/evaluation/golden_questions.json` or equivalent, if data files are allowed locally.
+Recommended priorities:
+
+1. Add a `Dockerfile` for FastAPI serving.
+2. Add `.dockerignore` excluding `.env`, `data/`, caches, and local virtual environments.
+3. Document how generated artifacts are provided or rebuilt for container use.

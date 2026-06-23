@@ -19,8 +19,9 @@ from configs.settings import settings
 from src.generation.generator import Generator
 from src.generation.rag_pipeline import RAGPipeline
 from src.retrieval.embedder import Embedder
-from src.retrieval.retriever import Retriever
+from src.retrieval.hybrid_retriever import HybridRetriever, load_embedded_chunks
 from src.retrieval.vector_store import VectorStore
+
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -34,22 +35,21 @@ _state: dict[str, Any] = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Run the code BEFORE yield when the server starts, and after yield when the server shuts down.
-        This is the FastAPI pattern recommended as a replacement for @app.on_event('startup')."""
-    logger.info("Initializing RAG pipeline...")
+    logger.info("Initializing hybrid RAG pipeline...")
     t0 = time.time()
 
     embedder = Embedder()
     store = VectorStore(path=settings.data_processed_dir / "qdrant")
-    retriever = Retriever(embedder=embedder, store=store)
+    all_chunks = load_embedded_chunks(settings.data_processed_dir)
+    logger.info("Loaded %d chunks for BM25 index", len(all_chunks))
+
+    retriever = HybridRetriever(embedder=embedder, store=store, all_chunks=all_chunks)
     generator = Generator(provider="groq")
     _state["pipeline"] = RAGPipeline(retriever=retriever, generator=generator)
     _state["store"] = store
 
-    logger.info("Pipeline ready after %.1f seconds", time.time() - t0)
-    yield  # server running...
-
-    # Cleanup
+    logger.info("Hybrid pipeline ready after %.1f seconds", time.time() - t0)
+    yield
     store.close()
     logger.info("VectorStore closed.")
 

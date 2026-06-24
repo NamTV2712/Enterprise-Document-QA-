@@ -2,26 +2,27 @@
 
 ## Current Milestone
 
-Steps 1-10 are complete for the MVP Enterprise Document QA / SEC 10-K RAG pipeline.
+Steps 1-11 are complete for the MVP Enterprise Document QA / SEC 10-K RAG pipeline.
+Phase 2A Step A, Streaming Response, is also complete and verified.
 
 Latest completed milestone commit:
 
 ```text
-ee6c3f6 Add FastAPI RAG service
+b8e8fdb Add streaming query endpoint
 ```
 
 Recent completed commits:
 
 ```text
+b8e8fdb Add streaming query endpoint
+8f440b7 Tidy SEC client comments
+8b63374 Update README for hybrid retrieval
+383272b Add hybrid retrieval reranking
+79c7228 Document Step 10 completion
 ee6c3f6 Add FastAPI RAG service
 a5c4d39 Add RAG evaluation framework
 d2dc7f2 Add RAG generation pipeline
 cb48532 Add retrieval pipeline wrapper
-268c36e Add Qdrant vector indexing
-544ddb7 Add local embedding pipeline
-cabd268 Add SEC filing chunking
-02b7fca Add project state handoff and tiktoken dependency
-6b2f599 Robust SEC filing section extraction
 ```
 
 ## Project Goal
@@ -29,7 +30,7 @@ cabd268 Add SEC filing chunking
 Build an Enterprise Document QA system over SEC 10-K filings using a RAG pipeline:
 
 ```text
-SEC Filing -> Section Extraction -> Chunking -> Embedding -> Vector DB -> Retrieval -> LLM Answer
+SEC Filing -> Section Extraction -> Chunking -> Embedding -> Qdrant/BM25 -> Hybrid Retrieval -> Re-ranking -> LLM Answer -> FastAPI/SSE
 ```
 
 The MVP corpus currently covers latest 10-K filings for:
@@ -54,16 +55,18 @@ The system answers finance/document questions using retrieved filing context and
   Qdrant wrapper for local persistent vector storage, upsert, metadata filters, and semantic search.
 - `src/retrieval/retriever.py`
   Retrieval abstraction combining Embedder + VectorStore and returning clean `RetrievedChunk` objects.
+- `src/retrieval/hybrid_retriever.py`
+  Hybrid retriever combining BM25 keyword search, Qdrant semantic search, Reciprocal Rank Fusion, and cross-encoder re-ranking.
 - `src/generation/generator.py`
-  LLM wrapper for RAG answer generation with strict anti-hallucination prompt. Current default provider is Groq.
+  LLM wrapper for non-streaming and streaming RAG answer generation with strict anti-hallucination prompt. Current default provider is Groq.
 - `src/generation/rag_pipeline.py`
-  End-to-end RAG pipeline combining Retriever + Generator.
+  End-to-end RAG pipeline combining Retriever + Generator, including `query_stream()` for SSE events.
 - `src/evaluation/evaluator.py`
   LLM-as-judge evaluation for faithfulness, answer relevancy, and context precision.
 - `src/evaluation/test_set.py`
   Fixed evaluation set covering numeric, risk, business/cloud, and out-of-corpus fallback questions.
 - `src/api/app.py`
-  FastAPI service exposing `/health`, `/query`, `/supported-tickers`, and Swagger UI at `/docs`.
+  FastAPI service exposing `/health`, `/query`, `/query/stream`, `/supported-tickers`, and Swagger UI at `/docs`.
 - `scripts/download_filings.py`
   Download and section extraction script.
 - `scripts/chunk_filings.py`
@@ -500,6 +503,107 @@ No-filter retrieval issue observed:
 - The LLM still answered correctly from AMZN Sources 2-4, but MSFT Sources 1 and 5 were retrieval noise.
 - This directly explains the low Step 9 context precision score and motivates Step 11: Hybrid Search + Re-ranking.
 
+### Step 11: Hybrid Search + Re-ranking
+
+Hybrid retrieval is complete and committed as:
+
+```text
+383272b Add hybrid retrieval reranking
+```
+
+Implemented files:
+
+- `src/retrieval/hybrid_retriever.py`
+- `src/api/app.py`
+- `scripts/run_evaluation.py`
+- `requirements.txt`
+
+Dependency added:
+
+- `rank-bm25==0.2.2`
+
+Retrieval design:
+
+- BM25 keyword search retrieves lexical candidates.
+- Qdrant semantic search retrieves dense-vector candidates.
+- Reciprocal Rank Fusion merges BM25 and semantic ranked lists without score normalization.
+- Cross-encoder `cross-encoder/ms-marco-MiniLM-L-6-v2` re-ranks the fused candidate pool.
+- FastAPI and evaluation now use `HybridRetriever`.
+
+Validation:
+
+- The no-filter AWS revenue-growth query no longer returns MSFT cloud chunks in final top-5 sources; returned sources are AMZN.
+- Context precision improved from `0.3833` to `0.4750`.
+- Overall evaluation improved from `0.7333` to `0.7583`.
+
+Hybrid evaluation comparison:
+
+| Metric | Step 9 Baseline | Step 11 Hybrid |
+|---|---:|---:|
+| Faithfulness | 0.9000 | 0.8667 |
+| Answer relevancy | 0.9167 | 0.9333 |
+| Context precision | 0.3833 | 0.4750 |
+| Overall | 0.7333 | 0.7583 |
+
+Remaining Step 11 limitation:
+
+- Context precision did not reach the target `0.55+` yet.
+- Broad Microsoft revenue-source queries and numeric financial-table queries still return more context than the judge considers useful.
+- Cross-encoder re-ranking improves precision but adds CPU latency at query time.
+
+### Phase 2A Step A: Streaming Response
+
+Streaming response is complete and committed as:
+
+```text
+b8e8fdb Add streaming query endpoint
+```
+
+Implemented files:
+
+- `src/generation/generator.py`
+- `src/generation/rag_pipeline.py`
+- `src/api/app.py`
+
+Streaming design:
+
+- `Generator.generate_stream()` streams tokens from the configured LLM provider.
+- Groq streaming uses `client.chat.completions.create(..., stream=True)`, which matches the installed Groq SDK.
+- Gemini streaming is implemented via `generate_content_stream()`.
+- `RAGPipeline.query_stream()` yields event tuples: `sources`, `token`, `done`, and `error`.
+- FastAPI exposes `POST /query/stream` using Server-Sent Events.
+- The SSE endpoint uses an `asyncio.Queue` plus a background thread to avoid collecting all events before yielding, so token streaming is real.
+
+Verified SSE event format:
+
+```text
+data: {"type": "sources", "data": [...]}
+data: {"type": "token", "data": "Based"}
+data: {"type": "token", "data": " on"}
+data: {"type": "done", "data": null}
+```
+
+Streaming validation query:
+
+```text
+What are Apple main risk factors?
+```
+
+Streaming timing:
+
+| Metric | Seconds |
+|---|---:|
+| First SSE event, `sources` | 2.4945 |
+| First token, end-to-end TTFT | 2.9459 |
+| Last token | 3.5820 |
+| Total | 3.5820 |
+
+Interpretation:
+
+- End-to-end TTFT includes hybrid retrieval and CPU cross-encoder re-ranking before the LLM call.
+- After sources were emitted, Groq produced the first streamed token in about 0.45s.
+- Streaming now improves perceived responsiveness even when total generation time remains provider-dependent.
+
 ## Current Data Artifacts
 
 These are generated locally and ignored by git because `data/` is ignored:
@@ -547,6 +651,7 @@ beautifulsoup4==4.12.3
 lxml==5.3.0
 tiktoken==0.13.0
 sentence-transformers==5.6.0
+rank-bm25==0.2.2
 einops==0.8.2
 qdrant-client==1.18.0
 anthropic==0.111.0
@@ -585,24 +690,24 @@ Note: the `Characters` column is character count, not token count.
 - Extraction is robust for tested 10-K filings but not broadly validated across 40-80 companies yet.
 - No automated test suite for section extraction, chunking, retrieval, or RAG evaluation yet.
 - Financial statements are verticalized, so exact numeric retrieval can be weaker than prose retrieval.
-- Semantic search can return related financial/accounting chunks above the exact numeric table.
+- Semantic search can return related financial/accounting chunks above the exact numeric table; hybrid retrieval reduces but does not eliminate this.
 - Amazon AWS revenue growth query did not retrieve the exact numeric context even though relevant data may exist in the corpus.
-- No-filter cloud questions can retrieve generic MSFT cloud chunks above relevant AMZN AWS chunks, lowering context precision.
+- Cross-encoder re-ranking improves context precision but adds CPU latency before streaming can begin.
 - Groq free tier can return `429 Too Many Requests`; SDK retries can recover, but latency may spike.
 - Gemini Flash Lite may return temporary `503 UNAVAILABLE` under high demand.
 - OpenAI key in the current environment was not a valid OpenAI Platform key during testing.
 
 ## Next Step
 
-Step 11: Hybrid Search + Re-ranking.
+Phase 2A Step B: Streamlit UI.
 
 Recommended priorities:
 
-1. Improve context precision beyond the current 0.3833 baseline.
-2. Add lexical/BM25-style retrieval to complement dense semantic search.
-3. Add a re-ranking stage so no-filter cloud queries prefer AMZN AWS evidence over generic MSFT cloud text.
-4. Preserve current high faithfulness and answer relevancy.
-5. Re-run `python -m scripts.run_evaluation` after changes.
+1. Build a simple Streamlit demo UI over `/query/stream`.
+2. Render sources as soon as the `sources` SSE event arrives.
+3. Render answer tokens incrementally as `token` events arrive.
+4. Add ticker/section filters and top-k control.
+5. Document how to run FastAPI and Streamlit together.
 
 Step 12: Docker packaging.
 

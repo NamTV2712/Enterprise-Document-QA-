@@ -7,6 +7,8 @@ at startup via the lifespan context manager.
 
 import logging
 import time
+import asyncio
+import threading
 from contextlib import asynccontextmanager
 from typing import Literal
 from typing import Any
@@ -22,6 +24,8 @@ from src.retrieval.embedder import Embedder
 from src.retrieval.hybrid_retriever import HybridRetriever, load_embedded_chunks
 from src.retrieval.vector_store import VectorStore
 
+import json as json_lib
+from fastapi.responses import StreamingResponse
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -155,3 +159,59 @@ async def supported_tickers() -> dict:
         "tickers": ["AAPL", "MSFT", "AMZN"],
         "sections": ["business", "risk_factors", "mdna", "financial_statements"],
     }
+
+@app.post("/query/stream")
+async def query_stream(request: QueryRequest):
+    """Streaming endpoint using Server-Sent Events (SSE).
+
+    Each event is emitted as `data: {json}\n\n` per the SSE spec.
+    """
+    pipeline: RAGPipeline = _state.get("pipeline")
+    if pipeline is None:
+        raise HTTPException(status_code=503, detail="Pipeline chưa sẵn sàng.")
+
+    async def event_generator():
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[tuple[str, Any] | None] = asyncio.Queue()
+
+        def run_stream() -> None:
+            try:
+                for event_type, data in pipeline.query_stream(
+                    question=request.question,
+                    top_k=request.top_k,
+                    ticker=request.ticker,
+                    section=request.section,
+                ):
+                    loop.call_soon_threadsafe(queue.put_nowait, (event_type, data))
+            except Exception as e:
+                logger.exception("Unhandled streaming endpoint error: %s", e)
+                loop.call_soon_threadsafe(queue.put_nowait, ("error", str(e)))
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, None)
+
+        threading.Thread(target=run_stream, daemon=True).start()
+
+        while True:
+            event = await queue.get()
+            if event is None:
+                break
+            event_type, data = event
+            try:
+                payload = json_lib.dumps(
+                    {"type": event_type, "data": data},
+                    ensure_ascii=False
+                )
+                yield f"data: {payload}\n\n"
+            except Exception as e:
+                error_payload = json_lib.dumps({"type": "error", "data": str(e)})
+                yield f"data: {error_payload}\n\n"
+                break
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",   # Disable nginx buffering if deploying after reverse proxy
+        },
+    )

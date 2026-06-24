@@ -98,7 +98,7 @@ class Generator:
                 model_used=self.model,
             )
 
-        # Kiểm tra score sớm — không đợi LLM generate rồi mới phát hiện context kém
+        # Check your score early — don't wait for the LLM to generate before discovering poor context
         best_score = max(c.score for c in chunks)
         if best_score < self.LOW_SCORE_THRESHOLD:
             logger.warning(
@@ -146,3 +146,54 @@ class Generator:
         )
         return response.text or ""
 
+    def generate_stream(self, query: str, chunks: list[RetrievedChunk]):
+        """Generator function — yields each token received from the LLM.
+            The caller uses 'for token in generator.generate_stream(...)'.
+            Returns an empty string if there are no chunks"""
+        if not chunks:
+            yield "I could not find any relevant information in the available documents"
+            return
+
+        best_score = max(c.score for c in chunks)
+        if best_score < self.LOW_SCORE_THRESHOLD:
+            logger.warning(
+                "Best score %.4f < threshold — The context may be irrelevant", best_score
+            )
+
+        user_message = _build_user_message(query, chunks)
+
+        if self.provider == "groq":
+            yield from self._call_groq_stream(user_message)
+        elif self.provider == "gemini":
+            yield from self._call_gemini_stream(user_message)
+        else:
+            raise ValueError(f"Provider '{self.provider}' does not support streaming.")
+
+    def _call_groq_stream(self, user_message: str):
+        stream = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            max_tokens=1024,
+            temperature=0,
+            stream=True,
+        )
+        for chunk in stream:
+            delta = chunk.choices[0].delta.content
+            if delta:
+                yield delta
+
+    def _call_gemini_stream(self, user_message: str):
+        from google.genai import types
+        for chunk in self.client.models.generate_content_stream(
+            model=self.model,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                max_output_tokens=1024,
+            ),
+            contents=user_message,
+        ):
+            if chunk.text:
+                yield chunk.text

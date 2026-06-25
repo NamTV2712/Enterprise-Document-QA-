@@ -8,12 +8,13 @@ Phase 2A Step A, Streaming Response, is also complete and verified.
 Latest completed milestone commit:
 
 ```text
-b8e8fdb Add streaming query endpoint
+29c3af3 Optimize BM25 chunk lookup
 ```
 
 Recent completed commits:
 
 ```text
+29c3af3 Optimize BM25 chunk lookup
 b8e8fdb Add streaming query endpoint
 8f440b7 Tidy SEC client comments
 8b63374 Update README for hybrid retrieval
@@ -511,6 +512,12 @@ Hybrid retrieval is complete and committed as:
 383272b Add hybrid retrieval reranking
 ```
 
+BM25 lookup optimization was committed as:
+
+```text
+29c3af3 Optimize BM25 chunk lookup
+```
+
 Implemented files:
 
 - `src/retrieval/hybrid_retriever.py`
@@ -529,12 +536,14 @@ Retrieval design:
 - Reciprocal Rank Fusion merges BM25 and semantic ranked lists without score normalization.
 - Cross-encoder `cross-encoder/ms-marco-MiniLM-L-6-v2` re-ranks the fused candidate pool.
 - FastAPI and evaluation now use `HybridRetriever`.
+- BM25 candidate sorting uses a precomputed `chunk_id -> index` map, avoiding `list.index()` O(n) lookup inside every query sort.
 
 Validation:
 
 - The no-filter AWS revenue-growth query no longer returns MSFT cloud chunks in final top-5 sources; returned sources are AMZN.
 - Context precision improved from `0.3833` to `0.4750`.
 - Overall evaluation improved from `0.7333` to `0.7583`.
+- BM25 sort benchmark on the current 271-chunk corpus improved from `0.083071s` to `0.018681s` over 2,000 loops, a `4.45x` speedup.
 
 Hybrid evaluation comparison:
 
@@ -693,6 +702,7 @@ Note: the `Characters` column is character count, not token count.
 - Semantic search can return related financial/accounting chunks above the exact numeric table; hybrid retrieval reduces but does not eliminate this.
 - Amazon AWS revenue growth query did not retrieve the exact numeric context even though relevant data may exist in the corpus.
 - Cross-encoder re-ranking improves context precision but adds CPU latency before streaming can begin.
+- Semantic query cache is intentionally not integrated yet. A local draft existed, but cache needs filter-aware keys, source preservation, cache-miss embedding reuse, and streaming replay semantics before it should be committed.
 - Groq free tier can return `429 Too Many Requests`; SDK retries can recover, but latency may spike.
 - Gemini Flash Lite may return temporary `503 UNAVAILABLE` under high demand.
 - OpenAI key in the current environment was not a valid OpenAI Platform key during testing.
@@ -708,6 +718,10 @@ Recommended priorities:
 3. Render answer tokens incrementally as `token` events arrive.
 4. Add ticker/section filters and top-k control.
 5. Document how to run FastAPI and Streamlit together.
+
+Deferred production-quality item:
+
+- Semantic query caching should be revisited after the Streamlit demo, not before. It should cache full responses with sources and be aware of `ticker`, `section`, and `top_k`.
 
 Step 12: Docker packaging.
 

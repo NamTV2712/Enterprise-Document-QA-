@@ -53,13 +53,13 @@ class HybridRetriever:
     ):
         self.embedder = embedder
         self.store = store
+        self._all_chunks = all_chunks
         self._chunks_by_id = {c["chunk_id"]: c for c in all_chunks}
-        self._chunk_positions = {c["chunk_id"]: i for i, c in enumerate(all_chunks)}
+        self._chunk_index_map = {c["chunk_id"]: i for i, c in enumerate(all_chunks)}
 
         # Build BM25 index
         logger.info("Building BM25 index on %d chunks", len(all_chunks))
         tokenized = [_tokenize(c["text"]) for c in all_chunks]
-        self._all_chunks = all_chunks
         self.bm25 = BM25Okapi(tokenized)
 
         # Load cross-encoder
@@ -88,7 +88,7 @@ class HybridRetriever:
         ]
         bm25_candidates = sorted(
             filtered_chunks,
-            key=lambda c: bm25_scores[self._chunk_positions[c["chunk_id"]]],
+            key=lambda c: bm25_scores[self._chunk_index_map[c["chunk_id"]]],
             reverse=True
         )[:candidate_pool]
 

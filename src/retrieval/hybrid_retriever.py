@@ -73,8 +73,36 @@ class HybridRetriever:
         top_k: int = 5,
         ticker: str | None = None,
         section: str | None = None,
-        candidate_pool: int = 20,  # number of candidates before re-ranking
+        candidate_pool: int = 20,
     ) -> list[RetrievedChunk]:
+        """Backward-compatible wrapper that embeds the query before retrieval."""
+        if not query.strip():
+            return []
+
+        query_embedding = self.embedder.embed_query(query)
+        return self.retrieve_with_embedding(
+            query=query,
+            query_embedding=query_embedding,
+            top_k=top_k,
+            ticker=ticker,
+            section=section,
+            candidate_pool=candidate_pool,
+        )
+
+    def retrieve_with_embedding(
+        self,
+        query: str,
+        query_embedding: list[float],
+        top_k: int = 5,
+        ticker: str | None = None,
+        section: str | None = None,
+        candidate_pool: int = 20,
+    ) -> list[RetrievedChunk]:
+        """Retrieve using a pre-computed query embedding.
+
+        This is used by the cache-aware pipeline to avoid embedding the same
+        query twice on cache misses.
+        """
         if not query.strip():
             return []
 
@@ -92,10 +120,8 @@ class HybridRetriever:
             reverse=True
         )[:candidate_pool]
 
-        # --- Stage 2: Semantic search ---
-        query_vector = self.embedder.embed_query(query)
         semantic_results = self.store.search(
-            query_vector=query_vector,
+            query_vector=query_embedding,
             top_k=candidate_pool,
             ticker=ticker,
             section=section,
@@ -137,22 +163,26 @@ class HybridRetriever:
 
         result = []
         for chunk, ce_score in reranked:
-            section_label = chunk["section"].replace("_", " ").title()
-            citation = (
-                f"{chunk['ticker']} 10-K (filed {chunk['filing_date']}), "
-                f"Section: {section_label}"
-            )
-            result.append(RetrievedChunk(
-                chunk_id=chunk["chunk_id"],
-                ticker=chunk["ticker"],
-                section=chunk["section"],
-                filing_date=chunk["filing_date"],
-                score=float(ce_score),
-                text=chunk["text"],
-                citation=citation,
-            ))
+            result.append(self._to_retrieved_chunk(chunk, ce_score))
         logger.info(
             "HybridRetriever: '%s...' -> %d chunks (top CE score: %.4f)",
             query[:50], len(result), result[0].score if result else 0
         )
         return result
+
+    @staticmethod
+    def _to_retrieved_chunk(chunk: dict, ce_score: float) -> RetrievedChunk:
+        section_label = chunk["section"].replace("_", " ").title()
+        citation = (
+            f"{chunk['ticker']} 10-K (filed {chunk['filing_date']}), "
+            f"Section: {section_label}"
+        )
+        return RetrievedChunk(
+            chunk_id=chunk["chunk_id"],
+            ticker=chunk["ticker"],
+            section=chunk["section"],
+            filing_date=chunk["filing_date"],
+            score=float(ce_score),
+            text=chunk["text"],
+            citation=citation,
+        )

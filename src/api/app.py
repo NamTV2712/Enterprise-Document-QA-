@@ -104,6 +104,11 @@ class QueryResponse(BaseModel):
     num_chunks_retrieved: int
 
 
+class CacheTestRequest(BaseModel):
+    query_a: str = Field(min_length=5)
+    query_b: str = Field(min_length=5)
+
+
 # --- Endpoints ---
 
 @app.get("/health")
@@ -158,6 +163,44 @@ async def supported_tickers() -> dict:
     return {
         "tickers": ["AAPL", "MSFT", "AMZN"],
         "sections": ["business", "risk_factors", "mdna", "financial_statements"],
+    }
+
+
+@app.get("/cache/stats")
+async def cache_stats() -> dict:
+    """Return semantic cache metrics."""
+    pipeline: RAGPipeline = _state.get("pipeline")
+    if pipeline is None:
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    return pipeline.cache.get_stats()
+
+
+@app.post("/cache/clear")
+async def cache_clear() -> dict:
+    """Clear semantic cache entries and reset cache metrics."""
+    pipeline: RAGPipeline = _state.get("pipeline")
+    if pipeline is None:
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    count = pipeline.cache.clear()
+    return {"cleared_entries": count}
+
+
+@app.post("/cache/test")
+async def cache_test_similarity(request: CacheTestRequest) -> dict:
+    """Compare two query embeddings to tune the semantic cache threshold."""
+    pipeline: RAGPipeline = _state.get("pipeline")
+    if pipeline is None:
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+
+    emb_a = pipeline.retriever.embedder.embed_query(request.query_a)
+    emb_b = pipeline.retriever.embedder.embed_query(request.query_b)
+    similarity = pipeline.cache.test_similarity(emb_a, emb_b)
+    return {
+        "query_a": request.query_a,
+        "query_b": request.query_b,
+        "similarity": round(similarity, 6),
+        "threshold": pipeline.cache.threshold,
+        "would_cache_hit": similarity >= pipeline.cache.threshold,
     }
 
 @app.post("/query/stream")

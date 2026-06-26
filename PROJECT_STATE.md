@@ -3,17 +3,19 @@
 ## Current Milestone
 
 Steps 1-11 are complete for the MVP Enterprise Document QA / SEC 10-K RAG pipeline.
-Phase 2A Step A, Streaming Response, is also complete and verified.
+Phase 2A Step A, Streaming Response, is complete and verified.
+Phase 2A Step A.1, Semantic Query Cache, is complete and verified.
 
 Latest completed milestone commit:
 
 ```text
-29c3af3 Optimize BM25 chunk lookup
+a697787 Add semantic query cache
 ```
 
 Recent completed commits:
 
 ```text
+a697787 Add semantic query cache
 29c3af3 Optimize BM25 chunk lookup
 b8e8fdb Add streaming query endpoint
 8f440b7 Tidy SEC client comments
@@ -31,7 +33,7 @@ cb48532 Add retrieval pipeline wrapper
 Build an Enterprise Document QA system over SEC 10-K filings using a RAG pipeline:
 
 ```text
-SEC Filing -> Section Extraction -> Chunking -> Embedding -> Qdrant/BM25 -> Hybrid Retrieval -> Re-ranking -> LLM Answer -> FastAPI/SSE
+SEC Filing -> Section Extraction -> Chunking -> Embedding -> Qdrant/BM25 -> Hybrid Retrieval -> Re-ranking -> Semantic Cache -> LLM Answer -> FastAPI/SSE
 ```
 
 The MVP corpus currently covers latest 10-K filings for:
@@ -57,17 +59,19 @@ The system answers finance/document questions using retrieved filing context and
 - `src/retrieval/retriever.py`
   Retrieval abstraction combining Embedder + VectorStore and returning clean `RetrievedChunk` objects.
 - `src/retrieval/hybrid_retriever.py`
-  Hybrid retriever combining BM25 keyword search, Qdrant semantic search, Reciprocal Rank Fusion, and cross-encoder re-ranking.
+  Hybrid retriever combining BM25 keyword search, Qdrant semantic search, Reciprocal Rank Fusion, and cross-encoder re-ranking. Supports pre-computed query embeddings for cache-aware retrieval.
+- `src/retrieval/semantic_cache.py`
+  In-memory filter-aware semantic cache for full RAG responses and sources.
 - `src/generation/generator.py`
   LLM wrapper for non-streaming and streaming RAG answer generation with strict anti-hallucination prompt. Current default provider is Groq.
 - `src/generation/rag_pipeline.py`
-  End-to-end RAG pipeline combining Retriever + Generator, including `query_stream()` for SSE events.
+  End-to-end RAG pipeline combining Retriever + Generator, including semantic cache checks and `query_stream()` for SSE events.
 - `src/evaluation/evaluator.py`
   LLM-as-judge evaluation for faithfulness, answer relevancy, and context precision.
 - `src/evaluation/test_set.py`
   Fixed evaluation set covering numeric, risk, business/cloud, and out-of-corpus fallback questions.
 - `src/api/app.py`
-  FastAPI service exposing `/health`, `/query`, `/query/stream`, `/supported-tickers`, and Swagger UI at `/docs`.
+  FastAPI service exposing `/health`, `/query`, `/query/stream`, `/supported-tickers`, `/cache/stats`, `/cache/clear`, `/cache/test`, and Swagger UI at `/docs`.
 - `scripts/download_filings.py`
   Download and section extraction script.
 - `scripts/chunk_filings.py`
@@ -613,6 +617,63 @@ Interpretation:
 - After sources were emitted, Groq produced the first streamed token in about 0.45s.
 - Streaming now improves perceived responsiveness even when total generation time remains provider-dependent.
 
+### Phase 2A Step A.1: Semantic Query Cache
+
+Semantic query caching is complete and committed as:
+
+```text
+a697787 Add semantic query cache
+```
+
+Implemented files:
+
+- `src/retrieval/semantic_cache.py`
+- `src/retrieval/hybrid_retriever.py`
+- `src/generation/rag_pipeline.py`
+- `src/api/app.py`
+
+Cache design:
+
+- The cache stores full generated answers plus serialized retrieved sources.
+- Cache lookup uses cosine similarity over query embeddings.
+- Cache entries are scoped by exact request filters: `ticker`, `section`, and `top_k`.
+- Default threshold is `0.95`, with `max_entries=500` and `ttl_seconds=3600`.
+- `RAGPipeline` embeds the query once and reuses that embedding for cache lookup and hybrid retrieval on cache misses.
+- Cached streaming responses replay `sources`, word-split `token` events, and `done` without calling the LLM.
+
+New API endpoints:
+
+- `GET /cache/stats`
+- `POST /cache/clear`
+- `POST /cache/test`
+
+Cache validation:
+
+| Check | Result |
+|---|---:|
+| Exact repeated `/query` model | `llama-3.3-70b-versatile (cached)` |
+| Exact repeated `/query` latency | `0.1080s` |
+| Same query with different ticker | cache miss |
+| Cached `/query/stream` first event | `0.1212s` |
+| Cached `/query/stream` first token | `0.1212s` |
+| Cached `/query/stream` done | `0.1212s` |
+
+Threshold tuning results:
+
+| Query A | Query B | Similarity | Cache Hit at `0.95` |
+|---|---|---:|---|
+| What was Apple revenue in 2024? | Apple 2024 total net sales figure | 0.901063 | No |
+| What was Apple revenue in 2024? | What was Apple net income in 2024? | 0.919944 | No |
+| What was Apple revenue in 2024? | What was Apple operating cash flow in 2024? | 0.870379 | No |
+| What was Apple revenue in 2024? | What are Apple's main risk factors? | 0.603403 | No |
+| What was Apple revenue in 2024? | What was Microsoft revenue in 2024? | 0.867607 | No |
+
+Interpretation:
+
+- `0.90` would be unsafe because Apple revenue vs Apple net income scored `0.919944`.
+- `0.95` is conservative and currently only intended to catch exact or near-identical repeats.
+- Broader paraphrase caching should wait for a larger threshold calibration set.
+
 ## Current Data Artifacts
 
 These are generated locally and ignored by git because `data/` is ignored:
@@ -702,7 +763,8 @@ Note: the `Characters` column is character count, not token count.
 - Semantic search can return related financial/accounting chunks above the exact numeric table; hybrid retrieval reduces but does not eliminate this.
 - Amazon AWS revenue growth query did not retrieve the exact numeric context even though relevant data may exist in the corpus.
 - Cross-encoder re-ranking improves context precision but adds CPU latency before streaming can begin.
-- Semantic query cache is intentionally not integrated yet. A local draft existed, but cache needs filter-aware keys, source preservation, cache-miss embedding reuse, and streaming replay semantics before it should be committed.
+- Semantic cache is in-memory only; entries are lost on process restart and the current list scan should be replaced by an indexed/vector-backed implementation at larger scale.
+- Semantic cache threshold is conservative. It catches exact or near-identical repeats, but does not yet cache broader paraphrases safely.
 - Groq free tier can return `429 Too Many Requests`; SDK retries can recover, but latency may spike.
 - Gemini Flash Lite may return temporary `503 UNAVAILABLE` under high demand.
 - OpenAI key in the current environment was not a valid OpenAI Platform key during testing.

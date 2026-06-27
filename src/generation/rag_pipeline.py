@@ -7,6 +7,8 @@ Purpose: The single entry point for the RAG system — connects the Retriever an
 import logging
 
 from src.generation.generator import Generator, RAGResponse
+from src.memory.conversation_memory import ConversationMemory, Turn
+from src.memory.query_rewriter import QueryRewriter
 from src.retrieval.retriever import Retriever
 from src.retrieval.retriever import RetrievedChunk
 from src.retrieval.semantic_cache import CacheEntry, SemanticCache
@@ -20,10 +22,13 @@ class RAGPipeline:
         retriever: Retriever,
         generator: Generator,
         cache: SemanticCache | None = None,
+        memory: ConversationMemory | None = None,
     ):
         self.retriever = retriever
         self.generator = generator
         self.cache = cache or SemanticCache()
+        self.memory = memory or ConversationMemory()
+        self.rewriter = QueryRewriter(generator)
 
     def _embed_query_once(self, question: str) -> list[float]:
         return self.retriever.embedder.embed_query(question)
@@ -98,35 +103,65 @@ class RAGPipeline:
         top_k: int = 5,
         ticker: str | None = None,
         section: str | None = None,
+        session_id: str | None = None,
     ) -> RAGResponse:
-        logger.info("RAG query: '%s...' (ticker=%s, section=%s)", question[:50], ticker, section)
-        query_embedding = self._embed_query_once(question)
+        logger.info(
+            "RAG query: '%s...' (ticker=%s, section=%s, session=%s)",
+            question[:50],
+            ticker,
+            section,
+            session_id,
+        )
 
-        cached = self.cache.get(query_embedding, ticker, section, top_k)
-        if cached:
-            return RAGResponse(
-                answer=cached.answer,
-                retrieved_chunks=self._chunks_from_cache(cached),
-                model_used=f"{cached.model_used} (cached)",
-            )
+        history_messages = []
+        if session_id:
+            session = self.memory.get_or_create(session_id)
+            history_messages = session.to_llm_messages()
+
+        effective_query = self.rewriter.rewrite(question, history_messages)
+        query_embedding = self._embed_query_once(effective_query)
+
+        if not session_id:
+            cached = self.cache.get(query_embedding, ticker, section, top_k)
+            if cached:
+                return RAGResponse(
+                    answer=cached.answer,
+                    retrieved_chunks=self._chunks_from_cache(cached),
+                    model_used=f"{cached.model_used} (cached)",
+                )
 
         chunks = self._retrieve_with_optional_embedding(
-            question=question,
+            question=effective_query,
             query_embedding=query_embedding,
             top_k=top_k,
             ticker=ticker,
             section=section,
         )
-        response = self.generator.generate(question, chunks)
-        self.cache.set(
-            query_embedding=query_embedding,
-            ticker=ticker,
-            section=section,
-            top_k=top_k,
-            answer=response.answer,
-            sources=self._chunks_to_dicts(chunks),
-            model_used=response.model_used,
+        response = self.generator.generate(
+            question,
+            chunks,
+            conversation_history=history_messages,
         )
+
+        if session_id:
+            self.memory.add_turn(
+                session_id,
+                Turn(
+                    user_message=question,
+                    assistant_message=response.answer,
+                    rewritten_query=effective_query if effective_query != question else None,
+                ),
+            )
+        else:
+            self.cache.set(
+                query_embedding=query_embedding,
+                ticker=ticker,
+                section=section,
+                top_k=top_k,
+                answer=response.answer,
+                sources=self._chunks_to_dicts(chunks),
+                model_used=response.model_used,
+            )
         return response
 
     def query_stream(
@@ -136,6 +171,7 @@ class RAGPipeline:
         ticker: str | None = None,
         section: str | None = None,
         conversation_history: list[dict] | None = None,
+        session_id: str | None = None,
     ):
         """Yield SSE-compatible event tuples.
 
@@ -143,20 +179,29 @@ class RAGPipeline:
         Cache misses run retrieval and LLM streaming, then store the full answer.
         """
         try:
-            query_embedding = self._embed_query_once(question)
-            cached = self.cache.get(query_embedding, ticker, section, top_k)
-            if cached:
-                logger.info("Stream cache HIT for '%s...'", question[:50])
-                yield ("sources", self._sources_for_stream(self._chunks_from_cache(cached)))
-                words = cached.answer.split(" ")
-                for index, word in enumerate(words):
-                    token = word if index == len(words) - 1 else f"{word} "
-                    yield ("token", token)
-                yield ("done", None)
-                return
+            history_messages = conversation_history or []
+            if session_id:
+                session = self.memory.get_or_create(session_id)
+                history_messages = session.to_llm_messages()
+
+            effective_query = self.rewriter.rewrite(question, history_messages)
+            query_embedding = self._embed_query_once(effective_query)
+
+            use_cache = not session_id and not history_messages
+            if use_cache:
+                cached = self.cache.get(query_embedding, ticker, section, top_k)
+                if cached:
+                    logger.info("Stream cache HIT for '%s...'", question[:50])
+                    yield ("sources", self._sources_for_stream(self._chunks_from_cache(cached)))
+                    words = cached.answer.split(" ")
+                    for index, word in enumerate(words):
+                        token = word if index == len(words) - 1 else f"{word} "
+                        yield ("token", token)
+                    yield ("done", None)
+                    return
 
             chunks = self._retrieve_with_optional_embedding(
-                question=question,
+                question=effective_query,
                 query_embedding=query_embedding,
                 top_k=top_k,
                 ticker=ticker,
@@ -167,19 +212,33 @@ class RAGPipeline:
             yield ("sources", sources_data)
 
             full_answer = ""
-            for token in self.generator.generate_stream(question, chunks):
+            for token in self.generator.generate_stream(
+                question,
+                chunks,
+                conversation_history=history_messages,
+            ):
                 full_answer += token
                 yield ("token", token)
 
-            self.cache.set(
-                query_embedding=query_embedding,
-                ticker=ticker,
-                section=section,
-                top_k=top_k,
-                answer=full_answer,
-                sources=self._chunks_to_dicts(chunks),
-                model_used=self.generator.model,
-            )
+            if session_id:
+                self.memory.add_turn(
+                    session_id,
+                    Turn(
+                        user_message=question,
+                        assistant_message=full_answer,
+                        rewritten_query=effective_query if effective_query != question else None,
+                    ),
+                )
+            elif use_cache:
+                self.cache.set(
+                    query_embedding=query_embedding,
+                    ticker=ticker,
+                    section=section,
+                    top_k=top_k,
+                    answer=full_answer,
+                    sources=self._chunks_to_dicts(chunks),
+                    model_used=self.generator.model,
+                )
 
             yield ("done", None)
 

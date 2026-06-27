@@ -73,7 +73,7 @@ app.add_middleware(
 )
 
 
-# --- Pydantic models cho request/response ---
+# --- Pydantic models for request/response ---
 
 class QueryRequest(BaseModel):
     question: str = Field(
@@ -89,6 +89,16 @@ class QueryRequest(BaseModel):
         examples=["financial_statements"]
     )
     top_k: int = Field(default=5, ge=1, le=10)
+    session_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=100,
+        description=(
+            "Session ID for multi-turn conversation. If omitted, the request "
+            "runs in stateless mode."
+        ),
+        examples=["test-session-001"],
+    )
 
 
 class SourceChunk(BaseModel):
@@ -115,9 +125,11 @@ class CacheTestRequest(BaseModel):
 async def health() -> dict:
     """Health check endpoint — used by Docker health check,
     load balancer, and monitoring in the future"""
+    pipeline: RAGPipeline | None = _state.get("pipeline")
     return {
         "status": "ok",
-        "pipeline_ready": "pipeline" in _state,
+        "pipeline_ready": pipeline is not None,
+        "memory": pipeline.memory.get_stats() if pipeline else {},
     }
 
 
@@ -135,6 +147,7 @@ async def query(request: QueryRequest) -> QueryResponse:
             top_k=request.top_k,
             ticker=request.ticker,
             section=request.section,
+            session_id=request.session_id,
         )
     except Exception as e:
         logger.exception("Error occurred while processing query: %s", e)
@@ -163,6 +176,37 @@ async def supported_tickers() -> dict:
     return {
         "tickers": ["AAPL", "MSFT", "AMZN"],
         "sections": ["business", "risk_factors", "mdna", "financial_statements"],
+    }
+
+
+@app.delete("/session/{session_id}")
+async def clear_session(session_id: str) -> dict:
+    """Clear one conversation session."""
+    pipeline: RAGPipeline = _state.get("pipeline")
+    if pipeline is None:
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    pipeline.memory.clear_session(session_id)
+    return {"cleared": session_id}
+
+
+@app.get("/session/{session_id}/history")
+async def get_session_history(session_id: str) -> dict:
+    """Return conversation history for debugging and UI rendering."""
+    pipeline: RAGPipeline = _state.get("pipeline")
+    if pipeline is None:
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+
+    turns = pipeline.memory.get_history(session_id)
+    return {
+        "session_id": session_id,
+        "turns": [
+            {
+                "user": turn.user_message,
+                "assistant": turn.assistant_message[:200],
+                "rewritten_query": turn.rewritten_query,
+            }
+            for turn in turns
+        ],
     }
 
 
@@ -211,7 +255,7 @@ async def query_stream(request: QueryRequest):
     """
     pipeline: RAGPipeline = _state.get("pipeline")
     if pipeline is None:
-        raise HTTPException(status_code=503, detail="Pipeline chưa sẵn sàng.")
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
 
     async def event_generator():
         loop = asyncio.get_running_loop()
@@ -224,6 +268,7 @@ async def query_stream(request: QueryRequest):
                     top_k=request.top_k,
                     ticker=request.ticker,
                     section=request.section,
+                    session_id=request.session_id,
                 ):
                     loop.call_soon_threadsafe(queue.put_nowait, (event_type, data))
             except Exception as e:

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 SYSTEM_PROMPT = """You are a financial analyst assistant. Your job is to answer questions
 about SEC 10-K filings accurately and concisely.
 
-STRICT RULES — violation of these rules is worse than saying "I don't know":
+STRICT RULES - violation of these rules is worse than saying "I don't know":
 1. ONLY use information explicitly stated in the provided context sections below.
    Do NOT use your general knowledge about companies or financial markets.
 2. ALWAYS cite the source for every factual claim using the format [Source N].
@@ -68,8 +68,8 @@ class Generator:
         Knows nothing about retrieval or vector DB."""
 
     LOW_SCORE_THRESHOLD = 0.50
-    # If the best chunk has a score < this threshold, the context may not be
-    # relevant enough — signal to fallback instead of providing an confident but wrong answer.
+    # If the best chunk has a score below this threshold, the context may not be
+    # relevant enough. Log it instead of silently producing a weak answer.
 
     def __init__(self, provider: str = "groq", model: str | None = None):
         self.provider = provider
@@ -90,7 +90,12 @@ class Generator:
         else:
             raise ValueError(f"Unsupported provider: {provider}. Use 'groq' or 'gemini'.")
 
-    def generate(self, query: str, chunks: list[RetrievedChunk]) -> RAGResponse:
+    def generate(
+        self,
+        query: str,
+        chunks: list[RetrievedChunk],
+        conversation_history: list[dict] | None = None,
+    ) -> RAGResponse:
         if not chunks:
             return RAGResponse(
                 answer="I could not find any relevant information in the available documents.",
@@ -98,42 +103,63 @@ class Generator:
                 model_used=self.model,
             )
 
-        # Check your score early — don't wait for the LLM to generate before discovering poor context
+        # Check retrieval quality before spending an LLM call.
         best_score = max(c.score for c in chunks)
         if best_score < self.LOW_SCORE_THRESHOLD:
             logger.warning(
-                "Best retrieval score %.4f < threshold %.2f — context may not be relevant enough.",
+                "Best retrieval score %.4f < threshold %.2f - context may not be relevant enough.",
                 best_score, self.LOW_SCORE_THRESHOLD
             )
 
         user_message = _build_user_message(query, chunks)
 
         if self.provider == "groq":
-            response_text = self._call_groq(user_message)
+            response_text = self._call_groq(user_message, conversation_history)
         elif self.provider == "gemini":
-            response_text = self._call_gemini(user_message)
+            response_text = self._call_gemini(user_message, conversation_history)
 
-        logger.info("Generated response (%d chars) từ %s", len(response_text), self.model)
+        logger.info("Generated response (%d chars) from %s", len(response_text), self.model)
         return RAGResponse(
             answer=response_text,
             retrieved_chunks=chunks,
             model_used=self.model,
         )
 
-    def _call_groq(self, user_message: str) -> str:
+    def _call_groq(
+        self,
+        user_message: str,
+        conversation_history: list[dict] | None = None,
+    ) -> str:
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        if conversation_history:
+            messages.extend(conversation_history)
+        messages.append({"role": "user", "content": user_message})
+
         response = self.client.chat.completions.create(
             model=self.model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_message},
-            ],
+            messages=messages,
             max_tokens=1024,
             temperature=0,
         )
         return response.choices[0].message.content or ""
 
-    def _call_gemini(self, user_message: str) -> str:
+    def _call_gemini(
+        self,
+        user_message: str,
+        conversation_history: list[dict] | None = None,
+    ) -> str:
         from google.genai import types
+
+        if conversation_history:
+            history_text = "\n".join(
+                f"{message['role'].upper()}: {message['content']}"
+                for message in conversation_history
+            )
+            user_message = f"""Conversation history:
+{history_text}
+
+Current request:
+{user_message}"""
 
         response = self.client.models.generate_content(
             model=self.model,
@@ -146,10 +172,13 @@ class Generator:
         )
         return response.text or ""
 
-    def generate_stream(self, query: str, chunks: list[RetrievedChunk]):
-        """Generator function — yields each token received from the LLM.
-            The caller uses 'for token in generator.generate_stream(...)'.
-            Returns an empty string if there are no chunks"""
+    def generate_stream(
+        self,
+        query: str,
+        chunks: list[RetrievedChunk],
+        conversation_history: list[dict] | None = None,
+    ):
+        """Yield each token received from the LLM."""
         if not chunks:
             yield "I could not find any relevant information in the available documents"
             return
@@ -163,19 +192,25 @@ class Generator:
         user_message = _build_user_message(query, chunks)
 
         if self.provider == "groq":
-            yield from self._call_groq_stream(user_message)
+            yield from self._call_groq_stream(user_message, conversation_history)
         elif self.provider == "gemini":
-            yield from self._call_gemini_stream(user_message)
+            yield from self._call_gemini_stream(user_message, conversation_history)
         else:
             raise ValueError(f"Provider '{self.provider}' does not support streaming.")
 
-    def _call_groq_stream(self, user_message: str):
+    def _call_groq_stream(
+        self,
+        user_message: str,
+        conversation_history: list[dict] | None = None,
+    ):
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        if conversation_history:
+            messages.extend(conversation_history)
+        messages.append({"role": "user", "content": user_message})
+
         stream = self.client.chat.completions.create(
             model=self.model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_message},
-            ],
+            messages=messages,
             max_tokens=1024,
             temperature=0,
             stream=True,
@@ -185,8 +220,23 @@ class Generator:
             if delta:
                 yield delta
 
-    def _call_gemini_stream(self, user_message: str):
+    def _call_gemini_stream(
+        self,
+        user_message: str,
+        conversation_history: list[dict] | None = None,
+    ):
         from google.genai import types
+        if conversation_history:
+            history_text = "\n".join(
+                f"{message['role'].upper()}: {message['content']}"
+                for message in conversation_history
+            )
+            user_message = f"""Conversation history:
+{history_text}
+
+Current request:
+{user_message}"""
+
         for chunk in self.client.models.generate_content_stream(
             model=self.model,
             config=types.GenerateContentConfig(

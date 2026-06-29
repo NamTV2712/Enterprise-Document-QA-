@@ -5,27 +5,28 @@
 Steps 1-11 are complete for the MVP Enterprise Document QA / SEC 10-K RAG pipeline.
 Phase 2A Step A, Streaming Response, is complete and verified.
 Phase 2A Step A.1, Semantic Query Cache, is complete and verified.
+Phase 2B Step C, Multi-turn Conversation with Memory, is complete and verified.
 
 Latest completed milestone commit:
 
 ```text
-a697787 Add semantic query cache
+40175e5 Add multi-turn conversation memory
 ```
 
 Recent completed commits:
 
 ```text
+40175e5 Add multi-turn conversation memory
+aad9a79 Document semantic cache completion
 a697787 Add semantic query cache
+db20e51 Update project state for BM25 optimization
 29c3af3 Optimize BM25 chunk lookup
+1df86d4 Update project state for streaming
 b8e8fdb Add streaming query endpoint
 8f440b7 Tidy SEC client comments
 8b63374 Update README for hybrid retrieval
 383272b Add hybrid retrieval reranking
 79c7228 Document Step 10 completion
-ee6c3f6 Add FastAPI RAG service
-a5c4d39 Add RAG evaluation framework
-d2dc7f2 Add RAG generation pipeline
-cb48532 Add retrieval pipeline wrapper
 ```
 
 ## Project Goal
@@ -33,7 +34,7 @@ cb48532 Add retrieval pipeline wrapper
 Build an Enterprise Document QA system over SEC 10-K filings using a RAG pipeline:
 
 ```text
-SEC Filing -> Section Extraction -> Chunking -> Embedding -> Qdrant/BM25 -> Hybrid Retrieval -> Re-ranking -> Semantic Cache -> LLM Answer -> FastAPI/SSE
+SEC Filing -> Section Extraction -> Chunking -> Embedding -> Query Rewrite -> Qdrant/BM25 -> Hybrid Retrieval -> Re-ranking -> Semantic Cache/Memory -> LLM Answer -> FastAPI/SSE
 ```
 
 The MVP corpus currently covers latest 10-K filings for:
@@ -62,16 +63,20 @@ The system answers finance/document questions using retrieved filing context and
   Hybrid retriever combining BM25 keyword search, Qdrant semantic search, Reciprocal Rank Fusion, and cross-encoder re-ranking. Supports pre-computed query embeddings for cache-aware retrieval.
 - `src/retrieval/semantic_cache.py`
   In-memory filter-aware semantic cache for full RAG responses and sources.
+- `src/memory/conversation_memory.py`
+  In-memory conversation session store with TTL cleanup and a small interface intended for future SQLite/Redis replacement.
+- `src/memory/query_rewriter.py`
+  LLM-powered follow-up query rewriter that converts pronoun-based questions into standalone retrieval queries.
 - `src/generation/generator.py`
-  LLM wrapper for non-streaming and streaming RAG answer generation with strict anti-hallucination prompt. Current default provider is Groq.
+  LLM wrapper for non-streaming and streaming RAG answer generation with strict anti-hallucination prompt and optional conversation history. Current default provider is Groq.
 - `src/generation/rag_pipeline.py`
-  End-to-end RAG pipeline combining Retriever + Generator, including semantic cache checks and `query_stream()` for SSE events.
+  End-to-end RAG pipeline combining Retriever + Generator, including semantic cache checks, conversation memory, query rewriting, and `query_stream()` for SSE events.
 - `src/evaluation/evaluator.py`
   LLM-as-judge evaluation for faithfulness, answer relevancy, and context precision.
 - `src/evaluation/test_set.py`
   Fixed evaluation set covering numeric, risk, business/cloud, and out-of-corpus fallback questions.
 - `src/api/app.py`
-  FastAPI service exposing `/health`, `/query`, `/query/stream`, `/supported-tickers`, `/cache/stats`, `/cache/clear`, `/cache/test`, and Swagger UI at `/docs`.
+  FastAPI service exposing `/health`, `/query`, `/query/stream`, `/supported-tickers`, cache endpoints, session endpoints, and Swagger UI at `/docs`.
 - `scripts/download_filings.py`
   Download and section extraction script.
 - `scripts/chunk_filings.py`
@@ -674,6 +679,84 @@ Interpretation:
 - `0.95` is conservative and currently only intended to catch exact or near-identical repeats.
 - Broader paraphrase caching should wait for a larger threshold calibration set.
 
+### Phase 2B Step C: Multi-turn Conversation with Memory
+
+Multi-turn conversation support is complete and committed as:
+
+```text
+40175e5 Add multi-turn conversation memory
+```
+
+Implemented files:
+
+- `src/memory/__init__.py`
+- `src/memory/conversation_memory.py`
+- `src/memory/query_rewriter.py`
+- `src/generation/rag_pipeline.py`
+- `src/generation/generator.py`
+- `src/api/app.py`
+
+Memory design:
+
+- Uses Option A: in-memory conversation storage for the current demo stage.
+- Stores conversation history per `session_id`.
+- Keeps recent turns for LLM context injection.
+- Tracks `rewritten_query` per turn for debugging and validation.
+- Uses TTL-based cleanup; default session TTL is 30 minutes.
+- Interface is intentionally small so a future SQLite or Redis implementation can replace the in-memory backend without changing pipeline/API code.
+
+Multi-turn RAG design:
+
+- Stateless requests continue to work when `session_id` is omitted.
+- Session requests load recent conversation history from `ConversationMemory`.
+- Follow-up questions are rewritten into standalone retrieval queries before embedding and retrieval.
+- Retrieval uses the rewritten query, while generation receives the original user question plus conversation history.
+- Multi-turn requests bypass semantic cache because answer context depends on the active conversation.
+- Stateless requests still use semantic cache as before.
+
+New/updated API behavior:
+
+- `POST /query` accepts optional `session_id`.
+- `POST /query/stream` accepts optional `session_id`.
+- `GET /session/{session_id}/history` returns recent turns and rewritten queries for debugging/UI rendering.
+- `DELETE /session/{session_id}` clears one conversation session.
+- `GET /health` includes memory stats.
+
+Validation:
+
+| Check | Result |
+|---|---|
+| Follow-up query | `What about their revenue?` |
+| Rewritten query | `What is Apple's total revenue?` |
+| Turn 2 answer | Returned Apple total net sales: `$416,161` for 2025, `$391,035` for 2024, and `$383,285` for 2023 |
+| Stateless cache compatibility | Second identical stateless query returned `llama-3.3-70b-versatile (cached)` |
+| Stateless cache latency | `0.1261s` |
+| Session isolation | Session A had 1 turn while Session B had 0 turns |
+
+History validation output:
+
+```json
+{
+  "session_id": "test-session-rewrite-002",
+  "turns": [
+    {
+      "user": "What are Apple's main risk factors?",
+      "assistant": "Based on the provided context sections, Apple's main risk factors include...",
+      "rewritten_query": null
+    },
+    {
+      "user": "What about their revenue?",
+      "assistant": "The Company's total net sales were $416,161 for 2025, $391,035 for 2024, and $383,285 for 2023...",
+      "rewritten_query": "What is Apple's total revenue?"
+    }
+  ]
+}
+```
+
+Important implementation note:
+
+- The rewriter prompt was tightened so revenue follow-ups target total revenue or total net sales, not revenue recognition policy. This fixed an initial retrieval path that returned revenue-recognition context instead of numeric revenue context.
+
 ## Current Data Artifacts
 
 These are generated locally and ignored by git because `data/` is ignored:
@@ -765,25 +848,27 @@ Note: the `Characters` column is character count, not token count.
 - Cross-encoder re-ranking improves context precision but adds CPU latency before streaming can begin.
 - Semantic cache is in-memory only; entries are lost on process restart and the current list scan should be replaced by an indexed/vector-backed implementation at larger scale.
 - Semantic cache threshold is conservative. It catches exact or near-identical repeats, but does not yet cache broader paraphrases safely.
+- Conversation memory is in-memory only; sessions are lost on process restart and are not shared across multiple API workers.
+- Query rewriting adds one LLM call for follow-up questions with history, so multi-turn latency can be higher than stateless queries.
 - Groq free tier can return `429 Too Many Requests`; SDK retries can recover, but latency may spike.
 - Gemini Flash Lite may return temporary `503 UNAVAILABLE` under high demand.
 - OpenAI key in the current environment was not a valid OpenAI Platform key during testing.
 
 ## Next Step
 
-Phase 2A Step B: Streamlit UI.
+Phase 2B Step D: Query Decomposition.
 
 Recommended priorities:
 
-1. Build a simple Streamlit demo UI over `/query/stream`.
-2. Render sources as soon as the `sources` SSE event arrives.
-3. Render answer tokens incrementally as `token` events arrive.
-4. Add ticker/section filters and top-k control.
-5. Document how to run FastAPI and Streamlit together.
+1. Detect compound or comparative questions that should be decomposed.
+2. Split complex questions into focused sub-queries.
+3. Retrieve evidence per sub-query and merge sources safely.
+4. Generate final answers that preserve source grounding across sub-answers.
+5. Add validation cases for multi-hop and comparison questions.
 
 Deferred production-quality item:
 
-- Semantic query caching should be revisited after the Streamlit demo, not before. It should cache full responses with sources and be aware of `ticker`, `section`, and `top_k`.
+- Streamlit UI remains the next demo/productization step after the backend reasoning improvements.
 
 Step 12: Docker packaging.
 

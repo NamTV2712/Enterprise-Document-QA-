@@ -1,80 +1,67 @@
 # Enterprise Document QA
 
-Enterprise Document QA is a retrieval-augmented generation (RAG) backend for answering questions over SEC 10-K filings. The current MVP ingests filings for Apple, Microsoft, and Amazon, extracts key filing sections, builds a hybrid retrieval index, and serves grounded answers through FastAPI.
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB-DC244C?style=for-the-badge)
+![RAG](https://img.shields.io/badge/RAG-Hybrid_Retrieval-7C3AED?style=for-the-badge)
+![Groq](https://img.shields.io/badge/Groq-LLM_Generation-F55036?style=for-the-badge)
+![Status](https://img.shields.io/badge/Status-MVP_Complete-16A34A?style=for-the-badge)
 
-The project is intentionally built as a production-style backend rather than a notebook demo: each stage is modular, validated, and documented so the system can be extended into a larger enterprise document assistant.
+Enterprise Document QA is a production-style Retrieval-Augmented Generation backend for answering grounded questions over SEC 10-K filings.
+The system ingests filings for Apple, Microsoft, and Amazon, extracts key sections, builds a hybrid search index, and serves cited financial answers through FastAPI with streaming, semantic caching, and multi-turn memory.
 
-## Highlights
+## Overview
 
-- SEC 10-K ingestion and robust section extraction.
-- Token-aware chunking with larger chunks for financial statements.
-- Local embeddings with `nomic-ai/nomic-embed-text-v1.5`.
-- Qdrant local vector index with deterministic point IDs.
-- Hybrid retrieval using BM25, dense semantic search, Reciprocal Rank Fusion, and cross-encoder re-ranking.
-- Grounded RAG generation with source citations and insufficient-context fallback.
-- FastAPI service with Swagger UI and Server-Sent Events streaming.
-- Filter-aware semantic response cache for repeated stateless queries.
-- Multi-turn conversation memory with query rewriting for follow-up questions.
-- LLM-as-judge evaluation for faithfulness, answer relevancy, and context precision.
+- Problem type: enterprise document question answering over financial filings.
+- Corpus: latest SEC 10-K filings for `AAPL`, `MSFT`, and `AMZN`.
+- Serving style: FastAPI REST API with non-streaming and Server-Sent Events streaming responses.
+- Retrieval stack: BM25 keyword search, Qdrant semantic search, Reciprocal Rank Fusion, and cross-encoder re-ranking.
+- Generation stack: strict source-grounded LLM prompting with citations and insufficient-context fallback.
+- Conversation support: session-based memory plus query rewriting for follow-up questions.
+- Evaluation: LLM-as-judge scoring for faithfulness, answer relevancy, and context precision.
+
+## Key Features
+
+| Area | Capability |
+|---|---|
+| Filing ingestion | SEC EDGAR client with CIK lookup, rate limiting, and filing download |
+| Section extraction | Robust extraction for `business`, `risk_factors`, `mdna`, and `financial_statements` |
+| Chunking | Token-aware recursive chunking with larger chunks for financial statements |
+| Embeddings | Local embeddings via `nomic-ai/nomic-embed-text-v1.5` |
+| Vector search | Persistent local Qdrant collection with deterministic point IDs |
+| Hybrid retrieval | BM25 + dense retrieval + RRF + cross-encoder re-ranking |
+| RAG generation | Grounded answer generation with source citations and fallback behavior |
+| API | FastAPI service with Swagger UI and SSE streaming |
+| Cache | Filter-aware semantic response cache for repeated stateless queries |
+| Memory | Multi-turn conversation memory and LLM-powered query rewriting |
+| Evaluation | Fixed benchmark with faithfulness, relevancy, and context precision metrics |
 
 ## Architecture
 
 ```text
-SEC Filing
+SEC 10-K Filing
+  -> HTML-to-Text Conversion
   -> Section Extraction
   -> Token-Aware Chunking
   -> Local Embeddings
   -> Qdrant Vector Index + BM25 Index
   -> Query Rewrite for Follow-ups
-  -> Hybrid Retrieval + RRF
+  -> Hybrid Retrieval + Reciprocal Rank Fusion
   -> Cross-Encoder Re-ranking
   -> Semantic Cache / Conversation Memory
-  -> LLM Answer Generation
-  -> FastAPI / SSE Streaming
+  -> Grounded LLM Answer Generation
+  -> FastAPI REST API / SSE Streaming
 ```
 
-Supported corpus:
+## Supported Corpus
 
-| Company | Ticker | Filing Type |
-|---|---|---|
-| Apple | AAPL | 10-K |
-| Microsoft | MSFT | 10-K |
-| Amazon | AMZN | 10-K |
+| Company | Ticker | Filing Type | Sections Indexed |
+|---|---|---|---|
+| Apple | `AAPL` | 10-K | Business, Risk Factors, MD&A, Financial Statements |
+| Microsoft | `MSFT` | 10-K | Business, Risk Factors, MD&A, Financial Statements |
+| Amazon | `AMZN` | 10-K | Business, Risk Factors, MD&A, Financial Statements |
 
-Extracted sections:
-
-| Section | Purpose |
-|---|---|
-| `business` | Business overview and operating context |
-| `risk_factors` | Risk disclosures |
-| `mdna` | Management discussion and analysis |
-| `financial_statements` | Financial statements and notes |
-
-## Current Status
-
-Completed backend milestones:
-
-| Area | Status |
-|---|---|
-| SEC download and section extraction | Complete |
-| Token-aware chunking | Complete |
-| Local embedding pipeline | Complete |
-| Qdrant vector indexing | Complete |
-| Base semantic retrieval | Complete |
-| RAG generation | Complete |
-| Evaluation framework | Complete |
-| FastAPI service | Complete |
-| Hybrid search and re-ranking | Complete |
-| SSE streaming | Complete |
-| Semantic query cache | Complete |
-| Multi-turn conversation memory | Complete |
-| Query decomposition | Foundation module added; full API integration is next |
-
-Latest completed milestone: multi-turn conversation memory with query rewriting.
-
-See `PROJECT_STATE.md` for the detailed engineering handoff document, validation notes, benchmark results, and roadmap.
-
-## API
+## API Endpoints
 
 Run the API locally:
 
@@ -87,8 +74,6 @@ Swagger UI:
 ```text
 http://localhost:8000/docs
 ```
-
-Main endpoints:
 
 | Method | Endpoint | Purpose |
 |---|---|---|
@@ -143,20 +128,16 @@ What is Apple's total revenue?
 
 ## Retrieval Design
 
-The retrieval layer combines multiple signals instead of relying on dense vectors alone.
+The retriever combines lexical and semantic signals instead of relying on vector search alone.
 
 | Stage | Role |
 |---|---|
-| BM25 | Lexical candidate retrieval for exact terms and financial labels |
-| Qdrant semantic search | Dense retrieval for semantic matching |
-| Reciprocal Rank Fusion | Combines BM25 and dense ranked lists without score normalization |
-| Cross-encoder re-ranker | Re-scores candidate chunks for final source ranking |
+| BM25 | Finds exact financial terms, company names, and table labels |
+| Qdrant semantic search | Finds conceptually relevant chunks using dense embeddings |
+| Reciprocal Rank Fusion | Merges BM25 and semantic rankings without score normalization |
+| Cross-encoder re-ranker | Re-scores fused candidates for final source ranking |
 
-Why this matters:
-
-- Dense retrieval alone returned related but sometimes non-answer chunks.
-- Hybrid retrieval improved context precision and fixed a no-filter AWS query that previously returned Microsoft cloud context.
-- Cross-encoder re-ranking improves source quality, with a CPU latency tradeoff.
+This design improved context precision and fixed a no-filter AWS query that previously returned Microsoft cloud context above Amazon evidence.
 
 ## Generation Design
 
@@ -166,8 +147,8 @@ The generator uses a strict financial analyst prompt:
 - Cite factual claims with `[Source N]`.
 - Do not use general knowledge.
 - Do not infer beyond the provided context.
-- Return an explicit fallback when the context is insufficient.
-- Quote numbers exactly as they appear in the context.
+- Quote numbers exactly as they appear in the retrieved context.
+- Return an explicit insufficient-context fallback when evidence is missing.
 
 Supported providers:
 
@@ -175,103 +156,26 @@ Supported providers:
 |---|---|
 | Groq | Primary provider used for current validation |
 | Gemini | Implemented fallback provider |
-| OpenAI/Anthropic | Dependencies present for future extension |
+| OpenAI / Anthropic | Dependencies present for future extension |
 
-## Multi-turn Conversation
+## Evaluation Results
 
-The system supports stateful chat through `session_id`.
-
-Two separate problems are handled explicitly:
-
-| Problem | Solution |
-|---|---|
-| LLM needs prior turns | Recent conversation history is injected into the generation prompt |
-| Retriever cannot resolve pronouns | Follow-up questions are rewritten into standalone retrieval queries |
-
-Validated example:
-
-| Turn | User Message | Internal Behavior |
-|---|---|---|
-| 1 | `What are Apple's main risk factors?` | Stores the user/assistant turn in memory |
-| 2 | `What about their revenue?` | Rewrites to `What is Apple's total revenue?` before retrieval |
-
-Observed Turn 2 answer:
-
-```text
-The Company's total net sales were $416,161 for 2025, $391,035 for 2024, and $383,285 for 2023 [Source 1, Source 2].
-```
-
-Memory implementation:
-
-- Current storage: in-memory.
-- Default TTL: 30 minutes.
-- Future replacement path: SQLite or Redis behind the same small interface.
-- Session isolation has been verified.
-
-## Semantic Cache
-
-Stateless queries use a filter-aware semantic cache.
-
-Cache key components:
-
-| Component | Purpose |
-|---|---|
-| Query embedding similarity | Finds semantically repeated questions |
-| `ticker` | Prevents cross-company reuse |
-| `section` | Prevents cross-section reuse |
-| `top_k` | Prevents source-count mismatch |
-
-Validation results:
-
-| Check | Result |
-|---|---:|
-| Exact repeated `/query` latency | `0.1080s` |
-| Cached `/query/stream` completion | `0.1212s` |
-| Similarity threshold | `0.95` |
-
-The threshold is intentionally conservative. A threshold near `0.90` was unsafe because `Apple revenue` vs `Apple net income` scored `0.919944`.
-
-## Evaluation
-
-The project includes an LLM-as-judge evaluation framework that measures faithfulness, answer relevancy, and context precision.
-
-Semantic retrieval baseline:
-
-| Metric | Score |
-|---|---:|
-| Faithfulness | 0.9000 |
-| Answer relevancy | 0.9167 |
-| Context precision | 0.3833 |
-| Overall | 0.7333 |
-
-Hybrid retrieval result:
-
-| Metric | Score |
-|---|---:|
-| Faithfulness | 0.8667 |
-| Answer relevancy | 0.9333 |
-| Context precision | 0.4750 |
-| Overall | 0.7583 |
+| Metric | Semantic Baseline | Hybrid Retrieval |
+|---|---:|---:|
+| Faithfulness | `0.9000` | `0.8667` |
+| Answer relevancy | `0.9167` | `0.9333` |
+| Context precision | `0.3833` | `0.4750` |
+| Overall | `0.7333` | `0.7583` |
 
 Interpretation:
 
 - Hybrid retrieval improved context precision from `0.3833` to `0.4750`.
-- Overall score improved from `0.7333` to `0.7583`.
-- Context precision is still the main improvement area, especially for financial tables and broad revenue-source questions.
+- Overall evaluation improved from `0.7333` to `0.7583`.
+- The remaining bottleneck is retrieval precision over verticalized financial tables.
 
 ## Performance Notes
 
-Baseline semantic retrieval API latency:
-
-| Query | Filter | Latency |
-|---|---|---:|
-| Apple revenue | `ticker=AAPL`, `section=financial_statements` | `1.2503s` |
-| Microsoft cybersecurity risks | `ticker=MSFT` | `1.2090s` |
-| AWS revenue growth | none | `5.8362s` |
-
-Hybrid retrieval API latency:
-
-| Query | Filter | Latency |
+| Scenario | Filter | Latency |
 |---|---|---:|
 | Apple revenue | `ticker=AAPL`, `section=financial_statements` | `5.2665s` |
 | Microsoft cybersecurity risks | `ticker=MSFT` | `4.6938s` |
@@ -283,16 +187,15 @@ Streaming validation:
 |---|---:|
 | First SSE event, `sources` | `2.4945` |
 | First token, end-to-end TTFT | `2.9459` |
-| Total | `3.5820` |
+| Total response time | `3.5820` |
 
-BM25 optimization:
+Semantic cache validation:
 
-| Implementation | Time over 2,000 loops |
+| Check | Result |
 |---|---:|
-| Previous `list.index()` sort path | `0.083071s` |
-| Precomputed `chunk_id -> index` map | `0.018681s` |
-
-Speedup: `4.45x`.
+| Exact repeated `/query` latency | `0.1080s` |
+| Cached `/query/stream` completion | `0.1212s` |
+| Similarity threshold | `0.95` |
 
 ## Local Setup
 
@@ -337,24 +240,19 @@ Run evaluation:
 .venv\Scripts\python.exe -m scripts.run_evaluation
 ```
 
-Run API:
-
-```powershell
-.venv\Scripts\python.exe -m uvicorn src.api.app:app --reload --port 8000
-```
-
 ## Repository Structure
 
 ```text
-configs/              Project settings
-scripts/              Pipeline and evaluation entry points
+configs/              Environment-backed project settings
+scripts/              Data pipeline, indexing, smoke test, and evaluation entry points
 src/api/              FastAPI application
 src/evaluation/       LLM-as-judge evaluation framework
 src/generation/       RAG generation, streaming, and decomposition foundation
-src/ingestion/        SEC download, extraction, and chunking
+src/ingestion/        SEC download, section extraction, and chunking
 src/memory/           Conversation memory and query rewriting
-src/retrieval/        Embeddings, vector store, retrieval, hybrid search, cache
-PROJECT_STATE.md      Detailed engineering handoff and milestone state
+src/retrieval/        Embeddings, vector store, hybrid retrieval, and semantic cache
+tests/                Unit tests
+PROJECT_STATE.md      Detailed engineering handoff and milestone notes
 ```
 
 ## Data And Secrets
@@ -367,33 +265,48 @@ Generated artifacts are intentionally ignored by git:
 - Local Qdrant index.
 - Evaluation result JSON.
 
-Secrets are loaded from `.env` and should not be committed.
+Secrets are loaded from `.env` and should never be committed.
+
+## Current Status
+
+| Area | Status |
+|---|---|
+| SEC download and section extraction | Complete |
+| Token-aware chunking | Complete |
+| Local embedding pipeline | Complete |
+| Qdrant vector indexing | Complete |
+| Base semantic retrieval | Complete |
+| RAG generation | Complete |
+| Evaluation framework | Complete |
+| FastAPI service | Complete |
+| Hybrid search and re-ranking | Complete |
+| SSE streaming | Complete |
+| Semantic query cache | Complete |
+| Multi-turn conversation memory | Complete |
+| Query decomposition | Foundation module added; API integration pending |
 
 ## Known Limitations
 
-- The current corpus covers only AAPL, MSFT, and AMZN.
+- The current corpus covers only `AAPL`, `MSFT`, and `AMZN`.
 - Extraction is validated on the current 10-K filings but not across a large company universe yet.
-- Financial statements become verticalized after HTML-to-text conversion, so exact numeric retrieval is harder than prose retrieval.
+- Financial statements become verticalized after HTML-to-text conversion, making exact numeric retrieval harder than prose retrieval.
 - Hybrid retrieval improves source quality but adds CPU latency due to cross-encoder re-ranking.
 - Semantic cache and conversation memory are currently in-memory and are lost on process restart.
 - Multi-turn query rewriting adds one LLM call for follow-up questions.
 - Groq free tier can return `429 Too Many Requests`; SDK retries can recover but increase latency.
-- Gemini Flash Lite can return temporary `503 UNAVAILABLE` under high demand.
 
 ## Roadmap
 
-Near-term engineering priorities:
-
 1. Integrate query decomposition into the API for compound and comparative questions.
 2. Improve financial table retrieval with table-aware chunking or metadata boosts.
-3. Expand the evaluation set from a small fixed set to a broader benchmark.
-4. Add automated unit and integration tests.
+3. Expand the evaluation set into a broader benchmark.
+4. Add automated unit and integration tests for extraction, retrieval, API, and memory.
 5. Build a Streamlit demo UI over `/query/stream`.
 6. Add Docker packaging for reproducible deployment.
 
 ## Why This Project Matters
 
-This project demonstrates the practical engineering work required to move RAG beyond a simple embedding demo:
+This project demonstrates the engineering work required to move RAG beyond a simple embedding demo:
 
 - Robust document preprocessing.
 - Retrieval quality measurement.
@@ -403,4 +316,4 @@ This project demonstrates the practical engineering work required to move RAG be
 - Multi-turn query rewriting.
 - Clear limitations and reproducible validation.
 
-The goal is not to hide the hard parts of document QA, but to expose them, measure them, and improve them systematically.
+The goal is not to hide the hard parts of enterprise document QA, but to expose them, measure them, and improve them systematically.

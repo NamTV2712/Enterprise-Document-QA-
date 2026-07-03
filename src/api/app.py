@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from configs.settings import settings
 from src.generation.generator import Generator
+from src.generation.query_decomposer import QueryDecomposer
 from src.generation.rag_pipeline import RAGPipeline
 from src.retrieval.embedder import Embedder
 from src.retrieval.hybrid_retriever import HybridRetriever, load_embedded_chunks
@@ -49,10 +50,12 @@ async def lifespan(app: FastAPI):
 
     retriever = HybridRetriever(embedder=embedder, store=store, all_chunks=all_chunks)
     generator = Generator(provider="groq")
-    _state["pipeline"] = RAGPipeline(retriever=retriever, generator=generator)
+    pipeline = RAGPipeline(retriever=retriever, generator=generator)
+    _state["pipeline"] = pipeline
+    _state["decomposer"] = QueryDecomposer(pipeline=pipeline)
     _state["store"] = store
 
-    logger.info("Hybrid pipeline ready after %.1f seconds", time.time() - t0)
+    logger.info("Hybrid pipeline and decomposer ready after %.1f seconds", time.time() - t0)
     yield
     store.close()
     logger.info("VectorStore closed.")
@@ -114,6 +117,22 @@ class QueryResponse(BaseModel):
     num_chunks_retrieved: int
 
 
+class SubQueryInfo(BaseModel):
+    query: str
+    ticker: str | None
+    section: str | None
+    num_chunks: int
+
+
+class DecomposedQueryResponse(BaseModel):
+    answer: str
+    model_used: str
+    was_decomposed: bool
+    sub_queries: list[SubQueryInfo]
+    sources: list[SourceChunk]
+    num_total_chunks: int
+
+
 class CacheTestRequest(BaseModel):
     query_a: str = Field(min_length=5)
     query_b: str = Field(min_length=5)
@@ -167,6 +186,55 @@ async def query(request: QueryRequest) -> QueryResponse:
         model_used=response.model_used,
         sources=sources,
         num_chunks_retrieved=len(response.retrieved_chunks),
+    )
+
+
+@app.post("/query/decomposed", response_model=DecomposedQueryResponse)
+async def query_decomposed(request: QueryRequest) -> DecomposedQueryResponse:
+    """Handle complex or comparative questions with optional query decomposition.
+
+    Simple questions fall back to the normal RAG pipeline. Complex questions are
+    planned into focused sub-queries, retrieved independently, and synthesized
+    into one grounded answer.
+    """
+    decomposer: QueryDecomposer | None = _state.get("decomposer")
+    if decomposer is None:
+        raise HTTPException(status_code=503, detail="The decomposer is not ready yet")
+
+    try:
+        result = decomposer.run(
+            question=request.question,
+            top_k=request.top_k,
+            ticker=request.ticker,
+            section=request.section,
+            session_id=request.session_id,
+        )
+    except Exception as e:
+        logger.exception("Error occurred while processing decomposed query: %s", e)
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+    return DecomposedQueryResponse(
+        answer=result.answer,
+        model_used=result.model_used,
+        was_decomposed=result.was_decomposed,
+        sub_queries=[
+            SubQueryInfo(
+                query=sub_query.query,
+                ticker=sub_query.ticker,
+                section=sub_query.section,
+                num_chunks=len(sub_query.retrieved_chunks),
+            )
+            for sub_query in result.sub_queries
+        ],
+        sources=[
+            SourceChunk(
+                citation=chunk.citation,
+                score=round(chunk.score, 4),
+                text_preview=chunk.text[:200],
+            )
+            for chunk in result.all_chunks[:10]
+        ],
+        num_total_chunks=len(result.all_chunks),
     )
 
 

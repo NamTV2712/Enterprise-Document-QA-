@@ -854,17 +854,33 @@ Note: the `Characters` column is character count, not token count.
 - Gemini Flash Lite may return temporary `503 UNAVAILABLE` under high demand.
 - OpenAI key in the current environment was not a valid OpenAI Platform key during testing.
 
+## Latest Step
+
+Phase 2B Step D: Query Decomposition is integrated into the API.
+
+Implemented behavior:
+
+1. `POST /query/decomposed` detects compound or comparative questions.
+2. Simple questions fall back to the normal RAG pipeline.
+3. Complex questions are split into focused sub-queries.
+4. Evidence is retrieved per sub-query and deduplicated by `chunk_id`.
+5. The final answer is synthesized from merged sources with citations.
+
+Validation note:
+
+- The 3-company cybersecurity comparison returned 3 chunks each for AAPL, MSFT, and AMZN after fixing a shared-model thread-safety issue.
+- Query decomposition dispatches sub-queries concurrently but serializes model inference through a lock. True parallel model inference is deferred until scoped model locks or separate model instances are introduced.
+
 ## Next Step
 
-Phase 2B Step D: Query Decomposition.
+Phase 2C: Evaluation metrics expansion.
 
 Recommended priorities:
 
-1. Detect compound or comparative questions that should be decomposed.
-2. Split complex questions into focused sub-queries.
-3. Retrieve evidence per sub-query and merge sources safely.
-4. Generate final answers that preserve source grounding across sub-answers.
-5. Add validation cases for multi-hop and comparison questions.
+1. Add `latency_seconds` to evaluation outputs.
+2. Add citation correctness scoring.
+3. Add a retrieval recall proxy before full chunk-level recall labels exist.
+4. Preserve the current faithfulness, answer relevancy, and context precision metrics.
 
 Deferred production-quality item:
 

@@ -869,7 +869,7 @@ Implemented behavior:
 Validation note:
 
 - The 3-company cybersecurity comparison returned 3 chunks each for AAPL, MSFT, and AMZN after fixing a shared-model thread-safety issue.
-- Query decomposition dispatches sub-queries concurrently but serializes model inference through a lock. True parallel model inference is deferred until scoped model locks or separate model instances are introduced.
+- Known limitation: Query decomposition dispatches sub-queries concurrently via `ThreadPoolExecutor`, but a global lock around `retrieve()` serializes model inference (`Embedder` + cross-encoder) to prevent a confirmed race condition in Nomic BERT's rotary embedding cache. Measured overhead: `2.98x` vs single query (`n=3` sub-queries), consistent with near-full serialization. Scoped locking around only `model.encode()` and `cross_encoder.predict()` would restore I/O-bound parallelism, but is deferred pending corpus expansion to validate the gain.
 
 ## Next Step
 

@@ -22,16 +22,60 @@ Do not add any explanation outside the JSON object."""
 @dataclass
 class EvalResult:
     question: str
-    faithfulness: float        # 0.0 – 1.0
-    answer_relevancy: float    # 0.0 – 1.0
-    context_precision: float   # 0.0 – 1.0
+    faithfulness: float
+    answer_relevancy: float
+    context_precision: float
     faithfulness_reason: str
     relevancy_reason: str
     precision_reason: str
+    latency_seconds: float = 0.0
+    citation_correctness: float | None = None
+    recall_proxy: float | None = None
+    fallback_correct: bool = True
 
     @property
     def average_score(self) -> float:
         return round((self.faithfulness + self.answer_relevancy + self.context_precision) / 3, 4)
+
+
+def compute_citation_correctness(answer: str, num_sources: int) -> float | None:
+    """Return the fraction of cited source numbers that are in range.
+
+    This deterministic check catches citation hallucinations such as citing
+    Source 7 when only five chunks were retrieved. It returns None when the
+    answer contains no source citations, which is usually a fallback case.
+    """
+    citation_numbers = [int(n) for n in re.findall(r"Source\s+(\d+)", answer)]
+    if not citation_numbers:
+        return None
+
+    valid = [n for n in citation_numbers if 1 <= n <= num_sources]
+    return len(valid) / len(citation_numbers)
+
+
+def compute_recall_proxy(
+    required_keywords: list[str],
+    retrieved_chunks: list[RetrievedChunk],
+) -> float | None:
+    """Return the fraction of required keywords found in retrieved context.
+
+    This is a deterministic proxy for Recall@5. It is not true recall because
+    true recall requires labeled ground-truth chunk IDs, but it verifies whether
+    the retrieved context contains the minimum evidence terms for each test.
+    """
+    if not required_keywords:
+        return None
+
+    combined_text = " ".join(chunk.text.lower() for chunk in retrieved_chunks)
+    matched = sum(1 for keyword in required_keywords if keyword.lower() in combined_text)
+    return matched / len(required_keywords)
+
+
+def check_fallback_correctness(answer: str, expects_fallback: bool) -> bool:
+    """Check whether fallback behavior matches the expected test behavior."""
+    fallback_phrase = "could not find sufficient information"
+    is_fallback = fallback_phrase in answer.lower()
+    return is_fallback == expects_fallback
 
 
 class RAGEvaluator:

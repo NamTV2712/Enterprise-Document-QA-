@@ -6,6 +6,7 @@ execute them in parallel, and aggregate the results
 
 import json
 import logging
+import re
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -14,24 +15,71 @@ from src.retrieval.retriever import RetrievedChunk
 
 logger = logging.getLogger(__name__)
 
+
+def _is_retryable_external_error(error: Exception) -> bool:
+    message = str(error).lower()
+    return (
+        "429" in message
+        or "rate limit" in message
+        or "quota" in message
+        or "503" in message
+        or "unavailable" in message
+    )
+
+
 SUPPORTED_TICKERS = ["AAPL", "MSFT", "AMZN"]  # will read from config after expanding corpus
 
 DECOMPOSE_SYSTEM_PROMPT = """You are an expert at analyzing financial questions about SEC 10-K filings.
-Your job is to determine if a question requires information from multiple companies or multiple topics,
-and if so, break it into simple sub-queries.
+Your job is to determine if a question requires decomposition into sub-queries, and if so, create them.
 
-Rules:
-1. If the question can be answered from ONE company's ONE section, return:
-   {"needs_decomposition": false}
+A question needs decomposition in TWO distinct cases:
 
-2. If the question requires comparing multiple companies OR combining multiple topics, return:
-   {"needs_decomposition": true, "sub_queries": [
-     {"query": "specific question 1", "ticker": "AAPL or null", "section": "section_name or null"},
-     {"query": "specific question 2", "ticker": "MSFT or null", "section": "section_name or null"}
-   ]}
+CASE 1 - Multi-company comparison: the question compares 2+ companies.
+CASE 2 - Single-company enumeration: the question asks to list/enumerate MULTIPLE
+distinct items, categories, segments, or topics about ONE company (e.g. "main sources
+of revenue", "all risk factors", "product categories", "business segments"). A single
+retrieval of top-5 chunks is usually NOT enough to cover all items for these questions,
+because each item/category tends to live in a different chunk of the document.
 
-Valid section values: business, risk_factors, mdna, financial_statements, null (search all)
-Valid ticker values: AAPL, MSFT, AMZN, null (search all)
+If NEITHER case applies (single fact, single topic, single company), return:
+{"needs_decomposition": false}
+
+For CASE 1, return one sub-query per company:
+{"needs_decomposition": true, "sub_queries": [
+  {"query": "...", "ticker": "AAPL", "section": "..."},
+  {"query": "...", "ticker": "MSFT", "section": "..."}
+]}
+
+For CASE 2, return 3-5 sub-queries, SAME ticker, each targeting a distinct topic/category
+you infer from general knowledge of what such enumeration usually includes for that
+type of company:
+{"needs_decomposition": true, "sub_queries": [
+  {"query": "specific sub-topic 1", "ticker": "MSFT", "section": "business"},
+  {"query": "specific sub-topic 2", "ticker": "MSFT", "section": "business"},
+  {"query": "specific sub-topic 3", "ticker": "MSFT", "section": "business"}
+]}
+
+Valid section values: business, risk_factors, mdna, financial_statements, null
+Valid ticker values: AAPL, MSFT, AMZN, null
+
+Examples:
+Q: "What are the main sources of revenue for Microsoft?"
+A: {"needs_decomposition": true, "sub_queries": [
+  {"query": "Microsoft cloud and Azure revenue", "ticker": "MSFT", "section": "business"},
+  {"query": "Microsoft Office and productivity software revenue", "ticker": "MSFT", "section": "business"},
+  {"query": "Microsoft LinkedIn revenue", "ticker": "MSFT", "section": "business"},
+  {"query": "Microsoft gaming and Xbox revenue", "ticker": "MSFT", "section": "business"},
+  {"query": "Microsoft Windows and devices revenue", "ticker": "MSFT", "section": "business"}
+]}
+
+Q: "What are Apple's main risk factors related to competition?"
+A: {"needs_decomposition": false}
+
+Q: "Compare Apple and Microsoft cloud revenue"
+A: {"needs_decomposition": true, "sub_queries": [
+  {"query": "Apple services and cloud revenue", "ticker": "AAPL", "section": "mdna"},
+  {"query": "Microsoft Azure and cloud revenue", "ticker": "MSFT", "section": "mdna"}
+]}
 
 Return ONLY valid JSON, no explanation."""
 
@@ -157,7 +205,7 @@ class QueryDecomposer:
                         {"role": "system", "content": DECOMPOSE_SYSTEM_PROMPT},
                         {"role": "user", "content": f"Question: {question}"},
                     ],
-                    max_tokens=300,
+                    max_tokens=700,
                     temperature=0,
                 ).choices[0].message.content.strip()
             else:
@@ -166,7 +214,7 @@ class QueryDecomposer:
                     model=self.generator.model,
                     config=types.GenerateContentConfig(
                         system_instruction=DECOMPOSE_SYSTEM_PROMPT,
-                        max_output_tokens=300,
+                        max_output_tokens=700,
                     ),
                     contents=f"Question: {question}",
                 ).text.strip()
@@ -177,11 +225,17 @@ class QueryDecomposer:
                 if raw.startswith("json"):
                     raw = raw[4:]
 
+            match = re.search(r"\{.*\}", raw, flags=re.DOTALL)
+            if match:
+                raw = match.group(0)
+
             plan = json.loads(raw)
             logger.info("Decomposition plan: %s", plan)
             return plan
 
         except Exception as e:
+            if _is_retryable_external_error(e):
+                raise
             logger.warning("Decomposition planning failed: %s - treating as simple", e)
             return {"needs_decomposition": False}
 
@@ -291,5 +345,7 @@ class QueryDecomposer:
                     contents=user_message,
                 ).text
         except Exception as e:
+            if _is_retryable_external_error(e):
+                raise
             logger.error("Synthesis failed: %s", e)
             return f"Error synthesizing answer: {e}"

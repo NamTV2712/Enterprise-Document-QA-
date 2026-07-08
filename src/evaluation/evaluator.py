@@ -1,7 +1,7 @@
 """
 Module: evaluator.py
-LLM-as-Judge: Use Groq (llama-3.3-70b) to evaluate each RAG response
-according to 3 metrics: Faithfulness, Answer Relevancy, and Context Precision.
+LLM-as-Judge: evaluate each RAG response according to 3 metrics:
+Faithfulness, Answer Relevancy, and Context Precision.
 """
 
 import json
@@ -155,16 +155,29 @@ Scoring guide:
             }
 
     def _call_judge(self, prompt: str) -> str:
-        if self.judge.provider != "groq":
-            raise ValueError("RAGEvaluator currently expects a Groq judge generator")
+        if self.judge.provider == "groq":
+            response = self.judge.client.chat.completions.create(
+                model=self.judge.model,
+                messages=[
+                    {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=320,
+                temperature=0,
+            )
+            return response.choices[0].message.content or ""
 
-        response = self.judge.client.chat.completions.create(
-            model=self.judge.model,
-            messages=[
-                {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            max_tokens=320,
-            temperature=0,
-        )
-        return response.choices[0].message.content or ""
+        if self.judge.provider == "gemini":
+            from google.genai import types
+            response = self.judge.client.models.generate_content(
+                model=self.judge.model,
+                config=types.GenerateContentConfig(
+                    system_instruction=JUDGE_SYSTEM_PROMPT,
+                    max_output_tokens=320,
+                    temperature=0,
+                ),
+                contents=prompt,
+            )
+            return response.text or ""
+
+        raise ValueError(f"Unsupported judge provider: {self.judge.provider}")

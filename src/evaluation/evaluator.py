@@ -14,6 +14,7 @@ from src.retrieval.retriever import RetrievedChunk
 
 logger = logging.getLogger(__name__)
 
+
 JUDGE_SYSTEM_PROMPT = """You are an expert evaluator for RAG (Retrieval-Augmented Generation) systems.
 Your job is to evaluate responses objectively and return ONLY valid JSON.
 Do not add any explanation outside the JSON object."""
@@ -91,7 +92,7 @@ class RAGEvaluator:
         chunks: list[RetrievedChunk],
         ground_truth: str,
     ) -> EvalResult:
-        context_texts = [c.text for c in chunks]
+        context_texts = [c.text for c in chunks[:8]]
         scores = self._judge_all(question, answer, context_texts, ground_truth)
         return EvalResult(question=question, **scores)
 
@@ -103,7 +104,7 @@ class RAGEvaluator:
         ground_truth: str,
     ) -> dict:
         context_str = "\n\n".join(
-            f"[Chunk {i+1}]: {t[:400]}" for i, t in enumerate(context_texts)
+            f"[Chunk {i+1}]: {t[:250]}" for i, t in enumerate(context_texts)
         )
         prompt = f"""Evaluate this RAG system response on 3 metrics. Return ONLY a JSON object.
 
@@ -163,7 +164,7 @@ Scoring guide:
                 {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
-            max_tokens=512,
+            max_tokens=320,
             temperature=0,
         )
         return response.choices[0].message.content or ""

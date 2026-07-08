@@ -6,6 +6,9 @@ Steps 1-11 are complete for the MVP Enterprise Document QA / SEC 10-K RAG pipeli
 Phase 2A Step A, Streaming Response, is complete and verified.
 Phase 2A Step A.1, Semantic Query Cache, is complete and verified.
 Phase 2B Step C, Multi-turn Conversation with Memory, is complete and verified.
+Phase 2B Step D, Query Decomposition, is integrated and verified for comparative queries.
+Phase 2C Muc 2, deterministic evaluation metrics and enumeration retrieval diagnosis, is complete.
+Phase 2C Muc 3, 30-case categorized evaluation set and decomposer-routed evaluation, is implemented. Full 30-case LLM-judge run is blocked by Groq free-tier quota.
 
 Latest completed milestone commit:
 
@@ -72,9 +75,9 @@ The system answers finance/document questions using retrieved filing context and
 - `src/generation/rag_pipeline.py`
   End-to-end RAG pipeline combining Retriever + Generator, including semantic cache checks, conversation memory, query rewriting, and `query_stream()` for SSE events.
 - `src/evaluation/evaluator.py`
-  LLM-as-judge evaluation for faithfulness, answer relevancy, and context precision.
+  LLM-as-judge evaluation for faithfulness, answer relevancy, and context precision, plus deterministic citation/fallback/recall-proxy checks.
 - `src/evaluation/test_set.py`
-  Fixed evaluation set covering numeric, risk, business/cloud, and out-of-corpus fallback questions.
+  Fixed 30-case categorized evaluation set covering fact lookup, summary, enumeration, comparative, multi-hop, and out-of-corpus fallback questions.
 - `src/api/app.py`
   FastAPI service exposing `/health`, `/query`, `/query/stream`, `/supported-tickers`, cache endpoints, session endpoints, and Swagger UI at `/docs`.
 - `scripts/download_filings.py`
@@ -767,6 +770,7 @@ These are generated locally and ignored by git because `data/` is ignored:
 - Embedded chunks: `data/processed/{TICKER}/*_chunks_embedded.jsonl`
 - Qdrant local index: `data/processed/qdrant`
 - Evaluation results: `data/evaluation_results.json`
+- Expanded evaluation results: `data/evaluation_results_v2.json`
 
 If a new session starts without these local artifacts, regenerate in order:
 
@@ -850,37 +854,44 @@ Note: the `Characters` column is character count, not token count.
 - Semantic cache threshold is conservative. It catches exact or near-identical repeats, but does not yet cache broader paraphrases safely.
 - Conversation memory is in-memory only; sessions are lost on process restart and are not shared across multiple API workers.
 - Query rewriting adds one LLM call for follow-up questions with history, so multi-turn latency can be higher than stateless queries.
+- Enumeration-type queries such as `What are the main sources of revenue for Microsoft?` underperform compared with fact-lookup queries. Current hypothesis: the system architecture (`top_k=5` plus a single-answer generation prompt) is tuned for focused QA, not exhaustive listing. Diagnostic result: Azure appears inside the top-20 candidate pool but outside the final top-5 for the Microsoft revenue-source query, indicating a top-k/query-type sizing issue rather than a hard retrieval miss. Candidate fix: extend query decomposition to detect single-company enumeration queries, not only multi-company comparisons.
+- Query decomposer currently does not detect single-company enumeration as needing decomposition. Partial Muc 3 evaluation confirmed `enumeration decomposition_correct = 0/4 = 0.00` for the four enumeration cases, while comparative multi-company cases do trigger decomposition.
 - Groq free tier can return `429 Too Many Requests`; SDK retries can recover, but latency may spike.
+- Full 30-case Muc 3 evaluation could not complete under current Groq free-tier token limits. Retrying after quota exhaustion causes long waits and contaminates latency metrics, so official category-level results should be generated from a clean run after quota reset or with a lower-cost judge/model configuration.
 - Gemini Flash Lite may return temporary `503 UNAVAILABLE` under high demand.
 - OpenAI key in the current environment was not a valid OpenAI Platform key during testing.
 
 ## Latest Step
 
-Phase 2B Step D: Query Decomposition is integrated into the API.
+Phase 2C Muc 3: Expanded evaluation set and decomposer-routed evaluation are implemented.
 
-Implemented behavior:
+Implemented evaluation behavior:
 
-1. `POST /query/decomposed` detects compound or comparative questions.
-2. Simple questions fall back to the normal RAG pipeline.
-3. Complex questions are split into focused sub-queries.
-4. Evidence is retrieved per sub-query and deduplicated by `chunk_id`.
-5. The final answer is synthesized from merged sources with citations.
+1. `src/evaluation/test_set.py` now contains 30 cases across six categories: `fact_lookup`, `summary`, `enumeration`, `comparative`, `multi_hop`, and `out_of_corpus`.
+2. Each test case has `category` and `expects_decomposition` metadata.
+3. `scripts/run_evaluation.py` routes every test case through `QueryDecomposer.run()` instead of directly calling `RAGPipeline.query()`.
+4. Simple questions still use the normal RAG path because the decomposer returns `was_decomposed=False` and falls back internally.
+5. Evaluation output now includes `DecompOK`, category summaries, sub-query metadata, answer text, and writes to `data/evaluation_results_v2.json`.
+6. Out-of-corpus fallback failures log the actual answer for debugging.
 
-Validation note:
+Validation notes:
 
 - The 3-company cybersecurity comparison returned 3 chunks each for AAPL, MSFT, and AMZN after fixing a shared-model thread-safety issue.
 - Known limitation: Query decomposition dispatches sub-queries concurrently via `ThreadPoolExecutor`, but a global lock around `retrieve()` serializes model inference (`Embedder` + cross-encoder) to prevent a confirmed race condition in Nomic BERT's rotary embedding cache. Measured overhead: `2.98x` vs single query (`n=3` sub-queries), consistent with near-full serialization. Scoped locking around only `model.encode()` and `cross_encoder.predict()` would restore I/O-bound parallelism, but is deferred pending corpus expansion to validate the gain.
+- Muc 2 Microsoft revenue-source diagnostic confirmed that Azure evidence chunks (`business_0006`, `business_0007`, `business_0008`) appear inside top-20 BM25 and semantic candidate pools, but not in top-3 for either method. This confirms an enumeration/query-shaping and final top-k issue, not a hard retrieval miss.
+- Partial Muc 3 run reached all four enumeration cases. All four had `expects_decomposition=True`, `was_decomposed=False`, and `decomposition_correct=False`, so enumeration decomposition correctness is currently `0/4 = 0.00`.
+- Full 30-case grouped category table is still unavailable because Groq returned repeated `429` quota errors before the run completed. Long retry sleeps should not be counted as valid latency data.
 
 ## Next Step
 
-Phase 2C: Evaluation metrics expansion.
+Phase 2C: Close Muc 3 with a clean full evaluation run, then decide whether to fix enumeration detection immediately.
 
 Recommended priorities:
 
-1. Add `latency_seconds` to evaluation outputs.
-2. Add citation correctness scoring.
-3. Add a retrieval recall proxy before full chunk-level recall labels exist.
-4. Preserve the current faithfulness, answer relevancy, and context precision metrics.
+1. Rerun `python -m scripts.run_evaluation` after Groq quota reset, or switch to a lower-cost judge/model configuration for evaluation only.
+2. Capture the full six-category summary table from `data/evaluation_results_v2.json`.
+3. Use the confirmed `enumeration decomposition_correct = 0.00` result to update `DECOMPOSE_SYSTEM_PROMPT` for single-company enumeration queries.
+4. Re-run the enumeration subset after prompt changes before changing retrieval top-k globally.
 
 Deferred production-quality item:
 

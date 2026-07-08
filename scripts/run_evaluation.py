@@ -6,6 +6,7 @@ Run the entire test set, print the results table, and save it to JSON.
 import json
 import logging
 import time
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from src.evaluation.evaluator import (
 )
 from src.evaluation.test_set import TEST_SET
 from src.generation.generator import Generator
+from src.generation.query_decomposer import QueryDecomposer
 from src.generation.rag_pipeline import RAGPipeline
 from src.retrieval.embedder import Embedder
 from src.retrieval.hybrid_retriever import HybridRetriever, load_embedded_chunks
@@ -43,6 +45,10 @@ def _pass_fail(value: bool) -> str:
     return "PASS" if value else "FAIL"
 
 
+def _average(values: list[float]) -> float:
+    return sum(values) / len(values) if values else 0.0
+
+
 def main() -> None:
     # --- Initialize pipeline ---
     embedder = Embedder()
@@ -53,18 +59,20 @@ def main() -> None:
     evaluator = RAGEvaluator(judge_generator=judge_generator)
 
     results: list[EvalResult] = []
+    rows: list[dict] = []
     fallback_checks: list[bool] = []
     with VectorStore(path=settings.data_processed_dir / "qdrant") as store:
         all_chunks = load_embedded_chunks(settings.data_processed_dir)
         logger.info("Loaded %d chunks for BM25 index", len(all_chunks))
         retriever = HybridRetriever(embedder=embedder, store=store, all_chunks=all_chunks)
         pipeline = RAGPipeline(retriever=retriever, generator=generator)
+        decomposer = QueryDecomposer(pipeline=pipeline)
 
         for tc in TEST_SET:
             logger.info("Evaluating: %s", tc.question[:60])
 
             t0 = time.perf_counter()
-            response = pipeline.query(
+            response = decomposer.run(
                 question=tc.question,
                 top_k=5,
                 ticker=tc.ticker,
@@ -75,7 +83,7 @@ def main() -> None:
             judge_result = evaluator.evaluate_one(
                 question=tc.question,
                 answer=response.answer,
-                chunks=response.retrieved_chunks,
+                chunks=response.all_chunks,
                 ground_truth=tc.ground_truth,
             )
 
@@ -83,17 +91,25 @@ def main() -> None:
             if not tc.expects_fallback:
                 citation_score = compute_citation_correctness(
                     response.answer,
-                    len(response.retrieved_chunks),
+                    len(response.all_chunks),
                 )
             recall_score = compute_recall_proxy(
                 tc.required_keywords,
-                response.retrieved_chunks,
+                response.all_chunks,
             )
             fallback_ok = check_fallback_correctness(
                 response.answer,
                 tc.expects_fallback,
             )
             fallback_checks.append(fallback_ok)
+            decomp_ok = response.was_decomposed == tc.expects_decomposition
+
+            if tc.category == "out_of_corpus" and not fallback_ok:
+                logger.warning(
+                    "Out-of-corpus fallback failed for '%s'. Actual answer: %s",
+                    tc.question,
+                    response.answer,
+                )
 
             result = EvalResult(
                 question=tc.question,
@@ -109,10 +125,28 @@ def main() -> None:
                 fallback_correct=fallback_ok,
             )
             results.append(result)
+            rows.append(
+                {
+                    "test_case": tc,
+                    "result": result,
+                    "answer": response.answer,
+                    "was_decomposed": response.was_decomposed,
+                    "decomposition_correct": decomp_ok,
+                    "sub_queries": [
+                        {
+                            "query": sq.query,
+                            "ticker": sq.ticker,
+                            "section": sq.section,
+                            "num_chunks": len(sq.retrieved_chunks),
+                        }
+                        for sq in response.sub_queries
+                    ],
+                }
+            )
 
             logger.info(
                 "  Faith=%.2f Relev=%.2f Prec=%.2f | Latency=%.2fs | "
-                "Citation=%s | Recall=%s | FallbackOK=%s",
+                "Citation=%s | Recall=%s | FallbackOK=%s | DecompOK=%s",
                 result.faithfulness,
                 result.answer_relevancy,
                 result.context_precision,
@@ -120,24 +154,28 @@ def main() -> None:
                 _format_optional(result.citation_correctness),
                 _format_optional(result.recall_proxy),
                 result.fallback_correct,
+                decomp_ok,
             )
             time.sleep(2)
 
     # --- Print summary table ---
-    print(f"\n{'='*100}")
+    print(f"\n{'='*110}")
     print(
-        f"{'Question':<40}{'Faith':>7}{'Relev':>7}{'Prec':>7}"
-        f"{'Lat(s)':>8}{'Cite':>7}{'Recall':>8}{'FB':>6}"
+        f"{'Category':<15}{'Question':<36}{'Faith':>7}{'Relev':>7}{'Prec':>7}"
+        f"{'Lat(s)':>8}{'Cite':>7}{'Recall':>8}{'FB':>6}{'Decomp':>8}"
     )
-    print(f"{'='*100}")
-    for result in results:
+    print(f"{'='*110}")
+    for row in rows:
+        tc = row["test_case"]
+        result = row["result"]
         question = result.question[:39]
         print(
-            f"{question:<40}{result.faithfulness:>7.2f}{result.answer_relevancy:>7.2f}"
+            f"{tc.category:<15}{question:<36}{result.faithfulness:>7.2f}{result.answer_relevancy:>7.2f}"
             f"{result.context_precision:>7.2f}{result.latency_seconds:>8.2f}"
             f"{_format_optional(result.citation_correctness):>7}"
             f"{_format_optional(result.recall_proxy):>8}"
             f"{_format_bool(result.fallback_correct):>6}"
+            f"{_format_bool(row['decomposition_correct']):>8}"
         )
 
     avg_faith = sum(result.faithfulness for result in results) / len(results)
@@ -181,6 +219,60 @@ def main() -> None:
         f"({sum(fallback_checks)}/{len(fallback_checks)} correct)"
     )
 
+    grouped: dict[str, list[dict]] = defaultdict(list)
+    for row in rows:
+        grouped[row["test_case"].category].append(row)
+
+    print(f"\n{'='*110}")
+    print("CATEGORY SUMMARY:")
+    print(
+        f"{'Category':<15}{'N':>4}{'Faith':>8}{'Relev':>8}{'Prec':>8}"
+        f"{'Latency':>10}{'Cite':>8}{'Recall':>8}{'Fallback':>10}{'DecompOK':>10}"
+    )
+    print(f"{'-'*110}")
+    category_summaries = {}
+    for category, category_rows in sorted(grouped.items()):
+        category_results = [row["result"] for row in category_rows]
+        category_citations = [
+            result.citation_correctness
+            for result in category_results
+            if result.citation_correctness is not None
+        ]
+        category_recalls = [
+            result.recall_proxy
+            for result in category_results
+            if result.recall_proxy is not None
+        ]
+        category_fallback = _average([1.0 if result.fallback_correct else 0.0 for result in category_results])
+        category_decomp = _average([1.0 if row["decomposition_correct"] else 0.0 for row in category_rows])
+        summary = {
+            "count": len(category_rows),
+            "faithfulness": round(_average([result.faithfulness for result in category_results]), 4),
+            "answer_relevancy": round(_average([result.answer_relevancy for result in category_results]), 4),
+            "context_precision": round(_average([result.context_precision for result in category_results]), 4),
+            "latency_seconds": round(_average([result.latency_seconds for result in category_results]), 4),
+            "citation_correctness": round(_average(category_citations), 4) if category_citations else None,
+            "recall_proxy": round(_average(category_recalls), 4) if category_recalls else None,
+            "fallback_accuracy": round(category_fallback, 4),
+            "decomposition_correct": round(category_decomp, 4),
+        }
+        category_summaries[category] = summary
+        print(
+            f"{category:<15}{summary['count']:>4}{summary['faithfulness']:>8.2f}"
+            f"{summary['answer_relevancy']:>8.2f}{summary['context_precision']:>8.2f}"
+            f"{summary['latency_seconds']:>10.2f}"
+            f"{_format_optional(summary['citation_correctness']):>8}"
+            f"{_format_optional(summary['recall_proxy']):>8}"
+            f"{summary['fallback_accuracy']:>10.2f}{summary['decomposition_correct']:>10.2f}"
+        )
+
+    enumeration = category_summaries.get("enumeration")
+    if enumeration:
+        print(
+            "\nEnumeration decomposition correctness: "
+            f"{enumeration['decomposition_correct']:.4f}"
+        )
+
     # --- Save JSON for time-series tracking ---
     output = {
         "timestamp": datetime.now().isoformat(),
@@ -196,9 +288,18 @@ def main() -> None:
             "recall_proxy": round(avg_recall, 4) if avg_recall is not None else None,
             "fallback_accuracy": round(fallback_accuracy, 4),
         },
+        "category_summaries": category_summaries,
         "results": [
             {
                 "question": result.question,
+                "category": row["test_case"].category,
+                "ticker": row["test_case"].ticker,
+                "section": row["test_case"].section,
+                "expects_decomposition": row["test_case"].expects_decomposition,
+                "was_decomposed": row["was_decomposed"],
+                "decomposition_correct": row["decomposition_correct"],
+                "sub_queries": row["sub_queries"],
+                "answer": row["answer"],
                 "faithfulness": result.faithfulness,
                 "answer_relevancy": result.answer_relevancy,
                 "context_precision": result.context_precision,
@@ -213,10 +314,11 @@ def main() -> None:
                     "precision": result.precision_reason,
                 },
             }
-            for result in results
+            for row in rows
+            for result in [row["result"]]
         ],
     }
-    out_path = Path("data/evaluation_results.json")
+    out_path = Path("data/evaluation_results_v2.json")
     out_path.parent.mkdir(exist_ok=True)
     out_path.write_text(json.dumps(output, indent=2, ensure_ascii=False))
     logger.info("Results saved to: %s", out_path)

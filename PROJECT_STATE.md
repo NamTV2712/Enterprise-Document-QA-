@@ -861,6 +861,8 @@ Note: the `Characters` column is character count, not token count.
 - A single 30-case evaluation run exhausted both Groq generation/planning quota and Gemini judge free-tier quota within one session. The checkpoint/resume mechanism preserved partial completion (`13/30` OK in the first full Muc 3 run) without data loss. Full CI-style evaluation requires quota reset across multiple sessions or a paid tier.
 - Gemini Flash Lite may return temporary `503 UNAVAILABLE` under high demand.
 - OpenAI key in the current environment was not a valid OpenAI Platform key during testing.
+- Initial Muc 4 diagnostics show that core AAPL/MSFT/AMZN financial statement rows are represented as native HTML `<table>` structures, but SEC table cells include spacer columns, separate `$`/`%` tokens, and non-fixed header row positions. Table-aware extraction must pattern-match content rather than hardcode row offsets.
+- MSFT `Microsoft Cloud gross margin percentage` is not present as a numeric table in the raw filing; the numeric `69%` appears in MD&A prose. In the current corpus, percentage-derived metrics are often narrative MD&A content, while native tables primarily contain absolute financial values.
 
 ## Latest Step
 
@@ -890,11 +892,20 @@ Validation notes:
 
 Phase 2D / Muc 4: Diagnose financial table representation before implementing table-aware retrieval improvements.
 
+Current diagnostic status:
+
+- `src/ingestion/table_extractor.py` exists as an isolated experimental parser, not yet integrated into section extraction or chunking.
+- Verified real-table rows: MSFT `Total revenue` maps to `281,724 / 245,122 / 211,915`, AAPL `Total net sales` maps to `416,161 / 391,035 / 383,285`, and AMZN `Total net sales` preserves the filing's `2023 -> 2024 -> 2025` year order.
+- MSFT self-consistency check passes: product revenue plus service-and-other revenue equals total revenue for 2025, 2024, and 2023.
+- Percentage-primary table handling is currently protected by a synthetic unit test only because the current corpus has no confirmed real percentage-primary financial table.
+- Corrected full financial-section table scan results after following TOC `href` anchors and detecting years inside longer header cells: AAPL `22/33` tables parsed with rows, MSFT `36/51`, and AMZN `31/46`. Empty parses are still expected for layout, signature, glossary, and non-year-header tables, but some remaining empty tables contain real data with multi-level non-year headers and should be preserved through prose chunks if not parsed structurally.
+- Table caption context is required metadata. Duplicate row labels such as AMZN `North America` / `International` / `AWS` refer to different financial concepts depending on nearby caption text, for example property and equipment by segment versus depreciation and amortization by segment.
+
 Recommended priorities:
 
-1. Inspect raw AAPL/MSFT/AMZN filing HTML to determine whether core financial statements use native `<table>` structures or div/span-positioned Inline XBRL layout.
-2. If native tables are present for the target financial statement rows, implement a table-aware financial statement extractor that preserves metric/year/value relationships.
-3. If financial statements are positioned Inline XBRL rather than native tables, evaluate XBRL fact extraction before attempting heuristic table reconstruction.
+1. Run `python -m scripts.diagnose_all_financial_tables` to measure table parser coverage across all financial statement tables, not only known anchors.
+2. Decide integration design based on parse coverage and label previews: include parsed tables, skip non-data layout/glossary tables, and preserve prose-derived percentage metrics through existing text chunks.
+3. If coverage is acceptable, integrate table-aware markdown chunks into the financial statement chunking path while keeping existing prose chunks.
 4. After quota reset, resume the 30-case evaluation to establish complete comparative and multi-hop baselines, then use those categories to measure Muc 4 before/after impact.
 
 Deferred production-quality item:

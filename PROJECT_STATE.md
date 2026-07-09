@@ -858,6 +858,7 @@ Note: the `Characters` column is character count, not token count.
 - Query decomposer currently does not detect single-company enumeration as needing decomposition. Partial Muc 3 evaluation confirmed `enumeration decomposition_correct = 0/4 = 0.00` for the four enumeration cases, while comparative multi-company cases do trigger decomposition.
 - Groq free tier can return `429 Too Many Requests`; SDK retries can recover, but latency may spike.
 - Full 30-case Muc 3 evaluation could not complete under current Groq free-tier token limits. Retrying after quota exhaustion causes long waits and contaminates latency metrics, so official category-level results should be generated from a clean run after quota reset or with a lower-cost judge/model configuration.
+- A single 30-case evaluation run exhausted both Groq generation/planning quota and Gemini judge free-tier quota within one session. The checkpoint/resume mechanism preserved partial completion (`13/30` OK in the first full Muc 3 run) without data loss. Full CI-style evaluation requires quota reset across multiple sessions or a paid tier.
 - Gemini Flash Lite may return temporary `503 UNAVAILABLE` under high demand.
 - OpenAI key in the current environment was not a valid OpenAI Platform key during testing.
 

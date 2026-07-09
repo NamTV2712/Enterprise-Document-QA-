@@ -27,7 +27,8 @@ def _is_retryable_external_error(error: Exception) -> bool:
     )
 
 
-SUPPORTED_TICKERS = ["AAPL", "MSFT", "AMZN"]  # will read from config after expanding corpus
+SUPPORTED_TICKERS = {"AAPL", "MSFT", "AMZN"}  # will read from config after expanding corpus
+VALID_SECTIONS = {"business", "risk_factors", "mdna", "financial_statements"}
 
 DECOMPOSE_SYSTEM_PROMPT = """You are an expert at analyzing financial questions about SEC 10-K filings.
 Your job is to determine if a question requires decomposition into sub-queries, and if so, create them.
@@ -229,8 +230,8 @@ class QueryDecomposer:
             if match:
                 raw = match.group(0)
 
-            plan = json.loads(raw)
-            logger.info("Decomposition plan: %s", plan)
+            plan = self._validate_plan(json.loads(raw))
+            logger.info("Decomposition plan (validated): %s", plan)
             return plan
 
         except Exception as e:
@@ -238,6 +239,45 @@ class QueryDecomposer:
                 raise
             logger.warning("Decomposition planning failed: %s - treating as simple", e)
             return {"needs_decomposition": False}
+
+    def _validate_plan(self, plan: dict) -> dict:
+        """Validate LLM-generated structured output before using it.
+
+        Prompt constraints are hints, not contracts. This layer drops invalid
+        ticker/section values so out-of-corpus companies do not create wasted
+        or misleading sub-query plans.
+        """
+        if not plan.get("needs_decomposition"):
+            return plan
+
+        valid_sub_queries = []
+        for sq in plan.get("sub_queries", []):
+            ticker = sq.get("ticker")
+            section = sq.get("section")
+
+            if ticker is not None and ticker not in SUPPORTED_TICKERS:
+                logger.warning(
+                    "Planner returned unsupported ticker '%s' for sub-query '%s'; dropping it",
+                    ticker,
+                    sq.get("query", "")[:50],
+                )
+                continue
+
+            if section is not None and section not in VALID_SECTIONS:
+                logger.warning(
+                    "Planner returned unsupported section '%s' for sub-query '%s'; dropping it",
+                    section,
+                    sq.get("query", "")[:50],
+                )
+                continue
+
+            valid_sub_queries.append(sq)
+
+        if not valid_sub_queries:
+            logger.info("All planned sub-queries were invalid; falling back to simple query")
+            return {"needs_decomposition": False}
+
+        return {"needs_decomposition": True, "sub_queries": valid_sub_queries}
 
     def _execute_parallel(
         self,

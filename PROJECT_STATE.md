@@ -855,7 +855,7 @@ Note: the `Characters` column is character count, not token count.
 - Conversation memory is in-memory only; sessions are lost on process restart and are not shared across multiple API workers.
 - Query rewriting adds one LLM call for follow-up questions with history, so multi-turn latency can be higher than stateless queries.
 - Enumeration-type queries such as `What are the main sources of revenue for Microsoft?` underperform compared with fact-lookup queries. Current hypothesis: the system architecture (`top_k=5` plus a single-answer generation prompt) is tuned for focused QA, not exhaustive listing. Diagnostic result: Azure appears inside the top-20 candidate pool but outside the final top-5 for the Microsoft revenue-source query, indicating a top-k/query-type sizing issue rather than a hard retrieval miss. Candidate fix: extend query decomposition to detect single-company enumeration queries, not only multi-company comparisons.
-- Query decomposer currently does not detect single-company enumeration as needing decomposition. Partial Muc 3 evaluation confirmed `enumeration decomposition_correct = 0/4 = 0.00` for the four enumeration cases, while comparative multi-company cases do trigger decomposition.
+- Query decomposer now detects single-company enumeration and validates LLM-generated ticker/section fields before execution. Regression tests cover unsupported ticker leaks such as `NVDA` and mixed valid/invalid plans.
 - Groq free tier can return `429 Too Many Requests`; SDK retries can recover, but latency may spike.
 - Full 30-case Muc 3 evaluation could not complete under current Groq free-tier token limits. Retrying after quota exhaustion causes long waits and contaminates latency metrics, so official category-level results should be generated from a clean run after quota reset or with a lower-cost judge/model configuration.
 - A single 30-case evaluation run exhausted both Groq generation/planning quota and Gemini judge free-tier quota within one session. The checkpoint/resume mechanism preserved partial completion (`13/30` OK in the first full Muc 3 run) without data loss. Full CI-style evaluation requires quota reset across multiple sessions or a paid tier.
@@ -864,7 +864,7 @@ Note: the `Characters` column is character count, not token count.
 
 ## Latest Step
 
-Phase 2C Muc 3: Expanded evaluation set and decomposer-routed evaluation are implemented.
+Phase 2C Muc 3: Expanded evaluation set and decomposer-routed evaluation are partially evaluated.
 
 Implemented evaluation behavior:
 
@@ -880,19 +880,22 @@ Validation notes:
 - The 3-company cybersecurity comparison returned 3 chunks each for AAPL, MSFT, and AMZN after fixing a shared-model thread-safety issue.
 - Known limitation: Query decomposition dispatches sub-queries concurrently via `ThreadPoolExecutor`, but a global lock around `retrieve()` serializes model inference (`Embedder` + cross-encoder) to prevent a confirmed race condition in Nomic BERT's rotary embedding cache. Measured overhead: `2.98x` vs single query (`n=3` sub-queries), consistent with near-full serialization. Scoped locking around only `model.encode()` and `cross_encoder.predict()` would restore I/O-bound parallelism, but is deferred pending corpus expansion to validate the gain.
 - Muc 2 Microsoft revenue-source diagnostic confirmed that Azure evidence chunks (`business_0006`, `business_0007`, `business_0008`) appear inside top-20 BM25 and semantic candidate pools, but not in top-3 for either method. This confirms an enumeration/query-shaping and final top-k issue, not a hard retrieval miss.
-- Partial Muc 3 run reached all four enumeration cases. All four had `expects_decomposition=True`, `was_decomposed=False`, and `decomposition_correct=False`, so enumeration decomposition correctness is currently `0/4 = 0.00`.
-- Full 30-case grouped category table is still unavailable because Groq returned repeated `429` quota errors before the run completed. Long retry sleeps should not be counted as valid latency data.
+- Deterministic unit tests for decomposition planner validation pass: `6/6` in `tests/test_query_decomposer.py`. This protects the defense-in-depth guard that validates LLM structured output instead of trusting prompt-only constraints.
+- Partial Muc 3 live evaluation status: `13/30` cases have full judge scores, `17/30` were skipped due to Groq generation/planning quota or Gemini judge quota. Checkpoint file `data/eval_checkpoint.jsonl` preserves completed cases; resuming only requires re-running `python -m scripts.run_evaluation` after quota reset.
+- Partial category coverage with judge scores: `fact_lookup` `7/8` judged (`Faith=0.8571`, `Precision=0.8571`), `summary` `4/6` judged (`Faith=0.7500`, `Precision=0.7750`), `enumeration` `2/4` judged (`decomposition_correct=1.0000` for judged cases, `4/4` confirmed including judge-skipped generated records).
+- Comparative and multi-hop quality are not fully measured yet: `comparative` has `0/6` judged but `3/6` generated records confirmed `decomposition_correct=True`; `multi_hop` has `0/3` judged and remains the highest-priority category to complete after quota reset.
+- Out-of-corpus coverage is incomplete: Tesla and Google were skipped before answer generation; Nvidia generated a correct insufficient-information answer, and the new validation guard prevents unsupported ticker subqueries from being trusted going forward.
 
 ## Next Step
 
-Phase 2C: Close Muc 3 with a clean full evaluation run, then decide whether to fix enumeration detection immediately.
+Phase 2D / Muc 4: Diagnose financial table representation before implementing table-aware retrieval improvements.
 
 Recommended priorities:
 
-1. Rerun `python -m scripts.run_evaluation` after Groq quota reset, or switch to a lower-cost judge/model configuration for evaluation only.
-2. Capture the full six-category summary table from `data/evaluation_results_v2.json`.
-3. Use the confirmed `enumeration decomposition_correct = 0.00` result to update `DECOMPOSE_SYSTEM_PROMPT` for single-company enumeration queries.
-4. Re-run the enumeration subset after prompt changes before changing retrieval top-k globally.
+1. Inspect raw AAPL/MSFT/AMZN filing HTML to determine whether core financial statements use native `<table>` structures or div/span-positioned Inline XBRL layout.
+2. If native tables are present for the target financial statement rows, implement a table-aware financial statement extractor that preserves metric/year/value relationships.
+3. If financial statements are positioned Inline XBRL rather than native tables, evaluate XBRL fact extraction before attempting heuristic table reconstruction.
+4. After quota reset, resume the 30-case evaluation to establish complete comparative and multi-hop baselines, then use those categories to measure Muc 4 before/after impact.
 
 Deferred production-quality item:
 

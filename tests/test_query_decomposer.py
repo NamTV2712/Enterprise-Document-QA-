@@ -78,6 +78,21 @@ def test_invalid_section_dropped() -> None:
     assert result["needs_decomposition"] is False
 
 
+def test_financial_table_section_kept() -> None:
+    decomposer = _make_decomposer()
+    fake_plan = {
+        "needs_decomposition": True,
+        "sub_queries": [
+            {"query": "Apple total net sales", "ticker": "AAPL", "section": "financial_table"},
+        ],
+    }
+
+    result = decomposer._validate_plan(fake_plan)
+
+    assert result["needs_decomposition"] is True
+    assert result["sub_queries"][0]["section"] == "financial_table"
+
+
 def test_null_ticker_and_section_always_valid() -> None:
     """None means search all and should not be filtered out."""
     decomposer = _make_decomposer()

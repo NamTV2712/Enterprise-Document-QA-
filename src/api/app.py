@@ -87,9 +87,15 @@ class QueryRequest(BaseModel):
         default=None, pattern=r"^[A-Z]{1,5}$",
         examples=["AAPL"]
     )
-    section: Literal["business", "risk_factors", "mdna", "financial_statements"] | None = Field(
+    section: Literal[
+        "business",
+        "risk_factors",
+        "mdna",
+        "financial_statements",
+        "financial_table",
+    ] | None = Field(
         default=None,
-        examples=["financial_statements"]
+        examples=["financial_table"]
     )
     top_k: int = Field(default=5, ge=1, le=10)
     session_id: str | None = Field(
@@ -243,7 +249,13 @@ async def supported_tickers() -> dict:
     """List of supported tickers — helps the UI/user know what they can ask about."""
     return {
         "tickers": ["AAPL", "MSFT", "AMZN"],
-        "sections": ["business", "risk_factors", "mdna", "financial_statements"],
+        "sections": [
+            "business",
+            "risk_factors",
+            "mdna",
+            "financial_statements",
+            "financial_table",
+        ],
     }
 
 

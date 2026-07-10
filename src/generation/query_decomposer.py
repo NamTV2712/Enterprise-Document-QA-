@@ -28,7 +28,7 @@ def _is_retryable_external_error(error: Exception) -> bool:
 
 
 SUPPORTED_TICKERS = {"AAPL", "MSFT", "AMZN"}  # will read from config after expanding corpus
-VALID_SECTIONS = {"business", "risk_factors", "mdna", "financial_statements"}
+VALID_SECTIONS = {"business", "risk_factors", "mdna", "financial_statements", "financial_table"}
 
 DECOMPOSE_SYSTEM_PROMPT = """You are an expert at analyzing financial questions about SEC 10-K filings.
 Your job is to determine if a question requires decomposition into sub-queries, and if so, create them.
@@ -60,7 +60,7 @@ type of company:
   {"query": "specific sub-topic 3", "ticker": "MSFT", "section": "business"}
 ]}
 
-Valid section values: business, risk_factors, mdna, financial_statements, null
+Valid section values: business, risk_factors, mdna, financial_statements, financial_table, null
 Valid ticker values: AAPL, MSFT, AMZN, null
 
 Examples:

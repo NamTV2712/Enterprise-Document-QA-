@@ -9,6 +9,9 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import tiktoken
+from bs4 import Tag
+
+from src.ingestion.table_extractor import extract_table_rows, get_table_caption, rows_to_markdown
 
 logger = logging.getLogger(__name__)
 ENCODING = tiktoken.get_encoding("cl100k_base")
@@ -123,6 +126,48 @@ def build_chunks_for_filing(filing_data: dict) -> list[Chunk]:
         logger.info("%s/%s -> %d chunk(s)", filing_data["ticker"], section_name, len(pieces))
 
     return chunks
+
+
+def build_table_chunks(
+    html_path: Path,
+    tables: list[Tag],
+    filing_data: dict,
+) -> list[Chunk]:
+    """Build one supplemental chunk for each parsed financial statement table."""
+    table_chunks: list[Chunk] = []
+    accession_nodash = filing_data["accession_number"].replace("-", "")
+
+    for index, table in enumerate(tables):
+        rows = extract_table_rows(table)
+        if not rows:
+            continue
+
+        caption = get_table_caption(table)
+        markdown = rows_to_markdown(rows, table_name=caption)
+        token_count = count_tokens(markdown)
+
+        if token_count > CHUNK_CONFIG["financial_statements"]["chunk_size"]:
+            logger.warning(
+                "Table chunk exceeds 900 tokens (%d) for %s: %s",
+                token_count,
+                html_path,
+                caption[:80],
+            )
+
+        table_chunks.append(Chunk(
+            chunk_id=f"{filing_data['ticker']}_{accession_nodash}_financial_table_{index:04d}",
+            ticker=filing_data["ticker"],
+            section="financial_table",
+            accession_number=filing_data["accession_number"],
+            filing_date=filing_data["filing_date"],
+            report_date=filing_data["report_date"],
+            chunk_index=index,
+            token_count=token_count,
+            text=markdown,
+        ))
+
+    logger.info("%s/financial_table -> %d chunk(s)", filing_data["ticker"], len(table_chunks))
+    return table_chunks
 
 
 def save_chunks(chunks: list[Chunk], output_path: Path) -> None:

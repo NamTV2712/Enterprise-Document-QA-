@@ -890,23 +890,27 @@ Validation notes:
 
 ## Next Step
 
-Phase 2D / Muc 4: Diagnose financial table representation before implementing table-aware retrieval improvements.
+Phase 2D / Muc 4: Table-aware financial chunks are integrated as supplemental local artifacts.
 
 Current diagnostic status:
 
-- `src/ingestion/table_extractor.py` exists as an isolated experimental parser, not yet integrated into section extraction or chunking.
+- `src/ingestion/table_extractor.py` parses native SEC HTML financial tables into captioned markdown that preserves metric/year/value relationships.
+- `src/ingestion/chunker.py` now has `build_table_chunks()`, which creates supplemental `financial_table` chunks. Existing `financial_statements` prose chunks are retained; parsed table chunks are additive, not replacements.
+- `scripts/add_table_chunks.py` appends table chunks idempotently to existing `*_chunks.jsonl` files.
 - Verified real-table rows: MSFT `Total revenue` maps to `281,724 / 245,122 / 211,915`, AAPL `Total net sales` maps to `416,161 / 391,035 / 383,285`, and AMZN `Total net sales` preserves the filing's `2023 -> 2024 -> 2025` year order.
 - MSFT self-consistency check passes: product revenue plus service-and-other revenue equals total revenue for 2025, 2024, and 2023.
 - Percentage-primary table handling is currently protected by a synthetic unit test only because the current corpus has no confirmed real percentage-primary financial table.
 - Corrected full financial-section table scan results after following TOC `href` anchors and detecting years inside longer header cells: AAPL `22/33` tables parsed with rows, MSFT `36/51`, and AMZN `31/46`. Empty parses are still expected for layout, signature, glossary, and non-year-header tables, but some remaining empty tables contain real data with multi-level non-year headers and should be preserved through prose chunks if not parsed structurally.
 - Table caption context is required metadata. Duplicate row labels such as AMZN `North America` / `International` / `AWS` refer to different financial concepts depending on nearby caption text, for example property and equipment by segment versus depreciation and amortization by segment.
+- Local table chunk generation added AAPL `22`, MSFT `36`, and AMZN `31` `financial_table` chunks (`89` total). Chunk files now contain `360` records, up from `271`.
+- Re-running `python -m scripts.embed_chunks` and `python -m scripts.index_chunks` embedded and indexed all `360` chunks. Qdrant collection `sec_filings` reports `points_count=360`.
+- Retrieval smoke test with `ticker=AAPL`, `section=financial_table`, and `What was Apple's total net sales in fiscal year 2024?` returns clean table chunks containing `Total net sales | 416,161 | 391,035 | 383,285`. The broader question ranks net-sales breakdown tables first; adding `consolidated statements of operations` retrieves the income statement table as top-1.
 
 Recommended priorities:
 
-1. Run `python -m scripts.diagnose_all_financial_tables` to measure table parser coverage across all financial statement tables, not only known anchors.
-2. Decide integration design based on parse coverage and label previews: include parsed tables, skip non-data layout/glossary tables, and preserve prose-derived percentage metrics through existing text chunks.
-3. If coverage is acceptable, integrate table-aware markdown chunks into the financial statement chunking path while keeping existing prose chunks.
-4. After quota reset, resume the 30-case evaluation to establish complete comparative and multi-hop baselines, then use those categories to measure Muc 4 before/after impact.
+1. Run targeted before/after retrieval checks for fact lookup and multi-hop financial questions using `financial_table` filters.
+2. Decide whether API/UI should automatically search both `financial_table` and `financial_statements` for numeric financial questions or keep the new section as an explicit filter.
+3. After quota reset, resume the 30-case evaluation to establish complete comparative and multi-hop baselines, then use those categories to measure Muc 4 before/after impact.
 
 Deferred production-quality item:
 

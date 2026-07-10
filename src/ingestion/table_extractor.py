@@ -60,6 +60,21 @@ def _is_value_token(text: str) -> bool:
     return bool(VALUE_PATTERN.fullmatch(text))
 
 
+def _is_section_header_row(cleaned_cells: list[str]) -> bool:
+    """Return whether a row is a one-cell segment/section header."""
+    if len(cleaned_cells) != 1:
+        return False
+
+    text = cleaned_cells[0]
+    if text.endswith(":"):
+        return False
+    if YEAR_PATTERN.search(text):
+        return False
+    if re.fullmatch(r"[\$%\(\)\-\s]*", text):
+        return False
+    return True
+
+
 def _extract_data_values(tokens: list[str], *, skip_percent_values: bool) -> list[str]:
     """Extract row values while handling currency and percentage tokens."""
     values = []
@@ -69,6 +84,11 @@ def _extract_data_values(tokens: list[str], *, skip_percent_values: bool) -> lis
         next_token = tokens[i + 1] if i + 1 < len(tokens) else ""
 
         if token in ("$", "%"):
+            i += 1
+            continue
+
+        if token.startswith("$") and _is_value_token(token[1:]):
+            values.append(token[1:])
             i += 1
             continue
 
@@ -114,8 +134,17 @@ def extract_table_rows(table: Tag) -> list[TableRow]:
     logger.debug("Header row index=%d, years=%s", header_idx, years)
 
     result: list[TableRow] = []
+    current_segment: str | None = None
     for row in rows[header_idx + 1:]:
         cleaned = _clean_cells(row)
+        if not cleaned:
+            continue
+
+        if _is_section_header_row(cleaned):
+            current_segment = cleaned[0]
+            logger.debug("Segment header detected: %s", current_segment)
+            continue
+
         if len(cleaned) < 2:
             continue
 
@@ -130,7 +159,8 @@ def extract_table_rows(table: Tag) -> list[TableRow]:
             values_by_year[year] = value
 
         if values_by_year:
-            result.append(TableRow(label=label, values_by_year=values_by_year))
+            full_label = f"{current_segment} - {label}" if current_segment else label
+            result.append(TableRow(label=full_label, values_by_year=values_by_year))
 
     return result
 

@@ -64,6 +64,40 @@ def test_caption_uses_previous_text_window() -> None:
     assert get_table_caption(soup.find("table")).startswith("Property and equipment")
 
 
+def test_segment_header_row_prefixes_following_metrics() -> None:
+    """One-cell segment headers should prefix following metric rows."""
+    html = """
+    <table>
+      <tr><td>Year Ended December 31,</td></tr>
+      <tr><td>2024</td><td>2025</td></tr>
+      <tr><td>North America</td></tr>
+      <tr><td>Net sales</td><td>$387,497</td><td>$426,305</td></tr>
+      <tr><td>International</td></tr>
+      <tr><td>Net sales</td><td>$142,906</td><td>$161,894</td></tr>
+    </table>
+    """
+    soup = BeautifulSoup(html, "lxml")
+    rows = extract_table_rows(soup.find("table"))
+    labels = [row.label for row in rows]
+
+    assert "North America - Net sales" in labels
+    assert "International - Net sales" in labels
+
+
+def test_non_segment_table_labels_unchanged() -> None:
+    """Regular tables should not receive a synthetic segment prefix."""
+    html = """
+    <table>
+      <tr><td>2025</td><td>2024</td></tr>
+      <tr><td>Total net sales</td><td>$416,161</td><td>$391,035</td></tr>
+    </table>
+    """
+    soup = BeautifulSoup(html, "lxml")
+    rows = extract_table_rows(soup.find("table"))
+
+    assert rows[0].label == "Total net sales"
+
+
 def test_aapl_total_net_sales_table() -> None:
     raw_path = Path("data/raw/AAPL/000032019325000079.html")
     if not raw_path.exists():

@@ -18,14 +18,26 @@ logger = logging.getLogger(__name__)
 
 
 def process_chunks_file(embedder: Embedder, chunks_path: Path) -> Path:
-    records = [json.loads(line) for line in chunks_path.read_text(encoding="utf-8").splitlines()]
+    output_path = chunks_path.with_name(f"{chunks_path.stem}_embedded.jsonl")
+    if output_path.exists():
+        logger.info("Skipping already embedded chunks file: %s", output_path)
+        return output_path
+
+    records = [
+        json.loads(line)
+        for line in chunks_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    if not records:
+        logger.warning("Skipping empty chunks file: %s", chunks_path)
+        return output_path
+
     texts = [record["text"] for record in records]
     embeddings = embedder.embed_documents(texts)
 
     for record, embedding in zip(records, embeddings):
         record["embedding"] = embedding
 
-    output_path = chunks_path.with_name(f"{chunks_path.stem}_embedded.jsonl")
     with output_path.open("w", encoding="utf-8") as file:
         for record in records:
             file.write(json.dumps(record, ensure_ascii=False) + "\n")

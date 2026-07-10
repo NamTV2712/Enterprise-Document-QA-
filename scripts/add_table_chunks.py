@@ -15,6 +15,7 @@ import logging
 from dataclasses import asdict
 from pathlib import Path
 
+from configs.settings import settings
 from src.ingestion.chunker import build_table_chunks
 from scripts.diagnose_all_financial_tables import find_tables_in_financial_section
 
@@ -23,28 +24,6 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
-
-FILINGS = [
-    (
-        "AAPL",
-        Path("data/raw/AAPL/000032019325000079.html"),
-        Path("data/processed/AAPL/000032019325000079_sections.json"),
-        Path("data/processed/AAPL/000032019325000079_chunks.jsonl"),
-    ),
-    (
-        "MSFT",
-        Path("data/raw/MSFT/000095017025100235.html"),
-        Path("data/processed/MSFT/000095017025100235_sections.json"),
-        Path("data/processed/MSFT/000095017025100235_chunks.jsonl"),
-    ),
-    (
-        "AMZN",
-        Path("data/raw/AMZN/000101872426000004.html"),
-        Path("data/processed/AMZN/000101872426000004_sections.json"),
-        Path("data/processed/AMZN/000101872426000004_chunks.jsonl"),
-    ),
-]
-
 
 def _load_existing_chunk_ids(chunks_path: Path) -> set[str]:
     if not chunks_path.exists():
@@ -58,14 +37,29 @@ def _load_existing_chunk_ids(chunks_path: Path) -> set[str]:
     return chunk_ids
 
 
+def _discover_filings() -> list[tuple[str, Path, Path, Path]]:
+    filings = []
+    for sections_path in sorted(settings.data_processed_dir.glob("*/*_sections.json")):
+        ticker = sections_path.parent.name
+        accession_nodash = sections_path.name.removesuffix("_sections.json")
+        html_path = settings.data_raw_dir / ticker / f"{accession_nodash}.html"
+        chunks_path = sections_path.with_name(f"{accession_nodash}_chunks.jsonl")
+        filings.append((ticker, html_path, sections_path, chunks_path))
+    return filings
+
+
 def main() -> None:
     total_new = 0
-    for ticker, html_path, sections_path, chunks_path in FILINGS:
+    for ticker, html_path, sections_path, chunks_path in _discover_filings():
         if not html_path.exists() or not sections_path.exists() or not chunks_path.exists():
             logger.warning("Skipping %s because one or more local artifacts are missing", ticker)
             continue
 
         filing_data = json.loads(sections_path.read_text(encoding="utf-8"))
+        if "financial_statements" not in filing_data.get("sections", {}):
+            logger.warning("Skipping %s table chunks because financial_statements is missing", ticker)
+            continue
+
         tables = find_tables_in_financial_section(html_path, sections_path)
         table_chunks = build_table_chunks(html_path, tables, filing_data)
 

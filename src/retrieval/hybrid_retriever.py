@@ -18,7 +18,7 @@ from pathlib import Path
 from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder
 
-from src.retrieval.embedder import Embedder
+from src.retrieval.embedder import AUTO_DEVICE, Embedder, resolve_torch_device
 from src.retrieval.retriever import RetrievedChunk
 from src.retrieval.vector_store import VectorStore
 
@@ -50,9 +50,11 @@ class HybridRetriever:
         embedder: Embedder,
         store: VectorStore,
         all_chunks: list[dict],
+        device: str = AUTO_DEVICE,
     ):
         self.embedder = embedder
         self.store = store
+        self.device = resolve_torch_device(device)
         self._all_chunks = all_chunks
         self._chunks_by_id = {c["chunk_id"]: c for c in all_chunks}
         self._chunk_index_map = {c["chunk_id"]: i for i, c in enumerate(all_chunks)}
@@ -63,8 +65,8 @@ class HybridRetriever:
         self.bm25 = BM25Okapi(tokenized)
 
         # Load cross-encoder
-        logger.info("Loading cross-encoder: %s", CROSS_ENCODER_MODEL)
-        self.cross_encoder = CrossEncoder(CROSS_ENCODER_MODEL)
+        logger.info("Loading cross-encoder: %s on %s", CROSS_ENCODER_MODEL, self.device)
+        self.cross_encoder = CrossEncoder(CROSS_ENCODER_MODEL, device=self.device)
         logger.info("HybridRetriever ready")
 
     def retrieve(

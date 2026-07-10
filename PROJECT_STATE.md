@@ -9,6 +9,19 @@ Phase 2B Step C, Multi-turn Conversation with Memory, is complete and verified.
 Phase 2B Step D, Query Decomposition, is integrated and verified for comparative queries.
 Phase 2C Muc 2, deterministic evaluation metrics and enumeration retrieval diagnosis, is complete.
 Phase 2C Muc 3, 30-case categorized evaluation set and decomposer-routed evaluation, is implemented. Full 30-case LLM-judge run is blocked by Groq free-tier quota.
+Phase 2C Muc 4, financial table retrieval, is complete.
+Phase 2C Muc 5, corpus expansion to 25 configured tickers, is locally ingested, chunked, embedded, and indexed with explicit corpus-quality reporting. Follow-up remains for section extraction gaps in filings that use annual-report cross-reference layouts.
+
+Current Muc 5 corpus quality:
+
+- Text-section ingestion report: 16 `success`, 6 `degraded`, 3 `failed`, 25 `skipped_existing` on latest idempotent rerun.
+- Clean for evaluation/demo requiring 4 text sections plus `financial_table`: 14 tickers: AAPL, AMD, AMZN, BAC, BRK-B, CRM, GOOGL, JNJ, META, MSFT, QCOM, TSLA, UNH, WMT.
+- Degraded but usable for some section-specific questions: CVX, GS, HD, JPM, NVDA, ORCL, PFE, XOM.
+- Unusable until extractor is improved: INTC, MCD, MS. These have `sections={}` and 0 chunks.
+- Qdrant currently indexes 3,944 chunks from 22 tickers. The 3 unusable tickers are not represented in the vector index.
+- `scripts/download_filings.py` now marks 0-section extraction as `failed` instead of successful/skipped, and marks partial section extraction as `degraded` with explicit missing-section warnings.
+- Structural limitation identified: degraded/unusable filings commonly use incorporation-by-reference language and annual-report/page-reference layouts around Item 7 and Item 8. Examples include JPM Item 7/8 pointing to MD&A pages 46-160 and financial statements pages 162-314, XOM Item 7/8 pointing to the Financial Section, CVX Item 7/8 pointing to Financial Table of Contents entries, and MS/MCD/INTC using annual-report layouts where relevant content is not exposed through standard `Item 7 ... Item 8` boundaries. This is not just a missing regex keyword. Some content may still be present in the same primary HTML, while other filings may require following referenced exhibits or report sections. Supporting these cases requires a separate annual-report/table-of-contents aware ingestion/extraction pass, out of scope for the current single-document section extractor.
+- For evaluation and portfolio demos, prefer the 14 clean tickers. Degraded tickers remain usable only for sections that were actually extracted, especially business and risk-factor queries.
 
 Latest completed milestone commit:
 
@@ -40,11 +53,33 @@ Build an Enterprise Document QA system over SEC 10-K filings using a RAG pipelin
 SEC Filing -> Section Extraction -> Chunking -> Embedding -> Query Rewrite -> Qdrant/BM25 -> Hybrid Retrieval -> Re-ranking -> Semantic Cache/Memory -> LLM Answer -> FastAPI/SSE
 ```
 
-The MVP corpus currently covers latest 10-K filings for:
+The configured corpus currently covers latest 10-K filings for:
 
 - AAPL
 - MSFT
 - AMZN
+- GOOGL
+- META
+- NVDA
+- TSLA
+- JPM
+- BAC
+- GS
+- MS
+- BRK-B
+- JNJ
+- UNH
+- PFE
+- WMT
+- HD
+- MCD
+- XOM
+- CVX
+- AMD
+- INTC
+- QCOM
+- CRM
+- ORCL
 
 The system answers finance/document questions using retrieved filing context and citations, with explicit fallback when the available context is insufficient.
 
@@ -81,13 +116,15 @@ The system answers finance/document questions using retrieved filing context and
 - `src/api/app.py`
   FastAPI service exposing `/health`, `/query`, `/query/stream`, `/supported-tickers`, cache endpoints, session endpoints, and Swagger UI at `/docs`.
 - `scripts/download_filings.py`
-  Download and section extraction script.
+  Idempotent batch download and section extraction script for configured tickers.
 - `scripts/chunk_filings.py`
   Chunk generation script.
 - `scripts/embed_chunks.py`
-  Embedding generation script.
+  Resumable embedding generation script.
 - `scripts/index_chunks.py`
-  Qdrant indexing script.
+  Qdrant indexing script that recreates the collection from embedded files.
+- `configs/tickers.py`
+  Corpus ticker list and ticker-to-CIK overrides for SEC ticker-map edge cases.
 - `scripts/test_rag.py`
   Manual end-to-end RAG test script.
 - `configs/settings.py`

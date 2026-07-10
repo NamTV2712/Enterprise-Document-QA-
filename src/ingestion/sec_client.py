@@ -81,7 +81,7 @@ class SECEdgarClient:
     SUBMISSIONS_URL_TEMPLATE = "https://data.sec.gov/submissions/CIK{cik}.json"
     MIN_REQUEST_INTERVAL_SECONDS = 0.5
 
-    def __init__(self, user_agent: str):
+    def __init__(self, user_agent: str, ticker_cik_overrides: dict[str, int] | None = None):
         if "@" not in user_agent:
             # Block the error early at initialization — instead of letting it cause
             # a vague 403 error on any request, which could be 10 lines of code later,
@@ -94,6 +94,9 @@ class SECEdgarClient:
         self.session.headers.update({"User-Agent": user_agent})
         self._last_request_time: float = 0.0
         self._ticker_to_cik: Optional[dict[str, int]] = None  # Cache, load once
+        self._ticker_cik_overrides = {
+            ticker.upper(): cik for ticker, cik in (ticker_cik_overrides or {}).items()
+        }
 
     def _throttled_get(self, url: str, timeout: int = 15) -> requests.Response:
         """All outgoing requests MUST go through this function — do not call
@@ -117,6 +120,10 @@ class SECEdgarClient:
     def get_cik(self, ticker: str) -> int:
         """Get CIK from ticker. File ticker map is large (several MB) so we only load
         it once and cache it in self._ticker_to_cik (memoization technique)."""
+        ticker = ticker.upper()
+        if ticker in self._ticker_cik_overrides:
+            return self._ticker_cik_overrides[ticker]
+
         if self._ticker_to_cik is None:
             response = self._throttled_get(self.TICKER_MAP_URL)
             data = response.json()
@@ -125,7 +132,6 @@ class SECEdgarClient:
             }
             logger.info("Ticket map has been downloaded: %d companies", len(self._ticker_to_cik))
 
-        ticker = ticker.upper()
         if ticker not in self._ticker_to_cik:
             raise EdgarNotFoundError(f"Ticker '{ticker}' not found in SEC EDGAR")
         return self._ticker_to_cik[ticker]

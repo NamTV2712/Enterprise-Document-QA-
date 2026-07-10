@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 
 from configs.settings import settings
-from src.retrieval.vector_store import VectorStore
+from src.retrieval.vector_store import COLLECTION_NAME, VectorStore
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
@@ -18,6 +18,11 @@ logger = logging.getLogger(__name__)
 
 def main() -> None:
     with VectorStore(path=settings.data_processed_dir / "qdrant") as store:
+        existing = [c.name for c in store.client.get_collections().collections]
+        if COLLECTION_NAME in existing:
+            store.client.delete_collection(collection_name=COLLECTION_NAME)
+            logger.info("Deleted existing collection '%s' before reindexing", COLLECTION_NAME)
+
         store.create_collection(embedding_dim=768)
 
         embedded_files = sorted(

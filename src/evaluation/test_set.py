@@ -21,6 +21,7 @@ class TestCase:
     required_keywords: list[str] = field(default_factory=list)
     expects_fallback: bool = False
     expects_decomposition: bool = False
+    priority: int = 1
 
 
 TEST_SET: list[TestCase] = [
@@ -40,6 +41,7 @@ TEST_SET: list[TestCase] = [
         section=None,
         ground_truth="Apple's total net sales in fiscal year 2025 were $416,161 million.",
         required_keywords=["416,161"],
+        priority=2,
     ),
     TestCase(
         question="What was Microsoft's total assets as of fiscal year 2025?",
@@ -64,6 +66,7 @@ TEST_SET: list[TestCase] = [
         section="mdna",
         ground_truth="Amazon's consolidated net sales were $637,959 million in 2024.",
         required_keywords=["637,959"],
+        priority=2,
     ),
     TestCase(
         question="What was Amazon's North America operating income in 2025?",
@@ -72,6 +75,7 @@ TEST_SET: list[TestCase] = [
         section="mdna",
         ground_truth="Amazon's North America operating income was $29,619 million in 2025.",
         required_keywords=["29,619"],
+        priority=2,
     ),
     TestCase(
         question="Who audited Apple's financial statements and when was the report signed?",
@@ -88,6 +92,7 @@ TEST_SET: list[TestCase] = [
         section=None,
         ground_truth="Deloitte & Touche LLP audited Microsoft's financial statements.",
         required_keywords=["Deloitte"],
+        priority=2,
     ),
 
     # Summary: one company, one topic, synthesis over a focused section.
@@ -114,6 +119,7 @@ TEST_SET: list[TestCase] = [
         section="risk_factors",
         ground_truth="Amazon faces risks from international operations including regulatory, currency, and geopolitical factors.",
         required_keywords=["international"],
+        priority=2,
     ),
     TestCase(
         question="What quality and manufacturing risks does Apple mention?",
@@ -122,6 +128,7 @@ TEST_SET: list[TestCase] = [
         section="risk_factors",
         ground_truth="Apple faces risks from design and manufacturing defects and third-party component quality issues.",
         required_keywords=["defect"],
+        priority=2,
     ),
     TestCase(
         question="How does Microsoft describe its Azure and cloud services growth?",
@@ -138,6 +145,7 @@ TEST_SET: list[TestCase] = [
         section="risk_factors",
         ground_truth="Amazon faces risks of debarment or termination from government business due to contract compliance issues.",
         required_keywords=["government"],
+        priority=2,
     ),
 
     # Enumeration: exhaustive listing across multiple items in one company.
@@ -212,6 +220,7 @@ TEST_SET: list[TestCase] = [
         section=None,
         ground_truth="Both AWS and Microsoft's Azure/cloud services showed strong growth, though exact comparison requires both companies' specific figures.",
         expects_decomposition=True,
+        priority=2,
     ),
     TestCase(
         question="Which company depends more on cloud/subscription revenue, Microsoft or Apple?",
@@ -220,6 +229,7 @@ TEST_SET: list[TestCase] = [
         section=None,
         ground_truth="Microsoft depends more heavily on cloud revenue as a core growth driver compared to Apple's services segment.",
         expects_decomposition=True,
+        priority=2,
     ),
     TestCase(
         question="Compare Apple's and Amazon's approach to international operations risk.",
@@ -229,6 +239,7 @@ TEST_SET: list[TestCase] = [
         ground_truth="Both companies disclose international operations risks including currency, regulatory, and geopolitical factors.",
         required_keywords=["international"],
         expects_decomposition=True,
+        priority=2,
     ),
 
     # Multi-hop: multiple evidence points across time or rows.
@@ -273,6 +284,7 @@ TEST_SET: list[TestCase] = [
         section=None,
         ground_truth="Nvidia is not in the document corpus.",
         expects_fallback=True,
+        priority=2,
     ),
     TestCase(
         question="What was Google's total revenue in 2024?",
@@ -281,5 +293,6 @@ TEST_SET: list[TestCase] = [
         section=None,
         ground_truth="Google/Alphabet is not in the document corpus.",
         expects_fallback=True,
+        priority=2,
     ),
 ]

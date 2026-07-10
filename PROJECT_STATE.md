@@ -914,6 +914,7 @@ Current diagnostic status:
 - Re-embedding and re-indexing after regeneration kept Qdrant stable at `points_count=360`, confirming no duplicate point growth.
 - AWS growth retest after segment-prefix regeneration is unchanged: `What is Amazon's AWS revenue growth?` still retrieves `financial_statements_0007` only and returns an insufficient-information answer. This confirms the remaining issue is query phrasing/derived-metric expansion, not stale table labels.
 - Post-Muc 4 evaluation preparation: 8 numeric-heavy `fact_lookup`/`multi_hop` cases in `src/evaluation/test_set.py` now use `section=None` instead of hardcoded `financial_statements`/`mdna`, allowing `financial_table` chunks to compete naturally during evaluation.
+- Evaluation set now supports priority-based runs: `priority=1` is an 18-case quota-safe core set (`fact_lookup=4`, `summary=3`, `enumeration=4`, `comparative=3`, `multi_hop=3`, `out_of_corpus=1`), while `priority=2` restores the full 30-case set. Use `python -m scripts.run_evaluation --priority 1` for the core run and `--priority 2` for the full run.
 - Full 30-case post-Muc 4 evaluation attempt is blocked by daily free-tier quotas. Gemini judge hit `GenerateRequestsPerDayPerProjectPerModel-FreeTier` (`20` requests/day), and Groq hit `100,000` tokens/day in the same session. Retry after provider daily reset.
 - Checkpoint backups preserved locally: `data/eval_checkpoint_before_muc4.jsonl` contains the pre-Muc 4 partial baseline (`13/30` OK), and `data/eval_checkpoint_gemini_blocked.jsonl` contains this session's blocked post-Muc 4 attempt (`0/30` OK; skipped records only).
 
@@ -921,7 +922,7 @@ Recommended priorities:
 
 1. Add query rewriting/expansion for growth/trend questions so terms like `growth` retrieve tables containing the underlying year-by-year values.
 2. Decide whether API/UI should automatically search both `financial_table` and `financial_statements` for numeric financial questions or keep the new section as an explicit filter.
-3. After quota reset, delete `data/eval_checkpoint.jsonl` from the blocked run and rerun `python -m scripts.run_evaluation` to generate a clean post-Muc 4 evaluation. If quota remains tight, run a smaller priority subset first (`fact_lookup` + `multi_hop`).
+3. After quota reset, delete `data/eval_checkpoint.jsonl` from the blocked run and rerun `python -m scripts.run_evaluation --priority 1` to generate a clean core post-Muc 4 evaluation. Use `--priority 2` only when quota is sufficient for the full 30-case run.
 
 Deferred production-quality item:
 

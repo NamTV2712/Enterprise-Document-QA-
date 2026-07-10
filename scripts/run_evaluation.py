@@ -7,6 +7,7 @@ and save final JSON output.
 import json
 import logging
 import time
+import argparse
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -284,10 +285,27 @@ def _print_summary(records: list[dict], skipped: list[dict], generator: Generato
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--priority",
+        type=int,
+        default=1,
+        help="Run test cases with priority <= N. Default 1 runs the core quota-safe set.",
+    )
+    args = parser.parse_args()
+
     embedder = Embedder()
     generator = Generator(provider="groq")
     judge_generator = Generator(provider="gemini")
     evaluator = RAGEvaluator(judge_generator=judge_generator)
+
+    test_set = [tc for tc in TEST_SET if tc.priority <= args.priority]
+    logger.info(
+        "Running %d/%d test cases (priority <= %d)",
+        len(test_set),
+        len(TEST_SET),
+        args.priority,
+    )
 
     done_cases = load_checkpoint()
     records = list(done_cases.values())
@@ -300,7 +318,7 @@ def main() -> None:
         pipeline = RAGPipeline(retriever=retriever, generator=generator)
         decomposer = QueryDecomposer(pipeline=pipeline)
 
-        for tc in TEST_SET:
+        for tc in test_set:
             if tc.question in done_cases:
                 logger.info("SKIP checkpoint OK: %s", tc.question[:60])
                 continue

@@ -905,12 +905,17 @@ Current diagnostic status:
 - Local table chunk generation added AAPL `22`, MSFT `36`, and AMZN `31` `financial_table` chunks (`89` total). Chunk files now contain `360` records, up from `271`.
 - Re-running `python -m scripts.embed_chunks` and `python -m scripts.index_chunks` embedded and indexed all `360` chunks. Qdrant collection `sec_filings` reports `points_count=360`.
 - Retrieval smoke test with `ticker=AAPL`, `section=financial_table`, and `What was Apple's total net sales in fiscal year 2024?` returns clean table chunks containing `Total net sales | 416,161 | 391,035 | 383,285`. The broader question ranks net-sales breakdown tables first; adding `consolidated statements of operations` retrieves the income statement table as top-1.
+- No-filter Apple fact lookup confirms automatic ranking improvement: for `What was Apple's total net sales in fiscal year 2024?`, `financial_table` ranks #1 and #2 (`CE=6.3033`, `5.1253`), ahead of `mdna` and `financial_statements` (`3.6-3.9`). The answer correctly returns `$391,035`.
+- No-filter Apple multi-hop trend check succeeds: `How did Apple's total net sales trend from 2023 to 2025?` ranks `financial_table` #1 and #3 and answers all three values correctly (`383,285`, `391,035`, `416,161`). This is the first successful multi-hop-style live result recorded after the Muc 4 integration.
+- New query-side limitation: `What is Amazon's AWS revenue growth?` still fails with no section filter because the relevant table chunks contain raw values but not the derived term `growth`. Rephrasing to include explicit years/metric, such as `AWS segment net sales 2024 2025 Amazon`, retrieves a `financial_table` chunk at rank #1. Candidate fix direction is query rewriting/expansion for growth/trend questions rather than extraction.
+- New table-structure limitation confirmed in AMZN table index `38`: raw rows use two-level segment headers (`North America`, `International`, `AWS`, `Consolidated`) followed by repeated metric rows (`Net sales`, `Operating expenses`, `Operating income`). Current extraction drops the segment header context, producing repeated generic labels such as `Net sales`. A future parser fix should carry section header rows forward into labels such as `AWS - Net sales`.
 
 Recommended priorities:
 
-1. Run targeted before/after retrieval checks for fact lookup and multi-hop financial questions using `financial_table` filters.
-2. Decide whether API/UI should automatically search both `financial_table` and `financial_statements` for numeric financial questions or keep the new section as an explicit filter.
-3. After quota reset, resume the 30-case evaluation to establish complete comparative and multi-hop baselines, then use those categories to measure Muc 4 before/after impact.
+1. Fix segment table label collisions by preserving section header rows in parsed table labels, starting with AMZN table index `38`.
+2. Add query rewriting/expansion for growth/trend questions so terms like `growth` retrieve tables containing the underlying year-by-year values.
+3. Decide whether API/UI should automatically search both `financial_table` and `financial_statements` for numeric financial questions or keep the new section as an explicit filter.
+4. After quota reset, resume the 30-case evaluation to establish complete comparative and multi-hop baselines, then use those categories to measure Muc 4 before/after impact.
 
 Deferred production-quality item:
 

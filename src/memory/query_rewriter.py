@@ -15,6 +15,14 @@ import re
 
 logger = logging.getLogger(__name__)
 YEAR_PATTERN = re.compile(r"\b20\d{2}\b")
+BALANCE_SHEET_TOTAL_PATTERN = re.compile(
+    r"\btotal\s+(assets|liabilities|equity)\b",
+    re.IGNORECASE,
+)
+INCOME_TOTAL_PATTERN = re.compile(
+    r"\btotal\s+(revenue|net sales)\b",
+    re.IGNORECASE,
+)
 TREND_KEYWORDS = (
     "growth",
     "trend",
@@ -24,27 +32,6 @@ TREND_KEYWORDS = (
     "year-over-year",
     "yoy",
 )
-ASSET_TREND_STOPWORDS = {
-    "how",
-    "did",
-    "does",
-    "do",
-    "what",
-    "was",
-    "were",
-    "is",
-    "are",
-    "the",
-    "a",
-    "an",
-    "change",
-    "changed",
-    "growth",
-    "trend",
-    "year",
-    "over",
-    "yoy",
-}
 
 REWRITE_SYSTEM_PROMPT = """You are a query rewriting assistant for a financial document QA system.
 Your job is to rewrite a follow-up question into a standalone question that can be 
@@ -61,6 +48,20 @@ Rules:
 5. Keep the rewritten question concise: one sentence maximum.
 6. Return ONLY the rewritten question, no explanation, no quotes."""
 
+FINANCIAL_EXPANSION_PROMPT = """You are a query rewriting assistant for a financial document QA system.
+Rewrite the question to help retrieve the correct row from a financial statement table.
+
+Rules:
+1. If the question asks for a total figure, add useful fiscal-year context such as 2025, 2024, and 2023 when helpful.
+2. Add a distinguishing qualifier to avoid confusion with similarly named line items in the same statement. For example, distinguish "Total assets" from "Total current assets" or "Total long-lived assets" by explicitly saying "balance sheet total assets, not a subtotal".
+3. For trend, growth, or comparison questions, keep the original metric and include the exact years or periods that should be retrieved.
+4. Keep the rewritten question natural and concise: one sentence maximum.
+5. Return ONLY the rewritten question, no explanation, no quotes.
+
+Example:
+Q: "What was Microsoft's total assets?"
+A: "What was Microsoft's balance sheet total assets, not a subtotal like current assets or long-lived assets, for fiscal years 2025 and 2024?"""
+
 
 class QueryRewriter:
     """Rewrite follow-up queries as standalone queries using LLM.
@@ -74,12 +75,14 @@ class QueryRewriter:
         self._generator = generator
 
     def rewrite(self, query: str, history_messages: list[dict]) -> str:
-        """Rewrite follow-ups and underspecified trend queries for retrieval."""
+        """Rewrite follow-ups and underspecified financial queries for retrieval."""
         needs_trend_expansion = self._needs_trend_expansion(query)
-        if not history_messages and not needs_trend_expansion:
+        requires_financial_expansion = needs_financial_expansion(query)
+        if not history_messages and not needs_trend_expansion and not requires_financial_expansion:
             return query
-        if not history_messages and needs_trend_expansion and "asset" in query.lower():
-            return self._build_asset_table_query(query)
+
+        if not history_messages and requires_financial_expansion:
+            return self._rewrite_financial_query(query)
 
         prompt = self._build_prompt(query, history_messages, needs_trend_expansion)
 
@@ -125,6 +128,41 @@ class QueryRewriter:
         normalized = query.lower()
         return any(keyword in normalized for keyword in TREND_KEYWORDS) and not YEAR_PATTERN.search(query)
 
+    def _rewrite_financial_query(self, query: str) -> str:
+        """Rewrite table-oriented financial questions without adding new clients."""
+        try:
+            if self._generator.provider == "groq":
+                rewritten = self._generator.client.chat.completions.create(
+                    model=self._generator.model,
+                    messages=[
+                        {"role": "system", "content": FINANCIAL_EXPANSION_PROMPT},
+                        {"role": "user", "content": f"Question: {query}"},
+                    ],
+                    max_tokens=100,
+                    temperature=0,
+                ).choices[0].message.content.strip()
+            else:
+                from google.genai import types
+                rewritten = self._generator.client.models.generate_content(
+                    model=self._generator.model,
+                    config=types.GenerateContentConfig(
+                        system_instruction=FINANCIAL_EXPANSION_PROMPT,
+                        max_output_tokens=100,
+                    ),
+                    contents=f"Question: {query}",
+                ).text.strip()
+
+            if rewritten and rewritten != query:
+                logger.info(
+                    "Financial query rewritten: '%s' -> '%s'",
+                    query[:60],
+                    rewritten[:60],
+                )
+            return rewritten or query
+        except Exception as e:
+            logger.warning("Financial query expansion failed, using original: %s", e)
+            return query
+
     @staticmethod
     def _build_prompt(
         query: str,
@@ -168,16 +206,17 @@ Return one concise standalone retrieval query:"""
             return rewritten_query
         return f"{rewritten_query} {' '.join(hints)}"
 
-    @staticmethod
-    def _build_asset_table_query(query: str) -> str:
-        normalized = query.replace("'s", "").replace("’s", "")
-        tokens = re.findall(r"[A-Za-z0-9-]+", normalized)
-        core_terms = [
-            token
-            for token in tokens
-            if token.lower() not in ASSET_TREND_STOPWORDS
-        ]
-        return (
-            f"{' '.join(core_terms)} balance sheets Assets - Total assets "
-            "total current assets 2025 2024 2023"
-        )
+
+def needs_financial_expansion(query: str) -> bool:
+    """Return whether a single-turn financial query needs table-oriented rewrite.
+
+    Balance-sheet totals need expansion even with an explicit year because terms
+    like total assets are easily confused with nearby subtotals such as total
+    current assets or long-lived assets. Income-statement totals only need this
+    extra rewrite when the question lacks year context.
+    """
+    has_year = bool(YEAR_PATTERN.search(query))
+    has_trend = any(keyword in query.lower() for keyword in TREND_KEYWORDS)
+    has_balance_sheet_total = bool(BALANCE_SHEET_TOTAL_PATTERN.search(query))
+    has_income_total = bool(INCOME_TOTAL_PATTERN.search(query))
+    return has_balance_sheet_total or ((has_trend or has_income_total) and not has_year)

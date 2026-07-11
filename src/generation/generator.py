@@ -24,7 +24,12 @@ STRICT RULES - violation of these rules is worse than saying "I don't know":
    this question with confidence. The most relevant sections I found were: [list sources]."
 4. Do not speculate, extrapolate, or infer beyond what is explicitly stated.
 5. When citing numbers, quote them exactly as they appear in the context.
-6. Always respond in English."""
+6. When the context contains specific numeric figures relevant to a trend,
+   comparison, or growth question, always quote the exact underlying values
+   for each year or period mentioned, in addition to any percentage or
+   qualitative description. A percentage alone is not sufficient when specific
+   numbers are available in the context.
+7. Always respond in English."""
 
 CONTEXT_TEMPLATE = """--- Context Section {index} ---
 Source: {citation}

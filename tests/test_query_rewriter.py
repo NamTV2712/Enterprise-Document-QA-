@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from src.memory.query_rewriter import QueryRewriter
+from src.memory.query_rewriter import QueryRewriter, needs_financial_expansion
 
 
 def _make_mock_generator(provider: str = "groq", rewrite_response: str = "rewritten query"):
@@ -33,23 +33,28 @@ def test_no_history_returns_original_query_unchanged() -> None:
 
 def test_single_turn_trend_query_without_years_is_rewritten() -> None:
     mock_generator = _make_mock_generator(
-        rewrite_response="What was Amazon AWS net sales growth for fiscal years 2025, 2024, and 2023?"
+        rewrite_response=(
+            "What was Amazon AWS net sales growth for fiscal years 2025, 2024, "
+            "and 2023?"
+        )
     )
     rewriter = QueryRewriter(mock_generator)
 
     result = rewriter.rewrite("What is Amazon's AWS revenue growth?", history_messages=[])
 
-    assert result == (
-        "What was Amazon AWS net sales growth for fiscal years 2025, 2024, and 2023? "
-        "net sales revenue AWS net sales"
-    )
+    assert result == "What was Amazon AWS net sales growth for fiscal years 2025, 2024, and 2023?"
     mock_generator.client.chat.completions.create.assert_called_once()
     sent_messages = mock_generator.client.chat.completions.create.call_args.kwargs["messages"]
-    assert "2025, 2024, and 2023" in sent_messages[-1]["content"]
+    assert "financial statement table" in sent_messages[0]["content"]
 
 
-def test_single_turn_trend_query_with_years_is_not_rewritten() -> None:
-    mock_generator = _make_mock_generator()
+def test_single_turn_asset_trend_query_with_years_is_financially_rewritten() -> None:
+    mock_generator = _make_mock_generator(
+        rewrite_response=(
+            "How did Microsoft's balance sheet total assets change from 2024 to 2025, "
+            "not a subtotal like current assets or long-lived assets?"
+        )
+    )
     rewriter = QueryRewriter(mock_generator)
 
     result = rewriter.rewrite(
@@ -57,12 +62,17 @@ def test_single_turn_trend_query_with_years_is_not_rewritten() -> None:
         history_messages=[],
     )
 
-    assert result == "How did Microsoft's total assets change from 2024 to 2025?"
-    mock_generator.client.chat.completions.create.assert_not_called()
+    assert "balance sheet total assets" in result
+    mock_generator.client.chat.completions.create.assert_called_once()
 
 
-def test_single_turn_asset_trend_appends_balance_sheet_hints() -> None:
-    mock_generator = _make_mock_generator()
+def test_single_turn_asset_trend_uses_financial_rewrite() -> None:
+    mock_generator = _make_mock_generator(
+        rewrite_response=(
+            "What was Microsoft's balance sheet total assets, not a subtotal like current "
+            "assets or long-lived assets, for fiscal years 2025 and 2024?"
+        )
+    )
     rewriter = QueryRewriter(mock_generator)
 
     result = rewriter.rewrite(
@@ -70,10 +80,29 @@ def test_single_turn_asset_trend_appends_balance_sheet_hints() -> None:
         history_messages=[],
     )
 
-    assert result.startswith("Microsoft total assets")
-    assert "balance sheets Assets - Total assets" in result
-    assert "2025 2024 2023" in result
-    mock_generator.client.chat.completions.create.assert_not_called()
+    assert "balance sheet total assets" in result
+    assert "long-lived assets" in result
+    mock_generator.client.chat.completions.create.assert_called_once()
+
+
+def test_total_assets_without_year_needs_financial_expansion() -> None:
+    assert needs_financial_expansion("What was Apple's total assets?") is True
+
+
+def test_balance_sheet_total_with_year_still_needs_financial_expansion() -> None:
+    assert needs_financial_expansion("What was Microsoft's total assets in 2025?") is True
+
+
+def test_income_statement_total_with_year_does_not_need_financial_expansion() -> None:
+    assert needs_financial_expansion("What was Apple's total net sales in 2024?") is False
+
+
+def test_trend_keyword_still_triggers_financial_expansion() -> None:
+    assert needs_financial_expansion("How did total assets change year over year?") is True
+
+
+def test_unrelated_question_does_not_trigger_financial_expansion() -> None:
+    assert needs_financial_expansion("What are Apple's risk factors?") is False
 
 
 def test_with_history_calls_llm_and_returns_rewritten_query() -> None:

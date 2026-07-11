@@ -292,6 +292,12 @@ def main() -> None:
         default=1,
         help="Run test cases with priority <= N. Default 1 runs the core quota-safe set.",
     )
+    parser.add_argument(
+        "--category",
+        action="append",
+        default=[],
+        help="Run only a category. Can be passed multiple times.",
+    )
     args = parser.parse_args()
 
     embedder = Embedder()
@@ -300,11 +306,15 @@ def main() -> None:
     evaluator = RAGEvaluator(judge_generator=judge_generator)
 
     test_set = [tc for tc in TEST_SET if tc.priority <= args.priority]
+    if args.category:
+        selected_categories = set(args.category)
+        test_set = [tc for tc in test_set if tc.category in selected_categories]
     logger.info(
-        "Running %d/%d test cases (priority <= %d)",
+        "Running %d/%d test cases (priority <= %d, categories=%s)",
         len(test_set),
         len(TEST_SET),
         args.priority,
+        args.category or "all",
     )
 
     done_cases = load_checkpoint()

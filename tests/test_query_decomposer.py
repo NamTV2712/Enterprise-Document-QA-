@@ -7,13 +7,39 @@ with NVDA.
 """
 
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
-from src.generation.query_decomposer import QueryDecomposer
+from src.generation.query_decomposer import (
+    INSUFFICIENT_DECOMPOSED_CONTEXT_ANSWER,
+    QueryDecomposer,
+)
+from src.retrieval.retriever import RetrievedChunk
 
 
 def _make_decomposer() -> QueryDecomposer:
     # _validate_plan does not call the generator or retriever.
     return QueryDecomposer(SimpleNamespace(generator=None, retriever=None))
+
+
+def _make_chunk(chunk_id: str) -> RetrievedChunk:
+    return RetrievedChunk(
+        chunk_id=chunk_id,
+        ticker="AMZN",
+        section="business",
+        filing_date="2026-02-01",
+        score=0.5,
+        text="Amazon context.",
+        citation="AMZN 10-K, Section: Business",
+    )
+
+
+def _make_runnable_decomposer() -> QueryDecomposer:
+    pipeline = SimpleNamespace(
+        generator=SimpleNamespace(model="fake-model", provider="groq"),
+        retriever=MagicMock(),
+        query=MagicMock(),
+    )
+    return QueryDecomposer(pipeline)
 
 
 def test_invalid_ticker_dropped() -> None:
@@ -116,3 +142,59 @@ def test_simple_plan_passthrough_unchanged() -> None:
     result = decomposer._validate_plan(fake_plan)
 
     assert result == {"needs_decomposition": False}
+
+
+def test_decomposed_query_with_too_little_context_returns_fallback(monkeypatch) -> None:
+    decomposer = _make_runnable_decomposer()
+    sub_query = {"query": "Amazon business segments", "ticker": "AMZN", "section": "business"}
+
+    monkeypatch.setattr(
+        decomposer,
+        "_plan",
+        lambda question: {"needs_decomposition": True, "sub_queries": [sub_query]},
+    )
+    monkeypatch.setattr(
+        decomposer,
+        "_execute_parallel",
+        lambda sub_queries, top_k: [
+            SimpleNamespace(**sub_query, retrieved_chunks=[_make_chunk("chunk-1")])
+        ],
+    )
+    synthesize = MagicMock(return_value="hallucinated answer")
+    monkeypatch.setattr(decomposer, "_synthesize", synthesize)
+
+    result = decomposer.run("What are Amazon's business segments?")
+
+    assert result.answer == INSUFFICIENT_DECOMPOSED_CONTEXT_ANSWER
+    assert result.was_decomposed is True
+    assert len(result.all_chunks) == 1
+    synthesize.assert_not_called()
+
+
+def test_decomposed_query_with_enough_context_synthesizes(monkeypatch) -> None:
+    decomposer = _make_runnable_decomposer()
+    sub_query = {"query": "Amazon business segments", "ticker": "AMZN", "section": "business"}
+
+    monkeypatch.setattr(
+        decomposer,
+        "_plan",
+        lambda question: {"needs_decomposition": True, "sub_queries": [sub_query]},
+    )
+    monkeypatch.setattr(
+        decomposer,
+        "_execute_parallel",
+        lambda sub_queries, top_k: [
+            SimpleNamespace(
+                **sub_query,
+                retrieved_chunks=[_make_chunk("chunk-1"), _make_chunk("chunk-2")],
+            )
+        ],
+    )
+    synthesize = MagicMock(return_value="grounded synthesized answer")
+    monkeypatch.setattr(decomposer, "_synthesize", synthesize)
+
+    result = decomposer.run("What are Amazon's business segments?")
+
+    assert result.answer == "grounded synthesized answer"
+    assert len(result.all_chunks) == 2
+    synthesize.assert_called_once()

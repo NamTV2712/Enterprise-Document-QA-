@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 JUDGE_SYSTEM_PROMPT = """You are an expert evaluator for RAG (Retrieval-Augmented Generation) systems.
 Your job is to evaluate responses objectively and return ONLY valid JSON.
 Do not add any explanation outside the JSON object."""
+JUDGE_CONTEXT_CHARS_PER_CHUNK = 1000
 
 
 @dataclass
@@ -104,7 +105,8 @@ class RAGEvaluator:
         ground_truth: str,
     ) -> dict:
         context_str = "\n\n".join(
-            f"[Chunk {i+1}]: {t[:250]}" for i, t in enumerate(context_texts)
+            f"[Chunk {i+1}]: {t[:JUDGE_CONTEXT_CHARS_PER_CHUNK]}"
+            for i, t in enumerate(context_texts)
         )
         prompt = f"""Evaluate this RAG system response on 3 metrics. Return ONLY a JSON object.
 

@@ -29,6 +29,11 @@ def _is_retryable_external_error(error: Exception) -> bool:
 
 SUPPORTED_TICKERS = {"AAPL", "MSFT", "AMZN"}  # will read from config after expanding corpus
 VALID_SECTIONS = {"business", "risk_factors", "mdna", "financial_statements", "financial_table"}
+MIN_CHUNKS_FOR_SYNTHESIS = 2
+INSUFFICIENT_DECOMPOSED_CONTEXT_ANSWER = (
+    "I could not find sufficient information in the available documents "
+    "to answer this question with confidence."
+)
 
 DECOMPOSE_SYSTEM_PROMPT = """You are an expert at analyzing financial questions about SEC 10-K filings.
 Your job is to determine if a question requires decomposition into sub-queries, and if so, create them.
@@ -186,6 +191,21 @@ class QueryDecomposer:
 
         # Deduplicate and synthesis
         all_chunks = self._deduplicate(sub_queries)
+        if len(all_chunks) < MIN_CHUNKS_FOR_SYNTHESIS:
+            logger.warning(
+                "Only %d chunks after decomposition, below synthesis threshold %d; "
+                "returning fallback to avoid hallucination.",
+                len(all_chunks),
+                MIN_CHUNKS_FOR_SYNTHESIS,
+            )
+            return DecomposedResponse(
+                answer=INSUFFICIENT_DECOMPOSED_CONTEXT_ANSWER,
+                sub_queries=sub_queries,
+                all_chunks=all_chunks,
+                model_used=self.generator.model,
+                was_decomposed=True,
+            )
+
         answer = self._synthesize(question, all_chunks)
 
         return DecomposedResponse(

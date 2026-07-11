@@ -45,6 +45,8 @@ Current Muc 5 corpus quality:
 - Degraded ticker section audit: NVDA has `business/mdna/risk_factors`; JPM, XOM, and CVX have `business/risk_factors`; ORCL has `business/mdna/risk_factors`; PFE has `business/financial_statements/financial_table/risk_factors`. Financial questions for degraded tickers without `financial_table` or `financial_statements` should be treated as limited-data cases.
 - Single-turn trend/growth query expansion added before the clean priority-1 evaluation: AWS revenue growth now retrieves the AWS net sales evidence at rank 1, and Microsoft total assets year-over-year now retrieves `MSFT_000095017025100235_financial_table_0001` at rank 1 under `financial_table`.
 - Current unit test suite after these fixes: `48 passed, 9 warnings`.
+- Trade-off: trend/growth query expansion adds one LLM rewrite call for underspecified single-turn trend queries. This improves retrieval for known table-backed trend cases but increases token budget consumption; it contributed to Groq quota exhaustion before completing the `multi_hop` and `out_of_corpus` categories in the latest priority-1 evaluation attempt.
+- Latest priority-1 evaluation attempt after all fixes judged 14/18 cases before Groq TPD quota stopped the run. Judged averages: Faithfulness `0.6964`, Answer Relevancy `0.7286`, Context Precision `0.6736`, Overall `0.6995`, Citation Correctness `1.0`, Recall Proxy `0.9231`, Fallback Accuracy `0.9286`. Category coverage: `fact_lookup=4/4`, `summary=3/3`, `enumeration=4/4`, `comparative=3/3`, `multi_hop=0/3`, `out_of_corpus=0/1`. Do not publish this as the final README/CV metric until the skipped cases are completed after quota reset.
 
 Latest completed milestone commit:
 

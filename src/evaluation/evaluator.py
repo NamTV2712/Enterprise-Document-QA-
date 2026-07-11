@@ -19,6 +19,7 @@ JUDGE_SYSTEM_PROMPT = """You are an expert evaluator for RAG (Retrieval-Augmente
 Your job is to evaluate responses objectively and return ONLY valid JSON.
 Do not add any explanation outside the JSON object."""
 JUDGE_CONTEXT_CHARS_PER_CHUNK = 1000
+RELEVANCE_WINDOW_STRIDE = 200
 
 
 @dataclass
@@ -80,6 +81,48 @@ def check_fallback_correctness(answer: str, expects_fallback: bool) -> bool:
     return is_fallback == expects_fallback
 
 
+def _extract_relevant_window(
+    text: str,
+    query: str,
+    window_chars: int = JUDGE_CONTEXT_CHARS_PER_CHUNK,
+) -> str:
+    """Return the most query-relevant context window without another LLM call.
+
+    A fixed prefix can hide evidence that appears deeper in a retrieved chunk.
+    This lightweight heuristic scans overlapping windows and chooses the first
+    window with the highest keyword overlap with the question.
+    """
+    if len(text) <= window_chars:
+        return text
+
+    query_words = {
+        word.lower()
+        for word in re.findall(r"[A-Za-z0-9]+", query)
+        if len(word) > 3
+    }
+    if not query_words:
+        return text[:window_chars]
+
+    text_lower = text.lower()
+    best_start = 0
+    best_score = 0
+    max_start = max(len(text) - window_chars, 0)
+    candidate_starts = list(range(0, max_start + 1, RELEVANCE_WINDOW_STRIDE))
+    if candidate_starts[-1] != max_start:
+        candidate_starts.append(max_start)
+
+    for start in candidate_starts:
+        segment = text_lower[start:start + window_chars]
+        score = sum(1 for word in query_words if word in segment)
+        if score > best_score:
+            best_score = score
+            best_start = start
+
+    if best_score <= 0:
+        return text[:window_chars]
+    return text[best_start:best_start + window_chars]
+
+
 class RAGEvaluator:
     def __init__(self, judge_generator: Generator):
         # Use a separate generator as a judge — distinct from the generator used for answering.
@@ -105,7 +148,7 @@ class RAGEvaluator:
         ground_truth: str,
     ) -> dict:
         context_str = "\n\n".join(
-            f"[Chunk {i+1}]: {t[:JUDGE_CONTEXT_CHARS_PER_CHUNK]}"
+            f"[Chunk {i+1}]: {_extract_relevant_window(t, question)}"
             for i, t in enumerate(context_texts)
         )
         prompt = f"""Evaluate this RAG system response on 3 metrics. Return ONLY a JSON object.

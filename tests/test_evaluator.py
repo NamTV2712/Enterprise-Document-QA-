@@ -1,6 +1,10 @@
 from types import SimpleNamespace
 
-from src.evaluation.evaluator import JUDGE_CONTEXT_CHARS_PER_CHUNK, RAGEvaluator
+from src.evaluation.evaluator import (
+    JUDGE_CONTEXT_CHARS_PER_CHUNK,
+    RAGEvaluator,
+    _extract_relevant_window,
+)
 
 
 def test_judge_prompt_includes_evidence_beyond_old_250_character_preview() -> None:
@@ -23,3 +27,32 @@ def test_judge_prompt_includes_evidence_beyond_old_250_character_preview() -> No
 
     assert JUDGE_CONTEXT_CHARS_PER_CHUNK == 1000
     assert "North America, International" in captured["prompt"]
+
+
+def test_relevant_window_finds_evidence_beyond_first_1000_chars() -> None:
+    """Regression guard for auditor evidence that appears after char 1000."""
+    padding = "Some unrelated text about tax positions. " * 40
+    evidence = (
+        "Ernst & Young LLP audited the financial statements. "
+        "Report signed October 31, 2025."
+    )
+    text = padding + evidence
+
+    result = _extract_relevant_window(
+        text,
+        query="Who audited Apple's financial statements and when was the report signed?",
+        window_chars=1000,
+    )
+
+    assert "Ernst & Young" in result
+    assert "October 31" in result
+
+
+def test_relevant_window_falls_back_to_start_when_no_overlap() -> None:
+    """If no relevant window is found, preserve the old prefix behavior."""
+    text = "Random unrelated content. " * 100
+
+    result = _extract_relevant_window(text, query="Apple revenue 2024", window_chars=1000)
+
+    assert len(result) == 1000
+    assert result == text[:1000]

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-    with VectorStore(path=settings.data_processed_dir / "qdrant") as store:
+    with VectorStore(path=settings.qdrant_local_path) as store:
         existing = [c.name for c in store.client.get_collections().collections]
         if COLLECTION_NAME in existing:
             store.client.delete_collection(collection_name=COLLECTION_NAME)

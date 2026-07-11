@@ -11,6 +11,21 @@ Phase 2C Muc 2, deterministic evaluation metrics and enumeration retrieval diagn
 Phase 2C Muc 3, 30-case categorized evaluation set and decomposer-routed evaluation, is implemented. Full 30-case LLM-judge run is blocked by Groq free-tier quota.
 Phase 2C Muc 4, financial table retrieval, is complete.
 Phase 2C Muc 5, corpus expansion to 25 configured tickers, is locally ingested, chunked, embedded, and indexed with explicit corpus-quality reporting. Follow-up remains for section extraction gaps in filings that use annual-report cross-reference layouts.
+Phase 2C Muc 7, Qdrant Cloud production configuration and migration, is implemented and verified.
+
+Current Muc 7 Qdrant Cloud status:
+
+- `configs/settings.py` supports `QDRANT_MODE`, `QDRANT_LOCAL_PATH`, `QDRANT_CLOUD_URL`, and `QDRANT_CLOUD_API_KEY`.
+- `VectorStore` supports local persistent mode and Qdrant Cloud mode while preserving the old `VectorStore(path=...)` local call pattern.
+- FastAPI startup, evaluation, and `scripts/test_rag.py` now use the configured Qdrant mode.
+- `scripts/index_chunks.py` intentionally rebuilds only the local Qdrant index via `settings.qdrant_local_path` to avoid accidentally deleting a cloud collection.
+- `scripts/migrate_to_qdrant_cloud.py` migrates the active local `sec_filings` collection to Qdrant Cloud. It upserts by default and only deletes/recreates the cloud collection when `--recreate` is explicitly passed.
+- Qdrant Cloud migration completed for `sec_filings`: local points `3,944`, cloud points `3,944`.
+- Qdrant Cloud required keyword payload indexes for filtered search; `ticker` and `section` indexes are now created by both `VectorStore.create_collection()` and the migration script.
+- `scripts/verify_qdrant_cloud.py` compares local vs cloud top-5 chunk IDs for a smoke query after migration.
+- Local-vs-cloud verification passed with exact top-5 match for `What was Apple's total net sales in 2024?` filtered to `AAPL`.
+- README documents the Qdrant Cloud migration and verification flow.
+- Validation after implementation: `.venv\Scripts\python.exe -m pytest tests/ -v` passes with `44 passed, 9 warnings`; `.venv\Scripts\python.exe -m compileall configs src scripts` passes.
 
 Current Muc 5 corpus quality:
 
@@ -22,11 +37,15 @@ Current Muc 5 corpus quality:
 - `scripts/download_filings.py` now marks 0-section extraction as `failed` instead of successful/skipped, and marks partial section extraction as `degraded` with explicit missing-section warnings.
 - Structural limitation identified: degraded/unusable filings commonly use incorporation-by-reference language and annual-report/page-reference layouts around Item 7 and Item 8. Examples include JPM Item 7/8 pointing to MD&A pages 46-160 and financial statements pages 162-314, XOM Item 7/8 pointing to the Financial Section, CVX Item 7/8 pointing to Financial Table of Contents entries, and MS/MCD/INTC using annual-report layouts where relevant content is not exposed through standard `Item 7 ... Item 8` boundaries. This is not just a missing regex keyword. Some content may still be present in the same primary HTML, while other filings may require following referenced exhibits or report sections. Supporting these cases requires a separate annual-report/table-of-contents aware ingestion/extraction pass, out of scope for the current single-document section extractor.
 - For evaluation and portfolio demos, prefer the 14 clean tickers. Degraded tickers remain usable only for sections that were actually extracted, especially business and risk-factor queries.
+- Cross-encoder score calibration finding: generic summary-style questions such as `What are X's main risk factors?` can score low or negative even when retrieval is verified correct by ticker, section, and content. Confirmed scores: AAPL `0.78` (positive outlier), MSFT `-1.70`, AMZN `-1.95`, JNJ `0.24`, BAC `-4.68`, UNH `-5.19`, GOOGL `-5.10`. Root cause: `ms-marco-MiniLM` scores specific query-passage relevance; broad summary queries do not have one strongly matching passage the same way fact-lookup queries do. Current impact is safe because `Generator.LOW_SCORE_THRESHOLD = 0.50` only logs a warning and does not block answer generation or trigger fallback. Before using retrieval score for fallback decisions or user-facing confidence, thresholds must be calibrated by query type/category instead of using one global cutoff.
+- Evaluation finding: derived/trend phrasing remains a retrieval limitation for raw financial table evidence. Examples: `How did Microsoft's total assets change year over year?` and the earlier `AWS revenue growth` case. The correct table chunks exist, but cross-encoder ranking scores the table evidence poorly for broad change/growth wording, even when `financial_table` is forced. This is a query formulation/ranking limitation, not table extraction failure.
+- Evaluation safety guard: `QueryDecomposer` now has a minimum-evidence guard (`MIN_CHUNKS_FOR_SYNTHESIS = 2`) that returns a fallback instead of synthesizing when decomposition retrieves too little evidence. Unit tests cover both fallback and normal synthesis paths. Follow-up evidence showed the Amazon business-segment case is not covered by this quantity guard because it retrieves enough chunks, and the current `AMZN_business_0000` chunk explicitly contains the segment sentence (`North America`, `International`, `Amazon Web Services`). Treat the prior Amazon judge score of `0.00` as an evaluation/context-audit item rather than confirmed hallucination until the exact judge context is inspected.
+- Evaluation truncation bug fixed: the LLM judge previously saw only the first 250 characters of each retrieved chunk. This hid important evidence that appeared later in otherwise correct chunks, including the Amazon segment sentence in `AMZN_business_0000`. Judge context now includes the first 1000 characters per chunk via `JUDGE_CONTEXT_CHARS_PER_CHUNK = 1000`, with a regression test. Previous faithfulness/context-precision scores from Muc 3 through the latest priority-1 run may be underestimates and should be re-evaluated before being treated as final metrics.
 
 Latest completed milestone commit:
 
 ```text
-40175e5 Add multi-turn conversation memory
+e9692e1 Expand corpus ingestion
 ```
 
 Recent completed commits:
@@ -829,6 +848,10 @@ OPENAI_API_KEY=
 ANTHROPIC_API_KEY=
 GEMINI_API_KEY=
 GROQ_API_KEY=
+QDRANT_MODE=local
+QDRANT_LOCAL_PATH=data/processed/qdrant
+QDRANT_CLOUD_URL=
+QDRANT_CLOUD_API_KEY=
 ```
 
 For the current working RAG test, `GROQ_API_KEY` is required.

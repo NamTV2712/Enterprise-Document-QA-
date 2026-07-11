@@ -15,6 +15,7 @@ from qdrant_client.models import (
     FieldCondition,
     Filter,
     MatchValue,
+    PayloadSchemaType,
     PointStruct,
     VectorParams,
 )
@@ -23,18 +24,33 @@ logger = logging.getLogger(__name__)
 
 COLLECTION_NAME = "sec_filings"
 BATCH_SIZE = 100
+PAYLOAD_INDEX_FIELDS = ("ticker", "section")
 
 
 class VectorStore:
-    def __init__(self, path: str | Path = "data/qdrant"):
-        """Local persistent mode: data is saved to disk and remains after restarting.
-            To switch to Qdrant server: replace with
-            QdrantClient(host="localhost", port=6333)
-            — the rest of the class remains unchanged.
-        """
-        Path(path).mkdir(parents=True, exist_ok=True)
-        self.client = QdrantClient(path=str(path))
-        logger.info("Qdrant client initialized at: %s", path)
+    def __init__(
+        self,
+        path: str | Path = "data/qdrant",
+        mode: str = "local",
+        url: str | None = None,
+        api_key: str | None = None,
+    ):
+        """Initialize Qdrant in local persistent mode or cloud mode."""
+        self.mode = mode
+        if mode == "local":
+            Path(path).mkdir(parents=True, exist_ok=True)
+            self.client = QdrantClient(path=str(path))
+            logger.info("Qdrant local client initialized at: %s", path)
+            return
+
+        if mode == "cloud":
+            if not url or not api_key:
+                raise ValueError("Qdrant cloud mode requires url and api_key")
+            self.client = QdrantClient(url=url, api_key=api_key)
+            logger.info("Qdrant cloud client initialized at: %s", url)
+            return
+
+        raise ValueError("qdrant mode must be 'local' or 'cloud'")
 
     def create_collection(self, embedding_dim: int = 768) -> None:
         """Create collection if it doesn't exist.
@@ -43,6 +59,7 @@ class VectorStore:
         existing = [c.name for c in self.client.get_collections().collections]
         if COLLECTION_NAME in existing:
             logger.info("Collection '%s' already exists, skipping.", COLLECTION_NAME)
+            self._ensure_payload_indexes()
             return
 
         self.client.create_collection(
@@ -50,6 +67,7 @@ class VectorStore:
             vectors_config=VectorParams(size=embedding_dim, distance=Distance.COSINE),
         )
         logger.info("Created collection '%s' (dim=%d, Cosine)", COLLECTION_NAME, embedding_dim)
+        self._ensure_payload_indexes()
 
     def upsert_chunks(self, chunks: list[dict]) -> None:
         """Upsert list of chunks from embedded JSONL.
@@ -125,6 +143,20 @@ class VectorStore:
     def _chunk_id_to_uuid(chunk_id: str) -> str:
         """Qdrant accepts UUID strings; uuid5 is stable across Python processes."""
         return str(uuid.uuid5(uuid.NAMESPACE_URL, chunk_id))
+
+    def _ensure_payload_indexes(self) -> None:
+        """Create keyword payload indexes needed for filtered search in Qdrant Cloud."""
+        info = self.client.get_collection(COLLECTION_NAME)
+        existing_schema = getattr(info, "payload_schema", None) or {}
+        for field_name in PAYLOAD_INDEX_FIELDS:
+            if field_name in existing_schema:
+                continue
+            self.client.create_payload_index(
+                collection_name=COLLECTION_NAME,
+                field_name=field_name,
+                field_schema=PayloadSchemaType.KEYWORD,
+            )
+            logger.info("Created payload index for '%s'", field_name)
 
     @staticmethod
     def _build_filter(

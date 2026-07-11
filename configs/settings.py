@@ -14,4 +14,10 @@ class Settings(BaseSettings):
     data_raw_dir: Path = Path("data/raw")
     data_processed_dir: Path = Path("data/processed")
 
+    # Qdrant configuration. Keep local as the safe default until cloud migration is verified.
+    qdrant_mode: str = "local"
+    qdrant_local_path: Path = Path("data/processed/qdrant")
+    qdrant_cloud_url: str = ""
+    qdrant_cloud_api_key: str = ""
+
 settings = Settings()

@@ -217,6 +217,9 @@ Create `.env`:
 ```text
 GROQ_API_KEY=your_groq_key
 GEMINI_API_KEY=optional_gemini_key
+QDRANT_MODE=local
+QDRANT_CLOUD_URL=
+QDRANT_CLOUD_API_KEY=
 ```
 
 Build local artifacts in order:
@@ -238,6 +241,39 @@ Run evaluation:
 
 ```powershell
 .venv\Scripts\python.exe -m scripts.run_evaluation
+```
+
+## Qdrant Cloud
+
+Local Qdrant remains the default serving mode. To migrate the current local collection to Qdrant Cloud, create a Qdrant Cloud cluster and set:
+
+```text
+QDRANT_CLOUD_URL=https://your-cluster-id.cloud.qdrant.io:6333
+QDRANT_CLOUD_API_KEY=your_api_key
+```
+
+Migrate the local `sec_filings` collection:
+
+```powershell
+.venv\Scripts\python.exe -m scripts.migrate_to_qdrant_cloud
+```
+
+Use `--recreate` only when you intentionally want to replace the cloud collection:
+
+```powershell
+.venv\Scripts\python.exe -m scripts.migrate_to_qdrant_cloud --recreate
+```
+
+Verify local and cloud retrieval agree on a smoke query:
+
+```powershell
+.venv\Scripts\python.exe -m scripts.verify_qdrant_cloud
+```
+
+After verification passes, switch serving to cloud:
+
+```text
+QDRANT_MODE=cloud
 ```
 
 ## Repository Structure

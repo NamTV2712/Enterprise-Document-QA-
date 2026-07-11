@@ -16,7 +16,12 @@ logging.basicConfig(level=logging.INFO,
 def main() -> None:
     generator = Generator(provider="groq")  # Change to "gemini" if needed.
     embedder = Embedder()
-    with VectorStore(path=settings.data_processed_dir / "qdrant") as store:
+    with VectorStore(
+        mode=settings.qdrant_mode,
+        path=settings.qdrant_local_path,
+        url=settings.qdrant_cloud_url,
+        api_key=settings.qdrant_cloud_api_key,
+    ) as store:
         retriever = Retriever(embedder=embedder, store=store)
         pipeline = RAGPipeline(retriever=retriever, generator=generator)
 

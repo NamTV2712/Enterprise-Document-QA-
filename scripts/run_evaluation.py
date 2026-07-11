@@ -311,7 +311,12 @@ def main() -> None:
     records = list(done_cases.values())
     skipped = []
 
-    with VectorStore(path=settings.data_processed_dir / "qdrant") as store:
+    with VectorStore(
+        mode=settings.qdrant_mode,
+        path=settings.qdrant_local_path,
+        url=settings.qdrant_cloud_url,
+        api_key=settings.qdrant_cloud_api_key,
+    ) as store:
         all_chunks = load_embedded_chunks(settings.data_processed_dir)
         logger.info("Loaded %d chunks for BM25 index", len(all_chunks))
         retriever = HybridRetriever(embedder=embedder, store=store, all_chunks=all_chunks)

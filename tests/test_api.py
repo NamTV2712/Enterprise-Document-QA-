@@ -66,6 +66,9 @@ def test_supported_tickers_returns_expected_structure(client) -> None:
     assert "tickers" in data
     assert "sections" in data
     assert isinstance(data["tickers"], list)
+    assert "AAPL" in data["tickers"]
+    assert "GOOGL" in data["tickers"]
+    assert "BRK-B" in data["tickers"]
     assert "financial_table" in data["sections"]
 
 
@@ -114,6 +117,19 @@ def test_query_rejects_invalid_ticker_format(client) -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_query_accepts_dash_ticker(client, mock_pipeline) -> None:
+    response = client.post(
+        "/query",
+        json={
+            "question": "What are Berkshire Hathaway's risks?",
+            "ticker": "BRK-B",
+        },
+    )
+
+    assert response.status_code == 200
+    assert mock_pipeline.query.call_args.kwargs["ticker"] == "BRK-B"
 
 
 def test_query_returns_503_when_pipeline_not_ready() -> None:

@@ -21,13 +21,58 @@ def _make_mock_generator(provider: str = "groq", rewrite_response: str = "rewrit
 
 
 def test_no_history_returns_original_query_unchanged() -> None:
-    """The first question in a session must not spend an LLM rewrite call."""
+    """Standalone non-trend questions must not spend an LLM rewrite call."""
     mock_generator = _make_mock_generator()
     rewriter = QueryRewriter(mock_generator)
 
     result = rewriter.rewrite("What are Apple's risks?", history_messages=[])
 
     assert result == "What are Apple's risks?"
+    mock_generator.client.chat.completions.create.assert_not_called()
+
+
+def test_single_turn_trend_query_without_years_is_rewritten() -> None:
+    mock_generator = _make_mock_generator(
+        rewrite_response="What was Amazon AWS net sales growth for fiscal years 2025, 2024, and 2023?"
+    )
+    rewriter = QueryRewriter(mock_generator)
+
+    result = rewriter.rewrite("What is Amazon's AWS revenue growth?", history_messages=[])
+
+    assert result == (
+        "What was Amazon AWS net sales growth for fiscal years 2025, 2024, and 2023? "
+        "net sales revenue AWS net sales"
+    )
+    mock_generator.client.chat.completions.create.assert_called_once()
+    sent_messages = mock_generator.client.chat.completions.create.call_args.kwargs["messages"]
+    assert "2025, 2024, and 2023" in sent_messages[-1]["content"]
+
+
+def test_single_turn_trend_query_with_years_is_not_rewritten() -> None:
+    mock_generator = _make_mock_generator()
+    rewriter = QueryRewriter(mock_generator)
+
+    result = rewriter.rewrite(
+        "How did Microsoft's total assets change from 2024 to 2025?",
+        history_messages=[],
+    )
+
+    assert result == "How did Microsoft's total assets change from 2024 to 2025?"
+    mock_generator.client.chat.completions.create.assert_not_called()
+
+
+def test_single_turn_asset_trend_appends_balance_sheet_hints() -> None:
+    mock_generator = _make_mock_generator()
+    rewriter = QueryRewriter(mock_generator)
+
+    result = rewriter.rewrite(
+        "How did Microsoft total assets change year over year?",
+        history_messages=[],
+    )
+
+    assert result.startswith("Microsoft total assets")
+    assert "balance sheets Assets - Total assets" in result
+    assert "2025 2024 2023" in result
     mock_generator.client.chat.completions.create.assert_not_called()
 
 

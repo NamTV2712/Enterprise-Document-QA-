@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from configs.settings import settings
+from configs.tickers import TICKERS
 from src.generation.generator import Generator
 from src.generation.query_decomposer import QueryDecomposer
 from src.generation.rag_pipeline import RAGPipeline
@@ -36,6 +37,22 @@ logging.basicConfig(
 
 # Global dictionary for pipeline storage — populated at startup, used in endpoints.
 _state: dict[str, Any] = {}
+SUPPORTED_SECTIONS = [
+    "business",
+    "risk_factors",
+    "mdna",
+    "financial_statements",
+    "financial_table",
+]
+
+
+def _load_supported_tickers() -> list[str]:
+    tickers = []
+    for ticker in TICKERS:
+        ticker_dir = settings.data_processed_dir / ticker
+        if any(path.stat().st_size > 0 for path in ticker_dir.glob("*_chunks_embedded.jsonl")):
+            tickers.append(ticker)
+    return tickers or TICKERS
 
 
 @asynccontextmanager
@@ -89,7 +106,7 @@ class QueryRequest(BaseModel):
         examples=["What was Apple's total revenue in 2024?"]
     )
     ticker: str | None = Field(
-        default=None, pattern=r"^[A-Z]{1,5}$",
+        default=None, pattern=r"^[A-Z]{1,5}(-[A-Z])?$",
         examples=["AAPL"]
     )
     section: Literal[
@@ -253,14 +270,8 @@ async def query_decomposed(request: QueryRequest) -> DecomposedQueryResponse:
 async def supported_tickers() -> dict:
     """List of supported tickers — helps the UI/user know what they can ask about."""
     return {
-        "tickers": ["AAPL", "MSFT", "AMZN"],
-        "sections": [
-            "business",
-            "risk_factors",
-            "mdna",
-            "financial_statements",
-            "financial_table",
-        ],
+        "tickers": _load_supported_tickers(),
+        "sections": SUPPORTED_SECTIONS,
     }
 
 

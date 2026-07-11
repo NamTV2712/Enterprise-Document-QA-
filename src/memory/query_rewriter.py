@@ -11,8 +11,40 @@ Rewritten: "What is Apple's total revenue?"
 """
 
 import logging
+import re
 
 logger = logging.getLogger(__name__)
+YEAR_PATTERN = re.compile(r"\b20\d{2}\b")
+TREND_KEYWORDS = (
+    "growth",
+    "trend",
+    "change",
+    "changed",
+    "year over year",
+    "year-over-year",
+    "yoy",
+)
+ASSET_TREND_STOPWORDS = {
+    "how",
+    "did",
+    "does",
+    "do",
+    "what",
+    "was",
+    "were",
+    "is",
+    "are",
+    "the",
+    "a",
+    "an",
+    "change",
+    "changed",
+    "growth",
+    "trend",
+    "year",
+    "over",
+    "yoy",
+}
 
 REWRITE_SYSTEM_PROMPT = """You are a query rewriting assistant for a financial document QA system.
 Your job is to rewrite a follow-up question into a standalone question that can be 
@@ -42,22 +74,14 @@ class QueryRewriter:
         self._generator = generator
 
     def rewrite(self, query: str, history_messages: list[dict]) -> str:
-        """Rewrite the query when history exists; otherwise return the original."""
-        if not history_messages:
+        """Rewrite follow-ups and underspecified trend queries for retrieval."""
+        needs_trend_expansion = self._needs_trend_expansion(query)
+        if not history_messages and not needs_trend_expansion:
             return query
+        if not history_messages and needs_trend_expansion and "asset" in query.lower():
+            return self._build_asset_table_query(query)
 
-        # Build prompt with history context
-        history_text = "\n".join([
-            f"{msg['role'].upper()}: {msg['content']}"
-            for msg in history_messages[-4:]  # only take the last 2 turns to keep the prompt short
-        ])
-
-        prompt = f"""Conversation history:
-{history_text}
-
-Follow-up question: {query}
-
-Rewrite the follow-up question as a standalone question:"""
+        prompt = self._build_prompt(query, history_messages, needs_trend_expansion)
 
         try:
             if self._generator.provider == "groq":
@@ -82,6 +106,9 @@ Rewrite the follow-up question as a standalone question:"""
                     contents=prompt,
                 ).text.strip()
 
+            if needs_trend_expansion:
+                rewritten = self._append_table_hints(query, rewritten or query)
+
             if rewritten and rewritten != query:
                 logger.info(
                     "Query rewritten: '%s' -> '%s'", query[:60], rewritten[:60]
@@ -92,3 +119,65 @@ Rewrite the follow-up question as a standalone question:"""
             # Rewriter failure should not crash the RAG pipeline.
             logger.warning("Query rewrite failed, using original: %s", e)
             return query
+
+    @staticmethod
+    def _needs_trend_expansion(query: str) -> bool:
+        normalized = query.lower()
+        return any(keyword in normalized for keyword in TREND_KEYWORDS) and not YEAR_PATTERN.search(query)
+
+    @staticmethod
+    def _build_prompt(
+        query: str,
+        history_messages: list[dict],
+        needs_trend_expansion: bool,
+    ) -> str:
+        if history_messages:
+            history_text = "\n".join([
+                f"{msg['role'].upper()}: {msg['content']}"
+                for msg in history_messages[-4:]  # only take the last 2 turns to keep the prompt short
+            ])
+            return f"""Conversation history:
+{history_text}
+
+Follow-up question: {query}
+
+Rewrite the follow-up question as a standalone question:"""
+
+        if needs_trend_expansion:
+            return f"""Question: {query}
+
+Rewrite this financial trend/growth question for retrieval over SEC 10-K tables.
+Keep the original company and metric. Add the latest fiscal years 2025, 2024, and 2023 if they are not already present.
+Use concrete table-friendly terms such as net sales, revenue, total assets, increase, decrease, and year-over-year when relevant.
+Return one concise standalone retrieval query:"""
+
+        return query
+
+    @staticmethod
+    def _append_table_hints(original_query: str, rewritten_query: str) -> str:
+        normalized = original_query.lower()
+        hints = []
+        if "asset" in normalized:
+            hints.append("balance sheets Assets - Total assets total current assets")
+        if "revenue" in normalized or "sales" in normalized:
+            hints.append("net sales revenue")
+        if "aws" in normalized:
+            hints.append("AWS net sales")
+
+        if not hints:
+            return rewritten_query
+        return f"{rewritten_query} {' '.join(hints)}"
+
+    @staticmethod
+    def _build_asset_table_query(query: str) -> str:
+        normalized = query.replace("'s", "").replace("’s", "")
+        tokens = re.findall(r"[A-Za-z0-9-]+", normalized)
+        core_terms = [
+            token
+            for token in tokens
+            if token.lower() not in ASSET_TREND_STOPWORDS
+        ]
+        return (
+            f"{' '.join(core_terms)} balance sheets Assets - Total assets "
+            "total current assets 2025 2024 2023"
+        )

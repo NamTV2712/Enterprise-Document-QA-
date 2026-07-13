@@ -18,7 +18,7 @@ class SlowCrossEncoder:
     def __init__(self):
         self.call_order = []
 
-    def predict(self, pairs):
+    def predict(self, pairs, **kwargs):
         call_id = pairs[0][0]
         self.call_order.append(f"start-{call_id}")
         time.sleep(0.05)

@@ -12,7 +12,12 @@ import time
 
 from configs.settings import settings
 from src.retrieval.embedder import Embedder
-from src.retrieval.hybrid_retriever import HybridRetriever, _tokenize, load_embedded_chunks
+from src.retrieval.hybrid_retriever import (
+    CROSS_ENCODER_BATCH_SIZE,
+    HybridRetriever,
+    _tokenize,
+    load_embedded_chunks,
+)
 from src.retrieval.vector_store import VectorStore
 
 
@@ -72,7 +77,7 @@ def profile_once(retriever: HybridRetriever) -> dict[str, float]:
     start = time.perf_counter()
     pairs = [(QUERY, chunk["text"]) for chunk in top_candidates]
     with retriever._model_lock:
-        retriever.cross_encoder.predict(pairs)
+        retriever.cross_encoder.predict(pairs, batch_size=CROSS_ENCODER_BATCH_SIZE)
     timings["cross_encoder"] = time.perf_counter() - start
 
     start = time.perf_counter()

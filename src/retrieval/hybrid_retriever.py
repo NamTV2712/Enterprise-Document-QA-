@@ -27,6 +27,7 @@ from src.retrieval.vector_store import VectorStore
 logger = logging.getLogger(__name__)
 
 CROSS_ENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+CROSS_ENCODER_BATCH_SIZE = 4
 RRF_K = 60  # The RRF constant, 60, is a commonly observed empirical value
 CE_RELATIVE_CUTOFF = 0.50
 
@@ -211,7 +212,7 @@ class HybridRetriever:
         # --- Stage 4: Cross-encoder re-ranking ---
         pairs = [(query, c["text"]) for c in top_candidates]
         with self._model_lock:
-            ce_scores = self.cross_encoder.predict(pairs)
+            ce_scores = self.cross_encoder.predict(pairs, batch_size=CROSS_ENCODER_BATCH_SIZE)
 
         reranked = sorted(
             zip(top_candidates, ce_scores),

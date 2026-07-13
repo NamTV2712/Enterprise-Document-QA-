@@ -13,6 +13,7 @@ no changes needed, just swap objects.
 import logging
 import json
 import re
+import threading
 from pathlib import Path
 
 from rank_bm25 import BM25Okapi
@@ -20,6 +21,7 @@ from sentence_transformers import CrossEncoder
 
 from src.retrieval.embedder import AUTO_DEVICE, Embedder, resolve_torch_device
 from src.retrieval.retriever import RetrievedChunk
+from src.retrieval.structured_lookup import structured_lookup
 from src.retrieval.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
@@ -42,6 +44,30 @@ def load_embedded_chunks(data_processed_dir: Path) -> list[dict]:
                 record.pop("embedding", None)
                 chunks.append(record)
     return chunks
+
+
+def _select_adaptive_chunks(
+    reranked: list[tuple[dict, float]],
+    max_k: int = 5,
+    min_k: int = 1,
+    gap_threshold: float = 1.0,
+) -> list[tuple[dict, float]]:
+    """Select chunks by cutting at a large cross-encoder score drop.
+
+    This is intentionally an experimental helper and is not wired into normal
+    retrieval yet. It supports offline validation of whether score gaps can
+    reduce low-value context without hurting deterministic recall proxies.
+    """
+    if not reranked:
+        return []
+
+    selected = [reranked[0]]
+    for index in range(1, min(len(reranked), max_k)):
+        gap = reranked[index - 1][1] - reranked[index][1]
+        if len(selected) >= min_k and gap > gap_threshold:
+            break
+        selected.append(reranked[index])
+    return selected
 
 
 class HybridRetriever:
@@ -67,7 +93,15 @@ class HybridRetriever:
         # Load cross-encoder
         logger.info("Loading cross-encoder: %s on %s", CROSS_ENCODER_MODEL, self.device)
         self.cross_encoder = CrossEncoder(CROSS_ENCODER_MODEL, device=self.device)
+        # Protect shared model instances for every retrieval path, including
+        # direct queries, streaming queries, and decomposed sub-queries.
+        self._model_lock = threading.Lock()
         logger.info("HybridRetriever ready")
+
+    def embed_query(self, query: str) -> list[float]:
+        """Embed a query through the shared retriever model lock."""
+        with self._model_lock:
+            return self.embedder.embed_query(query)
 
     def retrieve(
         self,
@@ -75,14 +109,14 @@ class HybridRetriever:
         top_k: int = 5,
         ticker: str | None = None,
         section: str | None = None,
-        candidate_pool: int = 20,
+        candidate_pool: int = 10,
     ) -> list[RetrievedChunk]:
         """Backward-compatible wrapper that embeds the query before retrieval."""
         if not query.strip():
             return []
 
-        query_embedding = self.embedder.embed_query(query)
-        return self.retrieve_with_embedding(
+        query_embedding = self.embed_query(query)
+        reranked = self._retrieve_with_embedding(
             query=query,
             query_embedding=query_embedding,
             top_k=top_k,
@@ -91,6 +125,8 @@ class HybridRetriever:
             candidate_pool=candidate_pool,
         )
 
+        return self._format_results(query, reranked)
+
     def retrieve_with_embedding(
         self,
         query: str,
@@ -98,7 +134,7 @@ class HybridRetriever:
         top_k: int = 5,
         ticker: str | None = None,
         section: str | None = None,
-        candidate_pool: int = 20,
+        candidate_pool: int = 10,
     ) -> list[RetrievedChunk]:
         """Retrieve using a pre-computed query embedding.
 
@@ -107,6 +143,31 @@ class HybridRetriever:
         """
         if not query.strip():
             return []
+
+        reranked = self._retrieve_with_embedding(
+            query=query,
+            query_embedding=query_embedding,
+            top_k=top_k,
+            ticker=ticker,
+            section=section,
+            candidate_pool=candidate_pool,
+        )
+
+        return self._format_results(query, reranked)
+
+    def _retrieve_with_embedding(
+        self,
+        query: str,
+        query_embedding: list[float],
+        top_k: int = 5,
+        ticker: str | None = None,
+        section: str | None = None,
+        candidate_pool: int = 10,
+    ) -> list[tuple[dict, float]]:
+        """Run retrieval with model lock scoped only to cross-encoder inference."""
+        structured_match = None
+        if section in (None, "financial_table", "financial_statements"):
+            structured_match = structured_lookup(query, ticker, self._all_chunks)
 
         # --- Stage 1: BM25 search ---
         bm25_scores = self.bm25.get_scores(_tokenize(query))
@@ -149,7 +210,8 @@ class HybridRetriever:
 
         # --- Stage 4: Cross-encoder re-ranking ---
         pairs = [(query, c["text"]) for c in top_candidates]
-        ce_scores = self.cross_encoder.predict(pairs)
+        with self._model_lock:
+            ce_scores = self.cross_encoder.predict(pairs)
 
         reranked = sorted(
             zip(top_candidates, ce_scores),
@@ -161,8 +223,29 @@ class HybridRetriever:
             cutoff = reranked[0][1] * CE_RELATIVE_CUTOFF
             reranked = [(chunk, score) for chunk, score in reranked if score >= cutoff]
 
-        reranked = reranked[:top_k]
+        if structured_match is not None:
+            matched_id = structured_match.chunk["chunk_id"]
+            reranked = [
+                (chunk, score)
+                for chunk, score in reranked
+                if chunk["chunk_id"] != matched_id
+            ]
+            reranked.insert(0, (structured_match.chunk, 10.0))
+            logger.info(
+                "Structured lookup matched %s row '%s' in %s",
+                structured_match.canonical_key,
+                structured_match.label,
+                matched_id,
+            )
 
+        reranked = reranked[:top_k]
+        return reranked
+
+    def _format_results(
+        self,
+        query: str,
+        reranked: list[tuple[dict, float]],
+    ) -> list[RetrievedChunk]:
         result = []
         for chunk, ce_score in reranked:
             result.append(self._to_retrieved_chunk(chunk, ce_score))

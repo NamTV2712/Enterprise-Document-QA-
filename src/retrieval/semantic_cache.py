@@ -8,6 +8,7 @@ different corpus slices.
 """
 
 import logging
+import threading
 import time
 from dataclasses import asdict, dataclass
 
@@ -66,6 +67,7 @@ class SemanticCache:
         self.max_entries = max_entries
         self.ttl = ttl_seconds
         self._entries: list[CacheEntry] = []
+        self._lock = threading.RLock()
         self._stats = CacheStats(
             max_entries=max_entries,
             similarity_threshold=similarity_threshold,
@@ -80,32 +82,33 @@ class SemanticCache:
         top_k: int,
     ) -> CacheEntry | None:
         """Return the best matching cache entry, or None on miss."""
-        self._stats.total_requests += 1
-        now = time.monotonic()
-        filter_key = make_filter_key(ticker, section, top_k)
+        with self._lock:
+            self._stats.total_requests += 1
+            now = time.monotonic()
+            filter_key = make_filter_key(ticker, section, top_k)
 
-        candidates = [
-            entry
-            for entry in self._entries
-            if entry.filter_key == filter_key and (now - entry.timestamp) <= self.ttl
-        ]
-        if not candidates:
-            return None
+            candidates = [
+                entry
+                for entry in self._entries
+                if entry.filter_key == filter_key and (now - entry.timestamp) <= self.ttl
+            ]
+            if not candidates:
+                return None
 
-        q_norm = self._normalize(query_embedding)
-        best_score = -1.0
-        best_entry = None
-        for entry in candidates:
-            score = float(np.dot(q_norm, self._normalize(entry.query_embedding)))
-            if score > best_score:
-                best_score = score
-                best_entry = entry
+            q_norm = self._normalize(query_embedding)
+            best_score = -1.0
+            best_entry = None
+            for entry in candidates:
+                score = float(np.dot(q_norm, self._normalize(entry.query_embedding)))
+                if score > best_score:
+                    best_score = score
+                    best_entry = entry
 
-        if best_entry is not None and best_score >= self.threshold:
-            best_entry.hit_count += 1
-            self._stats.cache_hits += 1
-            logger.info("Cache HIT (similarity=%.4f, filter=%s)", best_score, filter_key)
-            return best_entry
+            if best_entry is not None and best_score >= self.threshold:
+                best_entry.hit_count += 1
+                self._stats.cache_hits += 1
+                logger.info("Cache HIT (similarity=%.4f, filter=%s)", best_score, filter_key)
+                return best_entry
 
         logger.debug(
             "Cache MISS (best_similarity=%.4f, threshold=%.2f, filter=%s)",
@@ -126,45 +129,48 @@ class SemanticCache:
         model_used: str,
     ) -> None:
         """Store a response and evict expired or least-used entries if needed."""
-        now = time.monotonic()
-        self._prune_expired(now)
+        with self._lock:
+            now = time.monotonic()
+            self._prune_expired(now)
 
-        if len(self._entries) >= self.max_entries:
-            self._entries.sort(key=lambda entry: (entry.hit_count, entry.timestamp))
-            evicted = self._entries.pop(0)
-            logger.debug("Cache evicted: filter=%s", evicted.filter_key)
+            if len(self._entries) >= self.max_entries:
+                self._entries.sort(key=lambda entry: (entry.hit_count, entry.timestamp))
+                evicted = self._entries.pop(0)
+                logger.debug("Cache evicted: filter=%s", evicted.filter_key)
 
-        self._entries.append(
-            CacheEntry(
-                query_embedding=query_embedding,
-                filter_key=make_filter_key(ticker, section, top_k),
-                answer=answer,
-                sources=sources,
-                model_used=model_used,
-                timestamp=now,
+            self._entries.append(
+                CacheEntry(
+                    query_embedding=query_embedding,
+                    filter_key=make_filter_key(ticker, section, top_k),
+                    answer=answer,
+                    sources=sources,
+                    model_used=model_used,
+                    timestamp=now,
+                )
             )
-        )
-        self._stats.entries = len(self._entries)
+            self._stats.entries = len(self._entries)
 
     def test_similarity(self, embedding_a: list[float], embedding_b: list[float]) -> float:
         """Return cosine similarity for threshold tuning."""
         return float(np.dot(self._normalize(embedding_a), self._normalize(embedding_b)))
 
     def get_stats(self) -> dict:
-        self._prune_expired(time.monotonic())
-        self._stats.entries = len(self._entries)
-        return {**asdict(self._stats), "hit_rate": self._stats.hit_rate}
+        with self._lock:
+            self._prune_expired(time.monotonic())
+            self._stats.entries = len(self._entries)
+            return {**asdict(self._stats), "hit_rate": self._stats.hit_rate}
 
     def clear(self) -> int:
         """Clear all cache entries and reset metrics."""
-        count = len(self._entries)
-        self._entries.clear()
-        self._stats = CacheStats(
-            max_entries=self.max_entries,
-            similarity_threshold=self.threshold,
-            ttl_seconds=self.ttl,
-        )
-        return count
+        with self._lock:
+            count = len(self._entries)
+            self._entries.clear()
+            self._stats = CacheStats(
+                max_entries=self.max_entries,
+                similarity_threshold=self.threshold,
+                ttl_seconds=self.ttl,
+            )
+            return count
 
     def _prune_expired(self, now: float) -> None:
         self._entries = [entry for entry in self._entries if (now - entry.timestamp) <= self.ttl]

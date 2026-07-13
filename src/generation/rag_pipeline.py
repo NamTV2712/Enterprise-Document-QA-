@@ -31,6 +31,8 @@ class RAGPipeline:
         self.rewriter = QueryRewriter(generator)
 
     def _embed_query_once(self, question: str) -> list[float]:
+        if hasattr(self.retriever, "embed_query"):
+            return self.retriever.embed_query(question)
         return self.retriever.embedder.embed_query(question)
 
     def _retrieve_with_optional_embedding(
@@ -97,6 +99,13 @@ class RAGPipeline:
             for chunk in chunks
         ]
 
+    def _history_messages(self, session_id: str) -> list[dict]:
+        messages = []
+        for turn in self.memory.get_history(session_id):
+            messages.append({"role": "user", "content": turn.user_message})
+            messages.append({"role": "assistant", "content": turn.assistant_message})
+        return messages
+
     def query(
         self,
         question: str,
@@ -115,8 +124,8 @@ class RAGPipeline:
 
         history_messages = []
         if session_id:
-            session = self.memory.get_or_create(session_id)
-            history_messages = session.to_llm_messages()
+            self.memory.get_or_create(session_id)
+            history_messages = self._history_messages(session_id)
 
         effective_query = self.rewriter.rewrite(question, history_messages)
         query_embedding = self._embed_query_once(effective_query)
@@ -181,8 +190,8 @@ class RAGPipeline:
         try:
             history_messages = conversation_history or []
             if session_id:
-                session = self.memory.get_or_create(session_id)
-                history_messages = session.to_llm_messages()
+                self.memory.get_or_create(session_id)
+                history_messages = self._history_messages(session_id)
 
             effective_query = self.rewriter.rewrite(question, history_messages)
             query_embedding = self._embed_query_once(effective_query)

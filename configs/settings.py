@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
     groq_api_key: str = ""
+    groq_api_key_fall_back: str = ""
 
     # Data path (relative path to run on any machine)
     data_raw_dir: Path = Path("data/raw")

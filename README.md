@@ -160,18 +160,29 @@ Supported providers:
 
 ## Evaluation Results
 
-| Metric | Semantic Baseline | Hybrid Retrieval |
-|---|---:|---:|
-| Faithfulness | `0.9000` | `0.8667` |
-| Answer relevancy | `0.9167` | `0.9333` |
-| Context precision | `0.3833` | `0.4750` |
-| Overall | `0.7333` | `0.7583` |
+Latest priority-1 LLM-as-judge run, using Groq `llama-3.3-70b-versatile` as judge:
+
+| Metric | Score |
+|---|---:|
+| Faithfulness | `0.8000` |
+| Answer relevancy | `0.8444` |
+| Context precision | `0.4250` |
+| Overall judge average | `0.6898` |
+| Citation correctness | `1.0000` |
+| Recall proxy | `0.9375` |
+| Fallback accuracy | `0.9444` |
+
+Coverage:
+
+- `18/18` priority-1 cases completed with no skipped records.
+- Covered categories: fact lookup `4/4`, summary `3/3`, enumeration `4/4`, comparative `3/3`, multi-hop `3/3`, out-of-corpus `1/1`.
 
 Interpretation:
 
-- Hybrid retrieval improved context precision from `0.3833` to `0.4750`.
-- Overall evaluation improved from `0.7333` to `0.7583`.
-- The remaining bottleneck is retrieval precision over verticalized financial tables.
+- Achieved `1.00` faithfulness and answer relevancy on fact-lookup questions, with `1.00` citation correctness across answerable cases.
+- Overall context precision remains the primary optimization target: answers are usually found and cited correctly, but retrieval still includes extra non-essential chunks.
+- Balance-sheet `total X` questions use a lightweight structured lookup over financial-table row labels before semantic re-ranking. This fixes known total-assets retrieval failures without regenerating table chunks; Microsoft total-assets year-over-year now answers with `619,003`, `512,163`, and the computed increase `106,840`.
+- A smaller `llama-3.1-8b-instant` judge was rejected after producing false negatives on exact numbers that were present in context.
 
 ## Performance Notes
 
@@ -216,6 +227,7 @@ Create `.env`:
 
 ```text
 GROQ_API_KEY=your_groq_key
+GROQ_API_KEY_FALL_BACK=optional_second_groq_key_for_evaluation
 GEMINI_API_KEY=optional_gemini_key
 QDRANT_MODE=local
 QDRANT_CLOUD_URL=

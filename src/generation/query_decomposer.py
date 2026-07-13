@@ -7,7 +7,6 @@ execute them in parallel, and aggregate the results
 import json
 import logging
 import re
-import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
@@ -124,7 +123,6 @@ class QueryDecomposer:
         self.pipeline = pipeline
         self.generator = pipeline.generator
         self.retriever = pipeline.retriever
-        self._retriever_lock = threading.Lock()
 
     def run(
         self,
@@ -309,13 +307,12 @@ class QueryDecomposer:
         (Qdrant + cross-encoder inference)."""
         def retrieve_one(sq: SubQuery) -> SubQuery:
             try:
-                with self._retriever_lock:
-                    sq.retrieved_chunks = self.retriever.retrieve(
-                        query=sq.query,
-                        top_k=top_k,
-                        ticker=sq.ticker,
-                        section=sq.section,
-                    )
+                sq.retrieved_chunks = self.retriever.retrieve(
+                    query=sq.query,
+                    top_k=top_k,
+                    ticker=sq.ticker,
+                    section=sq.section,
+                )
                 logger.info(
                     "Sub-query '%s...' -> %d chunks",
                     sq.query[:40], len(sq.retrieved_chunks)

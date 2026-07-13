@@ -5,11 +5,16 @@ Supports Groq and Gemini — select via config.
 """
 
 import logging
+import re
+import time
 from dataclasses import dataclass
 
 from src.retrieval.retriever import RetrievedChunk
 
 logger = logging.getLogger(__name__)
+
+GROQ_MAX_RETRIES = 4
+GROQ_DEFAULT_RETRY_DELAY_SECONDS = 2.0
 
 SYSTEM_PROMPT = """You are a financial analyst assistant. Your job is to answer questions
 about SEC 10-K filings accurately and concisely.
@@ -76,24 +81,57 @@ class Generator:
     # If the best chunk has a score below this threshold, the context may not be
     # relevant enough. Log it instead of silently producing a weak answer.
 
-    def __init__(self, provider: str = "groq", model: str | None = None):
+    def __init__(self, provider: str = "groq", model: str | None = None, api_key: str | None = None):
         self.provider = provider
         from configs.settings import settings
 
         if provider == "groq":
             from groq import Groq
-            if not settings.groq_api_key:
+            selected_api_key = api_key or settings.groq_api_key
+            if not selected_api_key:
                 raise ValueError("GROQ_API_KEY is not configured in .env")
-            self.client = Groq(api_key=settings.groq_api_key)
+            self.client = Groq(api_key=selected_api_key)
             self.model = model or "llama-3.3-70b-versatile"
         elif provider == "gemini":
             from google import genai
-            if not settings.gemini_api_key:
+            selected_api_key = api_key or settings.gemini_api_key
+            if not selected_api_key:
                 raise ValueError("GEMINI_API_KEY is not configured in .env")
-            self.client = genai.Client(api_key=settings.gemini_api_key)
+            self.client = genai.Client(api_key=selected_api_key)
             self.model = model or "gemini-2.5-flash-lite"
         else:
             raise ValueError(f"Unsupported provider: {provider}. Use 'groq' or 'gemini'.")
+
+    @staticmethod
+    def _groq_retry_delay(error: Exception) -> float | None:
+        message = str(error).lower()
+        if "429" not in message and "rate limit" not in message:
+            return None
+
+        match = re.search(r"try again in ([0-9.]+)\s*(ms|s)", message)
+        if not match:
+            return GROQ_DEFAULT_RETRY_DELAY_SECONDS
+
+        value = float(match.group(1))
+        unit = match.group(2)
+        delay = value / 1000 if unit == "ms" else value
+        return min(delay + 0.5, 30.0)
+
+    def _create_groq_chat_completion(self, **kwargs):
+        for attempt in range(GROQ_MAX_RETRIES + 1):
+            try:
+                return self.client.chat.completions.create(**kwargs)
+            except Exception as error:
+                delay = self._groq_retry_delay(error)
+                if delay is None or attempt >= GROQ_MAX_RETRIES:
+                    raise
+                logger.warning(
+                    "Groq rate limit hit; retrying in %.2fs (attempt %d/%d)",
+                    delay,
+                    attempt + 1,
+                    GROQ_MAX_RETRIES,
+                )
+                time.sleep(delay)
 
     def generate(
         self,
@@ -140,7 +178,7 @@ class Generator:
             messages.extend(conversation_history)
         messages.append({"role": "user", "content": user_message})
 
-        response = self.client.chat.completions.create(
+        response = self._create_groq_chat_completion(
             model=self.model,
             messages=messages,
             max_tokens=1024,

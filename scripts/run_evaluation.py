@@ -301,8 +301,9 @@ def main() -> None:
     args = parser.parse_args()
 
     embedder = Embedder()
-    generator = Generator(provider="groq")
-    judge_generator = Generator(provider="gemini")
+    generation_api_key = settings.groq_api_key_fall_back or None
+    generator = Generator(provider="groq", api_key=generation_api_key)
+    judge_generator = Generator(provider="groq", model="llama-3.3-70b-versatile")
     evaluator = RAGEvaluator(judge_generator=judge_generator)
 
     test_set = [tc for tc in TEST_SET if tc.priority <= args.priority]

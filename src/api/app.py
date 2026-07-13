@@ -14,6 +14,7 @@ from typing import Literal
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -189,7 +190,8 @@ async def query(request: QueryRequest) -> QueryResponse:
         raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
 
     try:
-        response = pipeline.query(
+        response = await run_in_threadpool(
+            pipeline.query,
             question=request.question,
             top_k=request.top_k,
             ticker=request.ticker,
@@ -332,8 +334,12 @@ async def cache_test_similarity(request: CacheTestRequest) -> dict:
     if pipeline is None:
         raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
 
-    emb_a = pipeline.retriever.embedder.embed_query(request.query_a)
-    emb_b = pipeline.retriever.embedder.embed_query(request.query_b)
+    if hasattr(pipeline.retriever, "embed_query"):
+        emb_a = pipeline.retriever.embed_query(request.query_a)
+        emb_b = pipeline.retriever.embed_query(request.query_b)
+    else:
+        emb_a = pipeline.retriever.embedder.embed_query(request.query_a)
+        emb_b = pipeline.retriever.embedder.embed_query(request.query_b)
     similarity = pipeline.cache.test_similarity(emb_a, emb_b)
     return {
         "query_a": request.query_a,

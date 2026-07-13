@@ -186,6 +186,12 @@ Interpretation:
 
 ## Performance Notes
 
+Retrieval latency optimization:
+
+- Optimized retrieval latency by about `52%` (`0.86s -> 0.41s` per query) through evidence-based tuning of `candidate_pool` (`20 -> 10`) and cross-encoder `batch_size` (`32 -> 4`).
+- Validated with deterministic `recall_proxy` across 16 priority-1 cases with no measured recall degradation in any category, including comparative queries.
+- Qdrant local is the default Docker/runtime target: Qdrant Cloud added about `0.30s` per retrieve call in measured network latency (`0.737s` cloud vs `0.444s` local at `candidate_pool=10`).
+
 | Scenario | Filter | Latency |
 |---|---|---:|
 | Apple revenue | `ticker=AAPL`, `section=financial_statements` | `5.2665s` |

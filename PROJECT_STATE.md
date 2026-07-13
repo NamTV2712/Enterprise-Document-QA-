@@ -17,7 +17,7 @@ Current Muc 7 Qdrant Cloud status:
 
 - `configs/settings.py` supports `QDRANT_MODE`, `QDRANT_LOCAL_PATH`, `QDRANT_CLOUD_URL`, and `QDRANT_CLOUD_API_KEY`.
 - `VectorStore` supports local persistent mode and Qdrant Cloud mode while preserving the old `VectorStore(path=...)` local call pattern.
-- FastAPI startup, evaluation, and `scripts/test_rag.py` now use the configured Qdrant mode.
+- FastAPI startup, evaluation, and `scripts/diagnostics/rag_smoke_test.py` now use the configured Qdrant mode.
 - `scripts/index_chunks.py` intentionally rebuilds only the local Qdrant index via `settings.qdrant_local_path` to avoid accidentally deleting a cloud collection.
 - `scripts/migrate_to_qdrant_cloud.py` migrates the active local `sec_filings` collection to Qdrant Cloud. It upserts by default and only deletes/recreates the cloud collection when `--recreate` is explicitly passed.
 - Qdrant Cloud migration completed for `sec_filings`: local points `3,944`, cloud points `3,944`.
@@ -64,6 +64,8 @@ Current Muc 5 corpus quality:
 - `candidate_pool` default reduced from `20` to `10` in `HybridRetriever`. Deterministic sweep across all 16 measurable priority-1 cases plus separate comparative-only verification confirmed identical `recall_proxy` (`0.9688` overall, `1.0000` comparative) at pool `10` versus pool `20`, while average `retrieve()` time dropped about 45% (`0.86s -> 0.44s` in local mode) because fewer cross-encoder pairs are processed. Unlike the rejected adaptive score-gap cutoff, reducing `candidate_pool` applies uniformly before decomposition and did not drop company evidence in multi-company comparisons. Full test suite after wiring the new default: `61 passed, 9 warnings`.
 - Docker deployment decision: use `QDRANT_MODE=local`, bundling the Qdrant local data directory into the container or mounting it as a volume, not Qdrant Cloud as the default runtime target. Measured evidence with `candidate_pool=10`: Cloud search adds about `0.30s` per `retrieve()` call versus local (`~0.357s` cloud vs `~0.059s` local), and total retrieval is about `0.737s` cloud versus `0.444s` local. This overhead is not justified for a single-container demo/portfolio deployment where the main benefit of Cloud, avoiding local data packaging, does not offset the latency and external-service dependency. Qdrant Cloud setup from Muc 7 is retained as a documented, working alternative for multi-instance or production scenarios; local and cloud collections currently both contain `3,944` points and match in point count.
 - Performance optimization round after Muc 7: `candidate_pool` was reduced from `20` to `10` and wired as the default after deterministic `recall_proxy` sweep across all measurable priority-1 categories, including comparative, showed no recall loss and about 49% lower local `retrieve()` time. Cross-encoder `batch_size` was empirically tuned from the SentenceTransformers default `32` to `4` across 7 batch sizes on 10 real candidate pairs after pool reduction; `batch_size=4` was fastest (`0.308s` average vs `0.355s` at `32`), consistent with the small candidate pool benefiting from less padding/allocation overhead per batch. Two suspected issues were investigated and rejected with evidence: model re-initialization per request is not happening (`Embedder` and cross-encoder init log count each `1` across 3 sequential real HTTP requests), and cross-encoder cold-start is negligible (5 consecutive real-pair calls stayed in the `0.343s-0.353s` range with no first-call outlier), so startup warm-up was not implemented. Combined result: local `retrieve()` latency reduced about 52% (`0.86s -> 0.41s`) with zero measured recall degradation across test categories. Further major gains require infrastructure changes such as GPU inference or multiple model instances, not more CPU-side parameter tuning.
+- Structured lookup expanded to `total equity` in addition to total assets, total liabilities, and total revenue. Root-cause investigation of an initial replacement-character-looking display (`�`) showed it was a console rendering artifact, not data corruption: stored data correctly contains `U+2019` right single quote from original SEC HTML entity `&#8217;`. Added `_normalize_quotes()` so Unicode and ASCII apostrophes match uniformly across canonical label comparisons, preventing future false negatives from quote-style mismatches. Tests now cover equity subcomponents such as retained earnings and additional paid-in capital as negative cases, note-prefix `Commitments and contingencies (...) - Total ... equity` labels as positive cases, and Unicode-vs-ASCII apostrophe equivalence. Net income structured lookup expansion is deferred: unlike assets/liabilities/equity, the net income figure is numerically identical whether matched from the income statement row or the cash-flow reconciliation row, so the risk is citation clarity rather than answer correctness. Deterministic `recall_proxy` sweep after this expansion at `candidate_pool=10` showed no regression: comparative, fact_lookup, multi_hop, and summary remained `1.0000`, while enumeration stayed at its known pre-existing `0.8750`.
+- Final backend evaluation after all retrieval, structured lookup, concurrency, and performance optimizations completed 18/18 priority-1 cases with Groq `llama-3.3-70b-versatile` as judge and no skipped records. Results: Faithfulness `0.8889`, Answer Relevancy `0.9278`, Context Precision `0.4556`, Overall `0.7574`, Citation Correctness `1.0000`, Recall Proxy `1.0000`, Fallback Accuracy `1.0000`. This supersedes the earlier `0.6898` overall / `0.4250` context-precision table because it includes the MSFT total-assets YoY structured-lookup fix, `candidate_pool=10`, and cross-encoder `batch_size=4`. Multi-hop improved most significantly: category faithfulness moved from `0.50` to `0.83`, relevancy from `0.67` to `0.93`, and precision from `0.27` to `0.43`; the MSFT YoY case now scores `1.00/1.00/0.50` with recall `1.00`, replacing the pre-structured-lookup `0.00/0.20/0.00` failure. Context Precision `0.4556` remains the primary known limitation: correct answers are reliably retrieved (`Recall Proxy=1.0000`) but accompanied by more context than strictly necessary, a structural property of cross-encoder re-ranking on financial documents rather than a recall failure.
 
 Latest completed milestone commit:
 
@@ -167,7 +169,7 @@ The system answers finance/document questions using retrieved filing context and
   Qdrant indexing script that recreates the collection from embedded files.
 - `configs/tickers.py`
   Corpus ticker list and ticker-to-CIK overrides for SEC ticker-map edge cases.
-- `scripts/test_rag.py`
+- `scripts/diagnostics/rag_smoke_test.py`
   Manual end-to-end RAG test script.
 - `configs/settings.py`
   `.env`-backed settings and data paths.
@@ -440,7 +442,7 @@ Implemented files:
 
 - `src/generation/generator.py`
 - `src/generation/rag_pipeline.py`
-- `scripts/test_rag.py`
+- `scripts/diagnostics/rag_smoke_test.py`
 
 Dependencies added during Step 8/provider testing:
 
@@ -858,7 +860,7 @@ python -m scripts.download_filings
 python -m scripts.chunk_filings
 python -m scripts.embed_chunks
 python -m scripts.index_chunks
-python -m scripts.test_rag
+python -m scripts.diagnostics.rag_smoke_test
 python -m scripts.run_evaluation
 ```
 

@@ -21,6 +21,8 @@ CANONICAL_LABELS: dict[str, list[str]] = {
         "total stockholders' equity",
         "total shareholders' equity",
         "total equity",
+        "commitments and contingencies - total stockholders' equity",
+        "commitments and contingencies - total shareholders' equity",
     ],
 }
 
@@ -43,9 +45,21 @@ def detect_structured_query(question: str) -> str | None:
 
 
 def _normalize_label(label: str) -> str:
+    label = _normalize_quotes(label)
     label = label.lower().strip()
     label = re.sub(r"\s+", " ", label)
+    label = re.sub(r"\s*\([^)]*\)", "", label)
     return label.strip(" .:-")
+
+
+def _normalize_quotes(text: str) -> str:
+    """Normalize SEC smart quotes before comparing table labels.
+
+    SEC filings commonly encode apostrophes as HTML entity 8217, which becomes
+    U+2019 after extraction. This is valid data, but canonical labels in code
+    use ASCII apostrophes, so matching should normalize both sides.
+    """
+    return text.replace("\u2019", "'").replace("\u2018", "'")
 
 
 def _label_matches_canonical(label: str, canonical_variants: list[str]) -> bool:

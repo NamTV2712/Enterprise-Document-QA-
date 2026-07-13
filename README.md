@@ -164,13 +164,13 @@ Latest priority-1 LLM-as-judge run, using Groq `llama-3.3-70b-versatile` as judg
 
 | Metric | Score |
 |---|---:|
-| Faithfulness | `0.8000` |
-| Answer relevancy | `0.8444` |
-| Context precision | `0.4250` |
-| Overall judge average | `0.6898` |
+| Faithfulness | `0.8889` |
+| Answer relevancy | `0.9278` |
+| Context precision | `0.4556` |
+| Overall judge average | `0.7574` |
 | Citation correctness | `1.0000` |
-| Recall proxy | `0.9375` |
-| Fallback accuracy | `0.9444` |
+| Recall proxy | `1.0000` |
+| Fallback accuracy | `1.0000` |
 
 Coverage:
 
@@ -179,9 +179,10 @@ Coverage:
 
 Interpretation:
 
-- Achieved `1.00` faithfulness and answer relevancy on fact-lookup questions, with `1.00` citation correctness across answerable cases.
-- Overall context precision remains the primary optimization target: answers are usually found and cited correctly, but retrieval still includes extra non-essential chunks.
+- Achieved `0.89` faithfulness, `0.93` answer relevancy, and `1.00` recall proxy across 18 cases spanning 6 query categories.
+- Overall context precision remains the primary optimization target: correct answers are reliably retrieved, but retrieval still includes extra non-essential chunks.
 - Balance-sheet `total X` questions use a lightweight structured lookup over financial-table row labels before semantic re-ranking. This fixes known total-assets retrieval failures without regenerating table chunks; Microsoft total-assets year-over-year now answers with `619,003`, `512,163`, and the computed increase `106,840`.
+- Multi-hop improved most significantly after structured lookup: category faithfulness moved from `0.50` to `0.83`, with Microsoft total-assets year-over-year now scoring `1.00/1.00/0.50` instead of the previous `0.00/0.20/0.00`.
 - A smaller `llama-3.1-8b-instant` judge was rejected after producing false negatives on exact numbers that were present in context.
 
 ## Performance Notes
@@ -189,7 +190,7 @@ Interpretation:
 Retrieval latency optimization:
 
 - Optimized retrieval latency by about `52%` (`0.86s -> 0.41s` per query) through evidence-based tuning of `candidate_pool` (`20 -> 10`) and cross-encoder `batch_size` (`32 -> 4`).
-- Validated with deterministic `recall_proxy` across 16 priority-1 cases with no measured recall degradation in any category, including comparative queries.
+- Validated with deterministic recall sweeps and final LLM-judge evaluation: final `recall_proxy` is `1.0000`, with no measured recall degradation in any category, including comparative queries.
 - Qdrant local is the default Docker/runtime target: Qdrant Cloud added about `0.30s` per retrieve call in measured network latency (`0.737s` cloud vs `0.444s` local at `candidate_pool=10`).
 
 | Scenario | Filter | Latency |
@@ -252,7 +253,7 @@ Build local artifacts in order:
 Run a smoke test:
 
 ```powershell
-.venv\Scripts\python.exe -m scripts.test_rag
+.venv\Scripts\python.exe -m scripts.diagnostics.rag_smoke_test
 ```
 
 Run evaluation:

@@ -10,7 +10,7 @@ from __future__ import annotations
 import inspect
 import time
 
-from scripts.profile_cross_encoder_warmup import build_retriever_and_real_pairs
+from scripts.diagnostics.profile_cross_encoder_warmup import build_retriever_and_real_pairs
 
 
 BATCH_SIZES = [1, 2, 4, 8, 10, 16, 32]

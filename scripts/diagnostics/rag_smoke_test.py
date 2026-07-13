@@ -1,5 +1,5 @@
 """
-Script: test_rag.py — runs manually to perform end-to-end testing before FastAPI is available.
+Script: rag_smoke_test.py — runs manually to perform end-to-end testing before FastAPI is available.
 """
 import logging
 

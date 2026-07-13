@@ -2,7 +2,7 @@
 Diagnose parser coverage across all financial statement tables.
 
 Run from the project root:
-    python -m scripts.diagnose_all_financial_tables
+    python -m scripts.diagnostics.diagnose_all_financial_tables
 
 This script is intentionally read-only. It does not modify processed chunks or
 the retrieval index.

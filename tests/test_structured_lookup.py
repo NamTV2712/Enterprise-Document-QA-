@@ -1,7 +1,13 @@
 from src.retrieval.structured_lookup import (
+    CANONICAL_LABELS,
     detect_structured_query,
+    _label_matches_canonical,
     structured_lookup,
 )
+
+
+def matches_canonical(label: str, canonical_key: str) -> bool:
+    return _label_matches_canonical(label, CANONICAL_LABELS[canonical_key])
 
 
 def test_detect_structured_total_assets_query():
@@ -79,3 +85,38 @@ def test_structured_lookup_ignores_non_total_queries():
     ]
 
     assert structured_lookup("What are Apple's main risk factors?", "AAPL", chunks) is None
+
+
+def test_equity_subcomponents_do_not_match_total_equity():
+    """Equity section subcomponents must not match the total equity row."""
+    subcomponent_labels = [
+        "Shareholders' equity - Retained earnings",
+        "Stockholders' equity - Retained earnings",
+        "Stockholders' equity - Additional paid-in capital",
+        "Shareholders' equity - Common stock",
+    ]
+
+    for label in subcomponent_labels:
+        assert not matches_canonical(label, "total equity")
+
+
+def test_equity_with_commitments_prefix_matches():
+    """Real commitment-note prefixes should still match total equity rows."""
+    variants_with_notes = [
+        "Commitments and contingencies (see Note 12) - Total stockholders' equity",
+        "Commitments and contingencies (Note 7) - Total stockholders' equity",
+        "Commitments and Contingencies (Note 10) - Total stockholders' equity",
+        "Commitments and contingencies (see Note 12) - Total shareholders' equity",
+    ]
+
+    for label in variants_with_notes:
+        assert matches_canonical(label, "total equity")
+
+
+def test_quote_normalization_handles_unicode_and_ascii_quotes():
+    """Unicode and ASCII apostrophes should behave the same in label matching."""
+    unicode_version = "Total stockholders\u2019 equity"
+    ascii_version = "Total stockholders' equity"
+
+    assert matches_canonical(unicode_version, "total equity")
+    assert matches_canonical(ascii_version, "total equity")

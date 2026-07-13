@@ -17,7 +17,7 @@ from pathlib import Path
 
 from configs.settings import settings
 from src.ingestion.chunker import build_table_chunks
-from scripts.diagnose_all_financial_tables import find_tables_in_financial_section
+from scripts.diagnostics.diagnose_all_financial_tables import find_tables_in_financial_section
 
 logging.basicConfig(
     level=logging.INFO,

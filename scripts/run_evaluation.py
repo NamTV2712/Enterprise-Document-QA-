@@ -298,6 +298,12 @@ def main() -> None:
         default=[],
         help="Run only a category. Can be passed multiple times.",
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Run only the first N selected cases. Useful for quota/runtime probes.",
+    )
     args = parser.parse_args()
 
     embedder = Embedder()
@@ -310,6 +316,8 @@ def main() -> None:
     if args.category:
         selected_categories = set(args.category)
         test_set = [tc for tc in test_set if tc.category in selected_categories]
+    if args.limit is not None:
+        test_set = test_set[:args.limit]
     logger.info(
         "Running %d/%d test cases (priority <= %d, categories=%s)",
         len(test_set),

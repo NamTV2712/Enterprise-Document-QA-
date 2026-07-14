@@ -2,8 +2,7 @@
 Tests for QueryDecomposer plan validation.
 
 These tests do not call external LLM APIs. They cover the validation guard for
-LLM-generated planner output, including the real out-of-corpus ticker leak seen
-with NVDA.
+LLM-generated planner output, including out-of-corpus ticker guesses.
 """
 
 from types import SimpleNamespace
@@ -47,7 +46,7 @@ def test_invalid_ticker_dropped() -> None:
     fake_plan = {
         "needs_decomposition": True,
         "sub_queries": [
-            {"query": "Nvidia risk factors", "ticker": "NVDA", "section": "risk_factors"},
+            {"query": "Disney risk factors", "ticker": "DIS", "section": "risk_factors"},
         ],
     }
 
@@ -72,6 +71,22 @@ def test_valid_ticker_kept() -> None:
     assert len(result["sub_queries"]) == 2
 
 
+def test_expanded_corpus_tickers_kept() -> None:
+    decomposer = _make_decomposer()
+    fake_plan = {
+        "needs_decomposition": True,
+        "sub_queries": [
+            {"query": "Visa risk factors", "ticker": "V", "section": "risk_factors"},
+            {"query": "Mastercard risk factors", "ticker": "MA", "section": "risk_factors"},
+        ],
+    }
+
+    result = decomposer._validate_plan(fake_plan)
+
+    assert result["needs_decomposition"] is True
+    assert [sq["ticker"] for sq in result["sub_queries"]] == ["V", "MA"]
+
+
 def test_mixed_valid_invalid_tickers() -> None:
     """Keep valid sub-queries while dropping invalid ticker guesses."""
     decomposer = _make_decomposer()
@@ -79,7 +94,7 @@ def test_mixed_valid_invalid_tickers() -> None:
         "needs_decomposition": True,
         "sub_queries": [
             {"query": "Apple revenue", "ticker": "AAPL", "section": "financial_statements"},
-            {"query": "Tesla revenue", "ticker": "TSLA", "section": "financial_statements"},
+            {"query": "Netflix revenue", "ticker": "NFLX", "section": "financial_statements"},
         ],
     }
 

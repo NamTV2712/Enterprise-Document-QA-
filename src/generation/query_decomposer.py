@@ -10,6 +10,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
+from configs.tickers import TICKERS
 from src.retrieval.retriever import RetrievedChunk
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ def _is_retryable_external_error(error: Exception) -> bool:
     )
 
 
-SUPPORTED_TICKERS = {"AAPL", "MSFT", "AMZN"}  # will read from config after expanding corpus
+SUPPORTED_TICKERS = set(TICKERS)
 VALID_SECTIONS = {"business", "risk_factors", "mdna", "financial_statements", "financial_table"}
 MIN_CHUNKS_FOR_SYNTHESIS = 2
 INSUFFICIENT_DECOMPOSED_CONTEXT_ANSWER = (
@@ -65,7 +66,8 @@ type of company:
 ]}
 
 Valid section values: business, risk_factors, mdna, financial_statements, financial_table, null
-Valid ticker values: AAPL, MSFT, AMZN, null
+Valid ticker values: use the ticker symbols explicitly named in the question, or null
+when the company is unknown.
 
 Examples:
 Q: "What are the main sources of revenue for Microsoft?"

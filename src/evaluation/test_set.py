@@ -94,6 +94,33 @@ TEST_SET: list[TestCase] = [
         required_keywords=["Deloitte"],
         priority=2,
     ),
+    TestCase(
+        question="What was Visa's total assets?",
+        category="fact_lookup",
+        ticker="V",
+        section=None,
+        ground_truth="Visa's total assets were $99,627 million.",
+        required_keywords=["99,627"],
+        priority=3,
+    ),
+    TestCase(
+        question="What was Mastercard's total assets?",
+        category="fact_lookup",
+        ticker="MA",
+        section=None,
+        ground_truth="Mastercard's total assets were $54,157 million.",
+        required_keywords=["54,157"],
+        priority=3,
+    ),
+    TestCase(
+        question="What was Eli Lilly's total assets?",
+        category="fact_lookup",
+        ticker="LLY",
+        section=None,
+        ground_truth="Eli Lilly's total assets were $112,476 million.",
+        required_keywords=["112,476"],
+        priority=3,
+    ),
 
     # Summary: one company, one topic, synthesis over a focused section.
     TestCase(
@@ -146,6 +173,15 @@ TEST_SET: list[TestCase] = [
         ground_truth="Amazon faces risks of debarment or termination from government business due to contract compliance issues.",
         required_keywords=["government"],
         priority=2,
+    ),
+    TestCase(
+        question="What are Coca-Cola's main risk factors related to competition?",
+        category="summary",
+        ticker="KO",
+        section="risk_factors",
+        ground_truth="Coca-Cola faces intense competition in the beverage industry from other companies.",
+        required_keywords=["compet"],
+        priority=3,
     ),
 
     # Enumeration: exhaustive listing across multiple items in one company.
@@ -241,6 +277,15 @@ TEST_SET: list[TestCase] = [
         expects_decomposition=True,
         priority=2,
     ),
+    TestCase(
+        question="Compare Visa and Mastercard's business risk factors.",
+        category="comparative",
+        ticker=None,
+        section=None,
+        ground_truth="Both Visa and Mastercard face risks related to payment network competition, regulatory scrutiny, and cybersecurity.",
+        expects_decomposition=True,
+        priority=3,
+    ),
 
     # Multi-hop: multiple evidence points across time or rows.
     TestCase(
@@ -266,6 +311,15 @@ TEST_SET: list[TestCase] = [
         section=None,
         ground_truth="Microsoft's total assets grew from $512,163M to $619,003M.",
         required_keywords=["512,163", "619,003"],
+    ),
+    TestCase(
+        question="How did RTX's total net sales trend over recent years?",
+        category="multi_hop",
+        ticker="RTX",
+        section=None,
+        ground_truth="RTX's total net sales grew from $68,920M to $80,738M to $88,603M over the three years reported.",
+        required_keywords=["68,920", "88,603"],
+        priority=3,
     ),
 
     # Out of corpus: fallback behavior is required.

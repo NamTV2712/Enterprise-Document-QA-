@@ -30,9 +30,39 @@ TICKERS: list[str] = [
     "AMD",
     "INTC",
     "QCOM",
+    "AVGO",
+    "TXN",
     # Cloud/SaaS
     "CRM",
     "ORCL",
+    "NOW",
+    "IBM",
+    # Payments
+    "V",
+    "MA",
+    "AXP",
+    # Pharma/Biotech
+    "LLY",
+    "MRK",
+    "ABBV",
+    "TMO",
+    # Consumer staples/discretionary
+    "PG",
+    "KO",
+    "PEP",
+    "COST",
+    "NKE",
+    # Industrials/Aerospace
+    "CAT",
+    "GE",
+    "BA",
+    "LMT",
+    "HON",
+    "UPS",
+    "RTX",
+    # Telecom
+    "VZ",
+    "T",
 ]
 
 TICKER_CIK_OVERRIDES: dict[str, int] = {

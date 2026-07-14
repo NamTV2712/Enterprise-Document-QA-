@@ -10,7 +10,7 @@ Phase 2B Step D, Query Decomposition, is integrated and verified for comparative
 Phase 2C Muc 2, deterministic evaluation metrics and enumeration retrieval diagnosis, is complete.
 Phase 2C Muc 3, 30-case categorized evaluation set and decomposer-routed evaluation, is implemented. Full 30-case LLM-judge run is blocked by Groq free-tier quota.
 Phase 2C Muc 4, financial table retrieval, is complete.
-Phase 2C Muc 5, corpus expansion to 25 configured tickers, is locally ingested, chunked, embedded, and indexed with explicit corpus-quality reporting. Follow-up remains for section extraction gaps in filings that use annual-report cross-reference layouts.
+Phase 2C Muc 5, corpus expansion to 25 configured tickers, is locally ingested, chunked, embedded, and indexed with explicit corpus-quality reporting. The follow-up 50-company scale trial is also locally ingested and indexed, confirming that section extraction gaps persist at larger sample size.
 Phase 2C Muc 7, Qdrant Cloud production configuration and migration, is implemented and verified.
 
 Current Muc 7 Qdrant Cloud status:
@@ -20,23 +20,24 @@ Current Muc 7 Qdrant Cloud status:
 - FastAPI startup, evaluation, and `scripts/diagnostics/rag_smoke_test.py` now use the configured Qdrant mode.
 - `scripts/index_chunks.py` intentionally rebuilds only the local Qdrant index via `settings.qdrant_local_path` to avoid accidentally deleting a cloud collection.
 - `scripts/migrate_to_qdrant_cloud.py` migrates the active local `sec_filings` collection to Qdrant Cloud. It upserts by default and only deletes/recreates the cloud collection when `--recreate` is explicitly passed.
-- Qdrant Cloud migration completed for `sec_filings`: local points `3,944`, cloud points `3,944`.
+- Qdrant Cloud migration completed for the earlier 25-company `sec_filings` snapshot: local points `3,944`, cloud points `3,944`. After the later 50-company local scale trial, local Qdrant has `7,142` points; Qdrant Cloud has not been remigrated for that expanded corpus.
 - Qdrant Cloud required keyword payload indexes for filtered search; `ticker` and `section` indexes are now created by both `VectorStore.create_collection()` and the migration script.
 - `scripts/verify_qdrant_cloud.py` compares local vs cloud top-5 chunk IDs for a smoke query after migration.
 - Local-vs-cloud verification passed with exact top-5 match for `What was Apple's total net sales in 2024?` filtered to `AAPL`.
 - README documents the Qdrant Cloud migration and verification flow.
 - Validation after implementation: `.venv\Scripts\python.exe -m pytest tests/ -v` passes with `44 passed, 9 warnings`; `.venv\Scripts\python.exe -m compileall configs src scripts` passes.
 
-Current Muc 5 corpus quality:
+Current corpus quality:
 
-- Text-section ingestion report: 16 `success`, 6 `degraded`, 3 `failed`, 25 `skipped_existing` on latest idempotent rerun.
-- Clean for evaluation/demo requiring 4 text sections plus `financial_table`: 14 tickers: AAPL, AMD, AMZN, BAC, BRK-B, CRM, GOOGL, JNJ, META, MSFT, QCOM, TSLA, UNH, WMT.
-- Degraded but usable for some section-specific questions: CVX, GS, HD, JPM, NVDA, ORCL, PFE, XOM.
-- Unusable until extractor is improved: INTC, MCD, MS. These have `sections={}` and 0 chunks.
-- Qdrant currently indexes 3,944 chunks from 22 tickers. The 3 unusable tickers are not represented in the vector index.
+- 50-company scale trial completed locally with the current extractor and CUDA embedding environment.
+- Text-section ingestion report: 35 `success`, 9 `degraded`, 6 `failed`, 25 `skipped_existing` on latest idempotent rerun.
+- Clean for evaluation/demo requiring all four text sections: AAPL, MSFT, AMZN, GOOGL, META, TSLA, BAC, GS, BRK-B, JNJ, UNH, WMT, HD, AMD, QCOM, AVGO, TXN, CRM, V, MA, AXP, LLY, MRK, ABBV, TMO, PG, KO, NKE, CAT, BA, LMT, UPS, RTX, VZ, T.
+- Degraded but usable for some section-specific questions: NVDA, JPM, PFE, XOM, CVX, ORCL, NOW, IBM, PEP.
+- Unusable until extractor is improved: MS, MCD, INTC, COST, GE, HON. These have `sections={}` and 0 chunks.
+- Qdrant local currently indexes 7,142 chunks from 44 tickers. The 6 unusable tickers are not represented in the vector index.
 - `scripts/download_filings.py` now marks 0-section extraction as `failed` instead of successful/skipped, and marks partial section extraction as `degraded` with explicit missing-section warnings.
 - Structural limitation identified: degraded/unusable filings commonly use incorporation-by-reference language and annual-report/page-reference layouts around Item 7 and Item 8. Examples include JPM Item 7/8 pointing to MD&A pages 46-160 and financial statements pages 162-314, XOM Item 7/8 pointing to the Financial Section, CVX Item 7/8 pointing to Financial Table of Contents entries, and MS/MCD/INTC using annual-report layouts where relevant content is not exposed through standard `Item 7 ... Item 8` boundaries. This is not just a missing regex keyword. Some content may still be present in the same primary HTML, while other filings may require following referenced exhibits or report sections. Supporting these cases requires a separate annual-report/table-of-contents aware ingestion/extraction pass, out of scope for the current single-document section extractor.
-- For evaluation and portfolio demos, prefer the 14 clean tickers. Degraded tickers remain usable only for sections that were actually extracted, especially business and risk-factor queries.
+- For evaluation and portfolio demos, prefer the 35 clean tickers. Degraded tickers remain usable only for sections that were actually extracted, especially business and risk-factor queries.
 - Cross-encoder score calibration finding: generic summary-style questions such as `What are X's main risk factors?` can score low or negative even when retrieval is verified correct by ticker, section, and content. Confirmed scores: AAPL `0.78` (positive outlier), MSFT `-1.70`, AMZN `-1.95`, JNJ `0.24`, BAC `-4.68`, UNH `-5.19`, GOOGL `-5.10`. Root cause: `ms-marco-MiniLM` scores specific query-passage relevance; broad summary queries do not have one strongly matching passage the same way fact-lookup queries do. Current impact is safe because `Generator.LOW_SCORE_THRESHOLD = 0.50` only logs a warning and does not block answer generation or trigger fallback. Before using retrieval score for fallback decisions or user-facing confidence, thresholds must be calibrated by query type/category instead of using one global cutoff.
 - Evaluation finding: derived/trend phrasing remains a retrieval limitation for raw financial table evidence. Examples: `How did Microsoft's total assets change year over year?` and the earlier `AWS revenue growth` case. The correct table chunks exist, but cross-encoder ranking scores the table evidence poorly for broad change/growth wording, even when `financial_table` is forced. This is a query formulation/ranking limitation, not table extraction failure.
 - Evaluation safety guard: `QueryDecomposer` now has a minimum-evidence guard (`MIN_CHUNKS_FOR_SYNTHESIS = 2`) that returns a fallback instead of synthesizing when decomposition retrieves too little evidence. Unit tests cover both fallback and normal synthesis paths. Follow-up evidence showed the Amazon business-segment case is not covered by this quantity guard because it retrieves enough chunks, and the current `AMZN_business_0000` chunk explicitly contains the segment sentence (`North America`, `International`, `Amazon Web Services`). Treat the prior Amazon judge score of `0.00` as an evaluation/context-audit item rather than confirmed hallucination until the exact judge context is inspected.
@@ -100,33 +101,24 @@ Build an Enterprise Document QA system over SEC 10-K filings using a RAG pipelin
 SEC Filing -> Section Extraction -> Chunking -> Embedding -> Query Rewrite -> Qdrant/BM25 -> Hybrid Retrieval -> Re-ranking -> Semantic Cache/Memory -> LLM Answer -> FastAPI/SSE
 ```
 
-The configured corpus currently covers latest 10-K filings for:
+The configured corpus currently targets 50 latest 10-K filings:
 
-- AAPL
-- MSFT
-- AMZN
-- GOOGL
-- META
-- NVDA
-- TSLA
-- JPM
-- BAC
-- GS
-- MS
-- BRK-B
-- JNJ
-- UNH
-- PFE
-- WMT
-- HD
-- MCD
-- XOM
-- CVX
-- AMD
-- INTC
-- QCOM
-- CRM
-- ORCL
+```text
+AAPL, MSFT, AMZN, GOOGL, META, NVDA, TSLA,
+JPM, BAC, GS, MS, BRK-B,
+JNJ, UNH, PFE,
+WMT, HD, MCD,
+XOM, CVX,
+AMD, INTC, QCOM, AVGO, TXN,
+CRM, ORCL, NOW, IBM,
+V, MA, AXP,
+LLY, MRK, ABBV, TMO,
+PG, KO, PEP, COST, NKE,
+CAT, GE, BA, LMT, HON, UPS, RTX,
+VZ, T
+```
+
+Of these, 44 currently have searchable embedded chunks in local Qdrant and 6 are unusable until section extraction is improved.
 
 The system answers finance/document questions using retrieved filing context and citations, with explicit fallback when the available context is insufficient.
 

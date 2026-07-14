@@ -196,6 +196,12 @@ Retrieval latency optimization:
 - Qdrant local is the default Docker/runtime target: Qdrant Cloud added about `0.30s` per retrieve call in measured network latency (`0.737s` cloud vs `0.444s` local at `candidate_pool=10`).
 - On the Legion RTX 5060 environment, installing the CUDA 12.8 PyTorch build changed embedding from CPU to GPU (`cuda:0`) and measured throughput improved from about `2.7` to `23.3` chunks/sec on a 100-chunk sample.
 
+Corpus scale:
+
+- The configured corpus now targets `50` tickers; `44` currently have searchable embedded chunks in local Qdrant.
+- Local Qdrant indexes `7,142` chunks after the 50-company scale trial.
+- Latest extraction quality: `35` clean, `9` degraded, `6` failed/unusable. The main remaining corpus-scale limitation is section extraction for filings that use annual-report cross-reference or non-standard Item 7/8 layouts.
+
 | Scenario | Filter | Latency |
 |---|---|---:|
 | Apple revenue | `ticker=AAPL`, `section=financial_statements` | `5.2665s` |
@@ -345,8 +351,8 @@ Secrets are loaded from `.env` and should never be committed.
 
 ## Known Limitations
 
-- The current corpus covers only `AAPL`, `MSFT`, and `AMZN`.
-- Extraction is validated on the current 10-K filings but not across a large company universe yet.
+- The current corpus targets `50` companies, but only `44` have searchable chunks because `6` filings failed section extraction under the current single-document Item-boundary extractor.
+- Extraction quality remains uneven across large-company filing layouts: some annual-report cross-reference and non-standard Item 7/8 formats are degraded or unusable until the extractor is expanded.
 - Financial statements become verticalized after HTML-to-text conversion, making exact numeric retrieval harder than prose retrieval.
 - Hybrid retrieval improves source quality but adds CPU latency due to cross-encoder re-ranking.
 - Semantic cache and conversation memory are currently in-memory and are lost on process restart.

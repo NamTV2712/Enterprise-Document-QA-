@@ -1,8 +1,8 @@
-"""Structured lookup for high-precision financial table row retrieval.
+"""Structured lookup for high-precision filing evidence retrieval.
 
 This module handles questions where lexical row identity matters more than
 semantic similarity, such as "total assets" vs. "long-lived assets". It uses
-the existing rendered markdown table chunks, so no data regeneration is needed.
+the existing extracted chunks, so no data regeneration is needed.
 """
 
 from __future__ import annotations
@@ -26,6 +26,8 @@ CANONICAL_LABELS: dict[str, list[str]] = {
     ],
 }
 
+AUDITOR_SIGNATURE_KEY = "auditor signature"
+
 
 @dataclass(frozen=True)
 class StructuredMatch:
@@ -36,12 +38,20 @@ class StructuredMatch:
 
 
 def detect_structured_query(question: str) -> str | None:
-    """Return the canonical financial row requested by a question, if any."""
+    """Return the canonical evidence type requested by a question, if any."""
     normalized = question.lower()
+    if _is_auditor_query(normalized):
+        return AUDITOR_SIGNATURE_KEY
     for key in CANONICAL_LABELS:
         if re.search(rf"\b{re.escape(key)}\b", normalized):
             return key
     return None
+
+
+def _is_auditor_query(normalized_question: str) -> bool:
+    asks_about_auditor = re.search(r"\b(auditor|audited|accounting firm|report signed)\b", normalized_question)
+    asks_about_filing_report = re.search(r"\b(financial statements|report signed|audit report)\b", normalized_question)
+    return bool(asks_about_auditor and asks_about_filing_report)
 
 
 def _normalize_label(label: str) -> str:
@@ -84,6 +94,12 @@ def _iter_markdown_rows(text: str):
             yield cells[0], stripped
 
 
+def _contains_auditor_signature(text: str) -> bool:
+    normalized = _normalize_quotes(text).lower()
+    compact = re.sub(r"\s+", " ", normalized)
+    return "/s/" in normalized and re.search(r"served as .* auditor since", compact) is not None
+
+
 def structured_lookup(
     question: str,
     ticker: str | None,
@@ -95,6 +111,19 @@ def structured_lookup(
 
     canonical_key = detect_structured_query(question)
     if canonical_key is None:
+        return None
+
+    if canonical_key == AUDITOR_SIGNATURE_KEY:
+        for chunk in all_chunks:
+            if chunk.get("ticker") != ticker or chunk.get("section") != "financial_statements":
+                continue
+            if _contains_auditor_signature(chunk.get("text", "")):
+                return StructuredMatch(
+                    chunk=chunk,
+                    canonical_key=canonical_key,
+                    label=AUDITOR_SIGNATURE_KEY,
+                    line="auditor signature",
+                )
         return None
 
     variants = CANONICAL_LABELS[canonical_key]

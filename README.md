@@ -183,7 +183,7 @@ Interpretation:
 - Overall context precision remains the primary optimization target: correct answers are reliably retrieved, but retrieval still includes extra non-essential chunks.
 - Balance-sheet `total X` questions use a lightweight structured lookup over financial-table row labels before semantic re-ranking. This fixes known total-assets retrieval failures without regenerating table chunks; Microsoft total-assets year-over-year now answers with `619,003`, `512,163`, and the computed increase `106,840`.
 - Multi-hop improved most significantly after structured lookup: category faithfulness moved from `0.50` to `0.83`, with Microsoft total-assets year-over-year now scoring `1.00/1.00/0.50` instead of the previous `0.00/0.20/0.00`.
-- The 30-case run exposed one remaining fact-lookup recall miss on Microsoft's auditor question, lowering fact-lookup recall proxy to `0.875`; this is a narrow retrieval/citation coverage issue, not a fallback or generation-wide failure.
+- The 30-case run exposed a narrow fact-lookup recall miss on Microsoft's auditor question, lowering that run's fact-lookup recall proxy to `0.875`. This was subsequently fixed with auditor-signature lookup and targeted verification; the full 30-case table has not been rerun after that targeted fix.
 - Latency from the 30-case judge run is not used as a performance benchmark because Groq returned repeated `429 Too Many Requests` responses and SDK backoff delays during generation/judging.
 - A smaller `llama-3.1-8b-instant` judge was rejected after producing false negatives on exact numbers that were present in context.
 
@@ -194,6 +194,7 @@ Retrieval latency optimization:
 - Optimized retrieval latency by about `52%` (`0.86s -> 0.41s` per query) through evidence-based tuning of `candidate_pool` (`20 -> 10`) and cross-encoder `batch_size` (`32 -> 4`).
 - Validated with deterministic recall sweeps and LLM-judge evaluation: priority-1 recall proxy reached `1.0000`; the broader 30-case priority <= 2 run is `0.9583`, with comparative, enumeration, multi-hop, and summary all at `1.0000`.
 - Qdrant local is the default Docker/runtime target: Qdrant Cloud added about `0.30s` per retrieve call in measured network latency (`0.737s` cloud vs `0.444s` local at `candidate_pool=10`).
+- On the Legion RTX 5060 environment, installing the CUDA 12.8 PyTorch build changed embedding from CPU to GPU (`cuda:0`) and measured throughput improved from about `2.7` to `23.3` chunks/sec on a 100-chunk sample.
 
 | Scenario | Filter | Latency |
 |---|---|---:|

@@ -15,6 +15,12 @@ def test_detect_structured_total_assets_query():
     assert detect_structured_query("Tell me about assets") is None
 
 
+def test_detect_structured_auditor_query():
+    assert detect_structured_query("Who audited Microsoft's financial statements?") == "auditor signature"
+    assert detect_structured_query("When was Apple's audit report signed?") == "auditor signature"
+    assert detect_structured_query("Summarize Microsoft's audit risks") is None
+
+
 def test_structured_lookup_matches_exact_total_assets_row():
     chunks = [
         {
@@ -120,3 +126,39 @@ def test_quote_normalization_handles_unicode_and_ascii_quotes():
 
     assert matches_canonical(unicode_version, "total equity")
     assert matches_canonical(ascii_version, "total equity")
+
+
+def test_structured_lookup_matches_auditor_signature_chunk():
+    chunks = [
+        {
+            "chunk_id": "report_header",
+            "ticker": "MSFT",
+            "section": "financial_statements",
+            "text": "REPORT OF INDEPENDENT REGISTERED PUBLIC ACCOUNTING FIRM To the Stockholders",
+        },
+        {
+            "chunk_id": "signature",
+            "ticker": "MSFT",
+            "section": "financial_statements",
+            "text": "/s/\nD\nELOITTE\n & T\nOUCHE\n LLP\nSeattle, Washington\nJuly 30, 2025\nWe have served as the Company's auditor since 1983.",
+        },
+    ]
+
+    match = structured_lookup("Who audited Microsoft's financial statements?", "MSFT", chunks)
+
+    assert match is not None
+    assert match.chunk["chunk_id"] == "signature"
+    assert match.canonical_key == "auditor signature"
+
+
+def test_auditor_lookup_requires_signature_marker():
+    chunks = [
+        {
+            "chunk_id": "audit_matter",
+            "ticker": "MSFT",
+            "section": "financial_statements",
+            "text": "Evaluating estimates required auditor judgment and tax specialists.",
+        }
+    ]
+
+    assert structured_lookup("Who audited Microsoft's financial statements?", "MSFT", chunks) is None

@@ -201,6 +201,7 @@ Corpus scale:
 - The configured corpus now targets `50` tickers; `44` currently have searchable embedded chunks in local Qdrant.
 - Local Qdrant indexes `7,142` chunks after the 50-company scale trial.
 - Latest extraction quality: `35` clean, `9` degraded, `6` failed/unusable. The main remaining corpus-scale limitation is section extraction for filings that use annual-report cross-reference or non-standard Item 7/8 layouts.
+- The unusable rate stayed stable at `12%` from the 25-company snapshot to the 50-company trial, while clean extraction improved from `56%` to `70%`.
 
 | Scenario | Filter | Latency |
 |---|---|---:|

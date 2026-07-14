@@ -20,7 +20,7 @@ Current Muc 7 Qdrant Cloud status:
 - FastAPI startup, evaluation, and `scripts/diagnostics/rag_smoke_test.py` now use the configured Qdrant mode.
 - `scripts/index_chunks.py` intentionally rebuilds only the local Qdrant index via `settings.qdrant_local_path` to avoid accidentally deleting a cloud collection.
 - `scripts/migrate_to_qdrant_cloud.py` migrates the active local `sec_filings` collection to Qdrant Cloud. It upserts by default and only deletes/recreates the cloud collection when `--recreate` is explicitly passed.
-- Qdrant Cloud migration completed for the earlier 25-company `sec_filings` snapshot: local points `3,944`, cloud points `3,944`. After the later 50-company local scale trial, local Qdrant has `7,142` points; Qdrant Cloud has not been remigrated for that expanded corpus.
+- Qdrant Cloud migration completed for the earlier 25-company `sec_filings` snapshot: local points `3,944`, cloud points `3,944`. After the later 50-company local scale trial and restored table chunks, local Qdrant has `7,940` points; Qdrant Cloud has not been remigrated for that expanded corpus.
 - Qdrant Cloud required keyword payload indexes for filtered search; `ticker` and `section` indexes are now created by both `VectorStore.create_collection()` and the migration script.
 - `scripts/verify_qdrant_cloud.py` compares local vs cloud top-5 chunk IDs for a smoke query after migration.
 - Local-vs-cloud verification passed with exact top-5 match for `What was Apple's total net sales in 2024?` filtered to `AAPL`.
@@ -35,7 +35,9 @@ Current corpus quality:
 - Clean for evaluation/demo requiring all four text sections: AAPL, MSFT, AMZN, GOOGL, META, TSLA, BAC, GS, BRK-B, JNJ, UNH, WMT, HD, AMD, QCOM, AVGO, TXN, CRM, V, MA, AXP, LLY, MRK, ABBV, TMO, PG, KO, NKE, CAT, BA, LMT, UPS, RTX, VZ, T.
 - Degraded but usable for some section-specific questions: NVDA, JPM, PFE, XOM, CVX, ORCL, NOW, IBM, PEP.
 - Unusable until extractor is improved: MS, MCD, INTC, COST, GE, HON. These have `sections={}` and 0 chunks.
-- Qdrant local currently indexes 7,142 chunks from 44 tickers. The 6 unusable tickers are not represented in the vector index.
+- Qdrant local currently indexes 7,940 chunks from 44 tickers. The 6 unusable tickers are not represented in the vector index.
+- `financial_table` chunks are present for 33 searchable tickers after rerunning `scripts.add_table_chunks`, `scripts.embed_chunks`, and `scripts.index_chunks`: AAPL, ABBV, AMD, AMZN, AXP, BA, BAC, BRK-B, CAT, CRM, GOOGL, JNJ, KO, LLY, LMT, MA, META, MRK, MSFT, NKE, PFE, PG, QCOM, RTX, T, TMO, TSLA, TXN, UNH, UPS, V, VZ, WMT. The 11 searchable tickers still missing `financial_table` are AVGO, CVX, GS, HD, IBM, JPM, NOW, NVDA, ORCL, PEP, XOM, either because `financial_statements` is missing or table extraction generated 0 chunks.
+- Pipeline hazard fixed: `scripts.chunk_filings` overwrites `*_chunks.jsonl` via `save_chunks(... open("w"))`, which removes appended `financial_table` chunks unless `scripts.add_table_chunks` is rerun afterward. The first attempted recovery appended 1,336 table chunks but `scripts.embed_chunks` skipped stale `_chunks_embedded.jsonl` files because it checked only output existence, leaving Qdrant unchanged at 7,142 points. `scripts.embed_chunks` now compares modification times and re-embeds when the source `*_chunks.jsonl` is newer than the embedded output. Final verification: chunk files total `7,940`, embedded files total `7,940`, and Qdrant points_count is `7,940`.
 - `scripts/download_filings.py` now marks 0-section extraction as `failed` instead of successful/skipped, and marks partial section extraction as `degraded` with explicit missing-section warnings.
 - Structural limitation identified: degraded/unusable filings commonly use incorporation-by-reference language and annual-report/page-reference layouts around Item 7 and Item 8. Examples include JPM Item 7/8 pointing to MD&A pages 46-160 and financial statements pages 162-314, XOM Item 7/8 pointing to the Financial Section, CVX Item 7/8 pointing to Financial Table of Contents entries, and MS/MCD/INTC using annual-report layouts where relevant content is not exposed through standard `Item 7 ... Item 8` boundaries. The three newly failed 50-company tickers, COST, GE, and HON, also produced `sections={}` exactly like MS/MCD/INTC, confirming a recurring extractor-layout limitation rather than six unrelated failures. This is not just a missing regex keyword. Some content may still be present in the same primary HTML, while other filings may require following referenced exhibits or report sections. Supporting these cases requires a separate annual-report/table-of-contents aware ingestion/extraction pass, out of scope for the current single-document section extractor.
 - For evaluation and portfolio demos, prefer the 35 clean tickers. Degraded tickers remain usable only for sections that were actually extracted, especially business and risk-factor queries.
@@ -854,6 +856,7 @@ If a new session starts without these local artifacts, regenerate in order:
 ```text
 python -m scripts.download_filings
 python -m scripts.chunk_filings
+python -m scripts.add_table_chunks
 python -m scripts.embed_chunks
 python -m scripts.index_chunks
 python -m scripts.diagnostics.rag_smoke_test

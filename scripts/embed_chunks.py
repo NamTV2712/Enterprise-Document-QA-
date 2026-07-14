@@ -19,9 +19,11 @@ logger = logging.getLogger(__name__)
 
 def process_chunks_file(embedder: Embedder, chunks_path: Path) -> Path:
     output_path = chunks_path.with_name(f"{chunks_path.stem}_embedded.jsonl")
-    if output_path.exists():
+    if output_path.exists() and output_path.stat().st_mtime >= chunks_path.stat().st_mtime:
         logger.info("Skipping already embedded chunks file: %s", output_path)
         return output_path
+    if output_path.exists():
+        logger.info("Re-embedding stale chunks file: %s", chunks_path)
 
     records = [
         json.loads(line)

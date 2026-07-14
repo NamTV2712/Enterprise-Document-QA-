@@ -160,29 +160,31 @@ Supported providers:
 
 ## Evaluation Results
 
-Latest priority-1 LLM-as-judge run, using Groq `llama-3.3-70b-versatile` as judge:
+Latest priority-1 and priority-2 LLM-as-judge run, using Groq `llama-3.3-70b-versatile` as judge:
 
 | Metric | Score |
 |---|---:|
-| Faithfulness | `0.8889` |
-| Answer relevancy | `0.9278` |
-| Context precision | `0.4556` |
-| Overall judge average | `0.7574` |
+| Faithfulness | `0.8767` |
+| Answer relevancy | `0.9100` |
+| Context precision | `0.4453` |
+| Overall judge average | `0.7440` |
 | Citation correctness | `1.0000` |
-| Recall proxy | `1.0000` |
+| Recall proxy | `0.9583` |
 | Fallback accuracy | `1.0000` |
 
 Coverage:
 
-- `18/18` priority-1 cases completed with no skipped records.
-- Covered categories: fact lookup `4/4`, summary `3/3`, enumeration `4/4`, comparative `3/3`, multi-hop `3/3`, out-of-corpus `1/1`.
+- `30/30` priority <= 2 cases completed with no skipped records.
+- Covered categories: fact lookup `8/8`, summary `6/6`, enumeration `4/4`, comparative `6/6`, multi-hop `3/3`, out-of-corpus `3/3`.
 
 Interpretation:
 
-- Achieved `0.89` faithfulness, `0.93` answer relevancy, and `1.00` recall proxy across 18 cases spanning 6 query categories.
+- Achieved `0.88` faithfulness, `0.91` answer relevancy, and `0.96` recall proxy across 30 cases spanning 6 query categories.
 - Overall context precision remains the primary optimization target: correct answers are reliably retrieved, but retrieval still includes extra non-essential chunks.
 - Balance-sheet `total X` questions use a lightweight structured lookup over financial-table row labels before semantic re-ranking. This fixes known total-assets retrieval failures without regenerating table chunks; Microsoft total-assets year-over-year now answers with `619,003`, `512,163`, and the computed increase `106,840`.
 - Multi-hop improved most significantly after structured lookup: category faithfulness moved from `0.50` to `0.83`, with Microsoft total-assets year-over-year now scoring `1.00/1.00/0.50` instead of the previous `0.00/0.20/0.00`.
+- The 30-case run exposed one remaining fact-lookup recall miss on Microsoft's auditor question, lowering fact-lookup recall proxy to `0.875`; this is a narrow retrieval/citation coverage issue, not a fallback or generation-wide failure.
+- Latency from the 30-case judge run is not used as a performance benchmark because Groq returned repeated `429 Too Many Requests` responses and SDK backoff delays during generation/judging.
 - A smaller `llama-3.1-8b-instant` judge was rejected after producing false negatives on exact numbers that were present in context.
 
 ## Performance Notes
@@ -190,7 +192,7 @@ Interpretation:
 Retrieval latency optimization:
 
 - Optimized retrieval latency by about `52%` (`0.86s -> 0.41s` per query) through evidence-based tuning of `candidate_pool` (`20 -> 10`) and cross-encoder `batch_size` (`32 -> 4`).
-- Validated with deterministic recall sweeps and final LLM-judge evaluation: final `recall_proxy` is `1.0000`, with no measured recall degradation in any category, including comparative queries.
+- Validated with deterministic recall sweeps and LLM-judge evaluation: priority-1 recall proxy reached `1.0000`; the broader 30-case priority <= 2 run is `0.9583`, with comparative, enumeration, multi-hop, and summary all at `1.0000`.
 - Qdrant local is the default Docker/runtime target: Qdrant Cloud added about `0.30s` per retrieve call in measured network latency (`0.737s` cloud vs `0.444s` local at `candidate_pool=10`).
 
 | Scenario | Filter | Latency |

@@ -184,6 +184,7 @@ Interpretation:
 - Balance-sheet `total X` questions use a lightweight structured lookup over financial-table row labels before semantic re-ranking. This fixes known total-assets retrieval failures without regenerating table chunks; Microsoft total-assets year-over-year now answers with `619,003`, `512,163`, and the computed increase `106,840`.
 - Multi-hop improved most significantly after structured lookup: category faithfulness moved from `0.50` to `0.83`, with Microsoft total-assets year-over-year now scoring `1.00/1.00/0.50` instead of the previous `0.00/0.20/0.00`.
 - The 30-case run exposed a narrow fact-lookup recall miss on Microsoft's auditor question, lowering that run's fact-lookup recall proxy to `0.875`. This was subsequently fixed with auditor-signature lookup and targeted verification; the full 30-case table has not been rerun after that targeted fix.
+- The evaluation set also includes 6 extended-corpus `priority=3` cases for `V`, `MA`, `LLY`, `KO`, and `RTX`. These are retrieval-validated only so far: deterministic keyword recall is `1.0000` at `candidate_pool=10`; they are not included in the published 30-case judge table.
 - Latency from the 30-case judge run is not used as a performance benchmark because Groq returned repeated `429 Too Many Requests` responses and SDK backoff delays during generation/judging.
 - A smaller `llama-3.1-8b-instant` judge was rejected after producing false negatives on exact numbers that were present in context.
 

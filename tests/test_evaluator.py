@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from src.evaluation.evaluator import (
     JUDGE_CONTEXT_CHARS_PER_CHUNK,
     RAGEvaluator,
+    compute_recall_proxy,
     _extract_relevant_window,
 )
 
@@ -56,3 +57,23 @@ def test_relevant_window_falls_back_to_start_when_no_overlap() -> None:
 
     assert len(result) == 1000
     assert result == text[:1000]
+
+
+def test_recall_proxy_handles_split_character_artifact() -> None:
+    """SEC text may split auditor names across lines, e.g. D\nELOITTE."""
+    fake_chunk = SimpleNamespace(
+        text="/s/ \nD\nELOITTE\n & T\nOUCHE\n LLP\n\nSeattle, Washington"
+    )
+
+    result = compute_recall_proxy(["Deloitte"], [fake_chunk])
+
+    assert result == 1.0
+
+
+def test_recall_proxy_still_fails_on_truly_missing_keyword() -> None:
+    """Compact matching should not make unrelated chunks pass recall checks."""
+    fake_chunk = SimpleNamespace(text="This chunk talks about revenue only.")
+
+    result = compute_recall_proxy(["Deloitte"], [fake_chunk])
+
+    assert result == 0.0

@@ -56,6 +56,17 @@ def compute_citation_correctness(answer: str, num_sources: int) -> float | None:
     return len(valid) / len(citation_numbers)
 
 
+def _compact_for_matching(text: str) -> str:
+    """Remove whitespace for robust keyword matching in deterministic metrics.
+
+    SEC HTML rendering can split uppercase words across lines, for example
+    ``D\nELOITTE`` or the earlier ``B\nUSINESS`` extraction pattern. This helper
+    is used only for recall-proxy matching; it does not mutate retrieved text or
+    affect retrieval/generation behavior.
+    """
+    return re.sub(r"\s+", "", text.lower())
+
+
 def compute_recall_proxy(
     required_keywords: list[str],
     retrieved_chunks: list[RetrievedChunk],
@@ -69,8 +80,13 @@ def compute_recall_proxy(
     if not required_keywords:
         return None
 
-    combined_text = " ".join(chunk.text.lower() for chunk in retrieved_chunks)
-    matched = sum(1 for keyword in required_keywords if keyword.lower() in combined_text)
+    combined_text = " ".join(chunk.text for chunk in retrieved_chunks)
+    compact_text = _compact_for_matching(combined_text)
+    matched = sum(
+        1
+        for keyword in required_keywords
+        if _compact_for_matching(keyword) in compact_text
+    )
     return matched / len(required_keywords)
 
 

@@ -21,7 +21,7 @@ from sentence_transformers import CrossEncoder
 
 from src.retrieval.embedder import AUTO_DEVICE, Embedder, resolve_torch_device
 from src.retrieval.retriever import RetrievedChunk
-from src.retrieval.structured_lookup import structured_lookup
+from src.retrieval.structured_lookup import StructuredMatch, structured_lookup
 from src.retrieval.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
@@ -69,6 +69,23 @@ def _select_adaptive_chunks(
             break
         selected.append(reranked[index])
     return selected
+
+
+def _promote_structured_match(
+    reranked: list[tuple[dict, float]],
+    structured_match: StructuredMatch,
+    top_k: int,
+    backup_chunks: int = 1,
+) -> list[tuple[dict, float]]:
+    """Put a high-confidence structured match first and keep minimal backup context."""
+    matched_id = structured_match.chunk["chunk_id"]
+    remaining = [
+        (chunk, score)
+        for chunk, score in reranked
+        if chunk["chunk_id"] != matched_id
+    ]
+    limit = max(1, min(top_k, 1 + backup_chunks))
+    return [(structured_match.chunk, 10.0), *remaining[: limit - 1]]
 
 
 class HybridRetriever:
@@ -226,12 +243,7 @@ class HybridRetriever:
 
         if structured_match is not None:
             matched_id = structured_match.chunk["chunk_id"]
-            reranked = [
-                (chunk, score)
-                for chunk, score in reranked
-                if chunk["chunk_id"] != matched_id
-            ]
-            reranked.insert(0, (structured_match.chunk, 10.0))
+            reranked = _promote_structured_match(reranked, structured_match, top_k)
             logger.info(
                 "Structured lookup matched %s row '%s' in %s",
                 structured_match.canonical_key,

@@ -27,6 +27,12 @@ CANONICAL_LABELS: dict[str, list[str]] = {
 }
 
 AUDITOR_SIGNATURE_KEY = "auditor signature"
+CONSOLIDATED_CAPTION_MARKERS = (
+    "consolidated balance sheet",
+    "consolidated balance sheets",
+    "consolidated statement",
+    "consolidated statements",
+)
 
 
 @dataclass(frozen=True)
@@ -94,6 +100,30 @@ def _iter_markdown_rows(text: str):
             yield cells[0], stripped
 
 
+def _caption_text(chunk: dict) -> str:
+    """Return the markdown table caption/header text for match prioritization."""
+    text = chunk.get("text", "")
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("###"):
+            return stripped.lstrip("#").strip()
+        if stripped.startswith("|"):
+            break
+    return ""
+
+
+def _pick_best_table_match(candidates: list[StructuredMatch]) -> StructuredMatch | None:
+    """Prefer consolidated company-level tables when duplicate total rows exist."""
+    if not candidates:
+        return None
+
+    for candidate in candidates:
+        caption = _caption_text(candidate.chunk).lower()
+        if any(marker in caption for marker in CONSOLIDATED_CAPTION_MARKERS):
+            return candidate
+    return candidates[0]
+
+
 def _contains_auditor_signature(text: str) -> bool:
     normalized = _normalize_quotes(text).lower()
     compact = re.sub(r"\s+", " ", normalized)
@@ -127,15 +157,18 @@ def structured_lookup(
         return None
 
     variants = CANONICAL_LABELS[canonical_key]
+    candidates: list[StructuredMatch] = []
     for chunk in all_chunks:
         if chunk.get("ticker") != ticker or chunk.get("section") != "financial_table":
             continue
         for row_label, line in _iter_markdown_rows(chunk.get("text", "")):
             if _label_matches_canonical(row_label, variants):
-                return StructuredMatch(
-                    chunk=chunk,
-                    canonical_key=canonical_key,
-                    label=row_label,
-                    line=line,
+                candidates.append(
+                    StructuredMatch(
+                        chunk=chunk,
+                        canonical_key=canonical_key,
+                        label=row_label,
+                        line=line,
+                    )
                 )
-    return None
+    return _pick_best_table_match(candidates)

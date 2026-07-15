@@ -67,6 +67,34 @@ def test_structured_lookup_matches_prefixed_total_assets_row():
     assert match.label == "Current assets - Total assets"
 
 
+def test_structured_lookup_prefers_consolidated_table_for_duplicate_total_rows():
+    chunks = [
+        {
+            "chunk_id": "investee_table",
+            "ticker": "KO",
+            "section": "financial_table",
+            "text": "### Company equity income (loss) - net\n"
+            "| Metric | 2025 | 2024 |\n"
+            "|---|---|---|\n"
+            "| Assets - Total assets | 115,098 | 105,759 |",
+        },
+        {
+            "chunk_id": "consolidated_table",
+            "ticker": "KO",
+            "section": "financial_table",
+            "text": "### Consolidated Balance Sheets\n"
+            "| Metric | 2025 | 2024 |\n"
+            "|---|---|---|\n"
+            "| Assets - Total assets | 100 | 90 |",
+        },
+    ]
+
+    match = structured_lookup("What was Coca-Cola's total assets?", "KO", chunks)
+
+    assert match is not None
+    assert match.chunk["chunk_id"] == "consolidated_table"
+
+
 def test_structured_lookup_requires_ticker():
     chunks = [
         {

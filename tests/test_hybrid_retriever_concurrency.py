@@ -1,7 +1,8 @@
 import threading
 import time
 
-from src.retrieval.hybrid_retriever import HybridRetriever
+from src.retrieval.hybrid_retriever import HybridRetriever, _promote_structured_match
+from src.retrieval.structured_lookup import StructuredMatch
 
 
 class FakeBM25:
@@ -71,3 +72,23 @@ def test_model_lock_serializes_concurrent_retrieve_with_embedding_calls():
         ["start-1", "end-1", "start-2", "end-2"],
         ["start-2", "end-2", "start-1", "end-1"],
     )
+
+
+def test_structured_match_keeps_only_match_plus_one_backup_chunk():
+    chunks = [
+        {"chunk_id": "match", "text": "correct table"},
+        {"chunk_id": "backup-1", "text": "backup context"},
+        {"chunk_id": "backup-2", "text": "extra context"},
+    ]
+    structured_match = StructuredMatch(
+        chunk=chunks[0],
+        canonical_key="total assets",
+        label="Assets - Total assets",
+        line="| Assets - Total assets | 1 |",
+    )
+    reranked = [(chunks[1], 2.0), (chunks[0], 1.0), (chunks[2], 0.5)]
+
+    trimmed = _promote_structured_match(reranked, structured_match, top_k=5)
+
+    assert [chunk["chunk_id"] for chunk, _score in trimmed] == ["match", "backup-1"]
+    assert trimmed[0][1] == 10.0

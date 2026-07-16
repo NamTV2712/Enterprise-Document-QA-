@@ -8,16 +8,17 @@
 ![Status](https://img.shields.io/badge/Status-MVP_Complete-16A34A?style=for-the-badge)
 
 Enterprise Document QA is a production-style Retrieval-Augmented Generation backend for answering grounded questions over SEC 10-K filings.
-The system ingests filings for Apple, Microsoft, and Amazon, extracts key sections, builds a hybrid search index, and serves cited financial answers through FastAPI with streaming, semantic caching, and multi-turn memory.
+The system ingests a 50-company filing corpus, extracts key sections and financial tables, builds a hybrid search index, and serves cited financial answers through FastAPI with streaming, semantic caching, multi-turn memory, and query decomposition.
 
 ## Overview
 
 - Problem type: enterprise document question answering over financial filings.
-- Corpus: latest SEC 10-K filings for `AAPL`, `MSFT`, and `AMZN`.
+- Corpus: latest SEC 10-K filings for 50 configured tickers; 44 currently have searchable embedded chunks.
 - Serving style: FastAPI REST API with non-streaming and Server-Sent Events streaming responses.
 - Retrieval stack: BM25 keyword search, Qdrant semantic search, Reciprocal Rank Fusion, and cross-encoder re-ranking.
 - Generation stack: strict source-grounded LLM prompting with citations and insufficient-context fallback.
 - Conversation support: session-based memory plus query rewriting for follow-up questions.
+- Complex-query support: LLM query decomposition for comparative and enumeration-style questions.
 - Evaluation: LLM-as-judge scoring for faithfulness, answer relevancy, and context precision.
 
 ## Key Features
@@ -27,6 +28,7 @@ The system ingests filings for Apple, Microsoft, and Amazon, extracts key sectio
 | Filing ingestion | SEC EDGAR client with CIK lookup, rate limiting, and filing download |
 | Section extraction | Robust extraction for `business`, `risk_factors`, `mdna`, and `financial_statements` |
 | Chunking | Token-aware recursive chunking with larger chunks for financial statements |
+| Financial tables | Table extraction plus structured lookup for total assets, liabilities, revenue, equity, and auditor signatures |
 | Embeddings | Local embeddings via `nomic-ai/nomic-embed-text-v1.5` |
 | Vector search | Persistent local Qdrant collection with deterministic point IDs |
 | Hybrid retrieval | BM25 + dense retrieval + RRF + cross-encoder re-ranking |
@@ -34,6 +36,7 @@ The system ingests filings for Apple, Microsoft, and Amazon, extracts key sectio
 | API | FastAPI service with Swagger UI and SSE streaming |
 | Cache | Filter-aware semantic response cache for repeated stateless queries |
 | Memory | Multi-turn conversation memory and LLM-powered query rewriting |
+| Decomposition | Comparative and enumeration queries decomposed into focused sub-queries |
 | Evaluation | Fixed benchmark with faithfulness, relevancy, and context precision metrics |
 
 ## Architecture
@@ -46,6 +49,7 @@ SEC 10-K Filing
   -> Local Embeddings
   -> Qdrant Vector Index + BM25 Index
   -> Query Rewrite for Follow-ups
+  -> Query Decomposition for Complex Questions
   -> Hybrid Retrieval + Reciprocal Rank Fusion
   -> Cross-Encoder Re-ranking
   -> Semantic Cache / Conversation Memory
@@ -55,11 +59,31 @@ SEC 10-K Filing
 
 ## Supported Corpus
 
-| Company | Ticker | Filing Type | Sections Indexed |
-|---|---|---|---|
-| Apple | `AAPL` | 10-K | Business, Risk Factors, MD&A, Financial Statements |
-| Microsoft | `MSFT` | 10-K | Business, Risk Factors, MD&A, Financial Statements |
-| Amazon | `AMZN` | 10-K | Business, Risk Factors, MD&A, Financial Statements |
+The configured corpus targets 50 latest 10-K filings:
+
+```text
+AAPL, MSFT, AMZN, GOOGL, META, NVDA, TSLA,
+JPM, BAC, GS, MS, BRK-B,
+JNJ, UNH, PFE,
+WMT, HD, MCD,
+XOM, CVX,
+AMD, INTC, QCOM, AVGO, TXN,
+CRM, ORCL, NOW, IBM,
+V, MA, AXP,
+LLY, MRK, ABBV, TMO,
+PG, KO, PEP, COST, NKE,
+CAT, GE, BA, LMT, HON, UPS, RTX,
+VZ, T
+```
+
+Current searchable corpus:
+
+- 44 tickers have embedded chunks in local Qdrant.
+- 6 tickers are currently unusable due to annual-report/cross-reference extraction layouts: `MS`, `MCD`, `INTC`, `COST`, `GE`, `HON`.
+- Local Qdrant indexes `7,940` chunks.
+- `financial_table` chunks are available for 33 searchable tickers.
+
+The `/supported-tickers` endpoint returns the live searchable ticker list from embedded chunks, not the full configured list.
 
 ## API Endpoints
 
@@ -95,7 +119,7 @@ curl -X POST "http://localhost:8000/query" \
   -d '{
     "question": "What was Apple total revenue in 2024?",
     "ticker": "AAPL",
-    "section": "financial_statements",
+    "section": "financial_table",
     "top_k": 5
   }'
 ```
@@ -137,7 +161,7 @@ The retriever combines lexical and semantic signals instead of relying on vector
 | Reciprocal Rank Fusion | Merges BM25 and semantic rankings without score normalization |
 | Cross-encoder re-ranker | Re-scores fused candidates for final source ranking |
 
-This design improved context precision and fixed a no-filter AWS query that previously returned Microsoft cloud context above Amazon evidence.
+This design improved context precision and fixed a no-filter AWS query that previously returned Microsoft cloud context above Amazon evidence. High-confidence financial table lookups use structured row matching before final formatting, which promotes exact table evidence above semantically similar but wrong chunks.
 
 ## Generation Design
 
@@ -379,26 +403,27 @@ Secrets are loaded from `.env` and should never be committed.
 | SSE streaming | Complete |
 | Semantic query cache | Complete |
 | Multi-turn conversation memory | Complete |
-| Query decomposition | Foundation module added; API integration pending |
+| Query decomposition | Integrated and validated for comparative and enumeration queries |
+| Docker deployment | Complete; CPU-only image with local Qdrant volume mount |
 
 ## Known Limitations
 
 - The current corpus targets `50` companies, but only `44` have searchable chunks because `6` filings failed section extraction under the current single-document Item-boundary extractor.
 - Extraction quality remains uneven across large-company filing layouts: some annual-report cross-reference and non-standard Item 7/8 formats are degraded or unusable until the extractor is expanded.
-- Financial statements become verticalized after HTML-to-text conversion, making exact numeric retrieval harder than prose retrieval.
+- Financial statements can become verticalized after HTML-to-text conversion; table extraction and structured lookup reduce this issue for common total-line financial questions.
 - Hybrid retrieval improves source quality but adds CPU latency due to cross-encoder re-ranking.
 - Semantic cache and conversation memory are currently in-memory and are lost on process restart.
 - Multi-turn query rewriting adds one LLM call for follow-up questions.
 - Groq free tier can return `429 Too Many Requests`; SDK retries can recover but increase latency.
+- Docker runs CPU-only for portability. Local development on the Legion RTX 5060 can use CUDA for faster embedding generation.
 
 ## Roadmap
 
-1. Integrate query decomposition into the API for compound and comparative questions.
-2. Improve financial table retrieval with table-aware chunking or metadata boosts.
-3. Expand the evaluation set into a broader benchmark.
-4. Add automated unit and integration tests for extraction, retrieval, API, and memory.
-5. Build a Streamlit demo UI over `/query/stream`.
-6. Add Docker packaging for reproducible deployment.
+1. Build a Streamlit demo UI over `/query/stream`.
+2. Add a visual source explorer for retrieved chunks, decomposed sub-queries, and financial-table evidence.
+3. Add optional Qdrant server or Qdrant Cloud deployment docs for multi-worker serving.
+4. Improve annual-report/cross-reference extraction layouts for the remaining unusable tickers.
+5. Add more integration tests around Docker startup and mounted local Qdrant data.
 
 ## Why This Project Matters
 

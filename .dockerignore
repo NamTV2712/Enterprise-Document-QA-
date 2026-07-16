@@ -1,0 +1,14 @@
+.venv/
+.git/
+.env
+data/raw/
+__pycache__/
+*.pyc
+notebooks/
+.ipynb_checkpoints/
+.pytest_cache/
+eval_checkpoint*.jsonl
+data/evaluation_results*.json
+data/ingestion_report.json
+scripts/diagnostics/
+tests/

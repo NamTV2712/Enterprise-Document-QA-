@@ -249,6 +249,7 @@ GROQ_API_KEY=your_groq_key
 GROQ_API_KEY_FALL_BACK=optional_second_groq_key_for_evaluation
 GEMINI_API_KEY=optional_gemini_key
 QDRANT_MODE=local
+QDRANT_LOCAL_PATH=data/processed/qdrant
 QDRANT_CLOUD_URL=
 QDRANT_CLOUD_API_KEY=
 ```
@@ -274,6 +275,33 @@ Run evaluation:
 ```powershell
 .venv\Scripts\python.exe -m scripts.run_evaluation
 ```
+
+## Running With Docker
+
+Prerequisites: Docker Desktop installed and running, plus corpus artifacts already built locally under `data/processed/`.
+
+1. Copy `.env.example` to `.env` and fill in `GROQ_API_KEY`. `GEMINI_API_KEY` is optional for serving and only needed for Gemini-backed evaluation/judging flows.
+
+2. Build and run the backend:
+
+```bash
+docker compose build
+docker compose up
+```
+
+3. Verify the API is ready:
+
+```bash
+curl http://localhost:8000/health
+```
+
+The response should include `"pipeline_ready": true`.
+
+Docker notes:
+
+- The container uses CPU-only PyTorch for portability, so it runs on machines without an NVIDIA GPU. The verified Docker smoke test answered an Apple financial-table query in about `1.3s` end-to-end including the Groq API call.
+- Qdrant runs in local persistent mode and is mounted from `./data/processed` into `/app/data/processed`. The image does not bundle corpus data; `data/processed/` must exist on the host before running Docker.
+- The service uses one Uvicorn worker because Qdrant local mode uses a file lock and does not support multiple API worker processes reading the same local storage path. Use Qdrant server or Qdrant Cloud before enabling multi-worker deployment.
 
 ## Qdrant Cloud
 

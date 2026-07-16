@@ -1,0 +1,19 @@
+services:
+  rag-api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GROQ_API_KEY_FALL_BACK=${GROQ_API_KEY_FALL_BACK}
+      - QDRANT_MODE=local
+      - QDRANT_LOCAL_PATH=/app/data/processed/qdrant
+    volumes:
+      - ./data/processed:/app/data/processed
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s

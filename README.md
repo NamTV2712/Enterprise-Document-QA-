@@ -327,6 +327,16 @@ Docker notes:
 - Qdrant runs in local persistent mode and is mounted from `./data/processed` into `/app/data/processed`. The image does not bundle corpus data; `data/processed/` must exist on the host before running Docker.
 - The service uses one Uvicorn worker because Qdrant local mode uses a file lock and does not support multiple API worker processes reading the same local storage path. Use Qdrant server or Qdrant Cloud before enabling multi-worker deployment.
 
+To expose the local Docker backend to a hosted frontend during a demo, start ngrok after `docker compose up`:
+
+```powershell
+& "C:\Users\Nam\AppData\Local\Microsoft\WinGet\Packages\Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe\ngrok.exe" http 8000
+```
+
+The verified demo tunnel was `https://blog-making-bloated.ngrok-free.dev`, with `/health` returning `pipeline_ready: true` and CORS returning `Access-Control-Allow-Origin: *`. If a Google AI Studio or Next.js frontend is used, set `NEXT_PUBLIC_API_BASE_URL` to the active ngrok HTTPS URL, apply/rebuild the preview, and ensure any browser `fetch()` calls include `ngrok-skip-browser-warning: true` if the free-tier warning page appears.
+
+Current local runtime state after the latest verification: ngrok is stopped and Docker Compose is down. Restart Docker/ngrok with the commands above before testing a hosted frontend again.
+
 ## Qdrant Cloud
 
 Local Qdrant remains the default serving mode. To migrate the current local collection to Qdrant Cloud, create a Qdrant Cloud cluster and set:
@@ -405,6 +415,7 @@ Secrets are loaded from `.env` and should never be committed.
 | Multi-turn conversation memory | Complete |
 | Query decomposition | Integrated and validated for comparative and enumeration queries |
 | Docker deployment | Complete; CPU-only image with local Qdrant volume mount |
+| Hosted frontend handoff | Verified through ngrok; currently stopped until the next demo session |
 
 ## Known Limitations
 

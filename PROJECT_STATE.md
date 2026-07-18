@@ -13,6 +13,7 @@ Phase 2C Muc 4, financial table retrieval, is complete.
 Phase 2C Muc 5, corpus expansion to 25 configured tickers, is locally ingested, chunked, embedded, and indexed with explicit corpus-quality reporting. The follow-up 50-company scale trial is also locally ingested and indexed, confirming that section extraction gaps persist at larger sample size.
 Phase 2C Muc 7, Qdrant Cloud production configuration and migration, is implemented and verified.
 Step 12, Docker backend deployment packaging, is implemented and smoke-tested with local Qdrant volume mounting.
+Hosted frontend handoff through ngrok was verified at the backend/tunnel layer; Docker Compose and ngrok are currently stopped and should be restarted before the next UI session.
 
 Current recommended next milestone: build the Streamlit demo UI over the existing FastAPI endpoints, prioritizing visible source citations, streamed answers, supported ticker filters, and decomposed sub-query display.
 
@@ -83,11 +84,12 @@ Current corpus quality:
 - Fixed an expanded-corpus decomposition blocker: `QueryDecomposer` previously validated LLM-planned sub-query tickers against the original hardcoded `AAPL/MSFT/AMZN` set, so expanded-corpus comparative plans such as `V` vs `MA` could be dropped and silently fall back to raw retrieval. `SUPPORTED_TICKERS` now comes from `configs.tickers.TICKERS`, and tests cover `V`/`MA` as valid while preserving rejection of true out-of-corpus tickers such as `DIS` and `NFLX`.
 - Legion RTX 5060 environment is now configured for CUDA PyTorch. The previous `.venv` had CPU-only PyTorch (`torch 2.12.1+cpu`, `cuda available False`) despite `nvidia-smi` detecting the GPU. Reinstalled with `pip uninstall torch -y` followed by `pip install torch --index-url https://download.pytorch.org/whl/cu128`, yielding `torch 2.11.0+cu128`, CUDA `12.8`, and `NVIDIA GeForce RTX 5060 Laptop GPU`. Embedder now uses `cuda:0`. Measured embedding throughput on 100 real chunks improved from `37.65s` (`2.7 chunks/s`) on Legion CPU to `4.28s` (`23.3 chunks/s`) on GPU, implying roughly `12.8` minutes for an estimated `17,930` chunks / 100-company corpus embedding pass, excluding download/extraction time.
 - README and `requirements.txt` are now aligned with the deployment state: README documents the 50-company corpus, Docker flow, local Qdrant volume mount, and CPU-only container decision; `requirements.txt` explicitly pins `httpx==0.28.1` for the Docker healthcheck and documents that PyTorch must be installed separately for Docker CPU versus local CUDA workflows.
+- Hosted frontend bridge status: Docker FastAPI was run locally on `localhost:8000`, ngrok was updated to `3.39.9`, and `https://blog-making-bloated.ngrok-free.dev/health` returned `pipeline_ready: true`. CORS was verified through ngrok with `Access-Control-Allow-Origin: *`. The remaining Google AI Studio/Next.js issue was frontend configuration, not backend readiness: the preview was still logging `Base URL: http://localhost:8000` until `NEXT_PUBLIC_API_BASE_URL=https://blog-making-bloated.ngrok-free.dev` is applied and the preview is rebuilt. Ngrok and Docker Compose were then stopped intentionally; latest verification after shutdown showed no running containers and no ngrok process.
 
 Latest completed milestone commit before this state refresh:
 
 ```text
-872a273 Document PyTorch install policy and pin httpx dependency
+e529c2d Update project state for Docker deployment completion
 ```
 
 Recent completed commits:

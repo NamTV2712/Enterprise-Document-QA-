@@ -383,6 +383,7 @@ src/memory/           Conversation memory and query rewriting
 src/retrieval/        Embeddings, vector store, hybrid retrieval, and semantic cache
 tests/                Unit tests
 PROJECT_STATE.md      Detailed engineering handoff and milestone notes
+AGENTS.md             Stable operating guide for AI coding agents
 ```
 
 ## Data And Secrets
@@ -396,6 +397,12 @@ Generated artifacts are intentionally ignored by git:
 - Evaluation result JSON.
 
 Secrets are loaded from `.env` and should never be committed.
+
+## Development Notes
+
+- Read `AGENTS.md` before using AI coding agents in this repository. It captures stable operating rules, safe runtime commands, and project-specific traps that should not be duplicated in this README.
+- Use `PROJECT_STATE.md` as the living engineering journal for latest evaluation results, known limitations, rejected experiments, and current milestone context.
+- Keep `README.md` focused on public setup, architecture, status, and reproducible usage.
 
 ## Current Status
 

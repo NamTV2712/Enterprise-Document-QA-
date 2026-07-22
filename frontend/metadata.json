@@ -1,0 +1,6 @@
+{
+  "name": "Enterprise Document QA",
+  "description": "A professional fintech analyst tool for chat-based QA on SEC 10-K filings with retrieval sources and query decomposition.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

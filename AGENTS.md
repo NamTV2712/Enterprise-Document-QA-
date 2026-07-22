@@ -16,6 +16,13 @@ This file is the stable operating guide for AI coding agents working in this rep
 - Do not commit model caches, local virtual environments, Docker build artifacts, or generated diagnostic outputs.
 - If the worktree is dirty, preserve unrelated changes. Never revert user work unless explicitly asked.
 
+## Frontend (`frontend/`)
+
+- `frontend/` is a separate Vite/React/TypeScript application generated through Google AI Studio. Treat it as a distinct Node/Bun stack; do not run Python tooling inside it.
+- The frontend is deployed independently. The backend Docker image never bundles or serves it, and `.dockerignore` must continue to exclude `frontend/`.
+- Keep dependencies, build output, platform state, and local environment files untracked. Browser-exposed `VITE_*` variables must never contain secrets.
+- For Vercel, set the project root directory to `frontend` and configure `VITE_API_BASE_URL` with a reachable backend URL, not `localhost`.
+
 ## Project-Specific Traps
 
 - Qdrant local mode uses a file lock. Run the API with one worker when `QDRANT_MODE=local`; use Qdrant server or Qdrant Cloud before enabling multi-worker serving.

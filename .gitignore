@@ -5,3 +5,15 @@ __pycache__/
 data/
 .ipynb_checkpoints/
 .DS_Store
+
+# Frontend dependencies, build output, and local configuration
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.next/
+frontend/out/
+frontend/.vite/
+frontend/.vercel/
+frontend/.bun/
+frontend/*.tsbuildinfo
+frontend/.env*.local

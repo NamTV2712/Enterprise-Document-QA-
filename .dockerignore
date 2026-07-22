@@ -12,3 +12,4 @@ data/evaluation_results*.json
 data/ingestion_report.json
 scripts/diagnostics/
 tests/
+frontend/

@@ -48,8 +48,10 @@ export default function App() {
   const [inputText, setInputText] = useState<string>("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [isBackendConnected, setIsBackendConnected] = useState<boolean>(true);
-  const [isPipelineReady, setIsPipelineReady] = useState<boolean>(true);
+  const [isBackendConnected, setIsBackendConnected] = useState<boolean | null>(
+    null,
+  );
+  const [isPipelineReady, setIsPipelineReady] = useState<boolean | null>(null);
   const [healthData, setHealthData] = useState<HealthResponse | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [isClearingSession, setIsClearingSession] = useState<boolean>(false);
@@ -64,6 +66,7 @@ export default function App() {
   });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const requestAbortRef = useRef<AbortController | null>(null);
 
   // Apply theme class
   useEffect(() => {
@@ -135,6 +138,14 @@ export default function App() {
     initData();
   }, []);
 
+  useEffect(() => {
+    return () => {
+      const controller = requestAbortRef.current;
+      requestAbortRef.current = null;
+      controller?.abort();
+    };
+  }, []);
+
   // Scroll to bottom helper
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -159,7 +170,13 @@ export default function App() {
   };
 
   const handleSendMessage = async (text: string) => {
-    if (isLoading || !isBackendConnected || !isPipelineReady) return;
+    if (!isBackendConnected || !isPipelineReady) return;
+
+    requestAbortRef.current?.abort();
+    const controller = new AbortController();
+    requestAbortRef.current = controller;
+    const isCurrentRequest = () =>
+      requestAbortRef.current === controller && !controller.signal.aborted;
 
     // Add user message to chat list
     const userMsgId = "user-" + Date.now();
@@ -195,7 +212,8 @@ export default function App() {
       setMessages((prev) => [...prev, placeholder]);
 
       try {
-        const response = await queryDecomposed(payload);
+        const response = await queryDecomposed(payload, controller.signal);
+        if (!isCurrentRequest()) return;
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
@@ -212,6 +230,7 @@ export default function App() {
           ),
         );
       } catch (err: any) {
+        if (!isCurrentRequest()) return;
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
@@ -224,7 +243,10 @@ export default function App() {
           ),
         );
       } finally {
-        setIsLoading(false);
+        if (requestAbortRef.current === controller) {
+          requestAbortRef.current = null;
+          setIsLoading(false);
+        }
       }
     } else {
       // Streamed query over POST EventStream
@@ -243,6 +265,7 @@ export default function App() {
         await streamQuery(
           payload,
           (event) => {
+            if (!isCurrentRequest()) return;
             if (event.type === "sources") {
               sourcesList = event.data || [];
               setMessages((prev) =>
@@ -298,6 +321,7 @@ export default function App() {
             }
           },
           (error) => {
+            if (!isCurrentRequest()) return;
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantMsgId
@@ -314,8 +338,10 @@ export default function App() {
             );
             setIsLoading(false);
           },
+          controller.signal,
         );
       } catch (err: any) {
+        if (!isCurrentRequest()) return;
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
@@ -331,8 +357,15 @@ export default function App() {
           ),
         );
         setIsLoading(false);
+      } finally {
+        if (requestAbortRef.current === controller) {
+          requestAbortRef.current = null;
+          setIsLoading(false);
+        }
       }
     }
+
+    if (controller.signal.aborted) return;
 
     // Refresh health details to get updated total turn counters, active sessions, etc.
     try {
@@ -344,6 +377,9 @@ export default function App() {
   };
 
   const handleNewConversation = async () => {
+    requestAbortRef.current?.abort();
+    requestAbortRef.current = null;
+    setIsLoading(false);
     setIsClearingSession(true);
     try {
       if (sessionId) {
@@ -393,7 +429,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 font-sans text-slate-800 dark:text-slate-100 overflow-hidden bg-grid-pattern">
+    <div className="flex h-dvh bg-slate-50 dark:bg-slate-950 font-sans text-slate-800 dark:text-slate-100 overflow-hidden bg-grid-pattern">
       {/* Collapsible Sidebar */}
       <Sidebar
         tickers={tickers}
@@ -409,6 +445,7 @@ export default function App() {
         onNewConversation={handleNewConversation}
         onSelectSample={handleSelectSample}
         healthData={healthData}
+        isBackendConnected={isBackendConnected}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
         isClearingSession={isClearingSession}
@@ -423,6 +460,9 @@ export default function App() {
               type="button"
               id="sidebar-toggle"
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              aria-label={
+                isSidebarOpen ? "Close search controls" : "Open search controls"
+              }
               className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden text-slate-600 dark:text-slate-300 transition-colors"
             >
               <Menu className="w-5 h-5" />
@@ -448,19 +488,23 @@ export default function App() {
             <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono font-medium">
               <span
                 className={`w-2 h-2 rounded-full ${
-                  isBackendConnected && isPipelineReady
-                    ? "bg-emerald-500"
-                    : isBackendConnected
-                      ? "bg-amber-500"
-                      : "bg-rose-500"
+                  isBackendConnected === null || isPipelineReady === null
+                    ? "bg-slate-400"
+                    : isBackendConnected && isPipelineReady
+                      ? "bg-emerald-500"
+                      : isBackendConnected
+                        ? "bg-amber-500"
+                        : "bg-rose-500"
                 }`}
               />
               <span className="hidden sm:inline text-slate-600 dark:text-slate-300">
-                {isBackendConnected
-                  ? isPipelineReady
-                    ? "Pipeline: Ready"
-                    : "Pipeline: Pending"
-                  : "API: Offline"}
+                {isBackendConnected === null || isPipelineReady === null
+                  ? "Connecting..."
+                  : isBackendConnected
+                    ? isPipelineReady
+                      ? "Pipeline: Ready"
+                      : "Pipeline: Pending"
+                    : "API: Offline"}
               </span>
             </div>
 
@@ -471,6 +515,7 @@ export default function App() {
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
               className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
               title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
+              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
             >
               {theme === "dark" ? (
                 <Sun className="w-4 h-4" />
@@ -487,6 +532,7 @@ export default function App() {
               onClick={handleNewConversation}
               className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-rose-500 text-slate-400 dark:text-slate-500 disabled:opacity-50 transition-colors cursor-pointer"
               title="Reset Conversation"
+              aria-label="Reset conversation"
             >
               <RefreshCw
                 className={`w-4 h-4 ${isClearingSession ? "animate-spin" : ""}`}
@@ -504,7 +550,11 @@ export default function App() {
               id="onboarding-panel"
             >
               <div className="space-y-3 text-center">
-                {!isBackendConnected ? (
+                {isBackendConnected === null || isPipelineReady === null ? (
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-900/30 text-slate-600 dark:text-slate-400 font-mono text-[10px] font-bold uppercase tracking-wider">
+                    <span>[STATUS: CONNECTING TO BACKEND]</span>
+                  </div>
+                ) : !isBackendConnected ? (
                   <Tooltip
                     content={`${getApiBaseUrl()} — Start the FastAPI backend and refresh to connect.`}
                   >
@@ -512,6 +562,10 @@ export default function App() {
                       <span>[STATUS: BACKEND UNREACHABLE]</span>
                     </div>
                   </Tooltip>
+                ) : !isPipelineReady ? (
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded border border-amber-300 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 font-mono text-[10px] font-bold uppercase tracking-wider">
+                    <span>[STATUS: PIPELINE INITIALIZING]</span>
+                  </div>
                 ) : (
                   <Tooltip
                     content={`${getApiBaseUrl()} — Start the FastAPI backend and refresh to connect.`}
@@ -527,8 +581,9 @@ export default function App() {
                   SEC 10-K RAG Engine
                 </h2>
                 <p className="text-xs md:text-sm text-slate-550 dark:text-slate-400 max-w-xl mx-auto leading-relaxed font-mono">
-                  Multi-entity vector indexing & parallel query trace scheduler.
-                  Select or compose an SEC disclosure request to begin.
+                  Multi-entity vector indexing with grounded decomposition
+                  summaries. Select or compose an SEC disclosure request to
+                  begin.
                 </p>
               </div>
 
@@ -553,7 +608,7 @@ export default function App() {
                 </div>
 
                 <div className="group p-5 bg-white dark:bg-[#1B2430]/20 border border-slate-300 dark:border-slate-800 rounded-lg space-y-2.5 hover:border-brand-indigo/50 dark:hover:border-brand-indigo/50 hover:bg-indigo-500/[0.01] dark:hover:bg-brand-indigo/[0.02] hover:-translate-y-1 hover:shadow-[0_4px_20px_rgba(99,102,241,0.08)] transition-all duration-300 cursor-default shadow-3xs">
-                  <Tooltip content="Decomposes comparative requests into parallel vector scans across entities in real-time.">
+                  <Tooltip content="Decomposes comparative requests into focused retrievals and presents the completed execution summary.">
                     <div className="w-8 h-8 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 group-hover:text-brand-indigo group-hover:bg-brand-indigo/15 group-hover:scale-105 transition-all duration-300 cursor-help">
                       <GitFork className="w-4 h-4" />
                     </div>
@@ -562,8 +617,8 @@ export default function App() {
                     Multi-Hop Querying
                   </h3>
                   <p className="text-[11px] text-slate-550 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300 leading-relaxed font-mono transition-colors duration-300">
-                    Decomposes comparative requests into parallel vector scans
-                    across entities in real-time.
+                    Decomposes comparative requests into focused retrievals and
+                    presents a grounded execution summary.
                   </p>
                 </div>
 

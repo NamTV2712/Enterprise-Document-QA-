@@ -36,6 +36,7 @@ interface SidebarProps {
   onNewConversation: () => void;
   onSelectSample: (question: SampleQuestion) => void;
   healthData: HealthResponse | null;
+  isBackendConnected: boolean | null;
   isOpen: boolean;
   onClose: () => void;
   isClearingSession: boolean;
@@ -71,6 +72,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onNewConversation,
   onSelectSample,
   healthData,
+  isBackendConnected,
   isOpen,
   onClose,
   isClearingSession,
@@ -143,6 +145,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close search controls"
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
@@ -429,15 +432,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {/* Verified Green dot for pipeline_ready */}
               <span
                 className={`inline-flex items-center gap-1.5 text-[9px] font-extrabold px-2 py-0.5 rounded uppercase tracking-wider ${
-                  healthData?.pipeline_ready
-                    ? "bg-verified-green/5 dark:bg-[#1f5d4c]/10 text-verified-green dark:text-[#38a385] border border-verified-green/20 dark:border-[#1f5d4c]/30"
-                    : "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-950/30"
+                  isBackendConnected === null
+                    ? "bg-slate-100 dark:bg-slate-900/30 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-800"
+                    : isBackendConnected === false
+                      ? "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-950/30"
+                      : healthData?.pipeline_ready
+                        ? "bg-verified-green/5 dark:bg-[#1f5d4c]/10 text-verified-green dark:text-[#38a385] border border-verified-green/20 dark:border-[#1f5d4c]/30"
+                        : "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-950/30"
                 }`}
               >
                 <span
-                  className={`w-1.5 h-1.5 rounded-full ${healthData?.pipeline_ready ? "bg-verified-green dark:bg-[#38a385]" : "bg-rose-400"}`}
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    isBackendConnected === null
+                      ? "bg-slate-400"
+                      : isBackendConnected === false
+                        ? "bg-rose-400"
+                        : healthData?.pipeline_ready
+                          ? "bg-verified-green dark:bg-[#38a385]"
+                          : "bg-amber-400"
+                  }`}
                 />
-                {healthData?.pipeline_ready ? "pipeline_ready" : "offline"}
+                {isBackendConnected === null
+                  ? "connecting"
+                  : isBackendConnected === false
+                    ? "offline"
+                    : healthData?.pipeline_ready
+                      ? "pipeline_ready"
+                      : "pipeline_pending"}
               </span>
             </div>
 

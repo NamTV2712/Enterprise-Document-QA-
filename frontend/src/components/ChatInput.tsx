@@ -5,7 +5,7 @@
 
 import React, { useRef, useEffect, memo } from "react";
 import { motion } from "motion/react";
-import { Send, AlertTriangle } from "lucide-react";
+import { Send, AlertTriangle, Loader2 } from "lucide-react";
 import { Tooltip } from "./Tooltip";
 
 interface ChatInputProps {
@@ -13,8 +13,8 @@ interface ChatInputProps {
   setInputText: (text: string) => void;
   onSendMessage: (text: string) => void;
   isLoading: boolean;
-  isBackendConnected: boolean;
-  isPipelineReady: boolean;
+  isBackendConnected: boolean | null;
+  isPipelineReady: boolean | null;
   showBanner?: boolean;
 }
 
@@ -23,10 +23,19 @@ export const ConnectionBanner = memo(
     isBackendConnected,
     isPipelineReady,
   }: {
-    isBackendConnected: boolean;
-    isPipelineReady: boolean;
+    isBackendConnected: boolean | null;
+    isPipelineReady: boolean | null;
   }) => {
-    if (!isBackendConnected) {
+    if (isBackendConnected === null || isPipelineReady === null) {
+      return (
+        <div className="flex items-center gap-2 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/20 text-slate-600 dark:text-slate-400 text-xs font-semibold font-mono">
+          <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin" />
+          <span>Connecting to the FastAPI backend...</span>
+        </div>
+      );
+    }
+
+    if (isBackendConnected === false) {
       return (
         <div className="flex items-center gap-2 p-2.5 rounded-lg border border-red-200 dark:border-red-950/40 bg-red-50 dark:bg-red-950/20 text-red-750 dark:text-red-400 text-xs font-semibold font-mono">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
@@ -38,7 +47,7 @@ export const ConnectionBanner = memo(
       );
     }
 
-    if (!isPipelineReady) {
+    if (isPipelineReady === false) {
       return (
         <div className="flex items-center gap-2 p-2.5 rounded-lg border border-amber-200 dark:border-amber-950/40 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 text-xs font-semibold font-mono">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
@@ -131,11 +140,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={
-              !isBackendConnected
-                ? "Connect the FastAPI backend to start asking questions"
-                : !isPipelineReady
-                  ? "Pipeline index loading..."
-                  : "Ask a question about 10-K filings (e.g. Compare risk factors...)"
+              isBackendConnected === null || isPipelineReady === null
+                ? "Connecting to the FastAPI backend..."
+                : !isBackendConnected
+                  ? "Connect the FastAPI backend to start asking questions"
+                  : !isPipelineReady
+                    ? "Pipeline index loading..."
+                    : "Ask a question about 10-K filings (e.g. Compare risk factors...)"
             }
             disabled={isDisabled}
             className="flex-1 resize-none bg-transparent border-0 outline-none focus:ring-0 text-sm md:text-base text-slate-850 dark:text-[#F7F7F5] py-2.5 max-h-40 min-h-[40px] pr-12 scrollbar-none font-sans"
@@ -165,6 +176,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               type="submit"
               id="send-message-btn"
               title="Ask"
+              aria-label="Send question"
               disabled={!isValidLength || isDisabled}
               className={`p-2.5 rounded-lg flex items-center justify-center transition-all ${
                 isValidLength && !isDisabled

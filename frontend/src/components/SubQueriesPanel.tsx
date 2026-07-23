@@ -112,14 +112,14 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
         <div className="flex items-center gap-2">
           <GitFork className="w-4 h-4 text-brand-indigo rotate-180" />
           <span>
-            Multi-hop Query Decomposition Trace{" "}
+            Query Decomposition Execution Summary{" "}
             {subQueries.length > 0 ? `(${subQueries.length})` : ""}
           </span>
         </div>
         <div className="flex items-center gap-2">
           {!isFullyDone && (
             <span className="text-[10px] font-mono lowercase text-brand-indigo animate-pulse px-1.5 py-0.5 bg-brand-indigo/5 border border-brand-indigo/10 rounded-sm">
-              tracing...
+              revealing...
             </span>
           )}
           {isOpen ? (
@@ -142,10 +142,10 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
             <div className="p-3.5 space-y-3 font-mono text-[11px] md:text-xs">
               <div className="text-slate-400 dark:text-slate-500 uppercase font-bold border-b border-slate-250 dark:border-slate-800 pb-1 flex items-center justify-between">
                 <span>
-                  [EXECUTION LOG] STAGE:{" "}
+                  [EXECUTION SUMMARY] STATUS:{" "}
                   {subQueries.length > 0
-                    ? "VECTOR RETRIEVAL"
-                    : "DECOMPOSING QUERY"}
+                    ? "RESULTS READY"
+                    : "PREPARING RESULTS"}
                 </span>
                 <Cpu className="w-3.5 h-3.5" />
               </div>
@@ -154,7 +154,7 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
                 {subQueries.length === 0 ? (
                   <div className="p-3.5 rounded-lg border border-slate-200 dark:border-slate-800/60 bg-white/50 dark:bg-[#12161C]/30 text-slate-450 dark:text-slate-550 flex items-center gap-2.5 font-mono animate-pulse">
                     <RefreshCw className="w-3.5 h-3.5 animate-spin text-brand-indigo flex-shrink-0" />
-                    <span>Planning multi-hop query decomposition trace...</span>
+                    <span>Preparing query decomposition summary...</span>
                   </div>
                 ) : (
                   subQueries.slice(0, visibleCount).map((sub, index) => {
@@ -214,7 +214,7 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
                             {isLastRow && !isFullyDone ? (
                               <span className="text-brand-indigo flex items-center gap-1 animate-pulse font-bold">
                                 <RefreshCw className="w-3 h-3 animate-spin" />
-                                <span>scanning vectors...</span>
+                                <span>revealing result...</span>
                               </span>
                             ) : (
                               <span className="text-verified-green dark:text-[#38a385] flex items-center gap-1 font-bold">
@@ -232,9 +232,7 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
 
                         {(index < visibleCount - 1 || isFullyDone) && (
                           <div className="mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800/50 flex items-center justify-between text-[10px] text-slate-400 font-mono">
-                            <span>
-                              AGENT SCHEDULER RESPONSE: RETRIEVAL COMPLETE
-                            </span>
+                            <span>RETRIEVAL RESULT: COMPLETE</span>
                             <span className="text-verified-green dark:text-[#38a385] font-bold flex items-center gap-0.5">
                               <Hash className="w-3 h-3" />
                               {sub.num_chunks} chunks indexed

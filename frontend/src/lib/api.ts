@@ -23,10 +23,18 @@ async function apiFetch(
   options: RequestInit = {},
 ): Promise<Response> {
   const baseUrl = getApiBaseUrl();
-  console.log(`[API Client] Base URL: ${baseUrl}`);
-  console.log(`[API Client] Full Request URL: ${url}`);
+  if (import.meta.env.DEV) {
+    console.log(`[API Client] Base URL: ${baseUrl}`);
+    console.log(`[API Client] Full Request URL: ${url}`);
+  }
   const headers = new Headers(options.headers);
-  headers.set("ngrok-skip-browser-warning", "true");
+  const isNgrokRequest =
+    baseUrl.includes("ngrok") ||
+    (typeof window !== "undefined" &&
+      window.location.hostname.includes("ngrok"));
+  if (isNgrokRequest) {
+    headers.set("ngrok-skip-browser-warning", "true");
+  }
   return fetch(url, {
     ...options,
     headers,
@@ -63,6 +71,7 @@ export async function getSupportedTickers(): Promise<SupportedTickersResponse> {
 
 export async function queryDirect(
   payload: QueryRequest,
+  signal?: AbortSignal,
 ): Promise<QueryResponse> {
   const baseUrl = getApiBaseUrl();
   const response = await apiFetch(`${baseUrl}/query`, {
@@ -72,6 +81,7 @@ export async function queryDirect(
       Accept: "application/json",
     },
     body: JSON.stringify(payload),
+    signal,
   });
   if (!response.ok) {
     throw new Error(`Query failed with status: ${response.status}`);
@@ -81,6 +91,7 @@ export async function queryDirect(
 
 export async function queryDecomposed(
   payload: QueryRequest,
+  signal?: AbortSignal,
 ): Promise<DecomposedResponse> {
   const baseUrl = getApiBaseUrl();
   const response = await apiFetch(`${baseUrl}/query/decomposed`, {
@@ -90,6 +101,7 @@ export async function queryDecomposed(
       Accept: "application/json",
     },
     body: JSON.stringify(payload),
+    signal,
   });
   if (!response.ok) {
     throw new Error(`Decomposed query failed with status: ${response.status}`);
@@ -136,6 +148,7 @@ export async function streamQuery(
   payload: QueryRequest,
   onEvent: (event: { type: string; data: any }) => void,
   onError: (error: Error) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   const baseUrl = getApiBaseUrl();
   try {
@@ -145,6 +158,7 @@ export async function streamQuery(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
+      signal,
     });
 
     if (!response.ok) {
@@ -203,6 +217,7 @@ export async function streamQuery(
       }
     }
   } catch (error: any) {
+    if (signal?.aborted || error?.name === "AbortError") return;
     onError(
       error instanceof Error
         ? error

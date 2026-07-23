@@ -364,6 +364,7 @@ QDRANT_MODE=cloud
 
 ```text
 configs/              Environment-backed project settings
+frontend/             Independently deployed Vite/React/TypeScript client
 scripts/              Data pipeline, indexing, smoke test, and evaluation entry points
 src/api/              FastAPI application
 src/evaluation/       LLM-as-judge evaluation framework
@@ -406,6 +407,7 @@ Secrets are loaded from `.env` and should never be committed.
 | Multi-turn conversation memory | Complete |
 | Query decomposition | Integrated and validated for comparative and enumeration queries |
 | Docker deployment | Complete; CPU-only image with local Qdrant volume mount |
+| Vite frontend | End-to-end verified against the Docker backend through ngrok |
 
 ## Known Limitations
 
@@ -420,8 +422,8 @@ Secrets are loaded from `.env` and should never be committed.
 
 ## Roadmap
 
-1. Build a Streamlit demo UI over `/query/stream`.
-2. Add a visual source explorer for retrieved chunks, decomposed sub-queries, and financial-table evidence.
+1. Deploy the Vite frontend to Vercel with `frontend` as the project root.
+2. Deploy the backend at a stable public URL and configure Vercel's `VITE_API_BASE_URL`; ngrok remains test-only.
 3. Add optional Qdrant server or Qdrant Cloud deployment docs for multi-worker serving.
 4. Improve annual-report/cross-reference extraction layouts for the remaining unusable tickers.
 5. Add more integration tests around Docker startup and mounted local Qdrant data.

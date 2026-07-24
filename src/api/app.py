@@ -232,7 +232,8 @@ async def query_decomposed(request: QueryRequest) -> DecomposedQueryResponse:
         raise HTTPException(status_code=503, detail="The decomposer is not ready yet")
 
     try:
-        result = decomposer.run(
+        result = await run_in_threadpool(
+            decomposer.run,
             question=request.question,
             top_k=request.top_k,
             ticker=request.ticker,

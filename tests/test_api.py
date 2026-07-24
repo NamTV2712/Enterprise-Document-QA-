@@ -1,5 +1,9 @@
+import asyncio
+import threading
+import time
 from unittest.mock import MagicMock
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -155,6 +159,78 @@ def test_query_handles_pipeline_exception_gracefully(client, mock_pipeline) -> N
 
     assert response.status_code == 500
     assert "Unexpected retrieval error" in response.json()["detail"]
+
+
+def test_health_responds_while_decomposed_query_runs(mock_pipeline) -> None:
+    decomposer_started = threading.Event()
+    release_decomposer = threading.Event()
+    decomposer = MagicMock()
+    result = MagicMock(
+        answer="Comparison complete.",
+        model_used="mock-model",
+        was_decomposed=True,
+        sub_queries=[],
+        all_chunks=[],
+    )
+
+    def blocking_run(**kwargs):
+        decomposer_started.set()
+        release_decomposer.wait(timeout=2.0)
+        return result
+
+    decomposer.run.side_effect = blocking_run
+    app_module._state.clear()
+    app_module._state["pipeline"] = mock_pipeline
+    app_module._state["decomposer"] = decomposer
+
+    async def run_concurrent_requests() -> tuple[httpx.Response, httpx.Response, float]:
+        transport = httpx.ASGITransport(app=app_module.app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as async_client:
+            started_at = time.perf_counter()
+            decomposed_task = asyncio.create_task(
+                async_client.post(
+                    "/query/decomposed",
+                    json={
+                        "question": "Compare Apple and Microsoft revenue",
+                        "ticker": "AAPL",
+                        "section": "financial_table",
+                        "top_k": 3,
+                        "session_id": "concurrency-test",
+                    },
+                )
+            )
+            while not decomposer_started.is_set():
+                if time.perf_counter() - started_at > 1.0:
+                    raise AssertionError("Decomposed query did not start")
+                await asyncio.sleep(0.005)
+            health_response = await async_client.get("/health")
+            health_elapsed = time.perf_counter() - started_at
+            release_decomposer.set()
+            decomposed_response = await decomposed_task
+            return decomposed_response, health_response, health_elapsed
+
+    safety_release = threading.Timer(1.5, release_decomposer.set)
+    safety_release.start()
+    try:
+        decomposed_response, health_response, health_elapsed = asyncio.run(
+            run_concurrent_requests()
+        )
+    finally:
+        release_decomposer.set()
+        safety_release.cancel()
+        app_module._state.clear()
+
+    assert health_response.status_code == 200
+    assert health_response.json()["pipeline_ready"] is True
+    assert health_elapsed < 0.75
+    assert decomposed_response.status_code == 200
+    decomposer.run.assert_called_once_with(
+        question="Compare Apple and Microsoft revenue",
+        top_k=3,
+        ticker="AAPL",
+        section="financial_table",
+        session_id="concurrency-test",
+    )
 
 
 def test_cache_stats_endpoint(client) -> None:

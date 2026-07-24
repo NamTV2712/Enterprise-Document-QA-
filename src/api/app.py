@@ -45,6 +45,9 @@ SUPPORTED_SECTIONS = [
     "financial_statements",
     "financial_table",
 ]
+INTERNAL_ERROR_DETAIL = (
+    "An internal error occurred while processing your question. Please try again."
+)
 
 
 def _load_supported_tickers() -> list[str]:
@@ -93,9 +96,9 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Open for demo; narrow down in production
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.allowed_origins_list,
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Content-Type", "ngrok-skip-browser-warning"],
 )
 
 
@@ -200,7 +203,7 @@ async def query(request: QueryRequest) -> QueryResponse:
         )
     except Exception as e:
         logger.exception("Error occurred while processing query: %s", e)
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+        raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
 
     sources = [
         SourceChunk(
@@ -242,7 +245,7 @@ async def query_decomposed(request: QueryRequest) -> DecomposedQueryResponse:
         )
     except Exception as e:
         logger.exception("Error occurred while processing decomposed query: %s", e)
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+        raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
 
     return DecomposedQueryResponse(
         answer=result.answer,
@@ -376,7 +379,10 @@ async def query_stream(request: QueryRequest):
                     loop.call_soon_threadsafe(queue.put_nowait, (event_type, data))
             except Exception as e:
                 logger.exception("Unhandled streaming endpoint error: %s", e)
-                loop.call_soon_threadsafe(queue.put_nowait, ("error", str(e)))
+                loop.call_soon_threadsafe(
+                    queue.put_nowait,
+                    ("error", INTERNAL_ERROR_DETAIL),
+                )
             finally:
                 loop.call_soon_threadsafe(queue.put_nowait, None)
 
@@ -394,7 +400,10 @@ async def query_stream(request: QueryRequest):
                 )
                 yield f"data: {payload}\n\n"
             except Exception as e:
-                error_payload = json_lib.dumps({"type": "error", "data": str(e)})
+                logger.exception("Failed to serialize streaming response event: %s", e)
+                error_payload = json_lib.dumps(
+                    {"type": "error", "data": INTERNAL_ERROR_DETAIL}
+                )
                 yield f"data: {error_payload}\n\n"
                 break
 

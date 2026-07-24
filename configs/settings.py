@@ -1,5 +1,7 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -20,5 +22,17 @@ class Settings(BaseSettings):
     qdrant_local_path: Path = Path("data/processed/qdrant")
     qdrant_cloud_url: str = ""
     qdrant_cloud_api_key: str = ""
+
+    # Browser origins allowed to call the API. Add the deployed frontend URL via env.
+    allowed_origins: str = "http://localhost:3000,http://localhost:5173"
+
+    @property
+    def allowed_origins_list(self) -> list[str]:
+        return [
+            origin.strip()
+            for origin in self.allowed_origins.split(",")
+            if origin.strip()
+        ]
+
 
 settings = Settings()

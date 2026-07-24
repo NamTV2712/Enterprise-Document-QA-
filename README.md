@@ -276,7 +276,10 @@ QDRANT_MODE=local
 QDRANT_LOCAL_PATH=data/processed/qdrant
 QDRANT_CLOUD_URL=
 QDRANT_CLOUD_API_KEY=
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 ```
+
+`ALLOWED_ORIGINS` is a comma-separated allowlist. Add the final Vercel domain before public deployment; do not use `*`.
 
 Build local artifacts in order:
 

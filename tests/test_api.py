@@ -7,6 +7,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from configs.settings import Settings
 from src.api import app as app_module
 from src.generation.generator import RAGResponse
 from src.retrieval.retriever import RetrievedChunk
@@ -42,10 +43,24 @@ def mock_pipeline():
 
 
 @pytest.fixture
-def client(mock_pipeline):
+def mock_decomposer():
+    decomposer = MagicMock()
+    decomposer.run.return_value = MagicMock(
+        answer="Comparison complete.",
+        model_used="mock-model",
+        was_decomposed=True,
+        sub_queries=[],
+        all_chunks=[],
+    )
+    return decomposer
+
+
+@pytest.fixture
+def client(mock_pipeline, mock_decomposer):
     """Inject the mock pipeline and avoid FastAPI lifespan model loading."""
     app_module._state.clear()
     app_module._state["pipeline"] = mock_pipeline
+    app_module._state["decomposer"] = mock_decomposer
     app_module._state["store"] = MagicMock()
     test_client = TestClient(app_module.app)
     yield test_client
@@ -60,6 +75,62 @@ def test_health_returns_ok_when_pipeline_ready(client) -> None:
     assert data["status"] == "ok"
     assert data["pipeline_ready"] is True
     assert data["memory"] == {"active_sessions": 0, "total_turns": 0}
+
+
+def test_allowed_origins_parses_comma_separated_env_value() -> None:
+    configured = Settings(
+        allowed_origins=" http://localhost:3000, https://example.vercel.app, "
+    )
+
+    assert configured.allowed_origins_list == [
+        "http://localhost:3000",
+        "https://example.vercel.app",
+    ]
+
+
+def test_cors_preflight_allows_configured_frontend(client) -> None:
+    response = client.options(
+        "/query",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": (
+                "content-type,ngrok-skip-browser-warning"
+            ),
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+    assert "POST" in response.headers["access-control-allow-methods"]
+    assert "ngrok-skip-browser-warning" in response.headers[
+        "access-control-allow-headers"
+    ].lower()
+
+
+@pytest.mark.parametrize(
+    ("origin", "method", "headers"),
+    [
+        ("https://untrusted.example", "POST", "content-type"),
+        ("http://localhost:3000", "PUT", "content-type"),
+        ("http://localhost:3000", "POST", "authorization"),
+    ],
+)
+def test_cors_preflight_rejects_unapproved_access(
+    client, origin: str, method: str, headers: str
+) -> None:
+    response = client.options(
+        "/query",
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": method,
+            "Access-Control-Request-Headers": headers,
+        },
+    )
+
+    assert response.status_code == 400
+    if origin != "http://localhost:3000":
+        assert "access-control-allow-origin" not in response.headers
 
 
 def test_supported_tickers_returns_expected_structure(client) -> None:
@@ -149,16 +220,52 @@ def test_query_returns_503_when_pipeline_not_ready() -> None:
     assert response.json()["detail"] == "The pipeline is not ready yet"
 
 
-def test_query_handles_pipeline_exception_gracefully(client, mock_pipeline) -> None:
-    mock_pipeline.query.side_effect = RuntimeError("Unexpected retrieval error")
+def test_query_error_does_not_leak_exception_details(client, mock_pipeline) -> None:
+    secret = "Database connection: postgres://user:secret@internal-host/db"
+    mock_pipeline.query.side_effect = RuntimeError(secret)
 
     response = client.post(
         "/query",
-        json={"question": "What are Apple's risks?"},
+        json={"question": "Test question for secure error handling"},
     )
 
     assert response.status_code == 500
-    assert "Unexpected retrieval error" in response.json()["detail"]
+    assert response.json()["detail"] == app_module.INTERNAL_ERROR_DETAIL
+    assert "secret" not in response.text
+    assert "postgres://" not in response.text
+
+
+def test_decomposed_error_does_not_leak_exception_details(
+    client, mock_decomposer
+) -> None:
+    mock_decomposer.run.side_effect = RuntimeError(
+        "Private model path: /srv/models/internal-secret"
+    )
+
+    response = client.post(
+        "/query/decomposed",
+        json={"question": "Compare Apple and Microsoft revenue"},
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == app_module.INTERNAL_ERROR_DETAIL
+    assert "internal-secret" not in response.text
+    assert "/srv/models" not in response.text
+
+
+def test_stream_error_does_not_leak_exception_details(client, mock_pipeline) -> None:
+    mock_pipeline.query_stream.side_effect = RuntimeError(
+        "Provider token: super-secret-provider-token"
+    )
+
+    response = client.post(
+        "/query/stream",
+        json={"question": "What are Apple's main risk factors?"},
+    )
+
+    assert response.status_code == 200
+    assert app_module.INTERNAL_ERROR_DETAIL in response.text
+    assert "super-secret-provider-token" not in response.text
 
 
 def test_health_responds_while_decomposed_query_runs(mock_pipeline) -> None:

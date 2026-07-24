@@ -32,7 +32,7 @@ This file is the stable operating guide for AI coding agents working in this rep
 - `/supported-tickers` reports searchable embedded tickers, not the full configured ticker list.
 - The official reported benchmark is the clean priority `<=2` N=30 evaluation unless `PROJECT_STATE.md` explicitly says a newer official run supersedes it. Do not publish checkpoint-merged aggregates as official results.
 - Groq/Gemini quota errors can produce skipped judge records. Never treat quota-skipped or checkpoint-mixed results as final metrics.
-- Ngrok free-tier browser fetches may require the `ngrok-skip-browser-warning: true` header. Backend CORS is already open for demos with `allow_origins=["*"]`.
+- Ngrok free-tier browser fetches may require the `ngrok-skip-browser-warning: true` header. Add deployed frontend domains through `ALLOWED_ORIGINS`; do not reopen CORS with a wildcard.
 
 ## Change Discipline
 

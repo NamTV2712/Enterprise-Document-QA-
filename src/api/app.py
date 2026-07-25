@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from typing import Literal
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -48,6 +48,9 @@ SUPPORTED_SECTIONS = [
 INTERNAL_ERROR_DETAIL = (
     "An internal error occurred while processing your question. Please try again."
 )
+STREAM_TIMEOUT_DETAIL = "The query timed out. Please try again."
+STREAM_QUERY_TIMEOUT_SECONDS = 60.0
+STREAM_QUEUE_POLL_SECONDS = 0.25
 
 
 def _load_supported_tickers() -> list[str]:
@@ -354,7 +357,7 @@ async def cache_test_similarity(request: CacheTestRequest) -> dict:
     }
 
 @app.post("/query/stream")
-async def query_stream(request: QueryRequest):
+async def query_stream(request_body: QueryRequest, http_request: Request):
     """Streaming endpoint using Server-Sent Events (SSE).
 
     Each event is emitted as `data: {json}\n\n` per the SSE spec.
@@ -366,46 +369,89 @@ async def query_stream(request: QueryRequest):
     async def event_generator():
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[tuple[str, Any] | None] = asyncio.Queue()
+        cancel_event = threading.Event()
+
+        def enqueue(event: tuple[str, Any] | None) -> None:
+            if cancel_event.is_set():
+                return
+            try:
+                loop.call_soon_threadsafe(queue.put_nowait, event)
+            except RuntimeError:
+                cancel_event.set()
 
         def run_stream() -> None:
             try:
                 for event_type, data in pipeline.query_stream(
-                    question=request.question,
-                    top_k=request.top_k,
-                    ticker=request.ticker,
-                    section=request.section,
-                    session_id=request.session_id,
+                    question=request_body.question,
+                    top_k=request_body.top_k,
+                    ticker=request_body.ticker,
+                    section=request_body.section,
+                    session_id=request_body.session_id,
+                    cancel_event=cancel_event,
                 ):
-                    loop.call_soon_threadsafe(queue.put_nowait, (event_type, data))
+                    if cancel_event.is_set():
+                        break
+                    safe_data = INTERNAL_ERROR_DETAIL if event_type == "error" else data
+                    enqueue((event_type, safe_data))
+                    if event_type in {"done", "error"}:
+                        break
             except Exception as e:
                 logger.exception("Unhandled streaming endpoint error: %s", e)
-                loop.call_soon_threadsafe(
-                    queue.put_nowait,
-                    ("error", INTERNAL_ERROR_DETAIL),
-                )
+                enqueue(("error", INTERNAL_ERROR_DETAIL))
             finally:
-                loop.call_soon_threadsafe(queue.put_nowait, None)
+                enqueue(None)
 
         threading.Thread(target=run_stream, daemon=True).start()
+        started_at = time.monotonic()
 
-        while True:
-            event = await queue.get()
-            if event is None:
-                break
-            event_type, data = event
-            try:
-                payload = json_lib.dumps(
-                    {"type": event_type, "data": data},
-                    ensure_ascii=False
-                )
-                yield f"data: {payload}\n\n"
-            except Exception as e:
-                logger.exception("Failed to serialize streaming response event: %s", e)
-                error_payload = json_lib.dumps(
-                    {"type": "error", "data": INTERNAL_ERROR_DETAIL}
-                )
-                yield f"data: {error_payload}\n\n"
-                break
+        try:
+            while True:
+                if await http_request.is_disconnected():
+                    cancel_event.set()
+                    logger.info("Streaming client disconnected; cancelling query")
+                    break
+
+                elapsed = time.monotonic() - started_at
+                if elapsed >= STREAM_QUERY_TIMEOUT_SECONDS:
+                    cancel_event.set()
+                    timeout_payload = json_lib.dumps(
+                        {"type": "error", "data": STREAM_TIMEOUT_DETAIL}
+                    )
+                    yield f"data: {timeout_payload}\n\n"
+                    break
+
+                try:
+                    event = await asyncio.wait_for(
+                        queue.get(),
+                        timeout=min(
+                            STREAM_QUEUE_POLL_SECONDS,
+                            STREAM_QUERY_TIMEOUT_SECONDS - elapsed,
+                        ),
+                    )
+                except asyncio.TimeoutError:
+                    continue
+
+                if event is None:
+                    break
+                event_type, data = event
+                try:
+                    payload = json_lib.dumps(
+                        {"type": event_type, "data": data},
+                        ensure_ascii=False,
+                    )
+                    yield f"data: {payload}\n\n"
+                except Exception as e:
+                    logger.exception("Failed to serialize streaming response event: %s", e)
+                    error_payload = json_lib.dumps(
+                        {"type": "error", "data": INTERNAL_ERROR_DETAIL}
+                    )
+                    yield f"data: {error_payload}\n\n"
+                    break
+
+                if event_type in {"done", "error"}:
+                    break
+        finally:
+            cancel_event.set()
 
     return StreamingResponse(
         event_generator(),

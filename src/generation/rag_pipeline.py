@@ -5,6 +5,7 @@ Purpose: The single entry point for the RAG system — connects the Retriever an
 """
 
 import logging
+from threading import Event
 
 from src.generation.generator import Generator, RAGResponse
 from src.memory.conversation_memory import ConversationMemory, Turn
@@ -181,6 +182,7 @@ class RAGPipeline:
         section: str | None = None,
         conversation_history: list[dict] | None = None,
         session_id: str | None = None,
+        cancel_event: Event | None = None,
     ):
         """Yield SSE-compatible event tuples.
 
@@ -188,13 +190,21 @@ class RAGPipeline:
         Cache misses run retrieval and LLM streaming, then store the full answer.
         """
         try:
+            if cancel_event is not None and cancel_event.is_set():
+                return
+
             history_messages = conversation_history or []
             if session_id:
                 self.memory.get_or_create(session_id)
                 history_messages = self._history_messages(session_id)
 
             effective_query = self.rewriter.rewrite(question, history_messages)
+            if cancel_event is not None and cancel_event.is_set():
+                return
+
             query_embedding = self._embed_query_once(effective_query)
+            if cancel_event is not None and cancel_event.is_set():
+                return
 
             use_cache = not session_id and not history_messages
             if use_cache:
@@ -204,6 +214,8 @@ class RAGPipeline:
                     yield ("sources", self._sources_for_stream(self._chunks_from_cache(cached)))
                     words = cached.answer.split(" ")
                     for index, word in enumerate(words):
+                        if cancel_event is not None and cancel_event.is_set():
+                            return
                         token = word if index == len(words) - 1 else f"{word} "
                         yield ("token", token)
                     yield ("done", None)
@@ -216,6 +228,8 @@ class RAGPipeline:
                 ticker=ticker,
                 section=section,
             )
+            if cancel_event is not None and cancel_event.is_set():
+                return
 
             sources_data = self._sources_for_stream(chunks)
             yield ("sources", sources_data)
@@ -225,9 +239,15 @@ class RAGPipeline:
                 question,
                 chunks,
                 conversation_history=history_messages,
+                cancel_event=cancel_event,
             ):
+                if cancel_event is not None and cancel_event.is_set():
+                    return
                 full_answer += token
                 yield ("token", token)
+
+            if cancel_event is not None and cancel_event.is_set():
+                return
 
             if session_id:
                 self.memory.add_turn(
@@ -253,4 +273,5 @@ class RAGPipeline:
 
         except Exception as e:
             logger.exception("Error in query_stream: %s", e)
-            yield ("error", str(e))
+            if cancel_event is None or not cancel_event.is_set():
+                yield ("error", str(e))

@@ -8,6 +8,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass
+from threading import Event
 
 from src.retrieval.retriever import RetrievedChunk
 
@@ -220,8 +221,12 @@ Current request:
         query: str,
         chunks: list[RetrievedChunk],
         conversation_history: list[dict] | None = None,
+        cancel_event: Event | None = None,
     ):
         """Yield each token received from the LLM."""
+        if cancel_event is not None and cancel_event.is_set():
+            return
+
         if not chunks:
             yield "I could not find any relevant information in the available documents"
             return
@@ -235,9 +240,17 @@ Current request:
         user_message = _build_user_message(query, chunks)
 
         if self.provider == "groq":
-            yield from self._call_groq_stream(user_message, conversation_history)
+            yield from self._call_groq_stream(
+                user_message,
+                conversation_history,
+                cancel_event=cancel_event,
+            )
         elif self.provider == "gemini":
-            yield from self._call_gemini_stream(user_message, conversation_history)
+            yield from self._call_gemini_stream(
+                user_message,
+                conversation_history,
+                cancel_event=cancel_event,
+            )
         else:
             raise ValueError(f"Provider '{self.provider}' does not support streaming.")
 
@@ -245,6 +258,7 @@ Current request:
         self,
         user_message: str,
         conversation_history: list[dict] | None = None,
+        cancel_event: Event | None = None,
     ):
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
         if conversation_history:
@@ -258,15 +272,23 @@ Current request:
             temperature=0,
             stream=True,
         )
-        for chunk in stream:
-            delta = chunk.choices[0].delta.content
-            if delta:
-                yield delta
+        try:
+            for chunk in stream:
+                if cancel_event is not None and cancel_event.is_set():
+                    break
+                delta = chunk.choices[0].delta.content
+                if delta:
+                    yield delta
+        finally:
+            close = getattr(stream, "close", None)
+            if callable(close):
+                close()
 
     def _call_gemini_stream(
         self,
         user_message: str,
         conversation_history: list[dict] | None = None,
+        cancel_event: Event | None = None,
     ):
         from google.genai import types
         if conversation_history:
@@ -280,13 +302,21 @@ Current request:
 Current request:
 {user_message}"""
 
-        for chunk in self.client.models.generate_content_stream(
+        stream = self.client.models.generate_content_stream(
             model=self.model,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 max_output_tokens=1024,
             ),
             contents=user_message,
-        ):
-            if chunk.text:
-                yield chunk.text
+        )
+        try:
+            for chunk in stream:
+                if cancel_event is not None and cancel_event.is_set():
+                    break
+                if chunk.text:
+                    yield chunk.text
+        finally:
+            close = getattr(stream, "close", None)
+            if callable(close):
+                close()

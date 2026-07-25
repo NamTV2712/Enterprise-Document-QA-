@@ -1,7 +1,7 @@
 import asyncio
 import threading
 import time
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
@@ -266,6 +266,98 @@ def test_stream_error_does_not_leak_exception_details(client, mock_pipeline) -> 
     assert response.status_code == 200
     assert app_module.INTERNAL_ERROR_DETAIL in response.text
     assert "super-secret-provider-token" not in response.text
+
+
+def test_pipeline_stream_error_event_is_sanitized(client, mock_pipeline) -> None:
+    mock_pipeline.query_stream.return_value = iter(
+        [("error", "Database password: leaked-secret")]
+    )
+
+    response = client.post(
+        "/query/stream",
+        json={"question": "What are Apple's main risk factors?"},
+    )
+
+    assert response.status_code == 200
+    assert app_module.INTERNAL_ERROR_DETAIL in response.text
+    assert "leaked-secret" not in response.text
+
+
+def test_stream_disconnect_sets_cancellation_event(mock_pipeline) -> None:
+    captured_cancel_event = {}
+    producer_stopped = threading.Event()
+
+    def cancellable_stream(**kwargs):
+        cancel_event = kwargs["cancel_event"]
+        captured_cancel_event["event"] = cancel_event
+        try:
+            yield ("sources", [])
+            while not cancel_event.is_set():
+                time.sleep(0.005)
+                yield ("token", "unused")
+        finally:
+            producer_stopped.set()
+
+    mock_pipeline.query_stream.side_effect = cancellable_stream
+    app_module._state.clear()
+    app_module._state["pipeline"] = mock_pipeline
+    http_request = MagicMock()
+    http_request.is_disconnected = AsyncMock(side_effect=[False, True])
+
+    async def consume_stream() -> list[str]:
+        response = await app_module.query_stream(
+            app_module.QueryRequest(question="What are Apple's main risk factors?"),
+            http_request,
+        )
+        return [chunk async for chunk in response.body_iterator]
+
+    try:
+        chunks = asyncio.run(consume_stream())
+    finally:
+        app_module._state.clear()
+
+    assert len(chunks) == 1
+    assert captured_cancel_event["event"].is_set()
+    assert producer_stopped.wait(timeout=0.5)
+
+
+def test_stream_timeout_sets_cancellation_event(mock_pipeline, monkeypatch) -> None:
+    captured_cancel_event = {}
+    producer_stopped = threading.Event()
+
+    def stalled_stream(**kwargs):
+        cancel_event = kwargs["cancel_event"]
+        captured_cancel_event["event"] = cancel_event
+        while not cancel_event.is_set():
+            time.sleep(0.005)
+        producer_stopped.set()
+        if False:
+            yield ("token", "unused")
+
+    mock_pipeline.query_stream.side_effect = stalled_stream
+    app_module._state.clear()
+    app_module._state["pipeline"] = mock_pipeline
+    monkeypatch.setattr(app_module, "STREAM_QUERY_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(app_module, "STREAM_QUEUE_POLL_SECONDS", 0.01)
+    http_request = MagicMock()
+    http_request.is_disconnected = AsyncMock(return_value=False)
+
+    async def consume_stream() -> list[str]:
+        response = await app_module.query_stream(
+            app_module.QueryRequest(question="What are Apple's main risk factors?"),
+            http_request,
+        )
+        return [chunk async for chunk in response.body_iterator]
+
+    try:
+        chunks = asyncio.run(consume_stream())
+    finally:
+        app_module._state.clear()
+
+    body = "".join(chunks)
+    assert app_module.STREAM_TIMEOUT_DETAIL in body
+    assert captured_cancel_event["event"].is_set()
+    assert producer_stopped.wait(timeout=0.5)
 
 
 def test_health_responds_while_decomposed_query_runs(mock_pipeline) -> None:

@@ -62,6 +62,18 @@ def _load_supported_tickers() -> list[str]:
     return tickers or TICKERS
 
 
+def _embed_query_pair(
+    pipeline: RAGPipeline,
+    query_a: str,
+    query_b: str,
+) -> tuple[list[float], list[float]]:
+    """Embed both queries in one worker because the shared model lock serializes them."""
+    embed = getattr(pipeline.retriever, "embed_query", None)
+    if embed is None:
+        embed = pipeline.retriever.embedder.embed_query
+    return embed(query_a), embed(query_b)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Initializing hybrid RAG pipeline...")
@@ -278,8 +290,9 @@ async def query_decomposed(request: QueryRequest) -> DecomposedQueryResponse:
 @app.get("/supported-tickers")
 async def supported_tickers() -> dict:
     """List of supported tickers — helps the UI/user know what they can ask about."""
+    tickers = await run_in_threadpool(_load_supported_tickers)
     return {
-        "tickers": _load_supported_tickers(),
+        "tickers": tickers,
         "sections": SUPPORTED_SECTIONS,
     }
 
@@ -341,12 +354,12 @@ async def cache_test_similarity(request: CacheTestRequest) -> dict:
     if pipeline is None:
         raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
 
-    if hasattr(pipeline.retriever, "embed_query"):
-        emb_a = pipeline.retriever.embed_query(request.query_a)
-        emb_b = pipeline.retriever.embed_query(request.query_b)
-    else:
-        emb_a = pipeline.retriever.embedder.embed_query(request.query_a)
-        emb_b = pipeline.retriever.embedder.embed_query(request.query_b)
+    emb_a, emb_b = await run_in_threadpool(
+        _embed_query_pair,
+        pipeline,
+        request.query_a,
+        request.query_b,
+    )
     similarity = pipeline.cache.test_similarity(emb_a, emb_b)
     return {
         "query_a": request.query_a,

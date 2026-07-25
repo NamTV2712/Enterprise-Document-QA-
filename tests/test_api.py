@@ -147,6 +147,57 @@ def test_supported_tickers_returns_expected_structure(client) -> None:
     assert "financial_table" in data["sections"]
 
 
+def test_health_responds_while_supported_tickers_loads(
+    mock_pipeline, monkeypatch
+) -> None:
+    main_thread_id = threading.get_ident()
+    loader_thread_ids = []
+    loader_started = threading.Event()
+    release_loader = threading.Event()
+
+    def blocking_loader() -> list[str]:
+        loader_thread_ids.append(threading.get_ident())
+        loader_started.set()
+        release_loader.wait(timeout=2.0)
+        return ["AAPL", "MSFT"]
+
+    monkeypatch.setattr(app_module, "_load_supported_tickers", blocking_loader)
+    app_module._state.clear()
+    app_module._state["pipeline"] = mock_pipeline
+
+    async def run_concurrent_requests() -> tuple[httpx.Response, httpx.Response, float]:
+        transport = httpx.ASGITransport(app=app_module.app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as async_client:
+            started_at = time.perf_counter()
+            tickers_task = asyncio.create_task(async_client.get("/supported-tickers"))
+            while not loader_started.is_set():
+                if time.perf_counter() - started_at > 1.0:
+                    raise AssertionError("Supported ticker loader did not start")
+                await asyncio.sleep(0.005)
+            health_response = await async_client.get("/health")
+            health_elapsed = time.perf_counter() - started_at
+            release_loader.set()
+            tickers_response = await tickers_task
+            return tickers_response, health_response, health_elapsed
+
+    safety_release = threading.Timer(1.5, release_loader.set)
+    safety_release.start()
+    try:
+        tickers_response, health_response, health_elapsed = asyncio.run(
+            run_concurrent_requests()
+        )
+    finally:
+        release_loader.set()
+        safety_release.cancel()
+        app_module._state.clear()
+
+    assert health_response.status_code == 200
+    assert health_elapsed < 0.75
+    assert tickers_response.status_code == 200
+    assert tickers_response.json()["tickers"] == ["AAPL", "MSFT"]
+    assert loader_thread_ids[0] != main_thread_id
+
+
 def test_query_returns_answer_and_sources(client, mock_pipeline) -> None:
     response = client.post(
         "/query",
@@ -439,3 +490,64 @@ def test_cache_stats_endpoint(client) -> None:
     data = response.json()
     assert data["hit_rate"] == 0.0
     assert data["max_entries"] == 500
+
+
+def test_health_responds_while_cache_test_embeds(mock_pipeline) -> None:
+    main_thread_id = threading.get_ident()
+    embedding_thread_ids = []
+    embedding_started = threading.Event()
+    release_embedding = threading.Event()
+
+    def blocking_embed(query: str) -> list[float]:
+        embedding_thread_ids.append(threading.get_ident())
+        embedding_started.set()
+        release_embedding.wait(timeout=2.0)
+        return [1.0, 0.0] if query.endswith("A") else [0.9, 0.1]
+
+    mock_pipeline.retriever.embed_query.side_effect = blocking_embed
+    mock_pipeline.cache.test_similarity.return_value = 0.95
+    mock_pipeline.cache.threshold = 0.9
+    app_module._state.clear()
+    app_module._state["pipeline"] = mock_pipeline
+
+    async def run_concurrent_requests() -> tuple[httpx.Response, httpx.Response, float]:
+        transport = httpx.ASGITransport(app=app_module.app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as async_client:
+            started_at = time.perf_counter()
+            cache_test_task = asyncio.create_task(
+                async_client.post(
+                    "/cache/test",
+                    json={"query_a": "Query A", "query_b": "Query B"},
+                )
+            )
+            while not embedding_started.is_set():
+                if time.perf_counter() - started_at > 1.0:
+                    raise AssertionError("Cache test embedding did not start")
+                await asyncio.sleep(0.005)
+            health_response = await async_client.get("/health")
+            health_elapsed = time.perf_counter() - started_at
+            release_embedding.set()
+            cache_test_response = await cache_test_task
+            return cache_test_response, health_response, health_elapsed
+
+    safety_release = threading.Timer(1.5, release_embedding.set)
+    safety_release.start()
+    try:
+        cache_test_response, health_response, health_elapsed = asyncio.run(
+            run_concurrent_requests()
+        )
+    finally:
+        release_embedding.set()
+        safety_release.cancel()
+        app_module._state.clear()
+
+    assert health_response.status_code == 200
+    assert health_elapsed < 0.75
+    assert cache_test_response.status_code == 200
+    assert cache_test_response.json()["similarity"] == 0.95
+    embedded_queries = [
+        call.args[0] for call in mock_pipeline.retriever.embed_query.call_args_list
+    ]
+    assert embedded_queries == ["Query A", "Query B"]
+    assert len(set(embedding_thread_ids)) == 1
+    assert embedding_thread_ids[0] != main_thread_id

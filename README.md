@@ -188,12 +188,12 @@ Latest priority-1 and priority-2 LLM-as-judge run, using Groq `llama-3.3-70b-ver
 
 | Metric | Score |
 |---|---:|
-| Faithfulness | `0.8767` |
-| Answer relevancy | `0.9100` |
-| Context precision | `0.4453` |
-| Overall judge average | `0.7440` |
+| Faithfulness | `0.8533` |
+| Answer relevancy | `0.9300` |
+| Context precision | `0.4670` |
+| Overall judge average | `0.7501` |
 | Citation correctness | `1.0000` |
-| Recall proxy | `0.9583` |
+| Recall proxy | `1.0000` |
 | Fallback accuracy | `1.0000` |
 
 Coverage:
@@ -203,11 +203,11 @@ Coverage:
 
 Interpretation:
 
-- Achieved `0.88` faithfulness, `0.91` answer relevancy, and `0.96` recall proxy across 30 cases spanning 6 query categories.
+- Achieved `0.85` faithfulness, `0.93` answer relevancy, and `1.00` recall proxy across 30 cases spanning 6 query categories.
 - Overall context precision remains the primary optimization target: correct answers are reliably retrieved, but retrieval still includes extra non-essential chunks.
 - Balance-sheet `total X` questions use a lightweight structured lookup over financial-table row labels before semantic re-ranking. This fixes known total-assets retrieval failures without regenerating table chunks; Microsoft total-assets year-over-year now answers with `619,003`, `512,163`, and the computed increase `106,840`.
 - Multi-hop improved most significantly after structured lookup: category faithfulness moved from `0.50` to `0.83`, with Microsoft total-assets year-over-year now scoring `1.00/1.00/0.50` instead of the previous `0.00/0.20/0.00`.
-- The 30-case run exposed a narrow fact-lookup recall miss on Microsoft's auditor question, lowering that run's fact-lookup recall proxy to `0.875`. This was subsequently fixed with auditor-signature lookup and targeted verification; the full 30-case table has not been rerun after that targeted fix.
+- The fresh checkpoint-resumed run confirms the Microsoft auditor retrieval fix: it answers `Deloitte & Touche LLP` with citation correctness and recall proxy both at `1.00`. The judge still scored that case's faithfulness and context precision at `0.00` while claiming the auditor evidence was absent, so the aggregate keeps the measured score unchanged and treats this case as a judge/context-window outlier rather than manually correcting it.
 - Extended validation: 6 additional `priority=3` cases for `V`, `MA`, `LLY`, `KO`, and `RTX` were judged separately after the official N=30 run. They confirm structured lookup generalizes to new tickers: `V`, `MA`, and `LLY` total-assets cases all scored `1.00` faithfulness, and the RTX total-net-sales trend case also scored `1.00` faithfulness. One outlier, Coca-Cola competition risk factors, scored `0.50/0.60/0.20` despite recall `1.00` because retrieved context discussed competition only indirectly and included extra risk-factor context. The checkpoint-merged N=36 aggregate is not used as the official benchmark because it reused stale N=30 records, including the pre-fix MSFT auditor recall record.
 - Latency from the 30-case judge run is not used as a performance benchmark because Groq returned repeated `429 Too Many Requests` responses and SDK backoff delays during generation/judging.
 - A smaller `llama-3.1-8b-instant` judge was rejected after producing false negatives on exact numbers that were present in context.
@@ -217,7 +217,7 @@ Interpretation:
 Retrieval latency optimization:
 
 - Optimized retrieval latency by about `52%` (`0.86s -> 0.41s` per query) through evidence-based tuning of `candidate_pool` (`20 -> 10`) and cross-encoder `batch_size` (`32 -> 4`).
-- Validated with deterministic recall sweeps and LLM-judge evaluation: priority-1 recall proxy reached `1.0000`; the broader 30-case priority <= 2 run is `0.9583`, with comparative, enumeration, multi-hop, and summary all at `1.0000`.
+- Validated with deterministic recall sweeps and LLM-judge evaluation: the broader 30-case priority <= 2 run reached recall proxy `1.0000` in every measurable category.
 - Qdrant local is the default Docker/runtime target: Qdrant Cloud added about `0.30s` per retrieve call in measured network latency (`0.737s` cloud vs `0.444s` local at `candidate_pool=10`).
 - On the Legion RTX 5060 environment, installing the CUDA 12.8 PyTorch build changed embedding from CPU to GPU (`cuda:0`) and measured throughput improved from about `2.7` to `23.3` chunks/sec on a 100-chunk sample.
 

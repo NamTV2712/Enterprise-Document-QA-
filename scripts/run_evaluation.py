@@ -58,8 +58,8 @@ def _average(values: list[float]) -> float:
     return sum(values) / len(values) if values else 0.0
 
 
-def load_checkpoint() -> dict[str, dict]:
-    """Load completed checkpoint records keyed by question."""
+def load_checkpoint(selected_questions: set[str] | None = None) -> dict[str, dict]:
+    """Load completed checkpoint records keyed by selected question."""
     if not CHECKPOINT_PATH.exists():
         return {}
 
@@ -69,7 +69,10 @@ def load_checkpoint() -> dict[str, dict]:
             if not line.strip():
                 continue
             record = json.loads(line)
-            if record.get("status") == "OK":
+            if (
+                record.get("status") == "OK"
+                and (selected_questions is None or record["question"] in selected_questions)
+            ):
                 done[record["question"]] = record
 
     logger.info("Checkpoint loaded: %d completed cases", len(done))
@@ -304,13 +307,12 @@ def main() -> None:
         default=None,
         help="Run only the first N selected cases. Useful for quota/runtime probes.",
     )
+    parser.add_argument(
+        "--fresh",
+        action="store_true",
+        help="Delete the current checkpoint before running the selected cases.",
+    )
     args = parser.parse_args()
-
-    embedder = Embedder()
-    generation_api_key = settings.groq_api_key_fall_back or None
-    generator = Generator(provider="groq", api_key=generation_api_key)
-    judge_generator = Generator(provider="groq", model="llama-3.3-70b-versatile")
-    evaluator = RAGEvaluator(judge_generator=judge_generator)
 
     test_set = [tc for tc in TEST_SET if tc.priority <= args.priority]
     if args.category:
@@ -326,9 +328,20 @@ def main() -> None:
         args.category or "all",
     )
 
-    done_cases = load_checkpoint()
+    if args.fresh and CHECKPOINT_PATH.exists():
+        CHECKPOINT_PATH.unlink()
+        logger.info("Deleted checkpoint for fresh run: %s", CHECKPOINT_PATH)
+
+    selected_questions = {tc.question for tc in test_set}
+    done_cases = load_checkpoint(selected_questions)
     records = list(done_cases.values())
     skipped = []
+
+    embedder = Embedder()
+    generation_api_key = settings.groq_api_key_fall_back or None
+    generator = Generator(provider="groq", api_key=generation_api_key)
+    judge_generator = Generator(provider="groq", model="llama-3.3-70b-versatile")
+    evaluator = RAGEvaluator(judge_generator=judge_generator)
 
     with VectorStore(
         mode=settings.qdrant_mode,
@@ -416,6 +429,8 @@ def main() -> None:
             time.sleep(1.5)
 
     _print_summary(records, skipped, generator, judge_generator)
+    if skipped:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

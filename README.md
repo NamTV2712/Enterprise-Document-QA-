@@ -104,12 +104,15 @@ http://localhost:8000/docs
 | `GET` | `/health` | Service readiness and memory stats |
 | `POST` | `/query` | Non-streaming RAG answer |
 | `POST` | `/query/stream` | SSE streaming RAG answer |
+| `POST` | `/query/decomposed` | Comparative or complex RAG answer |
 | `GET` | `/supported-tickers` | Supported tickers and sections |
 | `GET` | `/cache/stats` | Semantic cache metrics |
 | `POST` | `/cache/clear` | Clear semantic cache |
 | `POST` | `/cache/test` | Compare query embedding similarity |
 | `GET` | `/session/{session_id}/history` | Inspect conversation history |
 | `DELETE` | `/session/{session_id}` | Clear one conversation session |
+
+The two non-streaming query endpoints enforce a 60-second request timeout and return HTTP `504` when exceeded. Timed-out synchronous workers are abandoned so they cannot hold the response open, but Python cannot safely kill a thread already running; that worker may finish in the background and its result is discarded.
 
 Example request:
 

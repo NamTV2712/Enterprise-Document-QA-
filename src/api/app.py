@@ -8,11 +8,12 @@ at startup via the lifespan context manager.
 import logging
 import time
 import asyncio
+import functools
 import threading
 from contextlib import asynccontextmanager
-from typing import Literal
-from typing import Any
+from typing import Any, Callable, Literal, TypeVar
 
+import anyio.to_thread
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,9 +49,12 @@ SUPPORTED_SECTIONS = [
 INTERNAL_ERROR_DETAIL = (
     "An internal error occurred while processing your question. Please try again."
 )
+QUERY_TIMEOUT_DETAIL = "The query timed out. Please try again."
+QUERY_TIMEOUT_SECONDS = 60.0
 STREAM_TIMEOUT_DETAIL = "The query timed out. Please try again."
 STREAM_QUERY_TIMEOUT_SECONDS = 60.0
 STREAM_QUEUE_POLL_SECONDS = 0.25
+T = TypeVar("T")
 
 
 def _load_supported_tickers() -> list[str]:
@@ -72,6 +76,17 @@ def _embed_query_pair(
     if embed is None:
         embed = pipeline.retriever.embedder.embed_query
     return embed(query_a), embed(query_b)
+
+
+async def _run_query_with_timeout(
+    func: Callable[..., T],
+    **kwargs: Any,
+) -> T:
+    worker = anyio.to_thread.run_sync(
+        functools.partial(func, **kwargs),
+        abandon_on_cancel=True,
+    )
+    return await asyncio.wait_for(worker, timeout=QUERY_TIMEOUT_SECONDS)
 
 
 @asynccontextmanager
@@ -208,7 +223,7 @@ async def query(request: QueryRequest) -> QueryResponse:
         raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
 
     try:
-        response = await run_in_threadpool(
+        response = await _run_query_with_timeout(
             pipeline.query,
             question=request.question,
             top_k=request.top_k,
@@ -216,6 +231,9 @@ async def query(request: QueryRequest) -> QueryResponse:
             section=request.section,
             session_id=request.session_id,
         )
+    except TimeoutError:
+        logger.warning("Query timed out after %.1f seconds", QUERY_TIMEOUT_SECONDS)
+        raise HTTPException(status_code=504, detail=QUERY_TIMEOUT_DETAIL)
     except Exception as e:
         logger.exception("Error occurred while processing query: %s", e)
         raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
@@ -250,7 +268,7 @@ async def query_decomposed(request: QueryRequest) -> DecomposedQueryResponse:
         raise HTTPException(status_code=503, detail="The decomposer is not ready yet")
 
     try:
-        result = await run_in_threadpool(
+        result = await _run_query_with_timeout(
             decomposer.run,
             question=request.question,
             top_k=request.top_k,
@@ -258,6 +276,12 @@ async def query_decomposed(request: QueryRequest) -> DecomposedQueryResponse:
             section=request.section,
             session_id=request.session_id,
         )
+    except TimeoutError:
+        logger.warning(
+            "Decomposed query timed out after %.1f seconds",
+            QUERY_TIMEOUT_SECONDS,
+        )
+        raise HTTPException(status_code=504, detail=QUERY_TIMEOUT_DETAIL)
     except Exception as e:
         logger.exception("Error occurred while processing decomposed query: %s", e)
         raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)

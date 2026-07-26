@@ -304,6 +304,50 @@ def test_decomposed_error_does_not_leak_exception_details(
     assert "/srv/models" not in response.text
 
 
+@pytest.mark.parametrize(
+    ("path", "worker_name", "question"),
+    [
+        ("/query", "pipeline", "What are Apple's main risk factors?"),
+        (
+            "/query/decomposed",
+            "decomposer",
+            "Compare Apple and Microsoft revenue",
+        ),
+    ],
+)
+def test_non_streaming_query_timeout_returns_504(
+    client,
+    mock_pipeline,
+    mock_decomposer,
+    monkeypatch,
+    path: str,
+    worker_name: str,
+    question: str,
+) -> None:
+    worker_started = threading.Event()
+    release_worker = threading.Event()
+
+    def blocking_worker(**kwargs):
+        worker_started.set()
+        release_worker.wait(timeout=2.0)
+
+    worker = mock_pipeline.query if worker_name == "pipeline" else mock_decomposer.run
+    worker.side_effect = blocking_worker
+    monkeypatch.setattr(app_module, "QUERY_TIMEOUT_SECONDS", 0.05)
+
+    started_at = time.perf_counter()
+    try:
+        response = client.post(path, json={"question": question})
+        elapsed = time.perf_counter() - started_at
+    finally:
+        release_worker.set()
+
+    assert worker_started.is_set()
+    assert response.status_code == 504
+    assert response.json()["detail"] == app_module.QUERY_TIMEOUT_DETAIL
+    assert elapsed < 0.75
+
+
 def test_stream_error_does_not_leak_exception_details(client, mock_pipeline) -> None:
     mock_pipeline.query_stream.side_effect = RuntimeError(
         "Provider token: super-secret-provider-token"

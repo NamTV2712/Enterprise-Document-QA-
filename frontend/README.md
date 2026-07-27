@@ -24,6 +24,7 @@ VITE_API_BASE_URL="http://localhost:8000"
 
 ```bash
 bun run lint
+bun run test
 bun run build
 ```
 
@@ -69,5 +70,7 @@ The streaming endpoint returns records in this format:
 ```text
 data: {"type":"sources|token|done|error","data":...}
 ```
+
+Initialization requests share one `AbortController` and are cancelled on unmount. During an active SSE response, the input exposes a Stop button that aborts the request, preserves any partial answer already rendered, and immediately re-enables the input. Reloaded session history renders full assistant answers without client-side truncation.
 
 Source objects contain `citation`, `score`, and `text_preview`. Decomposed responses also include `was_decomposed`, `sub_queries`, and `num_total_chunks`.

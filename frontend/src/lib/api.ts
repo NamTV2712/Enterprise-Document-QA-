@@ -41,13 +41,14 @@ async function apiFetch(
   });
 }
 
-export async function checkHealth(): Promise<HealthResponse> {
+export async function checkHealth(signal?: AbortSignal): Promise<HealthResponse> {
   const baseUrl = getApiBaseUrl();
   const response = await apiFetch(`${baseUrl}/health`, {
     method: "GET",
     headers: {
       Accept: "application/json",
     },
+    signal,
   });
   if (!response.ok) {
     throw new Error(`Health check failed with status: ${response.status}`);
@@ -55,13 +56,16 @@ export async function checkHealth(): Promise<HealthResponse> {
   return response.json();
 }
 
-export async function getSupportedTickers(): Promise<SupportedTickersResponse> {
+export async function getSupportedTickers(
+  signal?: AbortSignal,
+): Promise<SupportedTickersResponse> {
   const baseUrl = getApiBaseUrl();
   const response = await apiFetch(`${baseUrl}/supported-tickers`, {
     method: "GET",
     headers: {
       Accept: "application/json",
     },
+    signal,
   });
   if (!response.ok) {
     throw new Error(`Failed to fetch supported tickers: ${response.status}`);
@@ -127,6 +131,7 @@ export async function deleteSession(
 
 export async function getSessionHistory(
   sessionId: string,
+  signal?: AbortSignal,
 ): Promise<SessionHistoryResponse> {
   const baseUrl = getApiBaseUrl();
   const response = await apiFetch(`${baseUrl}/session/${sessionId}/history`, {
@@ -134,6 +139,7 @@ export async function getSessionHistory(
     headers: {
       Accept: "application/json",
     },
+    signal,
   });
   if (!response.ok) {
     throw new Error(`Failed to fetch session history: ${response.status}`);

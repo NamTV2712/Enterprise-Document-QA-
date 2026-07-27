@@ -19,6 +19,7 @@ import {
   AlertCircle,
   HelpCircle,
   RefreshCw,
+  Square,
 } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { ChatMessage } from "./components/ChatMessage";
@@ -80,6 +81,8 @@ export default function App() {
 
   // Handle initialization on first load
   useEffect(() => {
+    const controller = new AbortController();
+
     // 1. Session ID creation/restoration
     let sid = localStorage.getItem("sec_qa_session_id");
     if (!sid) {
@@ -94,19 +97,19 @@ export default function App() {
 
     const initData = async () => {
       try {
-        const health = await checkHealth();
+        const health = await checkHealth(controller.signal);
         setHealthData(health);
         setIsBackendConnected(true);
         setIsPipelineReady(health.pipeline_ready);
 
-        const support = await getSupportedTickers();
+        const support = await getSupportedTickers(controller.signal);
         setTickers(support.tickers || []);
         setSections(support.sections || []);
 
         // 3. Load historical chat turns if session exists
         if (sid) {
           try {
-            const history = await getSessionHistory(sid);
+            const history = await getSessionHistory(sid, controller.signal);
             if (history && history.turns && history.turns.length > 0) {
               const loadedMessages: Message[] = [];
               history.turns.forEach((turn, idx) => {
@@ -125,10 +128,19 @@ export default function App() {
               setMessages(loadedMessages);
             }
           } catch (histError) {
+            if (
+              histError instanceof DOMException &&
+              histError.name === "AbortError"
+            ) {
+              return;
+            }
             console.warn("Could not retrieve session history. Starting fresh.");
           }
         }
       } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return;
+        }
         console.warn("FastAPI initialization check failed:", err);
         setIsBackendConnected(false);
         setIsPipelineReady(false);
@@ -136,6 +148,7 @@ export default function App() {
     };
 
     initData();
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {
@@ -417,6 +430,26 @@ export default function App() {
     }
   };
 
+  const handleStopGenerating = () => {
+    const controller = requestAbortRef.current;
+    if (!controller) return;
+
+    requestAbortRef.current = null;
+    controller.abort();
+    setIsLoading(false);
+    setMessages((prev) =>
+      prev.map((message) =>
+        message.isStreaming
+          ? {
+              ...message,
+              text: message.text || "Generation stopped.",
+              isStreaming: false,
+            }
+          : message,
+      ),
+    );
+  };
+
   const handleSelectSample = (sample: SampleQuestion) => {
     if (sample.ticker !== undefined) {
       setSelectedTicker(sample.ticker || null);
@@ -668,7 +701,9 @@ export default function App() {
               inputText={inputText}
               setInputText={setInputText}
               onSendMessage={handleSendMessage}
+              onStopGenerating={handleStopGenerating}
               isLoading={isLoading}
+              isStreaming={messages.some((message) => message.isStreaming)}
               isBackendConnected={isBackendConnected}
               isPipelineReady={isPipelineReady}
               showBanner={messages.length > 0}

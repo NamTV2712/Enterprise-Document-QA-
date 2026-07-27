@@ -5,14 +5,16 @@
 
 import React, { useRef, useEffect, memo } from "react";
 import { motion } from "motion/react";
-import { Send, AlertTriangle, Loader2 } from "lucide-react";
+import { Send, AlertTriangle, Loader2, Square } from "lucide-react";
 import { Tooltip } from "./Tooltip";
 
 interface ChatInputProps {
   inputText: string;
   setInputText: (text: string) => void;
   onSendMessage: (text: string) => void;
+  onStopGenerating: () => void;
   isLoading: boolean;
+  isStreaming: boolean;
   isBackendConnected: boolean | null;
   isPipelineReady: boolean | null;
   showBanner?: boolean;
@@ -69,7 +71,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   inputText,
   setInputText,
   onSendMessage,
+  onStopGenerating,
   isLoading,
+  isStreaming,
   isBackendConnected,
   isPipelineReady,
   showBanner = true,
@@ -168,24 +172,38 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               </Tooltip>
             )}
 
-            <motion.button
-              whileHover={
-                isValidLength && !isDisabled ? { scale: 1.02, y: -0.5 } : {}
-              }
-              whileTap={isValidLength && !isDisabled ? { scale: 0.98 } : {}}
-              type="submit"
-              id="send-message-btn"
-              title="Ask"
-              aria-label="Send question"
-              disabled={!isValidLength || isDisabled}
-              className={`p-2.5 rounded-lg flex items-center justify-center transition-all ${
-                isValidLength && !isDisabled
-                  ? "bg-[#1B2430] dark:bg-[#F7F7F5] text-[#F7F7F5] dark:text-[#1B2430] hover:opacity-95 cursor-pointer shadow-3xs"
-                  : "bg-slate-100 dark:bg-slate-900/50 text-slate-400 dark:text-slate-650 cursor-not-allowed border border-slate-200/50 dark:border-slate-800/50"
-              }`}
-            >
-              <Send className="w-4 h-4" />
-            </motion.button>
+            {isStreaming ? (
+              <motion.button
+                whileHover={{ scale: 1.02, y: -0.5 }}
+                whileTap={{ scale: 0.98 }}
+                type="button"
+                onClick={onStopGenerating}
+                aria-label="Stop generating response"
+                className="h-10 px-3 rounded-lg flex items-center justify-center gap-2 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
+              >
+                <Square className="w-3 h-3 fill-current" />
+                <span className="text-xs font-semibold">Stop</span>
+              </motion.button>
+            ) : (
+              <motion.button
+                whileHover={
+                  isValidLength && !isDisabled ? { scale: 1.02, y: -0.5 } : {}
+                }
+                whileTap={isValidLength && !isDisabled ? { scale: 0.98 } : {}}
+                type="submit"
+                id="send-message-btn"
+                title="Ask"
+                aria-label="Send question"
+                disabled={!isValidLength || isDisabled}
+                className={`p-2.5 rounded-lg flex items-center justify-center transition-all ${
+                  isValidLength && !isDisabled
+                    ? "bg-[#1B2430] dark:bg-[#F7F7F5] text-[#F7F7F5] dark:text-[#1B2430] hover:opacity-95 cursor-pointer shadow-3xs"
+                    : "bg-slate-100 dark:bg-slate-900/50 text-slate-400 dark:text-slate-650 cursor-not-allowed border border-slate-200/50 dark:border-slate-800/50"
+                }`}
+              >
+                <Send className="w-4 h-4" />
+              </motion.button>
+            )}
           </div>
         </form>
 

@@ -344,7 +344,7 @@ async def get_session_history(session_id: str) -> dict:
         "turns": [
             {
                 "user": turn.user_message,
-                "assistant": turn.assistant_message[:200],
+                "assistant": turn.assistant_message,
                 "rewritten_query": turn.rewritten_query,
             }
             for turn in turns

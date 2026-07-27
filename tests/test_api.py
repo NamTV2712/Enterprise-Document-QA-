@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from configs.settings import Settings
 from src.api import app as app_module
 from src.generation.generator import RAGResponse
+from src.memory.conversation_memory import Turn
 from src.retrieval.retriever import RetrievedChunk
 
 
@@ -225,6 +226,24 @@ def test_query_returns_answer_and_sources(client, mock_pipeline) -> None:
     assert call_kwargs["ticker"] == "AAPL"
     assert call_kwargs["section"] == "risk_factors"
     assert call_kwargs["top_k"] == 5
+
+
+def test_session_history_returns_full_assistant_message(client, mock_pipeline) -> None:
+    """Historical answers must not be truncated when the UI reloads a session."""
+    long_answer = "A" * 500
+    mock_pipeline.memory.get_history.return_value = [
+        Turn(
+            user_message="What are the main risks?",
+            assistant_message=long_answer,
+            rewritten_query="What are Apple's main risk factors?",
+        )
+    ]
+
+    response = client.get("/session/history-regression/history")
+
+    assert response.status_code == 200
+    assert response.json()["turns"][0]["assistant"] == long_answer
+    assert len(response.json()["turns"][0]["assistant"]) == 500
 
 
 def test_query_rejects_too_short_question(client) -> None:

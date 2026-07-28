@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     # Browser origins allowed to call the API. Add the deployed frontend URL via env.
     allowed_origins: str = "http://localhost:3000,http://localhost:5173"
 
+    # Public API protection. In-memory limits are appropriate for the single-worker runtime.
+    llm_rate_limit_burst: str = "10/minute"
+    llm_rate_limit_daily: str = "100/day"
+    decomposed_rate_limit: str = "5/minute"
+    cache_test_rate_limit: str = "10/minute"
+    enable_cache_clear: bool = False
+
     @property
     def allowed_origins_list(self) -> list[str]:
         return [

@@ -101,18 +101,24 @@ http://localhost:8000/docs
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| `GET` | `/health` | Service readiness and memory stats |
+| `GET` | `/health/live` | Process liveness |
+| `GET` | `/health/ready` | Pipeline readiness; returns `503` until ready |
+| `GET` | `/health` | Legacy frontend-compatible readiness payload |
 | `POST` | `/query` | Non-streaming RAG answer |
 | `POST` | `/query/stream` | SSE streaming RAG answer |
 | `POST` | `/query/decomposed` | Comparative or complex RAG answer |
 | `GET` | `/supported-tickers` | Supported tickers and sections |
 | `GET` | `/cache/stats` | Semantic cache metrics |
-| `POST` | `/cache/clear` | Clear semantic cache |
-| `POST` | `/cache/test` | Compare query embedding similarity |
+| `POST` | `/cache/clear` | Clear semantic cache when explicitly enabled |
+| `POST` | `/cache/test` | Rate-limited query embedding comparison |
 | `GET` | `/session/{session_id}/history` | Inspect conversation history |
 | `DELETE` | `/session/{session_id}` | Clear one conversation session |
 
 The two non-streaming query endpoints enforce a 60-second request timeout and return HTTP `504` when exceeded. Timed-out synchronous workers are abandoned so they cannot hold the response open, but Python cannot safely kill a thread already running; that worker may finish in the background and its result is discarded.
+
+The three LLM query routes share per-IP limits of `10/minute` and `100/day`; decomposed queries also have a `5/minute` limit because each request can make multiple provider calls. `/cache/test` is limited to `10/minute`, and `/cache/clear` returns `403` unless `ENABLE_CACHE_CLEAR=true`. Limits use in-memory storage, matching the required single-worker local-Qdrant runtime. A multi-instance deployment must use shared rate-limit storage such as Redis.
+
+Rate-limit identity uses the ASGI client address. When deploying behind Fly.io, Render, Railway, or another reverse proxy, configure Uvicorn proxy headers and trust only the platform's documented proxy addresses. Do not trust arbitrary `X-Forwarded-For` headers or use a wildcard trusted-proxy range without confirming the platform isolates direct traffic.
 
 Session history returns the full stored assistant answer for each of the five retained turns, so reloading the frontend does not truncate earlier responses. LLM rewrite context already used the full stored messages independently of this API representation.
 
@@ -282,6 +288,11 @@ QDRANT_LOCAL_PATH=data/processed/qdrant
 QDRANT_CLOUD_URL=
 QDRANT_CLOUD_API_KEY=
 ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+LLM_RATE_LIMIT_BURST=10/minute
+LLM_RATE_LIMIT_DAILY=100/day
+DECOMPOSED_RATE_LIMIT=5/minute
+CACHE_TEST_RATE_LIMIT=10/minute
+ENABLE_CACHE_CLEAR=false
 ```
 
 `ALLOWED_ORIGINS` is a comma-separated allowlist. Add the final Vercel domain before public deployment; do not use `*`.
@@ -324,7 +335,7 @@ docker compose up
 3. Verify the API is ready:
 
 ```bash
-curl http://localhost:8000/health
+curl http://localhost:8000/health/ready
 ```
 
 The response should include `"pipeline_ready": true`.

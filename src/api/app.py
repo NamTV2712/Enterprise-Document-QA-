@@ -18,6 +18,9 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from configs.settings import settings
 from configs.tickers import TICKERS
@@ -55,6 +58,7 @@ STREAM_TIMEOUT_DETAIL = "The query timed out. Please try again."
 STREAM_QUERY_TIMEOUT_SECONDS = 60.0
 STREAM_QUEUE_POLL_SECONDS = 0.25
 T = TypeVar("T")
+limiter = Limiter(key_func=get_remote_address)
 
 
 def _load_supported_tickers() -> list[str]:
@@ -130,6 +134,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Content-Type", "ngrok-skip-browser-warning"],
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 # --- Pydantic models for request/response ---
@@ -202,10 +208,7 @@ class CacheTestRequest(BaseModel):
 
 # --- Endpoints ---
 
-@app.get("/health")
-async def health() -> dict:
-    """Health check endpoint — used by Docker health check,
-    load balancer, and monitoring in the future"""
+def _health_payload() -> dict:
     pipeline: RAGPipeline | None = _state.get("pipeline")
     return {
         "status": "ok",
@@ -214,8 +217,31 @@ async def health() -> dict:
     }
 
 
+@app.get("/health/live")
+async def health_live() -> dict:
+    """Report whether the API process can serve HTTP requests."""
+    return {"status": "ok"}
+
+
+@app.get("/health/ready")
+async def health_ready() -> dict:
+    """Report whether the RAG pipeline is ready to accept query traffic."""
+    payload = _health_payload()
+    if not payload["pipeline_ready"]:
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    return payload
+
+
+@app.get("/health")
+async def health() -> dict:
+    """Return the legacy health payload used by the current frontend."""
+    return _health_payload()
+
+
 @app.post("/query", response_model=QueryResponse)
-async def query(request: QueryRequest) -> QueryResponse:
+@limiter.shared_limit(settings.llm_rate_limit_burst, scope="llm-query-burst")
+@limiter.shared_limit(settings.llm_rate_limit_daily, scope="llm-query-daily")
+async def query(request: Request, body: QueryRequest) -> QueryResponse:
     """Main endpoint: receive the question, return the answer + source citation"""
     pipeline: RAGPipeline = _state.get("pipeline")
     if pipeline is None:
@@ -225,11 +251,11 @@ async def query(request: QueryRequest) -> QueryResponse:
     try:
         response = await _run_query_with_timeout(
             pipeline.query,
-            question=request.question,
-            top_k=request.top_k,
-            ticker=request.ticker,
-            section=request.section,
-            session_id=request.session_id,
+            question=body.question,
+            top_k=body.top_k,
+            ticker=body.ticker,
+            section=body.section,
+            session_id=body.session_id,
         )
     except TimeoutError:
         logger.warning("Query timed out after %.1f seconds", QUERY_TIMEOUT_SECONDS)
@@ -256,7 +282,13 @@ async def query(request: QueryRequest) -> QueryResponse:
 
 
 @app.post("/query/decomposed", response_model=DecomposedQueryResponse)
-async def query_decomposed(request: QueryRequest) -> DecomposedQueryResponse:
+@limiter.shared_limit(settings.llm_rate_limit_burst, scope="llm-query-burst")
+@limiter.shared_limit(settings.llm_rate_limit_daily, scope="llm-query-daily")
+@limiter.limit(settings.decomposed_rate_limit)
+async def query_decomposed(
+    request: Request,
+    body: QueryRequest,
+) -> DecomposedQueryResponse:
     """Handle complex or comparative questions with optional query decomposition.
 
     Simple questions fall back to the normal RAG pipeline. Complex questions are
@@ -270,11 +302,11 @@ async def query_decomposed(request: QueryRequest) -> DecomposedQueryResponse:
     try:
         result = await _run_query_with_timeout(
             decomposer.run,
-            question=request.question,
-            top_k=request.top_k,
-            ticker=request.ticker,
-            section=request.section,
-            session_id=request.session_id,
+            question=body.question,
+            top_k=body.top_k,
+            ticker=body.ticker,
+            section=body.section,
+            session_id=body.session_id,
         )
     except TimeoutError:
         logger.warning(
@@ -364,6 +396,11 @@ async def cache_stats() -> dict:
 @app.post("/cache/clear")
 async def cache_clear() -> dict:
     """Clear semantic cache entries and reset cache metrics."""
+    if not settings.enable_cache_clear:
+        raise HTTPException(
+            status_code=403,
+            detail="Cache clearing is disabled on this deployment",
+        )
     pipeline: RAGPipeline = _state.get("pipeline")
     if pipeline is None:
         raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
@@ -372,7 +409,8 @@ async def cache_clear() -> dict:
 
 
 @app.post("/cache/test")
-async def cache_test_similarity(request: CacheTestRequest) -> dict:
+@limiter.limit(settings.cache_test_rate_limit)
+async def cache_test_similarity(request: Request, body: CacheTestRequest) -> dict:
     """Compare two query embeddings to tune the semantic cache threshold."""
     pipeline: RAGPipeline = _state.get("pipeline")
     if pipeline is None:
@@ -381,20 +419,22 @@ async def cache_test_similarity(request: CacheTestRequest) -> dict:
     emb_a, emb_b = await run_in_threadpool(
         _embed_query_pair,
         pipeline,
-        request.query_a,
-        request.query_b,
+        body.query_a,
+        body.query_b,
     )
     similarity = pipeline.cache.test_similarity(emb_a, emb_b)
     return {
-        "query_a": request.query_a,
-        "query_b": request.query_b,
+        "query_a": body.query_a,
+        "query_b": body.query_b,
         "similarity": round(similarity, 6),
         "threshold": pipeline.cache.threshold,
         "would_cache_hit": similarity >= pipeline.cache.threshold,
     }
 
 @app.post("/query/stream")
-async def query_stream(request_body: QueryRequest, http_request: Request):
+@limiter.shared_limit(settings.llm_rate_limit_burst, scope="llm-query-burst")
+@limiter.shared_limit(settings.llm_rate_limit_daily, scope="llm-query-daily")
+async def query_stream(request: Request, request_body: QueryRequest):
     """Streaming endpoint using Server-Sent Events (SSE).
 
     Each event is emitted as `data: {json}\n\n` per the SSE spec.
@@ -443,7 +483,7 @@ async def query_stream(request_body: QueryRequest, http_request: Request):
 
         try:
             while True:
-                if await http_request.is_disconnected():
+                if await request.is_disconnected():
                     cancel_event.set()
                     logger.info("Streaming client disconnected; cancelling query")
                     break

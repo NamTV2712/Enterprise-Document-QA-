@@ -10,10 +10,11 @@ services:
       - QDRANT_MODE=local
       - QDRANT_LOCAL_PATH=/app/data/processed/qdrant
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      - ENABLE_CACHE_CLEAR=false
     volumes:
       - ./data/processed:/app/data/processed
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health/ready').raise_for_status()"]
       interval: 30s
       timeout: 10s
       retries: 3

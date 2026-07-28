@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import threading
 import time
 from unittest.mock import AsyncMock, MagicMock
@@ -12,6 +13,14 @@ from src.api import app as app_module
 from src.generation.generator import RAGResponse
 from src.memory.conversation_memory import Turn
 from src.retrieval.retriever import RetrievedChunk
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """Keep in-memory rate-limit counters isolated between tests."""
+    app_module.limiter.reset()
+    yield
+    app_module.limiter.reset()
 
 
 @pytest.fixture
@@ -76,6 +85,30 @@ def test_health_returns_ok_when_pipeline_ready(client) -> None:
     assert data["status"] == "ok"
     assert data["pipeline_ready"] is True
     assert data["memory"] == {"active_sessions": 0, "total_turns": 0}
+
+
+def test_health_live_and_ready_have_distinct_semantics() -> None:
+    app_module._state.clear()
+    test_client = TestClient(app_module.app)
+
+    live_response = test_client.get("/health/live")
+    ready_response = test_client.get("/health/ready")
+    legacy_response = test_client.get("/health")
+
+    assert live_response.status_code == 200
+    assert live_response.json() == {"status": "ok"}
+    assert ready_response.status_code == 503
+    assert ready_response.json()["detail"] == "The pipeline is not ready yet"
+    assert legacy_response.status_code == 200
+    assert legacy_response.json()["pipeline_ready"] is False
+
+
+def test_health_ready_returns_pipeline_stats(client) -> None:
+    response = client.get("/health/ready")
+
+    assert response.status_code == 200
+    assert response.json()["pipeline_ready"] is True
+    assert response.json()["memory"] == {"active_sessions": 0, "total_turns": 0}
 
 
 def test_allowed_origins_parses_comma_separated_env_value() -> None:
@@ -367,6 +400,72 @@ def test_non_streaming_query_timeout_returns_504(
     assert elapsed < 0.75
 
 
+def test_llm_routes_share_one_burst_limit(client) -> None:
+    payload = {"question": "What are Apple's main risk factors?"}
+    for _ in range(9):
+        assert client.post("/query", json=payload).status_code == 200
+
+    assert client.post("/query/stream", json=payload).status_code == 200
+    blocked = client.post(
+        "/query/decomposed",
+        json={"question": "Compare Apple and Microsoft revenue"},
+    )
+
+    assert blocked.status_code == 429
+    assert "Rate limit exceeded" in blocked.json()["error"]
+
+
+def test_decomposed_query_has_lower_endpoint_limit(client) -> None:
+    payload = {"question": "Compare Apple and Microsoft revenue"}
+    for _ in range(5):
+        assert client.post("/query/decomposed", json=payload).status_code == 200
+
+    blocked = client.post("/query/decomposed", json=payload)
+
+    assert blocked.status_code == 429
+
+
+def test_rate_limits_are_isolated_by_client_ip(mock_pipeline, mock_decomposer) -> None:
+    app_module._state.clear()
+    app_module._state["pipeline"] = mock_pipeline
+    app_module._state["decomposer"] = mock_decomposer
+    payload = {"question": "What are Apple's main risk factors?"}
+
+    async def run_requests() -> tuple[httpx.Response, httpx.Response]:
+        first_transport = httpx.ASGITransport(
+            app=app_module.app,
+            client=("198.51.100.10", 50000),
+        )
+        second_transport = httpx.ASGITransport(
+            app=app_module.app,
+            client=("198.51.100.20", 50000),
+        )
+        async with (
+            httpx.AsyncClient(
+                transport=first_transport,
+                base_url="http://test",
+            ) as first_client,
+            httpx.AsyncClient(
+                transport=second_transport,
+                base_url="http://test",
+            ) as second_client,
+        ):
+            for _ in range(10):
+                response = await first_client.post("/query", json=payload)
+                assert response.status_code == 200
+            blocked = await first_client.post("/query", json=payload)
+            allowed = await second_client.post("/query", json=payload)
+            return blocked, allowed
+
+    try:
+        blocked, allowed = asyncio.run(run_requests())
+    finally:
+        app_module._state.clear()
+
+    assert blocked.status_code == 429
+    assert allowed.status_code == 200
+
+
 def test_stream_error_does_not_leak_exception_details(client, mock_pipeline) -> None:
     mock_pipeline.query_stream.side_effect = RuntimeError(
         "Provider token: super-secret-provider-token"
@@ -419,9 +518,12 @@ def test_stream_disconnect_sets_cancellation_event(mock_pipeline) -> None:
     http_request.is_disconnected = AsyncMock(side_effect=[False, True])
 
     async def consume_stream() -> list[str]:
-        response = await app_module.query_stream(
-            app_module.QueryRequest(question="What are Apple's main risk factors?"),
-            http_request,
+        endpoint = inspect.unwrap(app_module.query_stream)
+        response = await endpoint(
+            request=http_request,
+            request_body=app_module.QueryRequest(
+                question="What are Apple's main risk factors?"
+            ),
         )
         return [chunk async for chunk in response.body_iterator]
 
@@ -457,9 +559,12 @@ def test_stream_timeout_sets_cancellation_event(mock_pipeline, monkeypatch) -> N
     http_request.is_disconnected = AsyncMock(return_value=False)
 
     async def consume_stream() -> list[str]:
-        response = await app_module.query_stream(
-            app_module.QueryRequest(question="What are Apple's main risk factors?"),
-            http_request,
+        endpoint = inspect.unwrap(app_module.query_stream)
+        response = await endpoint(
+            request=http_request,
+            request_body=app_module.QueryRequest(
+                question="What are Apple's main risk factors?"
+            ),
         )
         return [chunk async for chunk in response.body_iterator]
 
@@ -553,6 +658,42 @@ def test_cache_stats_endpoint(client) -> None:
     data = response.json()
     assert data["hit_rate"] == 0.0
     assert data["max_entries"] == 500
+
+
+def test_cache_clear_is_disabled_by_default(client, mock_pipeline) -> None:
+    response = client.post("/cache/clear")
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Cache clearing is disabled on this deployment"
+    mock_pipeline.cache.clear.assert_not_called()
+
+
+def test_cache_clear_can_be_enabled_explicitly(
+    client,
+    mock_pipeline,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(app_module.settings, "enable_cache_clear", True)
+    mock_pipeline.cache.clear.return_value = 3
+
+    response = client.post("/cache/clear")
+
+    assert response.status_code == 200
+    assert response.json() == {"cleared_entries": 3}
+
+
+def test_cache_test_is_rate_limited(client, mock_pipeline) -> None:
+    mock_pipeline.retriever.embed_query.return_value = [1.0, 0.0]
+    mock_pipeline.cache.test_similarity.return_value = 1.0
+    mock_pipeline.cache.threshold = 0.9
+    payload = {"query_a": "First query", "query_b": "Second query"}
+
+    for _ in range(10):
+        assert client.post("/cache/test", json=payload).status_code == 200
+
+    blocked = client.post("/cache/test", json=payload)
+
+    assert blocked.status_code == 429
 
 
 def test_health_responds_while_cache_test_embeds(mock_pipeline) -> None:

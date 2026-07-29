@@ -41,6 +41,10 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 
 ## Architecture
 
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for component boundaries, request flows,
+state ownership, reliability controls, deployment constraints, and extension
+paths.
+
 ```text
 SEC 10-K Filing
   -> HTML-to-Text Conversion
@@ -392,6 +396,7 @@ src/ingestion/        SEC download, section extraction, and chunking
 src/memory/           Conversation memory and query rewriting
 src/retrieval/        Embeddings, vector store, hybrid retrieval, and semantic cache
 tests/                Unit tests
+ARCHITECTURE.md        Stable system design and component boundaries
 PROJECT_STATE.md      Detailed engineering handoff and milestone notes
 AGENTS.md             Stable operating guide for AI coding agents
 ```

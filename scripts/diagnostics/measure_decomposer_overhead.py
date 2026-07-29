@@ -1,6 +1,6 @@
 """Measure retrieval-only overhead for decomposed sub-queries.
 
-This script does not call LLM generation, so it does not consume Groq or Gemini
+This script does not call LLM generation, so it does not consume Groq
 quota. It compares a single retrieve() call with three concurrent retrieve()
 calls, matching the shape of QueryDecomposer._execute_parallel().
 """

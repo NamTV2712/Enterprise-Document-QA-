@@ -199,13 +199,11 @@ The generator uses a strict financial analyst prompt:
 - Quote numbers exactly as they appear in the retrieved context.
 - Return an explicit insufficient-context fallback when evidence is missing.
 
-Supported providers:
+LLM provider:
 
 | Provider | Status |
 |---|---|
-| Groq | Primary provider used for current validation |
-| Gemini | Implemented fallback provider |
-| OpenAI / Anthropic | Dependencies present for future extension |
+| Groq | Only LLM provider; serves `llama-3.3-70b-versatile` |
 
 ## Evaluation Results
 
@@ -296,7 +294,6 @@ Create `.env`:
 ```text
 GROQ_API_KEY=your_groq_key
 GROQ_API_KEY_FALL_BACK=optional_second_groq_key_for_evaluation
-GEMINI_API_KEY=optional_gemini_key
 QDRANT_MODE=local
 QDRANT_LOCAL_PATH=data/processed/qdrant
 QDRANT_CLOUD_URL=
@@ -337,7 +334,7 @@ Run evaluation:
 
 Prerequisites: Docker Desktop installed and running, plus corpus artifacts already built locally under `data/processed/`.
 
-1. Copy `.env.example` to `.env` and fill in `GROQ_API_KEY`. `GEMINI_API_KEY` is optional for serving and only needed for Gemini-backed evaluation/judging flows.
+1. Copy `.env.example` to `.env` and fill in `GROQ_API_KEY`. `GROQ_API_KEY_FALL_BACK` is optional and can isolate evaluation generation quota from the primary judge key.
 
 2. Build and run the backend:
 

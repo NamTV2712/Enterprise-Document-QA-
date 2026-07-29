@@ -15,7 +15,7 @@ flowchart LR
     Qdrant[(Qdrant)]
     BM25[(In-Memory BM25)]
     Models[Local Embedding and Reranker Models]
-    Providers[Groq / Gemini]
+    Providers[Groq API]
     Memory[(In-Memory Cache and Sessions)]
 
     Browser -->|REST / SSE| API
@@ -41,7 +41,7 @@ Vercel-hosted frontend
   -> HTTPS FastAPI backend
      -> local embedding and cross-encoder models
      -> local Qdrant volume
-     -> Groq or Gemini generation API
+     -> Groq generation API
 ```
 
 One worker is mandatory when `QDRANT_MODE=local` because embedded Qdrant uses a
@@ -183,7 +183,8 @@ rules:
 - Do not answer from unsupported general knowledge.
 - Return an explicit insufficient-context response when evidence is inadequate.
 
-Groq is the primary serving provider. Gemini is implemented as a fallback.
+Groq is the only LLM provider. Serving, rewriting, decomposition, synthesis, and
+evaluation use `llama-3.3-70b-versatile` through the Groq API.
 Provider streams are closed in `finally` blocks, but provider-side billing
 cancellation remains best effort.
 

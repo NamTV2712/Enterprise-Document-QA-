@@ -109,7 +109,7 @@ async def lifespan(app: FastAPI):
     logger.info("Loaded %d chunks for BM25 index", len(all_chunks))
 
     retriever = HybridRetriever(embedder=embedder, store=store, all_chunks=all_chunks)
-    generator = Generator(provider="groq")
+    generator = Generator()
     pipeline = RAGPipeline(retriever=retriever, generator=generator)
     _state["pipeline"] = pipeline
     _state["decomposer"] = QueryDecomposer(pipeline=pipeline)

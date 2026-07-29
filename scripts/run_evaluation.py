@@ -339,8 +339,8 @@ def main() -> None:
 
     embedder = Embedder()
     generation_api_key = settings.groq_api_key_fall_back or None
-    generator = Generator(provider="groq", api_key=generation_api_key)
-    judge_generator = Generator(provider="groq", model="llama-3.3-70b-versatile")
+    generator = Generator(api_key=generation_api_key)
+    judge_generator = Generator(model="llama-3.3-70b-versatile")
     evaluator = RAGEvaluator(judge_generator=judge_generator)
 
     with VectorStore(

@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
 def main() -> None:
-    generator = Generator(provider="groq")  # Change to "gemini" if needed.
+    generator = Generator()
     embedder = Embedder()
     with VectorStore(
         mode=settings.qdrant_mode,

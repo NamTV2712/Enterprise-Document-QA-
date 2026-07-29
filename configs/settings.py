@@ -7,9 +7,6 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # LLM API keys
-    openai_api_key: str = ""
-    anthropic_api_key: str = ""
-    gemini_api_key: str = ""
     groq_api_key: str = ""
     groq_api_key_fall_back: str = ""
 

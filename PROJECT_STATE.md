@@ -85,11 +85,11 @@ Current corpus quality:
 - Fixed an expanded-corpus decomposition blocker: `QueryDecomposer` previously validated LLM-planned sub-query tickers against the original hardcoded `AAPL/MSFT/AMZN` set, so expanded-corpus comparative plans such as `V` vs `MA` could be dropped and silently fall back to raw retrieval. `SUPPORTED_TICKERS` now comes from `configs.tickers.TICKERS`, and tests cover `V`/`MA` as valid while preserving rejection of true out-of-corpus tickers such as `DIS` and `NFLX`.
 - Legion RTX 5060 environment is now configured for CUDA PyTorch. The previous `.venv` had CPU-only PyTorch (`torch 2.12.1+cpu`, `cuda available False`) despite `nvidia-smi` detecting the GPU. Reinstalled with `pip uninstall torch -y` followed by `pip install torch --index-url https://download.pytorch.org/whl/cu128`, yielding `torch 2.11.0+cu128`, CUDA `12.8`, and `NVIDIA GeForce RTX 5060 Laptop GPU`. Embedder now uses `cuda:0`. Measured embedding throughput on 100 real chunks improved from `37.65s` (`2.7 chunks/s`) on Legion CPU to `4.28s` (`23.3 chunks/s`) on GPU, implying roughly `12.8` minutes for an estimated `17,930` chunks / 100-company corpus embedding pass, excluding download/extraction time.
 - README and `requirements.txt` are now aligned with the deployment state: README documents the 50-company corpus, Docker flow, local Qdrant volume mount, and CPU-only container decision; `requirements.txt` explicitly pins `httpx==0.28.1` for the Docker healthcheck and documents that PyTorch must be installed separately for Docker CPU versus local CUDA workflows.
-- Frontend integration completed with the actual generated stack, Vite/React/TypeScript using Bun, not Next.js. Configuration is standardized on browser-public `VITE_API_BASE_URL`; stale Gemini metadata/dependencies, `NEXT_PUBLIC_*` compatibility, and the unsupported `GOOG` sample were removed. Real Chrome E2E verification against `https://blog-making-bloated.ngrok-free.dev` passed all four flows: pipeline badge ready, 44 searchable tickers loaded, a normal Apple query streamed multiple UI text updates with real source citations, and an Apple-vs-Microsoft risk-factor query returned `was_decomposed=true` with AAPL and MSFT sub-queries. The UI trace rendered sub-query 1 then sub-query 2 about `200ms` apart, matching the intended stagger. Final browser run had no console errors or failed resources after adding the missing favicon. Frontend TypeScript lint and production build pass; Vite reports only the accepted bundle-size warning at about `509KB` minified.
+- Frontend integration completed with the actual generated stack, Vite/React/TypeScript using Bun, not Next.js. Configuration is standardized on browser-public `VITE_API_BASE_URL`; stale provider metadata/dependencies, `NEXT_PUBLIC_*` compatibility, and the unsupported `GOOG` sample were removed. Real Chrome E2E verification against `https://blog-making-bloated.ngrok-free.dev` passed all four flows: pipeline badge ready, 44 searchable tickers loaded, a normal Apple query streamed multiple UI text updates with real source citations, and an Apple-vs-Microsoft risk-factor query returned `was_decomposed=true` with AAPL and MSFT sub-queries. The UI trace rendered sub-query 1 then sub-query 2 about `200ms` apart, matching the intended stagger. Final browser run had no console errors or failed resources after adding the missing favicon. Frontend TypeScript lint and production build pass; Vite reports only the accepted bundle-size warning at about `509KB` minified.
 - Pre-deploy frontend hardening completed: connection and pipeline state now start as unknown and render neutral connecting UI until the first real health response; active query requests use `AbortController` and reject stale state updates when superseded, reset, or unmounted; ngrok headers and API debug logs are conditional; icon-only controls have accessible labels; and the root layout uses the dynamic viewport height. The decomposed-query panel is now labeled as an execution summary because `/query/decomposed` returns a complete response before the client-side staggered reveal. A true `/query/decomposed/stream` SSE endpoint is explicitly deferred rather than implying that the current replay animation is live server execution.
 - Fixed an API event-loop blocking bug in `/query/decomposed`: `QueryDecomposer.run()` now executes through FastAPI's `run_in_threadpool` while preserving question, ticker, section, top-k, and session filters. A real ASGI concurrency regression test holds the mock decomposer in blocking work and verifies `/health` still responds before release. Final Docker verification: targeted concurrency test passed, `tests/test_api.py` passed `10/10`, and the full suite passed `73` tests with `9` existing warnings. The local Windows venv could not collect API tests because Windows Application Control blocked SciPy's `_group_columns` DLL, so verification ran in the existing Linux Docker image with source, tests, and data mounted read-only; no security policy was bypassed.
 - Pre-public API hardening completed: wildcard CORS was replaced with the environment-driven `ALLOWED_ORIGINS` allowlist, methods are limited to `GET/POST/DELETE`, and request headers are limited to `Content-Type` plus the ngrok warning bypass header. Defaults allow only local Vite development on ports `3000` and `5173`; the final Vercel domain must be added through env before deployment. `/query`, `/query/decomposed`, and both SSE exception paths now log full server-side errors but return one generic public message, preventing exception strings from leaking credentials, paths, or provider details. Regression tests cover origin/method/header preflight rejection and secret-bearing exceptions across normal, decomposed, and streaming queries. Docker verification passed `17/17` API tests and the full suite passed `80` tests with `9` existing warnings.
-- Streaming cancellation now propagates from `/query/stream` through `RAGPipeline.query_stream()` into Groq and Gemini token loops. Client disconnect and a 60-second hard timeout set a shared thread-safe event; the pipeline checks it between rewrite, embedding, retrieval, cache replay, generation, and persistence stages, does not store partial answers, and closes provider stream objects in `finally`. Retrieval or embedding already executing inside one synchronous call cannot be preempted mid-function, but processing stops at the next checkpoint. Closing the provider HTTP stream is best effort and does not guarantee that the provider stops billing immediately. The API also sanitizes pipeline-generated `error` events before sending SSE data. Deterministic tests cover disconnect, timeout, producer shutdown, partial-cache prevention, and Groq/Gemini connection closure. Docker verification passed `20/20` API tests, `7/7` targeted streaming tests, and the full suite passed `86` tests with `9` existing warnings.
+- Streaming cancellation now propagates from `/query/stream` through `RAGPipeline.query_stream()` into the Groq token loop. Client disconnect and a 60-second hard timeout set a shared thread-safe event; the pipeline checks it between rewrite, embedding, retrieval, cache replay, generation, and persistence stages, does not store partial answers, and closes provider stream objects in `finally`. Retrieval or embedding already executing inside one synchronous call cannot be preempted mid-function, but processing stops at the next checkpoint. Closing the provider HTTP stream is best effort and does not guarantee that the provider stops billing immediately. The API also sanitizes pipeline-generated `error` events before sending SSE data. Deterministic tests cover disconnect, timeout, producer shutdown, partial-cache prevention, and Groq connection closure. Docker verification passed `20/20` API tests, `7/7` targeted streaming tests, and the full suite passed `86` tests with `9` existing warnings.
 - Completed a full async-endpoint blocking audit. `/cache/test` was the only remaining runtime endpoint performing heavy synchronous ML work on the event loop; `/supported-tickers` also performed bounded synchronous filesystem glob/stat work. Both now use `run_in_threadpool`. Cache testing embeds both queries sequentially inside one worker because `HybridRetriever._model_lock` would serialize two parallel workers anyway. ASGI regression tests hold each worker operation in a blocked state, verify `/health` responds before release, and assert the ticker scan runs off the main thread while both embeddings use the same worker thread. All other runtime endpoints are either already offloaded/producer-threaded or perform only short bounded in-memory work. Docker verification passed `22/22` API tests and the full suite passed `88` tests with `9` existing warnings.
 - The July 26 clean priority `<=2` rerun exposed and fixed checkpoint contamination in `scripts/run_evaluation.py`: a filtered N=30 invocation previously aggregated every successful record in a shared N=36 checkpoint. Checkpoint loading now restricts records to the selected questions, `--fresh` explicitly deletes the active checkpoint before a run, and any skipped case makes the command exit nonzero. After Groq rolling TPD interrupted the first corrected attempt at `27 OK + 3 SKIPPED_QUOTA`, the same clean checkpoint was resumed and completed all three out-of-corpus cases. Final output reports `num_test_cases=30` and `num_skipped=0`: Faithfulness `0.8533`, Answer Relevancy `0.9300`, Context Precision `0.4670`, Overall `0.7501`, Citation Correctness `1.0000`, Recall Proxy `1.0000`, and Fallback Accuracy `1.0000`. Category counts are fact lookup `8`, summary `6`, enumeration `4`, comparative `6`, multi-hop `3`, and out-of-corpus `3`. The Microsoft auditor case now answers `Deloitte & Touche LLP` with citation correctness and recall proxy `1.00`, confirming the retrieval fix, but the judge assigned faithfulness/context precision `0.00` while claiming that evidence was absent; the official aggregate preserves this measured outlier without manual adjustment. Latency `12.9332s` is not a stable performance benchmark because the resumed checkpoint includes records affected by Groq retry backoff. The checkpoint-filter regression test and full suite pass with `89 passed, 9 warnings`.
 - Added a 60-second hard response timeout to `/query` and `/query/decomposed`. The implementation uses AnyIO's worker thread with `abandon_on_cancel=True`; this is required because Starlette's default `run_in_threadpool()` shields cancellation until synchronous work finishes and would make a surrounding `wait_for()` ineffective as a hard deadline. Both endpoints now return HTTP `504` with a stable public timeout message, while unexpected exceptions remain sanitized as `500`. Python cannot safely terminate a synchronous thread already executing, so a timed-out worker may finish in the background and its result is discarded; the request and event loop are released at the deadline. Deterministic tests block each worker for two seconds, set a 50ms timeout, and verify both responses return `504` in under 750ms. API tests pass `24/24`; the full suite passes `91 tests` with `9` existing warnings.
@@ -97,6 +97,7 @@ Current corpus quality:
 - Session-history truncation was isolated to the API presentation layer and removed. `ConversationSession.to_llm_messages()` already passes complete user and assistant messages to the rewrite LLM, while `GET /session/{session_id}/history` alone sliced assistant answers to 200 characters. The endpoint now returns each stored answer verbatim; payload remains bounded by `MAX_HISTORY_TURNS=5`. Backend regression coverage uses a 500-character answer, and frontend coverage confirms a long historical answer renders after initialization without client-side truncation.
 - Final pre-deploy backend protection is complete. SlowAPI `0.1.9` enforces shared per-IP budgets of `10/minute` and `100/day` across `/query`, `/query/stream`, and `/query/decomposed`; decomposed queries additionally allow only `5/minute`, and `/cache/test` allows `10/minute`. Limits use in-memory storage, which is correct for the mandatory single-worker local-Qdrant runtime; multi-instance serving will require shared storage such as Redis. `get_remote_address` uses the ASGI client address, so the selected hosting provider must be configured with Uvicorn proxy headers and a narrow trusted-proxy allowlist before public traffic. `/cache/clear` is disabled by default and returns `403` unless `ENABLE_CACHE_CLEAR=true`. Health semantics are separated into `/health/live` for process liveness, `/health/ready` for pipeline readiness with `503` when unavailable, and backward-compatible `/health` for the current frontend. Docker Compose now checks `/health/ready`. Regression tests cover shared cross-route limits, the lower decomposed threshold, client-IP isolation, cache-test limiting, cache-clear protection, and all three health contracts. Final validation: backend `100 passed, 9 warnings`; frontend type-check and `4` tests pass; frontend production build passes with the existing approximately `513 kB` warning. The rebuilt Docker image includes SlowAPI `0.1.9`; container health reached `healthy`, live and ready checks passed with `pipeline_ready=true`, and cache clear returned `403`. The container, Docker Desktop, and WSL were shut down afterward. Backend pre-deploy reliability work is now closed; the next milestone is selecting and configuring the hosting platform.
 - Added `ARCHITECTURE.md` as the stable system-design reference with GitHub-rendered Mermaid diagrams for system context, ingestion, standard query, and decomposition flows. It documents frontend/backend deployment separation, Qdrant mode boundaries, retrieval and generation responsibilities, state persistence, cancellation, rate limiting, health semantics, evaluation safeguards, intentional constraints, and supported extension paths. Mutable corpus counts, benchmark scores, operational findings, and rejected experiments remain in README or this journal instead of being duplicated into the architecture contract. README now includes an explicit documentation map for future contributors.
+- LLM integration is now Groq-only. Serving, streaming, query rewriting, decomposition, synthesis, and evaluation all use Groq chat completions; alternate-provider runtime branches, settings, environment variables, dependencies, tests, and current documentation were removed. Validation passes with `99` backend tests and `9` existing warnings, frontend type-check, `4` frontend tests, and the production build. The rebuilt Docker image reached `healthy`; `/health/live`, `/health/ready`, and `/supported-tickers` returned `200`, cache clearing remained disabled with `403`, and a real Apple financial-table query returned `391,035` using `llama-3.3-70b-versatile`.
 
 Latest completed milestone commit before this state refresh:
 
@@ -466,28 +467,19 @@ Implemented files:
 - `src/generation/rag_pipeline.py`
 - `scripts/diagnostics/rag_smoke_test.py`
 
-Dependencies added during Step 8/provider testing:
+Current generation dependency:
 
-- `anthropic==0.111.0`
-- `google-genai==2.9.0`
-- `openai==2.43.0`
 - `groq==1.5.0`
 
 Current provider setup:
 
-- Default provider: Groq.
-- Default Groq model: `llama-3.3-70b-versatile`.
-- Gemini provider is also supported.
-- Default Gemini model: `gemini-2.5-flash-lite` for lower cost, but it returned temporary `503 UNAVAILABLE` during testing.
-- `GROQ_API_KEY` and `GEMINI_API_KEY` are read from `.env` via `configs/settings.py`.
+- Groq is the only LLM provider.
+- The serving and evaluation model is `llama-3.3-70b-versatile`.
+- `GROQ_API_KEY` and optional `GROQ_API_KEY_FALL_BACK` are read from `.env` via `configs/settings.py`.
 
 Provider status observed:
 
-- Groq works with current key.
-- Gemini `gemini-2.5-flash` worked in a small API test.
-- Gemini `gemini-2.5-flash-lite` was selected for cost but returned `503 UNAVAILABLE` due to high demand in one test.
-- Gemini older `2.0` models returned quota/permission issues for current key/project.
-- OpenAI key currently appears to be an OpenRouter key (`sk-or-v1...`) and fails against OpenAI's default endpoint with `invalid_api_key`.
+- Groq works with the current key and serves `llama-3.3-70b-versatile`.
 
 System prompt rules:
 
@@ -691,9 +683,8 @@ Implemented files:
 
 Streaming design:
 
-- `Generator.generate_stream()` streams tokens from the configured LLM provider.
+- `Generator.generate_stream()` streams tokens from Groq.
 - Groq streaming uses `client.chat.completions.create(..., stream=True)`, which matches the installed Groq SDK.
-- Gemini streaming is implemented via `generate_content_stream()`.
 - `RAGPipeline.query_stream()` yields event tuples: `sources`, `token`, `done`, and `error`.
 - FastAPI exposes `POST /query/stream` using Server-Sent Events.
 - The SSE endpoint uses an `asyncio.Queue` plus a background thread to avoid collecting all events before yielding, so token streaming is real.
@@ -892,10 +883,8 @@ python -m scripts.run_evaluation
 Currently supported in `configs/settings.py`:
 
 ```text
-OPENAI_API_KEY=
-ANTHROPIC_API_KEY=
-GEMINI_API_KEY=
 GROQ_API_KEY=
+GROQ_API_KEY_FALL_BACK=
 QDRANT_MODE=local
 QDRANT_LOCAL_PATH=data/processed/qdrant
 QDRANT_CLOUD_URL=
@@ -919,9 +908,6 @@ sentence-transformers==5.6.0
 rank-bm25==0.2.2
 einops==0.8.2
 qdrant-client==1.18.0
-anthropic==0.111.0
-google-genai==2.9.0
-openai==2.43.0
 groq==1.5.0
 fastapi==0.115.0
 uvicorn==0.32.0
@@ -966,9 +952,7 @@ Note: the `Characters` column is character count, not token count.
 - Query decomposer now detects single-company enumeration and validates LLM-generated ticker/section fields before execution. Regression tests cover unsupported ticker leaks such as `NVDA` and mixed valid/invalid plans.
 - Groq free tier can return `429 Too Many Requests`; SDK retries can recover, but latency may spike.
 - Full 30-case Muc 3 evaluation could not complete under current Groq free-tier token limits. Retrying after quota exhaustion causes long waits and contaminates latency metrics, so official category-level results should be generated from a clean run after quota reset or with a lower-cost judge/model configuration.
-- A single 30-case evaluation run exhausted both Groq generation/planning quota and Gemini judge free-tier quota within one session. The checkpoint/resume mechanism preserved partial completion (`13/30` OK in the first full Muc 3 run) without data loss. Full CI-style evaluation requires quota reset across multiple sessions or a paid tier.
-- Gemini Flash Lite may return temporary `503 UNAVAILABLE` under high demand.
-- OpenAI key in the current environment was not a valid OpenAI Platform key during testing.
+- A historical 30-case evaluation run exhausted provider quotas within one session. The checkpoint/resume mechanism preserved partial completion (`13/30` OK in the first full Muc 3 run) without data loss. Full CI-style evaluation requires sufficient Groq quota or a paid tier.
 - Initial Muc 4 diagnostics show that core AAPL/MSFT/AMZN financial statement rows are represented as native HTML `<table>` structures, but SEC table cells include spacer columns, separate `$`/`%` tokens, and non-fixed header row positions. Table-aware extraction must pattern-match content rather than hardcode row offsets.
 - MSFT `Microsoft Cloud gross margin percentage` is not present as a numeric table in the raw filing; the numeric `69%` appears in MD&A prose. In the current corpus, percentage-derived metrics are often narrative MD&A content, while native tables primarily contain absolute financial values.
 
@@ -991,7 +975,7 @@ Validation notes:
 - Known limitation: Query decomposition dispatches sub-queries concurrently via `ThreadPoolExecutor`, but a global lock around `retrieve()` serializes model inference (`Embedder` + cross-encoder) to prevent a confirmed race condition in Nomic BERT's rotary embedding cache. Measured overhead: `2.98x` vs single query (`n=3` sub-queries), consistent with near-full serialization. Scoped locking around only `model.encode()` and `cross_encoder.predict()` would restore I/O-bound parallelism, but is deferred pending corpus expansion to validate the gain.
 - Muc 2 Microsoft revenue-source diagnostic confirmed that Azure evidence chunks (`business_0006`, `business_0007`, `business_0008`) appear inside top-20 BM25 and semantic candidate pools, but not in top-3 for either method. This confirms an enumeration/query-shaping and final top-k issue, not a hard retrieval miss.
 - Deterministic unit tests for decomposition planner validation pass: `6/6` in `tests/test_query_decomposer.py`. This protects the defense-in-depth guard that validates LLM structured output instead of trusting prompt-only constraints.
-- Partial Muc 3 live evaluation status: `13/30` cases have full judge scores, `17/30` were skipped due to Groq generation/planning quota or Gemini judge quota. Checkpoint file `data/eval_checkpoint.jsonl` preserves completed cases; resuming only requires re-running `python -m scripts.run_evaluation` after quota reset.
+- Historical partial Muc 3 status: `13/30` cases had full judge scores and `17/30` were quota-skipped. The later official Groq-only N=30 run supersedes this snapshot.
 - Partial category coverage with judge scores: `fact_lookup` `7/8` judged (`Faith=0.8571`, `Precision=0.8571`), `summary` `4/6` judged (`Faith=0.7500`, `Precision=0.7750`), `enumeration` `2/4` judged (`decomposition_correct=1.0000` for judged cases, `4/4` confirmed including judge-skipped generated records).
 - Comparative and multi-hop quality are not fully measured yet: `comparative` has `0/6` judged but `3/6` generated records confirmed `decomposition_correct=True`; `multi_hop` has `0/3` judged and remains the highest-priority category to complete after quota reset.
 - Out-of-corpus coverage is incomplete: Tesla and Google were skipped before answer generation; Nvidia generated a correct insufficient-information answer, and the new validation guard prevents unsupported ticker subqueries from being trusted going forward.
@@ -1023,8 +1007,8 @@ Current diagnostic status:
 - AWS growth retest after segment-prefix regeneration is unchanged: `What is Amazon's AWS revenue growth?` still retrieves `financial_statements_0007` only and returns an insufficient-information answer. This confirms the remaining issue is query phrasing/derived-metric expansion, not stale table labels.
 - Post-Muc 4 evaluation preparation: 8 numeric-heavy `fact_lookup`/`multi_hop` cases in `src/evaluation/test_set.py` now use `section=None` instead of hardcoded `financial_statements`/`mdna`, allowing `financial_table` chunks to compete naturally during evaluation.
 - Evaluation set now supports priority-based runs: `priority=1` is an 18-case quota-safe core set (`fact_lookup=4`, `summary=3`, `enumeration=4`, `comparative=3`, `multi_hop=3`, `out_of_corpus=1`), while `priority=2` restores the full 30-case set. Use `python -m scripts.run_evaluation --priority 1` for the core run and `--priority 2` for the full run.
-- Full 30-case post-Muc 4 evaluation attempt is blocked by daily free-tier quotas. Gemini judge hit `GenerateRequestsPerDayPerProjectPerModel-FreeTier` (`20` requests/day), and Groq hit `100,000` tokens/day in the same session. Retry after provider daily reset.
-- Checkpoint backups preserved locally: `data/eval_checkpoint_before_muc4.jsonl` contains the pre-Muc 4 partial baseline (`13/30` OK), and `data/eval_checkpoint_gemini_blocked.jsonl` contains this session's blocked post-Muc 4 attempt (`0/30` OK; skipped records only).
+- A historical full post-Muc 4 attempt was blocked by daily free-tier quotas. The later official Groq-only N=30 run supersedes it.
+- Historical checkpoint backups remain local under `data/` and are not valid official benchmark inputs.
 
 Recommended priorities:
 

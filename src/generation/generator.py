@@ -1,7 +1,6 @@
 """
 Module: generator.py
-Purpose: Call the LLM API with the retrieved context and return a cited response.
-Supports Groq and Gemini — select via config.
+Purpose: Call the Groq API with the retrieved context and return a cited response.
 """
 
 import logging
@@ -82,26 +81,15 @@ class Generator:
     # If the best chunk has a score below this threshold, the context may not be
     # relevant enough. Log it instead of silently producing a weak answer.
 
-    def __init__(self, provider: str = "groq", model: str | None = None, api_key: str | None = None):
-        self.provider = provider
+    def __init__(self, model: str | None = None, api_key: str | None = None):
         from configs.settings import settings
+        from groq import Groq
 
-        if provider == "groq":
-            from groq import Groq
-            selected_api_key = api_key or settings.groq_api_key
-            if not selected_api_key:
-                raise ValueError("GROQ_API_KEY is not configured in .env")
-            self.client = Groq(api_key=selected_api_key)
-            self.model = model or "llama-3.3-70b-versatile"
-        elif provider == "gemini":
-            from google import genai
-            selected_api_key = api_key or settings.gemini_api_key
-            if not selected_api_key:
-                raise ValueError("GEMINI_API_KEY is not configured in .env")
-            self.client = genai.Client(api_key=selected_api_key)
-            self.model = model or "gemini-2.5-flash-lite"
-        else:
-            raise ValueError(f"Unsupported provider: {provider}. Use 'groq' or 'gemini'.")
+        selected_api_key = api_key or settings.groq_api_key
+        if not selected_api_key:
+            raise ValueError("GROQ_API_KEY is not configured in .env")
+        self.client = Groq(api_key=selected_api_key)
+        self.model = model or "llama-3.3-70b-versatile"
 
     @staticmethod
     def _groq_retry_delay(error: Exception) -> float | None:
@@ -157,10 +145,7 @@ class Generator:
 
         user_message = _build_user_message(query, chunks)
 
-        if self.provider == "groq":
-            response_text = self._call_groq(user_message, conversation_history)
-        elif self.provider == "gemini":
-            response_text = self._call_gemini(user_message, conversation_history)
+        response_text = self._call_groq(user_message, conversation_history)
 
         logger.info("Generated response (%d chars) from %s", len(response_text), self.model)
         return RAGResponse(
@@ -187,35 +172,6 @@ class Generator:
         )
         return response.choices[0].message.content or ""
 
-    def _call_gemini(
-        self,
-        user_message: str,
-        conversation_history: list[dict] | None = None,
-    ) -> str:
-        from google.genai import types
-
-        if conversation_history:
-            history_text = "\n".join(
-                f"{message['role'].upper()}: {message['content']}"
-                for message in conversation_history
-            )
-            user_message = f"""Conversation history:
-{history_text}
-
-Current request:
-{user_message}"""
-
-        response = self.client.models.generate_content(
-            model=self.model,
-            contents=user_message,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                max_output_tokens=1024,
-                temperature=0,
-            ),
-        )
-        return response.text or ""
-
     def generate_stream(
         self,
         query: str,
@@ -239,20 +195,11 @@ Current request:
 
         user_message = _build_user_message(query, chunks)
 
-        if self.provider == "groq":
-            yield from self._call_groq_stream(
-                user_message,
-                conversation_history,
-                cancel_event=cancel_event,
-            )
-        elif self.provider == "gemini":
-            yield from self._call_gemini_stream(
-                user_message,
-                conversation_history,
-                cancel_event=cancel_event,
-            )
-        else:
-            raise ValueError(f"Provider '{self.provider}' does not support streaming.")
+        yield from self._call_groq_stream(
+            user_message,
+            conversation_history,
+            cancel_event=cancel_event,
+        )
 
     def _call_groq_stream(
         self,
@@ -279,43 +226,6 @@ Current request:
                 delta = chunk.choices[0].delta.content
                 if delta:
                     yield delta
-        finally:
-            close = getattr(stream, "close", None)
-            if callable(close):
-                close()
-
-    def _call_gemini_stream(
-        self,
-        user_message: str,
-        conversation_history: list[dict] | None = None,
-        cancel_event: Event | None = None,
-    ):
-        from google.genai import types
-        if conversation_history:
-            history_text = "\n".join(
-                f"{message['role'].upper()}: {message['content']}"
-                for message in conversation_history
-            )
-            user_message = f"""Conversation history:
-{history_text}
-
-Current request:
-{user_message}"""
-
-        stream = self.client.models.generate_content_stream(
-            model=self.model,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                max_output_tokens=1024,
-            ),
-            contents=user_message,
-        )
-        try:
-            for chunk in stream:
-                if cancel_event is not None and cancel_event.is_set():
-                    break
-                if chunk.text:
-                    yield chunk.text
         finally:
             close = getattr(stream, "close", None)
             if callable(close):

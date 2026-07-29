@@ -219,26 +219,15 @@ class QueryDecomposer:
     def _plan(self, question: str) -> dict:
         """Use LLM to decide whether decomposition is needed and create sub-queries."""
         try:
-            if self.generator.provider == "groq":
-                raw = self.generator.client.chat.completions.create(
-                    model=self.generator.model,
-                    messages=[
-                        {"role": "system", "content": DECOMPOSE_SYSTEM_PROMPT},
-                        {"role": "user", "content": f"Question: {question}"},
-                    ],
-                    max_tokens=700,
-                    temperature=0,
-                ).choices[0].message.content.strip()
-            else:
-                from google.genai import types
-                raw = self.generator.client.models.generate_content(
-                    model=self.generator.model,
-                    config=types.GenerateContentConfig(
-                        system_instruction=DECOMPOSE_SYSTEM_PROMPT,
-                        max_output_tokens=700,
-                    ),
-                    contents=f"Question: {question}",
-                ).text.strip()
+            raw = self.generator.client.chat.completions.create(
+                model=self.generator.model,
+                messages=[
+                    {"role": "system", "content": DECOMPOSE_SYSTEM_PROMPT},
+                    {"role": "user", "content": f"Question: {question}"},
+                ],
+                max_tokens=700,
+                temperature=0,
+            ).choices[0].message.content.strip()
 
             # Strip markdown fences if applicable.
             if raw.startswith("```"):
@@ -383,26 +372,15 @@ class QueryDecomposer:
         )
 
         try:
-            if self.generator.provider == "groq":
-                return self.generator.client.chat.completions.create(
-                    model=self.generator.model,
-                    messages=[
-                        {"role": "system", "content": SYNTHESIS_SYSTEM_PROMPT},
-                        {"role": "user", "content": user_message},
-                    ],
-                    max_tokens=1024,
-                    temperature=0,
-                ).choices[0].message.content
-            else:
-                from google.genai import types
-                return self.generator.client.models.generate_content(
-                    model=self.generator.model,
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYNTHESIS_SYSTEM_PROMPT,
-                        max_output_tokens=1024,
-                    ),
-                    contents=user_message,
-                ).text
+            return self.generator.client.chat.completions.create(
+                model=self.generator.model,
+                messages=[
+                    {"role": "system", "content": SYNTHESIS_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_message},
+                ],
+                max_tokens=1024,
+                temperature=0,
+            ).choices[0].message.content
         except Exception as e:
             if _is_retryable_external_error(e):
                 raise

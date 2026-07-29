@@ -10,7 +10,7 @@ from src.evaluation.evaluator import (
 
 def test_judge_prompt_includes_evidence_beyond_old_250_character_preview() -> None:
     captured = {}
-    evaluator = RAGEvaluator(SimpleNamespace(provider="fake"))
+    evaluator = RAGEvaluator(SimpleNamespace())
 
     def fake_call_judge(prompt: str) -> str:
         captured["prompt"] = prompt

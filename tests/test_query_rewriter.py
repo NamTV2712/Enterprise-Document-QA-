@@ -3,10 +3,9 @@ from unittest.mock import MagicMock
 from src.memory.query_rewriter import QueryRewriter, needs_financial_expansion
 
 
-def _make_mock_generator(provider: str = "groq", rewrite_response: str = "rewritten query"):
+def _make_mock_generator(rewrite_response: str = "rewritten query"):
     """Create a fake Generator with the Groq response shape used by QueryRewriter."""
     mock_generator = MagicMock()
-    mock_generator.provider = provider
     mock_generator.model = "fake-model"
 
     mock_message = MagicMock()

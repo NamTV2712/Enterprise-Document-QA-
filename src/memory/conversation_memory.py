@@ -42,7 +42,7 @@ class ConversationSession:
         return (time.monotonic() - self.last_active) > ttl
 
     def to_llm_messages(self, n: int = MAX_HISTORY_TURNS) -> list[dict]:
-        """Format history into OpenAI-style messages for the LLM."""
+        """Format history as chat messages for the LLM."""
         messages = []
         for turn in self.get_recent_turns(n):
             messages.append({"role": "user", "content": turn.user_message})

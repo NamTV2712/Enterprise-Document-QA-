@@ -87,27 +87,15 @@ class QueryRewriter:
         prompt = self._build_prompt(query, history_messages, needs_trend_expansion)
 
         try:
-            if self._generator.provider == "groq":
-                rewritten = self._generator.client.chat.completions.create(
-                    model=self._generator.model,
-                    messages=[
-                        {"role": "system", "content": REWRITE_SYSTEM_PROMPT},
-                        {"role": "user", "content": prompt},
-                    ],
-                    max_tokens=100,
-                    temperature=0,
-                ).choices[0].message.content.strip()
-            else:
-                # Gemini fallback.
-                from google.genai import types
-                rewritten = self._generator.client.models.generate_content(
-                    model=self._generator.model,
-                    config=types.GenerateContentConfig(
-                        system_instruction=REWRITE_SYSTEM_PROMPT,
-                        max_output_tokens=100,
-                    ),
-                    contents=prompt,
-                ).text.strip()
+            rewritten = self._generator.client.chat.completions.create(
+                model=self._generator.model,
+                messages=[
+                    {"role": "system", "content": REWRITE_SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=100,
+                temperature=0,
+            ).choices[0].message.content.strip()
 
             if needs_trend_expansion:
                 rewritten = self._append_table_hints(query, rewritten or query)
@@ -131,26 +119,15 @@ class QueryRewriter:
     def _rewrite_financial_query(self, query: str) -> str:
         """Rewrite table-oriented financial questions without adding new clients."""
         try:
-            if self._generator.provider == "groq":
-                rewritten = self._generator.client.chat.completions.create(
-                    model=self._generator.model,
-                    messages=[
-                        {"role": "system", "content": FINANCIAL_EXPANSION_PROMPT},
-                        {"role": "user", "content": f"Question: {query}"},
-                    ],
-                    max_tokens=100,
-                    temperature=0,
-                ).choices[0].message.content.strip()
-            else:
-                from google.genai import types
-                rewritten = self._generator.client.models.generate_content(
-                    model=self._generator.model,
-                    config=types.GenerateContentConfig(
-                        system_instruction=FINANCIAL_EXPANSION_PROMPT,
-                        max_output_tokens=100,
-                    ),
-                    contents=f"Question: {query}",
-                ).text.strip()
+            rewritten = self._generator.client.chat.completions.create(
+                model=self._generator.model,
+                messages=[
+                    {"role": "system", "content": FINANCIAL_EXPANSION_PROMPT},
+                    {"role": "user", "content": f"Question: {query}"},
+                ],
+                max_tokens=100,
+                temperature=0,
+            ).choices[0].message.content.strip()
 
             if rewritten and rewritten != query:
                 logger.info(

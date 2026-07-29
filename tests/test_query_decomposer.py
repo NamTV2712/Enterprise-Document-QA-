@@ -34,7 +34,7 @@ def _make_chunk(chunk_id: str) -> RetrievedChunk:
 
 def _make_runnable_decomposer() -> QueryDecomposer:
     pipeline = SimpleNamespace(
-        generator=SimpleNamespace(model="fake-model", provider="groq"),
+        generator=SimpleNamespace(model="fake-model"),
         retriever=MagicMock(),
         query=MagicMock(),
     )

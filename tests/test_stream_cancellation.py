@@ -86,23 +86,3 @@ def test_groq_stream_closes_provider_connection_on_cancel() -> None:
     cancel_event.set()
     assert list(tokens) == []
     assert provider_stream.closed is True
-
-
-def test_gemini_stream_closes_provider_connection_on_cancel() -> None:
-    first_chunk = MagicMock(text="first")
-    second_chunk = MagicMock(text="second")
-    provider_stream = FakeProviderStream([first_chunk, second_chunk])
-    generator = Generator.__new__(Generator)
-    generator.model = "mock-model"
-    generator.client = MagicMock()
-    generator.client.models.generate_content_stream.return_value = provider_stream
-    cancel_event = threading.Event()
-
-    tokens = generator._call_gemini_stream(
-        "prompt",
-        cancel_event=cancel_event,
-    )
-    assert next(tokens) == "first"
-    cancel_event.set()
-    assert list(tokens) == []
-    assert provider_stream.closed is True

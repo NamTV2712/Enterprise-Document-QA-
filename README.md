@@ -21,6 +21,16 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 - Complex-query support: LLM query decomposition for comparative and enumeration-style questions.
 - Evaluation: LLM-as-judge scoring for faithfulness, answer relevancy, and context precision.
 
+## Documentation
+
+| Document | Purpose |
+|---|---|
+| [`README.md`](README.md) | Public overview, setup, API contract, benchmark, and deployment instructions |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Stable component boundaries, data and request flows, state ownership, and extension paths |
+| [`PROJECT_STATE.md`](PROJECT_STATE.md) | Living engineering journal, measured decisions, rejected experiments, and current milestone state |
+| [`AGENTS.md`](AGENTS.md) | Stable repository rules and operational traps for coding agents |
+| [`frontend/README.md`](frontend/README.md) | Frontend-specific local development, Vercel setup, and API usage |
+
 ## Key Features
 
 | Area | Capability |

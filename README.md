@@ -5,10 +5,9 @@
 ![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB-DC244C?style=for-the-badge)
 ![RAG](https://img.shields.io/badge/RAG-Hybrid_Retrieval-7C3AED?style=for-the-badge)
 ![Groq](https://img.shields.io/badge/Groq-LLM_Generation-F55036?style=for-the-badge)
-![Status](https://img.shields.io/badge/Status-MVP_Complete-16A34A?style=for-the-badge)
 
-Enterprise Document QA is a production-style Retrieval-Augmented Generation backend for answering grounded questions over SEC 10-K filings.
-The system ingests a 50-company filing corpus, extracts key sections and financial tables, builds a hybrid search index, and serves cited financial answers through FastAPI with streaming, semantic caching, multi-turn memory, and query decomposition.
+Enterprise Document QA is a production-style Retrieval-Augmented Generation application for answering grounded questions over SEC 10-K filings.
+The system ingests a 50-company filing corpus, extracts key sections and financial tables, builds a hybrid search index, and serves cited financial answers through a Vite/React research workspace backed by FastAPI streaming, semantic caching, multi-turn memory, and query decomposition.
 
 ## Overview
 
@@ -48,6 +47,8 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 | Memory | Multi-turn conversation memory and LLM-powered query rewriting |
 | Decomposition | Comparative and enumeration queries decomposed into focused sub-queries |
 | Evaluation | Fixed benchmark with faithfulness, relevancy, and context precision metrics |
+| Research workspace | Vite/React interface with searchable company and section controls, streaming answers, evidence inspection, and session history |
+| Conversation UX | Separate Overview and Conversation views, bounded answer cards, interpreted-query metadata, and a resizable desktop control sidebar |
 
 ## Architecture
 
@@ -132,7 +133,7 @@ The two non-streaming query endpoints enforce a 60-second request timeout and re
 
 The three LLM query routes share per-IP limits of `10/minute` and `100/day`; decomposed queries also have a `5/minute` limit because each request can make multiple provider calls. `/cache/test` is limited to `10/minute`, and `/cache/clear` returns `403` unless `ENABLE_CACHE_CLEAR=true`. Limits use in-memory storage, matching the required single-worker local-Qdrant runtime. A multi-instance deployment must use shared rate-limit storage such as Redis.
 
-Rate-limit identity uses the ASGI client address. When deploying behind Fly.io, Render, Railway, or another reverse proxy, configure Uvicorn proxy headers and trust only the platform's documented proxy addresses. Do not trust arbitrary `X-Forwarded-For` headers or use a wildcard trusted-proxy range without confirming the platform isolates direct traffic.
+Rate-limit identity uses the ASGI client address. When deploying behind a reverse proxy, configure Uvicorn proxy headers and trust only the platform's documented proxy addresses. Do not trust arbitrary client-supplied forwarding headers.
 
 Session history returns the full stored assistant answer for each of the five retained turns, so reloading the frontend does not truncate earlier responses. LLM rewrite context already used the full stored messages independently of this API representation.
 
@@ -390,6 +391,44 @@ After verification passes, switch serving to cloud:
 QDRANT_MODE=cloud
 ```
 
+In cloud mode, the API scrolls chunk payloads from Qdrant at startup to rebuild
+the in-memory BM25 index and structured-lookup inputs. A hosted container does
+not need the git-ignored `data/processed/` directory when the cloud collection
+contains complete payloads.
+
+## Zero-Cost Public Demo
+
+The frontend can remain online on Vercel while the backend runs locally through
+the reserved ngrok endpoint. Visitors need only open the Vercel site; the owner
+must start Docker and ngrok before a demo session.
+
+Demo frontend: `https://frontend-one-gamma-f9jf11u8ec.vercel.app`
+
+The workspace supports full legal company names, professional section labels,
+streamed conversation cards, collapsible filing evidence, Overview/Conversation
+navigation without deleting history, viewport-safe help tooltips, and a desktop
+sidebar that can be resized from `280` to `480` pixels.
+
+```powershell
+.\scripts\start_demo.ps1
+```
+
+Stop all local demo services afterward:
+
+```powershell
+.\scripts\stop_demo.ps1
+```
+
+Configure Vercel with:
+
+```text
+VITE_API_BASE_URL=https://blog-making-bloated.ngrok-free.dev
+```
+
+Add the exact Vercel production origin to `ALLOWED_ORIGINS` in `.env`. The demo
+frontend remains reachable when the local backend is offline, but queries
+require the owner's machine, Docker Desktop, and ngrok tunnel to be running.
+
 ## Repository Structure
 
 ```text
@@ -437,8 +476,8 @@ Secrets are loaded from `.env` and should never be committed.
 | Semantic query cache | Complete |
 | Multi-turn conversation memory | Complete |
 | Query decomposition | Integrated and validated for comparative and enumeration queries |
-| Docker deployment | Complete; CPU-only image with local Qdrant volume mount |
-| Vite frontend | End-to-end verified against the Docker backend through ngrok |
+| Docker deployment | Complete; CPU-only image supports local Qdrant or stateless Qdrant Cloud startup |
+| Vite frontend | Deployed on Vercel with Overview/Conversation navigation, evidence inspection, and resizable desktop controls; verified against the local Docker backend through the reserved ngrok URL |
 
 ## Known Limitations
 
@@ -453,11 +492,9 @@ Secrets are loaded from `.env` and should never be committed.
 
 ## Roadmap
 
-1. Deploy the Vite frontend to Vercel with `frontend` as the project root.
-2. Deploy the backend at a stable public URL and configure Vercel's `VITE_API_BASE_URL`; ngrok remains test-only.
-3. Add optional Qdrant server or Qdrant Cloud deployment docs for multi-worker serving.
-4. Improve annual-report/cross-reference extraction layouts for the remaining unusable tickers.
-5. Add more integration tests around Docker startup and mounted local Qdrant data.
+1. Add production logging, quota monitoring, and error alerts before selecting a paid always-on backend.
+2. Improve annual-report/cross-reference extraction layouts for the remaining unusable tickers.
+3. Revisit permanent hosting only when always-on public availability is required.
 
 ## Why This Project Matters
 

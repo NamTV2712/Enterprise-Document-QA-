@@ -32,13 +32,15 @@ Production output is written to `dist/`.
 
 ## Vercel
 
+Production deployment: `https://frontend-one-gamma-f9jf11u8ec.vercel.app`
+
 Set the Vercel project Root Directory to `frontend` and define:
 
 ```text
 VITE_API_BASE_URL=https://your-fastapi-backend.example.com
 ```
 
-The backend URL must be reachable from the browser and must not be `localhost` in a hosted deployment.
+The backend URL must be reachable from the browser and must not be `localhost` in a hosted deployment. For the zero-cost demo, use the reserved ngrok URL while the local Docker backend and tunnel are running. Add the final Vercel origin to the backend's comma-separated `ALLOWED_ORIGINS` value.
 
 ## API Contract
 

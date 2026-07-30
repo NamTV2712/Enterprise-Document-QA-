@@ -62,12 +62,22 @@ limiter = Limiter(key_func=get_remote_address)
 
 
 def _load_supported_tickers() -> list[str]:
+    cached_tickers = _state.get("supported_tickers")
+    if cached_tickers is not None:
+        return list(cached_tickers)
+
     tickers = []
     for ticker in TICKERS:
         ticker_dir = settings.data_processed_dir / ticker
         if any(path.stat().st_size > 0 for path in ticker_dir.glob("*_chunks_embedded.jsonl")):
             tickers.append(ticker)
     return tickers or TICKERS
+
+
+def _load_retrieval_chunks(store: VectorStore) -> list[dict]:
+    if store.mode == "cloud":
+        return store.load_all_chunks()
+    return load_embedded_chunks(settings.data_processed_dir)
 
 
 def _embed_query_pair(
@@ -98,22 +108,29 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing hybrid RAG pipeline...")
     t0 = time.time()
 
-    embedder = Embedder()
     store = VectorStore(
         mode=settings.qdrant_mode,
         path=settings.qdrant_local_path,
         url=settings.qdrant_cloud_url,
         api_key=settings.qdrant_cloud_api_key,
     )
-    all_chunks = load_embedded_chunks(settings.data_processed_dir)
+    all_chunks = _load_retrieval_chunks(store)
+    if not all_chunks:
+        store.close()
+        raise RuntimeError("No searchable chunks are available for retrieval")
     logger.info("Loaded %d chunks for BM25 index", len(all_chunks))
 
+    embedder = Embedder()
     retriever = HybridRetriever(embedder=embedder, store=store, all_chunks=all_chunks)
     generator = Generator()
     pipeline = RAGPipeline(retriever=retriever, generator=generator)
     _state["pipeline"] = pipeline
     _state["decomposer"] = QueryDecomposer(pipeline=pipeline)
     _state["store"] = store
+    searchable_tickers = {chunk["ticker"] for chunk in all_chunks}
+    _state["supported_tickers"] = [
+        ticker for ticker in TICKERS if ticker in searchable_tickers
+    ]
 
     logger.info("Hybrid pipeline and decomposer ready after %.1f seconds", time.time() - t0)
     yield

@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 COLLECTION_NAME = "sec_filings"
 BATCH_SIZE = 100
+SCROLL_PAGE_SIZE = 256
 PAYLOAD_INDEX_FIELDS = ("ticker", "section")
 
 
@@ -129,6 +130,26 @@ class VectorStore:
             "points_count": info.points_count,
             "status": str(info.status),
         }
+
+    def load_all_chunks(self, page_size: int = SCROLL_PAGE_SIZE) -> list[dict]:
+        """Load chunk payloads without vectors for stateless cloud startup."""
+        chunks = []
+        offset = None
+        while True:
+            points, next_offset = self.client.scroll(
+                collection_name=COLLECTION_NAME,
+                limit=page_size,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            chunks.extend(dict(point.payload) for point in points if point.payload)
+            if next_offset is None:
+                break
+            offset = next_offset
+
+        logger.info("Loaded %d chunk payloads from Qdrant", len(chunks))
+        return chunks
 
     def close(self) -> None:
         self.client.close()

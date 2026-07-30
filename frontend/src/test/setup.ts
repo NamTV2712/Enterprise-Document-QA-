@@ -16,3 +16,4 @@ Object.defineProperty(window, "matchMedia", {
 });
 
 Element.prototype.scrollIntoView = vi.fn();
+window.scrollTo = vi.fn();

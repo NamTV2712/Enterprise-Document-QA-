@@ -27,8 +27,8 @@ describe("App request cancellation", () => {
       memory: { active_sessions: 0, total_turns: 0 },
     });
     apiMocks.getSupportedTickers.mockResolvedValue({
-      tickers: ["AAPL"],
-      sections: ["risk_factors"],
+      tickers: ["AAPL", "MSFT"],
+      sections: ["business", "risk_factors", "mdna", "financial_statements", "financial_table"],
     });
     apiMocks.getSessionHistory.mockResolvedValue({
       session_id: "test-session",
@@ -81,7 +81,7 @@ describe("App request cancellation", () => {
     expect(healthSignal.aborted).toBe(true);
   });
 
-  test("session reload renders a full historical assistant answer", async () => {
+  test("session history can switch between conversation and overview", async () => {
     const longAnswer = "Full historical answer ".repeat(30).trim();
     apiMocks.getSessionHistory.mockResolvedValue({
       session_id: "history-test",
@@ -97,6 +97,98 @@ describe("App request cancellation", () => {
     render(<App />);
 
     expect(await screen.findByText(longAnswer)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+    expect(
+      await screen.findByText("Research SEC 10-K filings with cited evidence"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(longAnswer)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Return to conversation" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Conversation" }));
+    expect(await screen.findByText(longAnswer)).toBeInTheDocument();
+  });
+
+  test("onboarding explains scope and how to verify results", async () => {
+    render(<App />);
+
+    expect(
+      await screen.findByText("Research SEC 10-K filings with cited evidence"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/API:\s*https?:\/\//i)).not.toBeInTheDocument();
+    expect(screen.getByText("How to read the workspace")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Rank scores order results; they are not confidence percentages/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText("In-memory conversations")).toBeInTheDocument();
+    expect(screen.getByText("Retained messages")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Explain active sessions" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Explain total turns" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("sidebar width can be adjusted with the resize separator", async () => {
+    render(<App />);
+    await screen.findByText("Pipeline: Ready");
+
+    const resizeHandle = screen.getByRole("separator", {
+      name: "Resize search controls",
+    });
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "320");
+
+    fireEvent.keyDown(resizeHandle, { key: "ArrowRight" });
+
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "336");
+    expect(document.getElementById("control-sidebar")).toHaveStyle({
+      width: "min(336px, calc(100vw - 2rem))",
+    });
+  });
+
+  test("ticker picker shows and searches company names", async () => {
+    render(<App />);
+    await screen.findByText("Pipeline: Ready");
+
+    fireEvent.click(screen.getByRole("button", { name: /All companies/i }));
+    expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
+    expect(screen.getByText("Microsoft Corporation")).toBeInTheDocument();
+
+    fireEvent.change(
+      screen.getByPlaceholderText("Search company or ticker..."),
+      { target: { value: "Microsoft" } },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /Microsoft Corporation MSFT/i }),
+    );
+    expect(screen.getByText("Microsoft Corporation (MSFT)")).toBeInTheDocument();
+  });
+
+  test("section picker explains filing scope", async () => {
+    render(<App />);
+    await screen.findByText("Pipeline: Ready");
+
+    fireEvent.click(screen.getByRole("button", { name: /All sections/i }));
+    expect(screen.getByText("Risk Factors")).toBeInTheDocument();
+    expect(screen.queryByText(/Item 1A/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Material risks disclosed by company management."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Extracted rows optimized for exact numeric retrieval."),
+    ).toBeInTheDocument();
+  });
+
+  test("suggested questions use readable company names", async () => {
+    render(<App />);
+
+    expect(
+      await screen.findByText("Apple vs Microsoft — Risk Factors"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Amazon — MD&A Highlights")).toBeInTheDocument();
   });
 
   test("stop generating aborts the stream and preserves partial text", async () => {

@@ -115,8 +115,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [inputText]);
 
   return (
-    <div className="w-full bg-gradient-to-t from-[#F7F7F5] via-[#F7F7F5]/95 to-transparent dark:from-[#12161C] dark:via-[#12161C]/95 to-transparent pt-8 pb-4 md:pb-6 px-4 backdrop-blur-3xs">
-      <div className="max-w-4xl mx-auto space-y-3">
+    <div className="w-full max-w-full min-w-0 bg-[#F7F7F5] dark:bg-[#12161C] border-t border-slate-200 dark:border-slate-800 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))] md:pb-4 px-4">
+      <div className="w-full max-w-4xl mx-auto space-y-3 min-w-0">
         {/* Banner Alert for Pipeline Not Ready or Disconnected */}
         {showBanner && (
           <ConnectionBanner

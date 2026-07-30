@@ -17,10 +17,17 @@ import {
   Check,
   Building2,
   Search,
+  HelpCircle,
 } from "lucide-react";
 import { SampleQuestionChips, SampleQuestion } from "./SampleQuestionChips";
 import { HealthResponse } from "../types";
 import { Tooltip } from "./Tooltip";
+import {
+  ALL_SECTIONS_DESCRIPTION,
+  COMPANY_NAMES,
+  formatCompanyLabel,
+  SECTION_METADATA,
+} from "../lib/displayMetadata";
 
 interface SidebarProps {
   tickers: string[];
@@ -42,22 +49,6 @@ interface SidebarProps {
   isClearingSession: boolean;
 }
 
-const SECTION_MAP: Record<string, string> = {
-  business: "Business",
-  risk_factors: "Risk Factors",
-  mdna: "MD&A",
-  financial_statements: "Financial Statements",
-  financial_table: "Financial Table",
-};
-
-const SECTIONS_LIST = [
-  { value: "business", label: "Business" },
-  { value: "risk_factors", label: "Risk Factors" },
-  { value: "mdna", label: "MD&A" },
-  { value: "financial_statements", label: "Financial Statements" },
-  { value: "financial_table", label: "Financial Table" },
-];
-
 export const Sidebar: React.FC<SidebarProps> = ({
   tickers,
   sections,
@@ -77,9 +68,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onClose,
   isClearingSession,
 }) => {
+  const minSidebarWidth = 280;
+  const maxSidebarWidth = 480;
   const [tickerDropdownOpen, setTickerDropdownOpen] = useState(false);
   const [sectionDropdownOpen, setSectionDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const savedWidth = Number(localStorage.getItem("sec_qa_sidebar_width"));
+    return Number.isFinite(savedWidth) && savedWidth >= minSidebarWidth
+      ? Math.min(savedWidth, maxSidebarWidth)
+      : 320;
+  });
+  const [isResizing, setIsResizing] = useState(false);
 
   useEffect(() => {
     if (!tickerDropdownOpen) {
@@ -89,6 +89,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const tickerRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const availableSections = Object.entries(SECTION_METADATA).filter(
+    ([value]) => sections.length === 0 || sections.includes(value),
+  );
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredTickers = [...tickers]
+    .sort((a, b) => (COMPANY_NAMES[a] || a).localeCompare(COMPANY_NAMES[b] || b))
+    .filter((ticker) =>
+      `${ticker} ${COMPANY_NAMES[ticker] || ""}`
+        .toLowerCase()
+        .includes(normalizedSearch),
+    );
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -111,6 +123,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
   }, []);
 
+  useEffect(() => {
+    localStorage.setItem("sec_qa_sidebar_width", String(sidebarWidth));
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const sidebarLeft = sidebarRef.current?.getBoundingClientRect().left ?? 0;
+      const nextWidth = Math.min(
+        Math.max(event.clientX - sidebarLeft, minSidebarWidth),
+        maxSidebarWidth,
+      );
+      setSidebarWidth(nextWidth);
+    };
+    const stopResizing = () => setIsResizing(false);
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResizing);
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResizing);
+    };
+  }, [isResizing]);
+
+  const resizeWithKeyboard = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const direction = event.key === "ArrowLeft" ? -16 : 16;
+    setSidebarWidth((current) =>
+      Math.min(Math.max(current + direction, minSidebarWidth), maxSidebarWidth),
+    );
+  };
+
   return (
     <>
       {/* Mobile Sidebar Overlay */}
@@ -122,11 +172,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       <aside
+        ref={sidebarRef}
         id="control-sidebar"
-        className={`fixed inset-y-0 left-0 w-80 bg-[#F7F7F5] dark:bg-[#12161C] text-[#1B2430] dark:text-[#F7F7F5] flex flex-col border-r border-slate-200 dark:border-slate-800 z-45 transition-all duration-300 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 bg-[#F7F7F5] dark:bg-[#12161C] text-[#1B2430] dark:text-[#F7F7F5] flex flex-col border-r border-slate-200 dark:border-slate-800 z-45 lg:static lg:translate-x-0 ${
+          isResizing ? "transition-none" : "transition-transform duration-300"
+        } ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
+        style={{ width: `min(${sidebarWidth}px, calc(100vw - 2rem))` }}
       >
+        <div
+          role="separator"
+          aria-label="Resize search controls"
+          aria-orientation="vertical"
+          aria-valuemin={minSidebarWidth}
+          aria-valuemax={maxSidebarWidth}
+          aria-valuenow={sidebarWidth}
+          tabIndex={0}
+          onPointerDown={() => setIsResizing(true)}
+          onKeyDown={resizeWithKeyboard}
+          className="hidden lg:flex absolute inset-y-0 -right-1 z-50 w-2 cursor-col-resize items-center justify-center outline-none group"
+        >
+          <span className="h-12 w-0.5 rounded-full bg-slate-300 dark:bg-slate-700 opacity-0 group-hover:opacity-100 group-focus:opacity-100 group-active:opacity-100 transition-opacity" />
+        </div>
         {/* Header */}
         <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-[#1B2430]/10">
           <div className="flex items-center gap-2.5">
@@ -185,10 +253,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <div className="flex items-center gap-2 min-w-0">
                 <Building2 className="w-4 h-4 text-slate-400 dark:text-slate-500 transition-colors flex-shrink-0" />
-                <span className="truncate font-mono">
+                <span className="truncate">
                   {tickers.length === 0
                     ? "Connect API to load companies"
-                    : selectedTicker || "(All companies)"}
+                    : selectedTicker
+                      ? formatCompanyLabel(selectedTicker)
+                      : "All companies"}
                 </span>
               </div>
               <ChevronDown
@@ -209,7 +279,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <Search className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
                     <input
                       type="text"
-                      placeholder="Search ticker..."
+                      placeholder="Search company or ticker..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       onClick={(e) => e.stopPropagation()}
@@ -237,14 +307,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         )}
                       </button>
                     )}
-                    {[...tickers]
-                      .sort((a, b) => a.localeCompare(b))
-                      .filter((ticker) =>
-                        ticker
-                          .toLowerCase()
-                          .includes(searchQuery.toLowerCase()),
-                      )
-                      .map((ticker) => {
+                    {filteredTickers.map((ticker) => {
                         const isSelected = selectedTicker === ticker;
                         return (
                           <button
@@ -254,18 +317,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               onSelectTicker(ticker);
                               setTickerDropdownOpen(false);
                             }}
-                            className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors font-mono cursor-pointer ${isSelected ? "text-brand-indigo font-bold bg-brand-indigo/[0.03]" : "text-slate-600 dark:text-slate-300 font-medium"}`}
+                            className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 text-xs text-left hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer ${isSelected ? "text-brand-indigo font-bold bg-brand-indigo/[0.03]" : "text-slate-600 dark:text-slate-300 font-medium"}`}
                           >
-                            <span>{ticker}</span>
+                            <span className="min-w-0">
+                              <span className="block truncate font-semibold">
+                                {COMPANY_NAMES[ticker] || ticker}
+                              </span>
+                              <span className="block mt-0.5 font-mono text-[10px] text-slate-400 dark:text-slate-500">
+                                {ticker}
+                              </span>
+                            </span>
                             {isSelected && (
                               <Check className="w-3.5 h-3.5 text-brand-indigo flex-shrink-0" />
                             )}
                           </button>
                         );
                       })}
-                    {[...tickers].filter((ticker) =>
-                      ticker.toLowerCase().includes(searchQuery.toLowerCase()),
-                    ).length === 0 &&
+                    {filteredTickers.length === 0 &&
                       searchQuery && (
                         <div className="px-3 py-3 text-xs text-center text-slate-400 dark:text-slate-500 font-mono">
                           No matching companies
@@ -279,10 +347,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Section Filter */}
           <div className="space-y-2 relative" ref={sectionRef}>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
-              <span>10-K Section</span>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5">
+                10-K Section
+                <Tooltip content="Limit retrieval to one filing section. Leave this on All sections when you are unsure where the answer appears." align="left" placement="bottom">
+                  <button type="button" aria-label="Explain 10-K section filter" className="text-slate-400 hover:text-brand-indigo focus:text-brand-indigo outline-none">
+                    <HelpCircle className="w-3.5 h-3.5" />
+                  </button>
+                </Tooltip>
+              </span>
               <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500">
-                Granular Retrieval
+                Retrieval scope
               </span>
             </label>
 
@@ -299,8 +374,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <FileSpreadsheet className="w-4 h-4 text-slate-400 dark:text-slate-500 transition-colors flex-shrink-0" />
                 <span className="truncate">
                   {selectedSection
-                    ? SECTION_MAP[selectedSection] || selectedSection
-                    : "(All sections)"}
+                    ? SECTION_METADATA[selectedSection]?.shortLabel || selectedSection
+                    : "All sections"}
                 </span>
               </div>
               <ChevronDown
@@ -315,7 +390,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 4, scale: 0.98 }}
                   transition={{ duration: 0.15, ease: "easeOut" }}
-                  className="absolute z-55 left-0 right-0 mt-1 bg-white dark:bg-[#12161C] border border-slate-200 dark:border-slate-800 rounded-lg shadow-lg divide-y divide-slate-100 dark:divide-slate-800/40 overflow-hidden"
+                  className="absolute z-55 left-0 right-0 mt-1 bg-white dark:bg-[#12161C] border border-slate-200 dark:border-slate-800 rounded-lg shadow-lg divide-y divide-slate-100 dark:divide-slate-800/40 overflow-y-auto max-h-96"
                 >
                   <button
                     type="button"
@@ -325,24 +400,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     }}
                     className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer ${!selectedSection ? "text-brand-indigo font-bold bg-brand-indigo/[0.03]" : "text-slate-600 dark:text-slate-300 font-medium"}`}
                   >
-                    <span>(All sections)</span>
+                    <span className="min-w-0 pr-2">
+                      <span className="block">All sections</span>
+                      <span className="block mt-0.5 text-[10px] font-normal text-slate-400 dark:text-slate-500 leading-snug">
+                        {ALL_SECTIONS_DESCRIPTION}
+                      </span>
+                    </span>
                     {!selectedSection && (
                       <Check className="w-3.5 h-3.5 text-brand-indigo flex-shrink-0" />
                     )}
                   </button>
-                  {SECTIONS_LIST.map((sec) => {
-                    const isSelected = selectedSection === sec.value;
+                  {availableSections.map(([value, metadata]) => {
+                    const isSelected = selectedSection === value;
                     return (
                       <button
-                        key={sec.value}
+                        key={value}
                         type="button"
                         onClick={() => {
-                          onSelectSection(sec.value);
+                          onSelectSection(value);
                           setSectionDropdownOpen(false);
                         }}
-                        className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer ${isSelected ? "text-brand-indigo font-bold bg-brand-indigo/[0.03]" : "text-slate-600 dark:text-slate-300 font-medium"}`}
+                        className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 text-xs text-left hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer ${isSelected ? "text-brand-indigo font-bold bg-brand-indigo/[0.03]" : "text-slate-600 dark:text-slate-300 font-medium"}`}
                       >
-                        <span>{sec.label}</span>
+                        <span className="min-w-0 pr-2">
+                          <span className="block leading-snug">{metadata.label}</span>
+                          <span className="block mt-0.5 text-[10px] font-normal text-slate-400 dark:text-slate-500 leading-snug">
+                            {metadata.description}
+                          </span>
+                        </span>
                         {isSelected && (
                           <Check className="w-3.5 h-3.5 text-brand-indigo flex-shrink-0" />
                         )}
@@ -357,7 +442,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Top_K Slider */}
           <div className="space-y-2">
             <div className="flex justify-between items-center text-xs font-bold text-slate-700 dark:text-slate-300">
-              <span>Context Breadth (Top-K Chunks)</span>
+              <span className="flex items-center gap-1.5">
+                Context Breadth (Top-K)
+                <Tooltip content="Maximum number of filing excerpts retained after retrieval and re-ranking. More context is not always better." align="left">
+                  <button type="button" aria-label="Explain context breadth" className="text-slate-400 hover:text-brand-indigo focus:text-brand-indigo outline-none">
+                    <HelpCircle className="w-3.5 h-3.5" />
+                  </button>
+                </Tooltip>
+              </span>
               <span className="font-mono text-slate-950 dark:text-[#F7F7F5] bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 px-1.5 py-0.5 rounded text-[11px] font-bold">
                 {topK}
               </span>
@@ -471,6 +563,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <div className="text-[#1B2430] dark:text-[#F7F7F5] font-bold mt-1 text-xs font-mono">
                     {healthData.memory.active_sessions}
                   </div>
+                  <div className="mt-1 text-[9px] leading-tight text-slate-400 dark:text-slate-500 font-sans">
+                    In-memory conversations
+                  </div>
                 </div>
                 <div className="bg-[#F7F7F5] dark:bg-[#1B2430]/30 p-2 rounded border border-slate-200 dark:border-slate-800">
                   <div className="text-slate-500 dark:text-slate-450 font-sans font-bold">
@@ -478,6 +573,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </div>
                   <div className="text-[#1B2430] dark:text-[#F7F7F5] font-bold mt-1 text-xs font-mono">
                     {healthData.memory.total_turns}
+                  </div>
+                  <div className="mt-1 text-[9px] leading-tight text-slate-400 dark:text-slate-500 font-sans">
+                    Retained messages
                   </div>
                 </div>
               </div>

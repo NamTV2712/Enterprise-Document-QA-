@@ -15,6 +15,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { SubQuery } from "../types";
+import { formatCompanyLabel } from "../lib/displayMetadata";
 
 interface SubQueriesPanelProps {
   subQueries: SubQuery[];
@@ -23,28 +24,28 @@ interface SubQueriesPanelProps {
 }
 
 const sectionMap: Record<string, string> = {
-  business: "Item 1 · Business",
-  risk_factors: "Item 1A · Risk Factors",
-  "risk factors": "Item 1A · Risk Factors",
-  unresolved_comments: "Item 1B · Unresolved Staff Comments",
-  properties: "Item 2 · Properties",
-  legal_proceedings: "Item 3 · Legal Proceedings",
-  mine_safety: "Item 4 · Mine Safety Disclosures",
-  market_matters: "Item 5 · Market, Shareholder Matters",
-  selected_financial_data: "Item 6 · Selected Financial Data",
-  mdna: "Item 7 · Management's Discussion & Analysis (MD&A)",
-  mda: "Item 7 · Management's Discussion & Analysis (MD&A)",
-  market_risk: "Item 7A · Market Risk Disclosures",
-  financial_statements: "Item 8 · Financial Statements",
-  accountant_disagreements: "Item 9 · Accountant Disagreements",
-  controls_procedures: "Item 9A · Controls and Procedures",
-  other_information: "Item 9B · Other Information",
-  directors_officers: "Item 10 · Directors & Officers",
-  executive_compensation: "Item 11 · Executive Compensation",
-  security_ownership: "Item 12 · Security Ownership",
-  related_transactions: "Item 13 · Related Transactions",
-  accountant_fees: "Item 14 · Accountant Fees & Services",
-  exhibits_schedules: "Item 15 · Exhibits & Schedules",
+  business: "Business Overview",
+  risk_factors: "Risk Factors",
+  "risk factors": "Risk Factors",
+  unresolved_comments: "Unresolved Staff Comments",
+  properties: "Properties",
+  legal_proceedings: "Legal Proceedings",
+  mine_safety: "Mine Safety Disclosures",
+  market_matters: "Market and Shareholder Matters",
+  selected_financial_data: "Selected Financial Data",
+  mdna: "Management Discussion & Analysis (MD&A)",
+  mda: "Management Discussion & Analysis (MD&A)",
+  market_risk: "Market Risk Disclosures",
+  financial_statements: "Financial Statements & Notes",
+  accountant_disagreements: "Accountant Disagreements",
+  controls_procedures: "Controls and Procedures",
+  other_information: "Other Information",
+  directors_officers: "Directors & Officers",
+  executive_compensation: "Executive Compensation",
+  security_ownership: "Security Ownership",
+  related_transactions: "Related Transactions",
+  accountant_fees: "Accountant Fees & Services",
+  exhibits_schedules: "Exhibits & Schedules",
 };
 
 export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
@@ -198,7 +199,7 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
 
                             {sub.ticker && (
                               <span className="font-mono text-[10px] font-bold bg-slate-200/50 dark:bg-slate-800/80 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300">
-                                {sub.ticker}
+                                {formatCompanyLabel(sub.ticker)}
                               </span>
                             )}
 

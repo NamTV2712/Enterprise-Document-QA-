@@ -132,22 +132,26 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 140, damping: 20 }}
-      className={`w-full transition-colors border-b border-slate-200/50 dark:border-slate-900/20 ${
-        isUser
-          ? "bg-[#F7F7F5] dark:bg-[#12161C]"
-          : "bg-white dark:bg-[#1B2430]/30"
-      }`}
+      className="w-full px-3 py-2 md:px-5 md:py-2.5"
       id={`message-${message.id}`}
+      role="article"
+      aria-label={isUser ? "Your question" : "Research assistant response"}
     >
-      <div className="max-w-4xl mx-auto w-full flex gap-4 p-5 md:p-6">
+      <div
+        className={`max-w-4xl mx-auto w-full flex gap-3 md:gap-4 ${
+          isUser
+            ? "flex-row-reverse items-start py-2"
+            : "items-start rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-[#171D25] p-4 md:p-5 shadow-3xs"
+        }`}
+      >
         <div className="flex-shrink-0">
           <div
-            className={`w-8 h-8 rounded-lg flex items-center justify-center shadow-3xs ${
+            className={`w-8 h-8 rounded-lg flex items-center justify-center shadow-3xs border ${
               isUser
-                ? "bg-[#1B2430] text-[#F7F7F5] dark:bg-[#F7F7F5] dark:text-[#1B2430]"
+                ? "bg-brand-indigo/10 text-brand-indigo border-brand-indigo/20"
                 : message.error
-                  ? "bg-rose-100 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400"
-                  : "bg-slate-100 text-slate-700 dark:bg-slate-850 dark:text-slate-300"
+                  ? "bg-rose-100 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400 border-rose-200 dark:border-rose-900"
+                  : "bg-slate-100 text-slate-700 dark:bg-slate-850 dark:text-slate-300 border-slate-200 dark:border-slate-700"
             }`}
           >
             {isUser ? (
@@ -160,22 +164,30 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           </div>
         </div>
 
-        <div className="flex-1 space-y-4 overflow-hidden">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-[#1B2430] dark:text-[#F7F7F5] uppercase tracking-wider font-sans">
-              {isUser ? "Equity Analyst" : "SEC RAG Agent Pipeline"}
+        <div
+          className={`${isUser ? "flex-none w-fit max-w-[82%] md:max-w-2xl" : "flex-1"} space-y-3 overflow-hidden`}
+        >
+          <div className={`flex flex-wrap items-center gap-2 ${isUser ? "justify-end" : ""}`}>
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.14em] font-sans">
+              {isUser ? "Your question" : "SEC Filing Research Assistant"}
             </span>
             {!isUser && message.model_used && (
-              <span className="text-[9px] font-mono font-bold bg-[#F7F7F5] dark:bg-[#12161C] border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded shadow-4xs">
+              <span className="text-[9px] font-mono font-semibold bg-slate-50 dark:bg-[#12161C] border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded shadow-4xs">
                 {message.model_used}
               </span>
             )}
-            {message.rewritten_query && (
-              <span className="text-[10px] font-mono text-brand-indigo bg-brand-indigo/5 border border-brand-indigo/10 px-1.5 py-0.5 rounded italic shadow-4xs">
-                Query: {message.rewritten_query}
-              </span>
-            )}
           </div>
+
+          {!isUser && message.rewritten_query && (
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-lg border border-brand-indigo/15 bg-brand-indigo/[0.035] px-3 py-2 text-[10px]">
+              <span className="font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Interpreted query
+              </span>
+              <span className="font-mono italic text-brand-indigo">
+                {message.rewritten_query}
+              </span>
+            </div>
+          )}
 
           {/* Collapsible Decomposed Sub-Queries Trace Log (SIGNATURE ELEMENT) */}
           {!isUser && (message.subQueries || message.wasDecomposed) && (
@@ -193,10 +205,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.35, ease: "easeOut" }}
-                className="prose prose-slate dark:prose-invert max-w-none text-[#1B2430] dark:text-[#F7F7F5] text-sm md:text-base leading-relaxed font-sans"
+                className={`prose prose-slate dark:prose-invert max-w-none text-[#1B2430] dark:text-[#F7F7F5] text-sm md:text-base leading-relaxed font-sans ${
+                  isUser
+                    ? "rounded-2xl rounded-tr-md border border-brand-indigo/20 bg-brand-indigo/[0.06] dark:bg-brand-indigo/[0.10] px-4 py-3 shadow-3xs"
+                    : ""
+                }`}
               >
                 {isUser ? (
-                  <p className="whitespace-pre-wrap select-text font-sans text-slate-850 dark:text-slate-200">
+                  <p className="!m-0 whitespace-pre-wrap select-text font-sans text-slate-850 dark:text-slate-100">
                     {message.text}
                   </p>
                 ) : message.error ? (

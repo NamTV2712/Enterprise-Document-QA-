@@ -3,10 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
+import React, { useId, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { ChevronDown, ChevronUp, FileText, ArrowUpRight } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  ArrowUpRight,
+} from "lucide-react";
 import { Source } from "../types";
+import { formatCompanyLabel, SECTION_METADATA } from "../lib/displayMetadata";
 
 interface SourcesPanelProps {
   sources: Source[];
@@ -18,9 +24,8 @@ export function getSectionDisplay(
 ): { section: string; ticker: string; year: string } {
   const citationLower = citation.toLowerCase();
 
-  // Extract ticker (first alphanumeric word before underscore)
-  const firstPart = citation.split("_")[0] || "";
-  const ticker = firstPart.toUpperCase();
+  const tickerMatch = citation.match(/^([A-Z]{1,5}(?:-[A-Z])?)(?:\s|_)/i);
+  const ticker = tickerMatch?.[1]?.toUpperCase() || "SEC";
 
   // Extract year (4 digit number)
   const yearMatch =
@@ -32,6 +37,13 @@ export function getSectionDisplay(
 
   // Extract Section Item
   let matchedItem = sectionField || "";
+  const explicitSection = citation.match(/Section:\s*([^,]+)/i)?.[1]?.trim();
+  if (!matchedItem && explicitSection) {
+    const normalizedSection = explicitSection.toLowerCase().replace(/\s+/g, "_");
+    if (SECTION_METADATA[normalizedSection]) {
+      matchedItem = normalizedSection;
+    }
+  }
   if (!matchedItem) {
     const itemMatch =
       citationLower.match(/item_(\d+[a-z]?)/) ||
@@ -75,29 +87,37 @@ export function getSectionDisplay(
     }
   }
 
+  if (SECTION_METADATA[matchedItem]) {
+    return {
+      section: SECTION_METADATA[matchedItem].label,
+      ticker,
+      year,
+    };
+  }
+
   const cleanItem = matchedItem.toLowerCase().replace(/_/g, " ").trim();
 
   const secMap: Record<string, string> = {
-    "item 1": "Item 1 · Business",
-    "item 1a": "Item 1A · Risk Factors",
-    "item 1b": "Item 1B · Unresolved Staff Comments",
-    "item 2": "Item 2 · Properties",
-    "item 3": "Item 3 · Legal Proceedings",
-    "item 4": "Item 4 · Mine Safety Disclosures",
-    "item 5": "Item 5 · Market, Shareholder Matters",
-    "item 6": "Item 6 · Selected Financial Data",
-    "item 7": "Item 7 · Management's Discussion and Analysis (MD&A)",
-    "item 7a": "Item 7A · Quantitative and Qualitative Market Risk",
-    "item 8": "Item 8 · Financial Statements and Supplementary Data",
-    "item 9": "Item 9 · Accountant Disagreements",
-    "item 9a": "Item 9A · Controls and Procedures",
-    "item 9b": "Item 9B · Other Information",
-    "item 10": "Item 10 · Directors & Officers",
-    "item 11": "Item 11 · Executive Compensation",
-    "item 12": "Item 12 · Security Ownership",
-    "item 13": "Item 13 · Related Transactions",
-    "item 14": "Item 14 · Accountant Fees & Services",
-    "item 15": "Item 15 · Exhibits & Schedules",
+    "item 1": "Business Overview",
+    "item 1a": "Risk Factors",
+    "item 1b": "Unresolved Staff Comments",
+    "item 2": "Properties",
+    "item 3": "Legal Proceedings",
+    "item 4": "Mine Safety Disclosures",
+    "item 5": "Market and Shareholder Matters",
+    "item 6": "Selected Financial Data",
+    "item 7": "Management Discussion & Analysis (MD&A)",
+    "item 7a": "Market Risk Disclosures",
+    "item 8": "Financial Statements & Supplementary Data",
+    "item 9": "Accountant Disagreements",
+    "item 9a": "Controls and Procedures",
+    "item 9b": "Other Information",
+    "item 10": "Directors & Officers",
+    "item 11": "Executive Compensation",
+    "item 12": "Security Ownership",
+    "item 13": "Related Transactions",
+    "item 14": "Accountant Fees & Services",
+    "item 15": "Exhibits & Schedules",
   };
 
   const sectionName =
@@ -107,29 +127,51 @@ export function getSectionDisplay(
 }
 
 export const SourcesPanel: React.FC<SourcesPanelProps> = ({ sources }) => {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
+  const panelId = `sources-panel-${useId().replace(/:/g, "")}`;
 
   if (!sources || sources.length === 0) return null;
+
+  const sourceTickers = Array.from(
+    new Set(sources.map((source) => getSectionDisplay(source.citation).ticker)),
+  );
+  const companySummary = sourceTickers
+    .slice(0, 2)
+    .map(formatCompanyLabel)
+    .join(" · ");
+  const remainingCompanies = Math.max(0, sourceTickers.length - 2);
 
   return (
     <div className="border border-slate-200/80 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-900/40 overflow-hidden my-4 shadow-3xs hover:shadow-2xs transition-all">
       <button
         type="button"
-        id="sources-toggle-btn"
+        aria-expanded={isOpen}
+        aria-controls={panelId}
+        aria-label={`${isOpen ? "Hide" : "Show"} ${sources.length} retrieved filing evidence excerpts`}
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-3.5 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer uppercase tracking-wider"
+        className="w-full flex items-center justify-between gap-3 p-3.5 text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
       >
-        <div className="flex items-center gap-2">
-          <FileText className="w-4 h-4 text-slate-400 dark:text-slate-500" />
-          <span className="font-sans">
-            Retrieved Filing Evidence ({sources.length})
+        <div className="flex items-start gap-2 min-w-0">
+          <FileText className="w-4 h-4 mt-0.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+          <span className="min-w-0">
+            <span className="block font-sans uppercase tracking-wider">
+              Retrieved Filing Evidence · {sources.length} excerpts
+            </span>
+            <span className="block mt-1 text-[10px] font-normal text-slate-500 dark:text-slate-400 normal-case tracking-normal truncate">
+              {companySummary}
+              {remainingCompanies > 0 ? ` · +${remainingCompanies} more` : ""}
+              {" · "}{isOpen ? "Hide source text" : "Open source text and ranking details"}
+            </span>
           </span>
         </div>
-        {isOpen ? (
-          <ChevronUp className="w-4 h-4 text-slate-400" />
-        ) : (
-          <ChevronDown className="w-4 h-4 text-slate-400" />
-        )}
+        <span className="flex items-center gap-1.5 flex-shrink-0 text-[10px] uppercase tracking-wider text-brand-indigo">
+          {isOpen ? "Hide" : "View"}
+          {isOpen ? (
+            <ChevronUp className="w-4 h-4" />
+          ) : (
+            <ChevronDown className="w-4 h-4" />
+          )}
+        </span>
       </button>
 
       <AnimatePresence initial={false}>
@@ -139,9 +181,15 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({ sources }) => {
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.22, ease: "easeInOut" }}
+            id={panelId}
             className="overflow-hidden border-t border-slate-200/60 dark:border-slate-800/80"
           >
-            <div className="p-3.5 divide-y divide-slate-200/50 dark:divide-slate-800/40 max-h-96 overflow-y-auto bg-slate-50/30 dark:bg-slate-950/20">
+            <div className="px-3.5 py-2.5 bg-brand-indigo/[0.03] border-b border-slate-200/60 dark:border-slate-800/80 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+              These are the filing excerpts used to ground the answer. Rank score
+              orders excerpts within this result set; it is not a probability or
+              confidence percentage.
+            </div>
+            <div className="p-3.5 divide-y divide-slate-200/50 dark:divide-slate-800/40 max-h-[min(28rem,55vh)] overflow-y-auto bg-slate-50/30 dark:bg-slate-950/20">
               {sources.map((source, index) => {
                 const { section, ticker, year } = getSectionDisplay(
                   source.citation,
@@ -163,18 +211,17 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({ sources }) => {
                         <span className="text-[10px] md:text-xs font-bold text-brand-indigo border border-brand-indigo/30 bg-brand-indigo/5 px-2 py-0.5 rounded shadow-3xs flex items-center gap-1 font-sans">
                           <ArrowUpRight className="w-3.5 h-3.5" />
                           <span>
-                            {ticker} {year ? `'${year.slice(-2)}` : ""} ·{" "}
+                            {formatCompanyLabel(ticker)} {year ? `'${year.slice(-2)}` : ""} ·{" "}
                             {section}
                           </span>
                         </span>
                       </div>
 
-                      {/* Verified Green for Confidence Relevance Scores */}
                       <div className="flex items-center gap-1.5 font-mono">
                         <span className="text-[9px] text-slate-400 dark:text-slate-500 uppercase tracking-wider font-bold">
-                          Relevance
+                          Rank score
                         </span>
-                        <span className="text-xs font-bold text-verified-green dark:text-[#38a385] bg-verified-green/5 dark:bg-[#1f5d4c]/10 border border-verified-green/20 dark:border-[#1f5d4c]/30 px-1.5 py-0.5 rounded shadow-3xs">
+                        <span className="text-xs font-bold text-brand-indigo bg-brand-indigo/5 border border-brand-indigo/20 px-1.5 py-0.5 rounded shadow-3xs">
                           {displayScore}
                         </span>
                       </div>

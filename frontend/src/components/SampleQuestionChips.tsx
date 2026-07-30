@@ -17,25 +17,25 @@ export interface SampleQuestion {
 export const SAMPLE_QUESTIONS: SampleQuestion[] = [
   {
     text: 'Compare the primary business risk factors between Apple (AAPL) and Microsoft (MSFT) for the latest fiscal year.',
-    label: 'AAPL vs MSFT Risk Factors',
+    label: 'Apple vs Microsoft — Risk Factors',
     ticker: '',
     section: 'risk_factors',
   },
   {
     text: "What are Google's (GOOGL) main sources of business revenue and products according to their 10-K?",
-    label: 'GOOGL Business Segments',
+    label: 'Alphabet (Google) — Business Segments',
     ticker: 'GOOGL',
     section: 'business',
   },
   {
     text: 'Summarize the primary MD&A (Management Discussion & Analysis) findings in Amazon (AMZN) latest 10-K.',
-    label: 'AMZN MD&A Highlights',
+    label: 'Amazon — MD&A Highlights',
     ticker: 'AMZN',
     section: 'mdna',
   },
   {
     text: 'What are the major financial tables or statements trends highlighted in Tesla (TSLA) filings?',
-    label: 'TSLA Financial Statements',
+    label: 'Tesla — Financial Statements',
     ticker: 'TSLA',
     section: 'financial_statements',
   },

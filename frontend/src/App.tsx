@@ -20,6 +20,8 @@ import {
   HelpCircle,
   RefreshCw,
   Square,
+  BookOpen,
+  MessageSquare,
 } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { ChatMessage } from "./components/ChatMessage";
@@ -34,7 +36,6 @@ import {
   deleteSession,
   getSessionHistory,
   streamQuery,
-  getApiBaseUrl,
 } from "./lib/api";
 
 export default function App() {
@@ -56,6 +57,9 @@ export default function App() {
   const [healthData, setHealthData] = useState<HealthResponse | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [isClearingSession, setIsClearingSession] = useState<boolean>(false);
+  const [activeView, setActiveView] = useState<"overview" | "conversation">(
+    "overview",
+  );
 
   // Theme state
   const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -126,6 +130,7 @@ export default function App() {
                 });
               });
               setMessages(loadedMessages);
+              setActiveView("conversation");
             }
           } catch (histError) {
             if (
@@ -165,8 +170,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (activeView === "conversation") scrollToBottom();
+  }, [activeView, messages]);
 
   // Helper to determine if query is comparative
   const isComparativeQuery = (question: string): boolean => {
@@ -185,6 +190,7 @@ export default function App() {
   const handleSendMessage = async (text: string) => {
     if (!isBackendConnected || !isPipelineReady) return;
 
+    setActiveView("conversation");
     requestAbortRef.current?.abort();
     const controller = new AbortController();
     requestAbortRef.current = controller;
@@ -414,6 +420,7 @@ export default function App() {
       localStorage.setItem("sec_qa_session_id", newSid);
       setSessionId(newSid);
       setMessages([]);
+      setActiveView("overview");
       setIsClearingSession(false);
       setSelectedTicker(null);
       setSelectedSection(null);
@@ -462,7 +469,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-dvh bg-slate-50 dark:bg-slate-950 font-sans text-slate-800 dark:text-slate-100 overflow-hidden bg-grid-pattern">
+    <div className="flex w-screen max-w-full h-dvh bg-slate-50 dark:bg-slate-950 font-sans text-slate-800 dark:text-slate-100 overflow-hidden bg-grid-pattern">
       {/* Collapsible Sidebar */}
       <Sidebar
         tickers={tickers}
@@ -485,10 +492,10 @@ export default function App() {
       />
 
       {/* Main chat window area */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+      <div className="w-0 flex-1 min-w-0 max-w-full flex flex-col h-full overflow-hidden">
         {/* Header toolbar */}
         <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white/85 dark:bg-[#12161C]/85 backdrop-blur-md px-4 md:px-6 flex items-center justify-between flex-shrink-0 z-20 shadow-xs">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
               id="sidebar-toggle"
@@ -500,20 +507,54 @@ export default function App() {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <TrendingUp className="w-5 h-5 text-indigo-600 dark:text-indigo-400 hidden lg:block" />
-              <div className="flex flex-col lg:flex-row lg:items-center gap-0 lg:gap-2">
-                <span className="font-semibold text-sm md:text-base text-slate-900 dark:text-white">
-                  Enterprise Document QA
-                </span>
-                <span className="hidden lg:inline text-slate-300 dark:text-slate-700">
-                  |
-                </span>
-                <span className="text-[10px] md:text-xs font-medium text-slate-500 dark:text-slate-400 font-mono">
-                  API: {getApiBaseUrl()}
-                </span>
-              </div>
+              <span className="font-semibold text-sm md:text-base text-slate-900 dark:text-white truncate">
+                Enterprise Document QA
+              </span>
             </div>
+            {messages.length > 0 && activeView === "conversation" && (
+              <button
+                type="button"
+                onClick={() => setActiveView("overview")}
+                aria-label="Show overview"
+                className="lg:hidden p-1.5 rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <BookOpen className="w-4 h-4" />
+              </button>
+            )}
+            <nav
+              className="hidden lg:flex items-center gap-1 ml-2 pl-3 border-l border-slate-200 dark:border-slate-700"
+              aria-label="Workspace views"
+            >
+              <button
+                type="button"
+                onClick={() => setActiveView("overview")}
+                aria-pressed={activeView === "overview"}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                  activeView === "overview"
+                    ? "bg-brand-indigo/10 text-brand-indigo"
+                    : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                Overview
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveView("conversation")}
+                disabled={messages.length === 0}
+                aria-pressed={activeView === "conversation"}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-colors ${
+                  activeView === "conversation"
+                    ? "bg-brand-indigo/10 text-brand-indigo"
+                    : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                } disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer`}
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                Conversation
+              </button>
+            </nav>
           </div>
 
           <div className="flex items-center gap-2 md:gap-3">
@@ -575,48 +616,56 @@ export default function App() {
         </header>
 
         {/* Content stream area */}
-        <div className="flex-1 overflow-y-auto min-h-0 bg-[#F7F7F5] dark:bg-[#12161C] relative z-10">
-          {messages.length === 0 ? (
+        <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 bg-[#F7F7F5] dark:bg-[#12161C] relative z-10">
+          {activeView === "overview" ? (
             /* Onboarding splash screen with Framer Motion animations */
             <div
-              className="max-w-3xl mx-auto px-5 pt-12 pb-56 md:pt-16 md:pb-72 space-y-8 relative z-10 font-sans animate-fade-in"
+              className="w-full max-w-3xl mx-auto px-5 py-10 md:py-14 space-y-8 relative z-10 font-sans animate-fade-in"
               id="onboarding-panel"
             >
               <div className="space-y-3 text-center">
+                {messages.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveView("conversation")}
+                    className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-indigo hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors cursor-pointer"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    Return to conversation
+                  </button>
+                )}
                 {isBackendConnected === null || isPipelineReady === null ? (
                   <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-900/30 text-slate-600 dark:text-slate-400 font-mono text-[10px] font-bold uppercase tracking-wider">
                     <span>[STATUS: CONNECTING TO BACKEND]</span>
                   </div>
                 ) : !isBackendConnected ? (
-                  <Tooltip
-                    content={`${getApiBaseUrl()} — Start the FastAPI backend and refresh to connect.`}
-                  >
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded border border-red-300 dark:border-red-900 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-rose-400 font-mono text-[10px] font-bold uppercase tracking-wider cursor-help">
+                  <div className="space-y-1">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded border border-red-300 dark:border-red-900 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-rose-400 font-mono text-[10px] font-bold uppercase tracking-wider">
                       <span>[STATUS: BACKEND UNREACHABLE]</span>
                     </div>
-                  </Tooltip>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                      The research service is temporarily unavailable. Please refresh shortly.
+                    </p>
+                  </div>
                 ) : !isPipelineReady ? (
                   <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded border border-amber-300 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 font-mono text-[10px] font-bold uppercase tracking-wider">
                     <span>[STATUS: PIPELINE INITIALIZING]</span>
                   </div>
                 ) : (
-                  <Tooltip
-                    content={`${getApiBaseUrl()} — Start the FastAPI backend and refresh to connect.`}
-                  >
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded border border-verified-green/20 dark:border-[#1f5d4c]/30 bg-verified-green/5 dark:bg-[#1f5d4c]/10 text-verified-green dark:text-[#38a385] font-mono text-[10px] font-bold uppercase tracking-wider cursor-help">
-                      <span>
-                        [STATUS: LIVE — {tickers.length} COMPANIES INDEXED]
-                      </span>
-                    </div>
-                  </Tooltip>
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded border border-verified-green/20 dark:border-[#1f5d4c]/30 bg-verified-green/5 dark:bg-[#1f5d4c]/10 text-verified-green dark:text-[#38a385] font-mono text-[10px] font-bold uppercase tracking-wider">
+                    <span>
+                      [STATUS: LIVE — {tickers.length} COMPANIES INDEXED]
+                    </span>
+                  </div>
                 )}
-                <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-[#1B2430] dark:text-[#F7F7F5] py-1 font-serif">
-                  SEC 10-K RAG Engine
+                <h2 className="max-w-full text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-[#1B2430] dark:text-[#F7F7F5] py-1 font-serif break-words">
+                  Research SEC 10-K filings with cited evidence
                 </h2>
                 <p className="text-xs md:text-sm text-slate-550 dark:text-slate-400 max-w-xl mx-auto leading-relaxed font-mono">
-                  Multi-entity vector indexing with grounded decomposition
-                  summaries. Select or compose an SEC disclosure request to
-                  begin.
+                  Ask a financial or business question across {tickers.length || 44}{" "}
+                  searchable companies. The system retrieves filing excerpts,
+                  reranks them, and asks Groq-hosted Llama to answer only from
+                  that context.
                 </p>
               </div>
 
@@ -665,10 +714,38 @@ export default function App() {
                     Verifiable Sources
                   </h3>
                   <p className="text-[11px] text-slate-550 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300 leading-relaxed font-mono transition-colors duration-300">
-                    All extracted disclosures are verified with alignment
-                    margins, item tags, and exact document indexes.
+                    Every answer keeps the retrieved filing excerpts visible so
+                    you can inspect the source text behind each claim.
                   </p>
                 </div>
+              </div>
+
+              <div className="rounded-xl border border-brand-indigo/20 bg-brand-indigo/[0.035] dark:bg-brand-indigo/[0.06] p-4 md:p-5 space-y-3">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-brand-indigo">
+                  <HelpCircle className="w-4 h-4" />
+                  How to read the workspace
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] leading-relaxed text-slate-600 dark:text-slate-350">
+                  <p>
+                    <strong className="block text-slate-800 dark:text-slate-100">1. Choose scope</strong>
+                    Select a company and 10-K section, or leave both on All for
+                    discovery and comparisons.
+                  </p>
+                  <p>
+                    <strong className="block text-slate-800 dark:text-slate-100">2. Ask naturally</strong>
+                    Comparisons can be decomposed into focused sub-queries before
+                    a grounded summary is produced.
+                  </p>
+                  <p>
+                    <strong className="block text-slate-800 dark:text-slate-100">3. Verify evidence</strong>
+                    Open the evidence panel to read source excerpts. Rank scores
+                    order results; they are not confidence percentages.
+                  </p>
+                </div>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono border-t border-brand-indigo/10 pt-3">
+                  Research demo only · Answers may be incomplete and are not
+                  financial advice.
+                </p>
               </div>
 
               {/* ConnectionBanner in normal document flow BELOW the cards */}
@@ -681,7 +758,7 @@ export default function App() {
             </div>
           ) : (
             /* Active Chat Stream */
-            <div className="flex flex-col w-full h-full divide-y divide-slate-200/50 dark:divide-slate-900/40 pb-36">
+            <div className="flex flex-col w-full min-h-full py-4 md:py-5 pb-6">
               {messages.map((msg, index) => (
                 <ChatMessage
                   key={msg.id}
@@ -694,21 +771,19 @@ export default function App() {
           )}
         </div>
 
-        {/* Input anchor zone */}
-        <div className="absolute bottom-0 inset-x-0 bg-transparent z-10 pointer-events-none">
-          <div className="pointer-events-auto">
-            <ChatInput
-              inputText={inputText}
-              setInputText={setInputText}
-              onSendMessage={handleSendMessage}
-              onStopGenerating={handleStopGenerating}
-              isLoading={isLoading}
-              isStreaming={messages.some((message) => message.isStreaming)}
-              isBackendConnected={isBackendConnected}
-              isPipelineReady={isPipelineReady}
-              showBanner={messages.length > 0}
-            />
-          </div>
+        {/* The composer is a flex sibling, so it never overlays response evidence. */}
+        <div className="flex-shrink-0 bg-[#F7F7F5] dark:bg-[#12161C] z-10">
+          <ChatInput
+            inputText={inputText}
+            setInputText={setInputText}
+            onSendMessage={handleSendMessage}
+            onStopGenerating={handleStopGenerating}
+            isLoading={isLoading}
+            isStreaming={messages.some((message) => message.isStreaming)}
+            isBackendConnected={isBackendConnected}
+            isPipelineReady={isPipelineReady}
+            showBanner={activeView === "conversation" && messages.length > 0}
+          />
         </div>
       </div>
     </div>

@@ -14,7 +14,13 @@ from dataclasses import dataclass
 CANONICAL_LABELS: dict[str, list[str]] = {
     "total assets": ["assets - total assets", "total assets"],
     "total liabilities": ["liabilities - total liabilities", "total liabilities"],
-    "total revenue": ["total revenue", "total net sales", "net sales - total net sales"],
+    "total revenue": [
+        "total revenue",
+        "total revenues",
+        "total net sales",
+        "net sales - total net sales",
+        "revenues - total revenues",
+    ],
     "total equity": [
         "stockholders' equity - total stockholders' equity",
         "shareholders' equity - total shareholders' equity",

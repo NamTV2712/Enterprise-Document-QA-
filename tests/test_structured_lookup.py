@@ -121,6 +121,23 @@ def test_structured_lookup_ignores_non_total_queries():
     assert structured_lookup("What are Apple's main risk factors?", "AAPL", chunks) is None
 
 
+def test_tsla_total_revenue_matches_plural_prefixed_label():
+    """Tesla's plural, prefixed total-revenue row must match exactly."""
+    assert matches_canonical("Revenues - Total revenues", "total revenue")
+
+
+def test_total_revenue_excludes_unrelated_revenue_rows():
+    """Expanding total-revenue variants must not promote non-total rows."""
+    non_target_labels = [
+        "Related party revenue",
+        "Revenue by segment",
+        "Revenues - Automotive revenue",
+    ]
+
+    for label in non_target_labels:
+        assert not matches_canonical(label, "total revenue")
+
+
 def test_equity_subcomponents_do_not_match_total_equity():
     """Equity section subcomponents must not match the total equity row."""
     subcomponent_labels = [

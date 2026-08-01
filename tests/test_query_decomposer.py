@@ -213,3 +213,28 @@ def test_decomposed_query_with_enough_context_synthesizes(monkeypatch) -> None:
     assert result.answer == "grounded synthesized answer"
     assert len(result.all_chunks) == 2
     synthesize.assert_called_once()
+
+
+def test_synthesis_exception_does_not_leak_to_public_response() -> None:
+    """Non-retryable synthesis failures must return a stable public message."""
+    generator = MagicMock()
+    generator.model = "fake-model"
+    generator.client.chat.completions.create.side_effect = RuntimeError(
+        "Connection failed: api_key=sk-secret-abc123 at /internal/models/path"
+    )
+    decomposer = QueryDecomposer(
+        SimpleNamespace(generator=generator, retriever=MagicMock())
+    )
+
+    answer = decomposer._synthesize(
+        "What are Amazon's risks?",
+        [_make_chunk("chunk-1")],
+    )
+
+    assert "sk-secret-abc123" not in answer
+    assert "/internal/models/path" not in answer
+    assert "RuntimeError" not in answer
+    assert answer == (
+        "I encountered an error while synthesizing the answer from the "
+        "retrieved sources. Please try rephrasing your question."
+    )

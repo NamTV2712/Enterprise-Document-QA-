@@ -34,6 +34,10 @@ INSUFFICIENT_DECOMPOSED_CONTEXT_ANSWER = (
     "I could not find sufficient information in the available documents "
     "to answer this question with confidence."
 )
+SYNTHESIS_ERROR_ANSWER = (
+    "I encountered an error while synthesizing the answer from the "
+    "retrieved sources. Please try rephrasing your question."
+)
 
 DECOMPOSE_SYSTEM_PROMPT = """You are an expert at analyzing financial questions about SEC 10-K filings.
 Your job is to determine if a question requires decomposition into sub-queries, and if so, create them.
@@ -381,8 +385,12 @@ class QueryDecomposer:
                 max_tokens=1024,
                 temperature=0,
             ).choices[0].message.content
-        except Exception as e:
-            if _is_retryable_external_error(e):
+        except Exception as error:
+            if _is_retryable_external_error(error):
                 raise
-            logger.error("Synthesis failed: %s", e)
-            return f"Error synthesizing answer: {e}"
+            logger.exception(
+                "Synthesis failed for question: %s (chunks=%d)",
+                original_question[:80],
+                len(all_chunks),
+            )
+            return SYNTHESIS_ERROR_ANSWER

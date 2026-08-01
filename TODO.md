@@ -5,14 +5,19 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
 
 ## Always-On Deployment
 
-- [ ] Choose the backend host: prefer Oracle A1 when free capacity is available;
-      use Fly.io only with explicit approval for ongoing charges.
+- [ ] Provision `VM.Standard.A1.Flex` in the Singapore home region, targeting
+      `2 OCPU / 8 GB`. The Console exposes this Always Free-eligible option,
+      but actual host capacity remains unverified until instance creation.
 - [x] Verify the Docker `builder` stage for `linux/arm64`. CPU PyTorch and all
       requirements installed successfully through BuildKit emulation.
-- [ ] Build the full ARM64 runtime image, verify both model downloads/imports,
-      and pass a memory smoke test before committing to Oracle A1.
+- [x] Build the full ARM64 runtime image, verify offline inference through both
+      models, and run the API memory smoke test. Peak cgroup memory was
+      `1.821 GiB` with no OOM events under QEMU.
 - [ ] Deploy the backend with persistent storage, secrets, HTTPS, health checks,
       and trusted-proxy configuration.
+- [ ] Run the native ARM64 startup, Tesla query, latency, and memory smoke tests.
+      Use Fly.io only with explicit approval if Oracle capacity or native
+      validation fails.
 - [ ] Point the existing Vercel frontend `VITE_API_BASE_URL` at the always-on
       backend and update backend `ALLOWED_ORIGINS`.
 - [ ] Verify readiness, ticker discovery, streaming, session history, and a

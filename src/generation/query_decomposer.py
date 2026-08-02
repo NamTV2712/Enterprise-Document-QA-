@@ -122,6 +122,20 @@ class DecomposedResponse:
     was_decomposed: bool
 
 
+def _missing_comparative_tickers(sub_queries: list[SubQuery]) -> set[str]:
+    """Return expected company tickers missing from multi-company evidence."""
+    expected_tickers = {sq.ticker for sq in sub_queries if sq.ticker is not None}
+    if len(expected_tickers) < 2:
+        return set()
+
+    evidence_tickers = {
+        chunk.ticker
+        for sq in sub_queries
+        for chunk in sq.retrieved_chunks
+    }
+    return expected_tickers - evidence_tickers
+
+
 class QueryDecomposer:
     def __init__(self, pipeline):
         """Receive RAGPipeline to reuse retriever + generator.
@@ -195,12 +209,14 @@ class QueryDecomposer:
 
         # Deduplicate and synthesis
         all_chunks = self._deduplicate(sub_queries)
-        if len(all_chunks) < MIN_CHUNKS_FOR_SYNTHESIS:
+        missing_tickers = _missing_comparative_tickers(sub_queries)
+        if len(all_chunks) < MIN_CHUNKS_FOR_SYNTHESIS or missing_tickers:
             logger.warning(
-                "Only %d chunks after decomposition, below synthesis threshold %d; "
-                "returning fallback to avoid hallucination.",
+                "Decomposed query has %d unique chunks (minimum %d) and is missing "
+                "evidence for tickers %s; returning fallback to avoid hallucination.",
                 len(all_chunks),
                 MIN_CHUNKS_FOR_SYNTHESIS,
+                sorted(missing_tickers),
             )
             return DecomposedResponse(
                 answer=INSUFFICIENT_DECOMPOSED_CONTEXT_ANSWER,

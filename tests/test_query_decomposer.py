@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 from src.generation.query_decomposer import (
     INSUFFICIENT_DECOMPOSED_CONTEXT_ANSWER,
     QueryDecomposer,
+    SubQuery,
 )
 from src.retrieval.retriever import RetrievedChunk
 
@@ -29,6 +30,18 @@ def _make_chunk(chunk_id: str) -> RetrievedChunk:
         score=0.5,
         text="Amazon context.",
         citation="AMZN 10-K, Section: Business",
+    )
+
+
+def _make_ticker_chunk(chunk_id: str, ticker: str) -> RetrievedChunk:
+    return RetrievedChunk(
+        chunk_id=chunk_id,
+        ticker=ticker,
+        section="mdna",
+        filing_date="2025-01-01",
+        score=1.0,
+        text=f"{ticker} cloud evidence.",
+        citation=f"{ticker} 10-K, Section: MD&A",
     )
 
 
@@ -238,3 +251,95 @@ def test_synthesis_exception_does_not_leak_to_public_response() -> None:
         "I encountered an error while synthesizing the answer from the "
         "retrieved sources. Please try rephrasing your question."
     )
+
+
+def test_comparative_query_with_all_evidence_from_one_company_falls_back(
+    monkeypatch,
+) -> None:
+    """A multi-company comparison must not synthesize one-sided evidence."""
+    decomposer = _make_runnable_decomposer()
+    planned_sub_queries = [
+        {"query": "Apple cloud revenue", "ticker": "AAPL", "section": "mdna"},
+        {"query": "Microsoft cloud revenue", "ticker": "MSFT", "section": "mdna"},
+    ]
+    executed_sub_queries = [
+        SubQuery(
+            **planned_sub_queries[0],
+            retrieved_chunks=[_make_ticker_chunk("AAPL_0", "AAPL")],
+        ),
+        SubQuery(
+            **planned_sub_queries[1],
+            retrieved_chunks=[_make_ticker_chunk("AAPL_1", "AAPL")],
+        ),
+    ]
+    monkeypatch.setattr(
+        decomposer,
+        "_plan",
+        lambda question: {
+            "needs_decomposition": True,
+            "sub_queries": planned_sub_queries,
+        },
+    )
+    monkeypatch.setattr(
+        decomposer,
+        "_execute_parallel",
+        lambda sub_queries, top_k: executed_sub_queries,
+    )
+    synthesize = MagicMock(return_value="one-sided comparison")
+    monkeypatch.setattr(decomposer, "_synthesize", synthesize)
+
+    result = decomposer.run(
+        "Compare Apple and Microsoft's cloud revenue",
+        top_k=3,
+    )
+
+    synthesize.assert_not_called()
+    assert result.answer == INSUFFICIENT_DECOMPOSED_CONTEXT_ANSWER
+    assert result.was_decomposed is True
+    assert {chunk.ticker for chunk in result.all_chunks} == {"AAPL"}
+
+
+def test_comparative_query_with_per_company_evidence_still_synthesizes(
+    monkeypatch,
+) -> None:
+    """Valid multi-company evidence must continue to reach synthesis."""
+    decomposer = _make_runnable_decomposer()
+    planned_sub_queries = [
+        {"query": "Apple cloud revenue", "ticker": "AAPL", "section": "mdna"},
+        {"query": "Microsoft cloud revenue", "ticker": "MSFT", "section": "mdna"},
+    ]
+    executed_sub_queries = [
+        SubQuery(
+            **planned_sub_queries[0],
+            retrieved_chunks=[_make_ticker_chunk("AAPL_0", "AAPL")],
+        ),
+        SubQuery(
+            **planned_sub_queries[1],
+            retrieved_chunks=[_make_ticker_chunk("MSFT_0", "MSFT")],
+        ),
+    ]
+    monkeypatch.setattr(
+        decomposer,
+        "_plan",
+        lambda question: {
+            "needs_decomposition": True,
+            "sub_queries": planned_sub_queries,
+        },
+    )
+    monkeypatch.setattr(
+        decomposer,
+        "_execute_parallel",
+        lambda sub_queries, top_k: executed_sub_queries,
+    )
+    synthesize = MagicMock(return_value="grounded comparison")
+    monkeypatch.setattr(decomposer, "_synthesize", synthesize)
+
+    result = decomposer.run(
+        "Compare Apple and Microsoft's cloud revenue",
+        top_k=3,
+    )
+
+    synthesize.assert_called_once()
+    assert result.answer == "grounded comparison"
+    assert result.was_decomposed is True
+    assert {chunk.ticker for chunk in result.all_chunks} == {"AAPL", "MSFT"}

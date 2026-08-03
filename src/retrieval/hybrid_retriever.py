@@ -241,6 +241,18 @@ class HybridRetriever:
             cutoff = reranked[0][1] * CE_RELATIVE_CUTOFF
             reranked = [(chunk, score) for chunk, score in reranked if score >= cutoff]
 
+        if (
+            structured_match is not None
+            and section is not None
+            and structured_match.chunk.get("section") != section
+        ):
+            logger.debug(
+                "Discarding structured match from section=%s for explicit section=%s",
+                structured_match.chunk.get("section"),
+                section,
+            )
+            structured_match = None
+
         if structured_match is not None:
             matched_id = structured_match.chunk["chunk_id"]
             reranked = _promote_structured_match(reranked, structured_match, top_k)

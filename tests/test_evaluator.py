@@ -1,11 +1,72 @@
+import json
 from types import SimpleNamespace
+
+import pytest
 
 from src.evaluation.evaluator import (
     JUDGE_CONTEXT_CHARS_PER_CHUNK,
+    JudgeParseError,
     RAGEvaluator,
     compute_recall_proxy,
     _extract_relevant_window,
+    _parse_judge_response,
 )
+
+
+def test_malformed_judge_json_raises_instead_of_returning_zero_scores() -> None:
+    evaluator = RAGEvaluator(SimpleNamespace())
+    evaluator._call_judge = lambda prompt: "I cannot evaluate this properly."
+
+    with pytest.raises(JudgeParseError):
+        evaluator.evaluate_one(
+            question="test question",
+            answer="test answer",
+            chunks=[],
+            ground_truth="test ground truth",
+        )
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "missing_field",
+        "unexpected_field",
+        "string_score",
+        "null_score",
+        "out_of_range_score",
+        "non_finite_score",
+        "null_reason",
+        "non_object",
+    ],
+)
+def test_invalid_judge_schema_raises_parse_error(case: str) -> None:
+    payload = {
+        "faithfulness": 1.0,
+        "faithfulness_reason": "grounded",
+        "answer_relevancy": 0.9,
+        "relevancy_reason": "relevant",
+        "context_precision": 0.8,
+        "precision_reason": "precise",
+    }
+    if case == "missing_field":
+        payload.pop("context_precision")
+    elif case == "unexpected_field":
+        payload["extra"] = "unexpected"
+    elif case == "string_score":
+        payload["faithfulness"] = "1.0"
+    elif case == "null_score":
+        payload["answer_relevancy"] = None
+    elif case == "out_of_range_score":
+        payload["context_precision"] = 1.1
+    elif case == "non_finite_score":
+        payload["faithfulness"] = float("nan")
+    elif case == "null_reason":
+        payload["precision_reason"] = None
+
+    raw = "[]" if case == "non_object" else json.dumps(payload)
+
+    with pytest.raises(JudgeParseError):
+        _parse_judge_response(raw)
 
 
 def test_judge_prompt_includes_evidence_beyond_old_250_character_preview() -> None:

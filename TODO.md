@@ -35,6 +35,15 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
       (`97,690`) existed in `financial_table_0002` but was absent from every
       tested top result.
 
+## Evaluation Integrity
+
+- [x] Reject malformed or schema-invalid judge responses instead of recording
+      silent zero scores; preserve retries for provider/network failures.
+- [x] Confirm the official N=30 artifact contains no silent parse-error records.
+- [ ] Fingerprint checkpoints against test-case, model, corpus, and runtime
+      configuration so stale records cannot be reused by question text alone.
+- [ ] Share one mode-aware chunk loader across API, evaluation, and diagnostics.
+
 ## Backlog
 
 - [ ] Add entity/ticker auto-detection only if diagnostics show that unfiltered

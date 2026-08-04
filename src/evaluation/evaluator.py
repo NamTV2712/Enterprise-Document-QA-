@@ -6,6 +6,7 @@ Faithfulness, Answer Relevancy, and Context Precision.
 
 import json
 import logging
+import math
 import re
 from dataclasses import dataclass
 
@@ -20,6 +21,12 @@ Your job is to evaluate responses objectively and return ONLY valid JSON.
 Do not add any explanation outside the JSON object."""
 JUDGE_CONTEXT_CHARS_PER_CHUNK = 1000
 RELEVANCE_WINDOW_STRIDE = 200
+JUDGE_SCORE_FIELDS = ("faithfulness", "answer_relevancy", "context_precision")
+JUDGE_REASON_FIELDS = ("faithfulness_reason", "relevancy_reason", "precision_reason")
+
+
+class JudgeParseError(ValueError):
+    """The judge response is not a valid evaluation result."""
 
 
 @dataclass
@@ -39,6 +46,58 @@ class EvalResult:
     @property
     def average_score(self) -> float:
         return round((self.faithfulness + self.answer_relevancy + self.context_precision) / 3, 4)
+
+
+def _parse_judge_response(raw: str) -> dict:
+    """Parse and validate the complete judge response schema."""
+    raw = raw.strip()
+    if raw.startswith("```"):
+        parts = raw.split("```")
+        if len(parts) < 3:
+            raise JudgeParseError("Judge response contains an incomplete markdown fence")
+        raw = parts[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+
+    match = re.search(r"\{.*\}", raw, flags=re.DOTALL)
+    if match:
+        raw = match.group(0)
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as error:
+        logger.error("Judge returned invalid JSON: %s\nRaw: %s", error, raw[:200])
+        raise JudgeParseError("Judge response is not valid JSON") from error
+
+    if not isinstance(data, dict):
+        raise JudgeParseError("Judge response must be a JSON object")
+
+    required_fields = set(JUDGE_SCORE_FIELDS + JUDGE_REASON_FIELDS)
+    missing_fields = sorted(required_fields - data.keys())
+    if missing_fields:
+        raise JudgeParseError(
+            f"Judge response is missing required fields: {', '.join(missing_fields)}"
+        )
+
+    unexpected_fields = sorted(data.keys() - required_fields)
+    if unexpected_fields:
+        raise JudgeParseError(
+            f"Judge response contains unexpected fields: {', '.join(unexpected_fields)}"
+        )
+
+    for field in JUDGE_SCORE_FIELDS:
+        value = data[field]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise JudgeParseError(f"Judge score {field} must be numeric")
+        if not math.isfinite(value) or not 0.0 <= value <= 1.0:
+            raise JudgeParseError(f"Judge score {field} must be within [0, 1]")
+        data[field] = float(value)
+
+    for field in JUDGE_REASON_FIELDS:
+        if not isinstance(data[field], str):
+            raise JudgeParseError(f"Judge reason {field} must be a string")
+
+    return data
 
 
 def compute_citation_correctness(answer: str, num_sources: int) -> float | None:
@@ -193,27 +252,7 @@ Scoring guide:
 
         raw = self._call_judge(prompt)
 
-        # Strip markdown fences if the model returns ```json ... ```.
-        raw = raw.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-
-        # Fall back to the first JSON object if the judge adds extra text.
-        match = re.search(r"\{.*\}", raw, flags=re.DOTALL)
-        if match:
-            raw = match.group(0)
-
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError as e:
-            logger.error("Judge returned invalid JSON: %s\nRaw: %s", e, raw[:200])
-            return {
-                "faithfulness": 0.0, "faithfulness_reason": "parse error",
-                "answer_relevancy": 0.0, "relevancy_reason": "parse error",
-                "context_precision": 0.0, "precision_reason": "parse error",
-            }
+        return _parse_judge_response(raw)
 
     def _call_judge(self, prompt: str) -> str:
         response = self.judge.client.chat.completions.create(

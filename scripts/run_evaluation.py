@@ -15,6 +15,7 @@ from typing import Callable, TypeVar
 
 from configs.settings import settings
 from src.evaluation.evaluator import (
+    JudgeParseError,
     RAGEvaluator,
     check_fallback_correctness,
     compute_citation_correctness,
@@ -36,6 +37,8 @@ CHECKPOINT_PATH = Path("data/eval_checkpoint.jsonl")
 OUTPUT_PATH = Path("data/evaluation_results_v2.json")
 MAX_RETRIES = 2
 RETRY_BACKOFF_SECONDS = [5, 15]
+JUDGE_PARSE_INVALID_STATUS = "JUDGE_PARSE_INVALID"
+JUDGE_SKIPPED_QUOTA_STATUS = "JUDGE_SKIPPED_QUOTA"
 
 T = TypeVar("T")
 
@@ -95,10 +98,19 @@ def call_with_capped_retry(fn: Callable[..., T], *args, **kwargs) -> tuple[T | N
             time.sleep(wait)
         try:
             return fn(*args, **kwargs), None
+        except JudgeParseError as error:
+            logger.error("Judge response invalid; not retrying: %s", error)
+            return None, f"{JUDGE_PARSE_INVALID_STATUS}: {error}"
         except Exception as e:
             last_error = str(e)
             logger.warning("Attempt %d failed: %s", attempt, last_error[:180])
     return None, last_error
+
+
+def _judge_failure_status(error: str | None) -> str:
+    if error and error.startswith(f"{JUDGE_PARSE_INVALID_STATUS}:"):
+        return JUDGE_PARSE_INVALID_STATUS
+    return JUDGE_SKIPPED_QUOTA_STATUS
 
 
 def _sub_queries(response: DecomposedResponse) -> list[dict]:
@@ -393,10 +405,11 @@ def main() -> None:
             )
 
             if judge_scores is None:
+                judge_status = _judge_failure_status(judge_error)
                 record = {
                     "question": tc.question,
                     "category": tc.category,
-                    "status": "JUDGE_SKIPPED_QUOTA",
+                    "status": judge_status,
                     "error": judge_error,
                     "answer": response.answer,
                     "latency_seconds": round(latency, 3),
@@ -408,7 +421,7 @@ def main() -> None:
                 }
                 append_checkpoint(record)
                 skipped.append(record)
-                logger.error("Skipped judge due to quota/error: %s", tc.question[:60])
+                logger.error("Skipped judge with status %s: %s", judge_status, tc.question[:60])
                 continue
 
             record = _record_success(tc, response, judge_scores, latency)

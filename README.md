@@ -5,6 +5,8 @@
 ![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB-DC244C?style=for-the-badge)
 ![RAG](https://img.shields.io/badge/RAG-Hybrid_Retrieval-7C3AED?style=for-the-badge)
 ![Groq](https://img.shields.io/badge/Groq-LLM_Generation-F55036?style=for-the-badge)
+[![Backend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/backend.yml/badge.svg)](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/backend.yml)
+[![Frontend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/frontend.yml/badge.svg)](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/frontend.yml)
 
 Enterprise Document QA is a production-style Retrieval-Augmented Generation application for answering grounded questions over SEC 10-K filings.
 The system ingests a 50-company filing corpus, extracts key sections and financial tables, builds a hybrid search index, and serves cited financial answers through a Vite/React research workspace backed by FastAPI streaming, semantic caching, multi-turn memory, and query decomposition.
@@ -331,6 +333,33 @@ Run evaluation:
 ```powershell
 .venv\Scripts\python.exe -m scripts.run_evaluation
 ```
+
+## Continuous Integration
+
+GitHub Actions runs separate path-filtered quality gates for the backend and
+frontend. The backend job uses Python 3.12 with CPU-only PyTorch, runs the full
+quota-free test suite, and compiles `src`, `scripts`, and `configs`. Hugging Face
+offline flags prevent accidental model downloads. The frontend job uses the
+project-pinned Bun `1.3.14`, installs from `bun.lock`, type-checks, runs Vitest,
+and builds the production bundle.
+
+Run the same checks locally:
+
+```powershell
+.venv\Scripts\python.exe -m pytest tests/ -v
+.venv\Scripts\python.exe -m compileall src scripts configs
+```
+
+```bash
+cd frontend
+bun install --frozen-lockfile
+bun run lint
+bun run test
+bun run build
+```
+
+Use `bun run test`, not `bun test`: the latter invokes Bun's native test runner
+instead of the repository's configured Vitest/jsdom environment.
 
 ## Running With Docker
 

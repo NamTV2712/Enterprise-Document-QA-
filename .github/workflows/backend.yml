@@ -1,0 +1,53 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - ".github/workflows/backend.yml"
+      - "configs/**"
+      - "scripts/**"
+      - "src/**"
+      - "tests/**"
+      - "requirements.txt"
+      - "pytest.ini"
+  pull_request:
+    paths:
+      - ".github/workflows/backend.yml"
+      - "configs/**"
+      - "scripts/**"
+      - "src/**"
+      - "tests/**"
+      - "requirements.txt"
+      - "pytest.ini"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install CPU-only PyTorch
+        run: python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run tests
+        run: python -m pytest tests/ -v
+
+      - name: Compile check
+        run: python -m compileall src scripts configs

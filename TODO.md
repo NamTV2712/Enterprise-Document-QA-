@@ -40,8 +40,9 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
 - [x] Reject malformed or schema-invalid judge responses instead of recording
       silent zero scores; preserve retries for provider/network failures.
 - [x] Confirm the official N=30 artifact contains no silent parse-error records.
-- [ ] Fingerprint checkpoints against test-case, model, corpus, and runtime
-      configuration so stale records cannot be reused by question text alone.
+- [x] Fingerprint checkpoints against all semantic test-case fields plus explicit
+      generator/judge models and a schema version; reject incompatible legacy
+      records instead of reusing by question text alone.
 - [ ] Share one mode-aware chunk loader across API, evaluation, and diagnostics.
 
 ## Backlog

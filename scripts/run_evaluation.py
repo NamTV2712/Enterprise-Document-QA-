@@ -8,7 +8,9 @@ import json
 import logging
 import time
 import argparse
+import hashlib
 from collections import defaultdict
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, TypeVar
@@ -39,6 +41,9 @@ MAX_RETRIES = 2
 RETRY_BACKOFF_SECONDS = [5, 15]
 JUDGE_PARSE_INVALID_STATUS = "JUDGE_PARSE_INVALID"
 JUDGE_SKIPPED_QUOTA_STATUS = "JUDGE_SKIPPED_QUOTA"
+EVALUATION_FINGERPRINT_VERSION = 1
+GENERATOR_MODEL = "llama-3.3-70b-versatile"
+JUDGE_MODEL = "llama-3.3-70b-versatile"
 
 T = TypeVar("T")
 
@@ -61,8 +66,29 @@ def _average(values: list[float]) -> float:
     return sum(values) / len(values) if values else 0.0
 
 
-def load_checkpoint(selected_questions: set[str] | None = None) -> dict[str, dict]:
-    """Load completed checkpoint records keyed by selected question."""
+def evaluation_fingerprint(
+    test_case: TestCase,
+    generator_model: str = GENERATOR_MODEL,
+    judge_model: str = JUDGE_MODEL,
+) -> str:
+    """Return a stable identity for one test case and its evaluation models."""
+    payload = {
+        "version": EVALUATION_FINGERPRINT_VERSION,
+        "generator_model": generator_model,
+        "judge_model": judge_model,
+        **asdict(test_case),
+    }
+    canonical = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def load_checkpoint(expected_fingerprints: dict[str, str]) -> dict[str, dict]:
+    """Load only successful checkpoint records with compatible identities."""
     if not CHECKPOINT_PATH.exists():
         return {}
 
@@ -72,11 +98,13 @@ def load_checkpoint(selected_questions: set[str] | None = None) -> dict[str, dic
             if not line.strip():
                 continue
             record = json.loads(line)
+            question = record.get("question")
             if (
                 record.get("status") == "OK"
-                and (selected_questions is None or record["question"] in selected_questions)
+                and question in expected_fingerprints
+                and record.get("fingerprint") == expected_fingerprints[question]
             ):
-                done[record["question"]] = record
+                done[question] = record
 
     logger.info("Checkpoint loaded: %d completed cases", len(done))
     return done
@@ -130,6 +158,7 @@ def _record_success(
     response: DecomposedResponse,
     judge_scores,
     latency: float,
+    fingerprint: str,
 ) -> dict:
     citation_score = None
     if not tc.expects_fallback:
@@ -149,6 +178,7 @@ def _record_success(
         "ticker": tc.ticker,
         "section": tc.section,
         "status": "OK",
+        "fingerprint": fingerprint,
         "answer": response.answer,
         "faithfulness": judge_scores.faithfulness,
         "answer_relevancy": judge_scores.answer_relevancy,
@@ -276,6 +306,7 @@ def _print_summary(records: list[dict], skipped: list[dict], generator: Generato
 
     output = {
         "timestamp": datetime.now().isoformat(),
+        "evaluation_fingerprint_version": EVALUATION_FINGERPRINT_VERSION,
         "generator_model": generator.model,
         "judge_model": judge.model,
         "num_test_cases": len(records),
@@ -344,15 +375,18 @@ def main() -> None:
         CHECKPOINT_PATH.unlink()
         logger.info("Deleted checkpoint for fresh run: %s", CHECKPOINT_PATH)
 
-    selected_questions = {tc.question for tc in test_set}
-    done_cases = load_checkpoint(selected_questions)
+    expected_fingerprints = {
+        tc.question: evaluation_fingerprint(tc)
+        for tc in test_set
+    }
+    done_cases = load_checkpoint(expected_fingerprints)
     records = list(done_cases.values())
     skipped = []
 
     embedder = Embedder()
     generation_api_key = settings.groq_api_key_fall_back or None
-    generator = Generator(api_key=generation_api_key)
-    judge_generator = Generator(model="llama-3.3-70b-versatile")
+    generator = Generator(model=GENERATOR_MODEL, api_key=generation_api_key)
+    judge_generator = Generator(model=JUDGE_MODEL)
     evaluator = RAGEvaluator(judge_generator=judge_generator)
 
     with VectorStore(
@@ -387,6 +421,7 @@ def main() -> None:
                     "question": tc.question,
                     "category": tc.category,
                     "status": "SKIPPED_QUOTA",
+                    "fingerprint": expected_fingerprints[tc.question],
                     "error": error,
                     "timestamp": datetime.now().isoformat(),
                 }
@@ -410,6 +445,7 @@ def main() -> None:
                     "question": tc.question,
                     "category": tc.category,
                     "status": judge_status,
+                    "fingerprint": expected_fingerprints[tc.question],
                     "error": judge_error,
                     "answer": response.answer,
                     "latency_seconds": round(latency, 3),
@@ -424,7 +460,13 @@ def main() -> None:
                 logger.error("Skipped judge with status %s: %s", judge_status, tc.question[:60])
                 continue
 
-            record = _record_success(tc, response, judge_scores, latency)
+            record = _record_success(
+                tc,
+                response,
+                judge_scores,
+                latency,
+                expected_fingerprints[tc.question],
+            )
             append_checkpoint(record)
             records.append(record)
             logger.info(

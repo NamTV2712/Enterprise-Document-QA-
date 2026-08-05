@@ -45,6 +45,13 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
       records instead of reusing by question text alone.
 - [ ] Share one mode-aware chunk loader across API, evaluation, and diagnostics.
 
+## Quality Gates
+
+- [x] Run path-filtered backend CI with CPU-only dependencies, offline model
+      guards, the full test suite, and compile checks.
+- [x] Run path-filtered frontend CI with pinned Bun, frozen dependencies,
+      TypeScript checking, Vitest, and the production build.
+
 ## Backlog
 
 - [ ] Add entity/ticker auto-detection only if diagnostics show that unfiltered

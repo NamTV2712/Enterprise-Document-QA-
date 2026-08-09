@@ -43,7 +43,10 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
 - [x] Fingerprint checkpoints against all semantic test-case fields plus explicit
       generator/judge models and a schema version; reject incompatible legacy
       records instead of reusing by question text alone.
-- [ ] Share one mode-aware chunk loader across API, evaluation, and diagnostics.
+- [x] Share one mode-aware chunk loader across API, evaluation, and diagnostics.
+      Local mode reads nested embedded JSONL artifacts without retaining dense
+      vectors; cloud mode scrolls Qdrant payloads. Source-selection and local
+      filesystem behavior are covered by dedicated regression tests.
 
 ## Quality Gates
 

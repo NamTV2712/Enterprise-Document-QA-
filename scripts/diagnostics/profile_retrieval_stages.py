@@ -11,12 +11,12 @@ import argparse
 import time
 
 from configs.settings import settings
+from src.retrieval.chunk_loader import load_retrieval_chunks
 from src.retrieval.embedder import Embedder
 from src.retrieval.hybrid_retriever import (
     CROSS_ENCODER_BATCH_SIZE,
     HybridRetriever,
     _tokenize,
-    load_embedded_chunks,
 )
 from src.retrieval.vector_store import VectorStore
 
@@ -111,7 +111,7 @@ def main() -> None:
         url=settings.qdrant_cloud_url,
         api_key=settings.qdrant_cloud_api_key,
     ) as store:
-        chunks = load_embedded_chunks(settings.data_processed_dir)
+        chunks = load_retrieval_chunks(store, settings.data_processed_dir)
         retriever = HybridRetriever(embedder=embedder, store=store, all_chunks=chunks)
 
         # Warm up models before recording measurements.

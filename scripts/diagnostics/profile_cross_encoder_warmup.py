@@ -11,11 +11,11 @@ from __future__ import annotations
 import time
 
 from configs.settings import settings
+from src.retrieval.chunk_loader import load_retrieval_chunks
 from src.retrieval.embedder import Embedder
 from src.retrieval.hybrid_retriever import (
     HybridRetriever,
     _tokenize,
-    load_embedded_chunks,
 )
 from src.retrieval.vector_store import VectorStore
 
@@ -33,7 +33,7 @@ def build_retriever_and_real_pairs() -> tuple[HybridRetriever, list[tuple[str, s
         url=settings.qdrant_cloud_url,
         api_key=settings.qdrant_cloud_api_key,
     )
-    chunks = load_embedded_chunks(settings.data_processed_dir)
+    chunks = load_retrieval_chunks(store, settings.data_processed_dir)
     retriever = HybridRetriever(embedder=embedder, store=store, all_chunks=chunks)
     query_embedding = retriever.embed_query(QUERY)
     bm25_scores = retriever.bm25.get_scores(_tokenize(QUERY))

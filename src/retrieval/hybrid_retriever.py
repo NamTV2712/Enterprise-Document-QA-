@@ -11,10 +11,8 @@ no changes needed, just swap objects.
 """
 
 import logging
-import json
 import re
 import threading
-from pathlib import Path
 
 from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder
@@ -34,17 +32,6 @@ CE_RELATIVE_CUTOFF = 0.50
 
 def _tokenize(text: str) -> list[str]:
     return re.findall(r"[a-z0-9]+", text.lower())
-
-
-def load_embedded_chunks(data_processed_dir: Path) -> list[dict]:
-    chunks = []
-    for path in sorted(data_processed_dir.glob("*/*_chunks_embedded.jsonl")):
-        with path.open(encoding="utf-8") as f:
-            for line in f:
-                record = json.loads(line)
-                record.pop("embedding", None)
-                chunks.append(record)
-    return chunks
 
 
 def _select_adaptive_chunks(

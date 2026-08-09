@@ -11,8 +11,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from configs.settings import settings
+from src.retrieval.chunk_loader import load_retrieval_chunks
 from src.retrieval.embedder import Embedder
-from src.retrieval.hybrid_retriever import HybridRetriever, load_embedded_chunks
+from src.retrieval.hybrid_retriever import HybridRetriever
 from src.retrieval.vector_store import VectorStore
 
 
@@ -56,7 +57,7 @@ def main() -> None:
         url=settings.qdrant_cloud_url,
         api_key=settings.qdrant_cloud_api_key,
     ) as store:
-        chunks = load_embedded_chunks(settings.data_processed_dir)
+        chunks = load_retrieval_chunks(store, settings.data_processed_dir)
         retriever = HybridRetriever(embedder=embedder, store=store, all_chunks=chunks)
 
         # Warm up model and local indexes before measuring.

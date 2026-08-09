@@ -122,16 +122,6 @@ def test_allowed_origins_parses_comma_separated_env_value() -> None:
     ]
 
 
-def test_cloud_retrieval_chunks_load_from_qdrant_payloads() -> None:
-    store = MagicMock(mode="cloud")
-    store.load_all_chunks.return_value = [{"chunk_id": "cloud-chunk"}]
-
-    assert app_module._load_retrieval_chunks(store) == [
-        {"chunk_id": "cloud-chunk"}
-    ]
-    store.load_all_chunks.assert_called_once_with()
-
-
 def test_cors_preflight_allows_configured_frontend(client) -> None:
     response = client.options(
         "/query",

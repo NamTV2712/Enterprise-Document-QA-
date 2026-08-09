@@ -27,8 +27,9 @@ from src.evaluation.test_set import TEST_SET, TestCase
 from src.generation.query_decomposer import DecomposedResponse, QueryDecomposer
 from src.generation.generator import Generator
 from src.generation.rag_pipeline import RAGPipeline
+from src.retrieval.chunk_loader import load_retrieval_chunks
 from src.retrieval.embedder import Embedder
-from src.retrieval.hybrid_retriever import HybridRetriever, load_embedded_chunks
+from src.retrieval.hybrid_retriever import HybridRetriever
 from src.retrieval.vector_store import VectorStore
 
 logging.basicConfig(level=logging.INFO,
@@ -395,7 +396,7 @@ def main() -> None:
         url=settings.qdrant_cloud_url,
         api_key=settings.qdrant_cloud_api_key,
     ) as store:
-        all_chunks = load_embedded_chunks(settings.data_processed_dir)
+        all_chunks = load_retrieval_chunks(store, settings.data_processed_dir)
         logger.info("Loaded %d chunks for BM25 index", len(all_chunks))
         retriever = HybridRetriever(embedder=embedder, store=store, all_chunks=all_chunks)
         pipeline = RAGPipeline(retriever=retriever, generator=generator)

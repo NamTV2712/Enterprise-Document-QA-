@@ -27,8 +27,9 @@ from configs.tickers import TICKERS
 from src.generation.generator import Generator
 from src.generation.query_decomposer import QueryDecomposer
 from src.generation.rag_pipeline import RAGPipeline
+from src.retrieval.chunk_loader import load_retrieval_chunks
 from src.retrieval.embedder import Embedder
-from src.retrieval.hybrid_retriever import HybridRetriever, load_embedded_chunks
+from src.retrieval.hybrid_retriever import HybridRetriever
 from src.retrieval.vector_store import VectorStore
 
 import json as json_lib
@@ -74,12 +75,6 @@ def _load_supported_tickers() -> list[str]:
     return tickers or TICKERS
 
 
-def _load_retrieval_chunks(store: VectorStore) -> list[dict]:
-    if store.mode == "cloud":
-        return store.load_all_chunks()
-    return load_embedded_chunks(settings.data_processed_dir)
-
-
 def _embed_query_pair(
     pipeline: RAGPipeline,
     query_a: str,
@@ -114,7 +109,7 @@ async def lifespan(app: FastAPI):
         url=settings.qdrant_cloud_url,
         api_key=settings.qdrant_cloud_api_key,
     )
-    all_chunks = _load_retrieval_chunks(store)
+    all_chunks = load_retrieval_chunks(store, settings.data_processed_dir)
     if not all_chunks:
         store.close()
         raise RuntimeError("No searchable chunks are available for retrieval")

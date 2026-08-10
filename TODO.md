@@ -47,6 +47,14 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
       Local mode reads nested embedded JSONL artifacts without retaining dense
       vectors; cloud mode scrolls Qdrant payloads. Source-selection and local
       filesystem behavior are covered by dedicated regression tests.
+- [x] Add deterministic corpus/retrieval/replay/diagnostic fingerprints and
+      trusted local-index manifest generation. The manifest binds canonical
+      payloads, exact vector build inputs, pinned embedding revision, dimension,
+      distance metric, point count, and builder version; it is published only
+      after successful verification.
+- [ ] With explicit approval, force re-embed all chunks using the pinned model
+      revision, rebuild the local Qdrant collection, publish its trusted manifest,
+      verify retrieval, then remigrate Cloud before claiming strict comparability.
 
 ## Quality Gates
 

@@ -300,8 +300,11 @@ GROQ_API_KEY=your_groq_key
 GROQ_API_KEY_FALL_BACK=optional_second_groq_key_for_evaluation
 QDRANT_MODE=local
 QDRANT_LOCAL_PATH=data/processed/qdrant
+QDRANT_INDEX_MANIFEST_PATH=data/processed/qdrant_index_manifest.json
 QDRANT_CLOUD_URL=
 QDRANT_CLOUD_API_KEY=
+EMBEDDING_MODEL_ID=nomic-ai/nomic-embed-text-v1.5
+EMBEDDING_MODEL_REVISION=<exact-hugging-face-commit>
 ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 LLM_RATE_LIMIT_BURST=10/minute
 LLM_RATE_LIMIT_DAILY=100/day
@@ -321,6 +324,15 @@ Build local artifacts in order:
 .venv\Scripts\python.exe -m scripts.embed_chunks
 .venv\Scripts\python.exe -m scripts.index_chunks
 ```
+
+`EMBEDDING_MODEL_REVISION` is required for trusted embedding and index rebuilds.
+With a pinned revision, `scripts.embed_chunks` deliberately recomputes every
+embedding instead of trusting file modification times from an older model build.
+The indexing command validates all vector dimensions, hashes the canonical corpus
+and exact vector build inputs, verifies the final Qdrant point count, and only
+then atomically publishes `QDRANT_INDEX_MANIFEST_PATH`. If rebuilding fails after
+the collection is modified, the old manifest remains invalidated rather than
+claiming that a partial index is trusted.
 
 Run a smoke test:
 

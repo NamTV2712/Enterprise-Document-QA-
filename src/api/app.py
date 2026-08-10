@@ -115,7 +115,10 @@ async def lifespan(app: FastAPI):
         raise RuntimeError("No searchable chunks are available for retrieval")
     logger.info("Loaded %d chunks for BM25 index", len(all_chunks))
 
-    embedder = Embedder()
+    embedder = Embedder(
+        model_name=settings.embedding_model_id,
+        revision=settings.embedding_model_revision or None,
+    )
     retriever = HybridRetriever(embedder=embedder, store=store, all_chunks=all_chunks)
     generator = Generator()
     pipeline = RAGPipeline(retriever=retriever, generator=generator)

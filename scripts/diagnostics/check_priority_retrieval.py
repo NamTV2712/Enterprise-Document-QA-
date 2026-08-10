@@ -33,7 +33,10 @@ def main() -> None:
     print(f"Qdrant mode: {settings.qdrant_mode}")
     print(f"Evaluating {len(test_cases)} priority-{args.priority} cases")
 
-    embedder = Embedder()
+    embedder = Embedder(
+        model_name=settings.embedding_model_id,
+        revision=settings.embedding_model_revision or None,
+    )
     with VectorStore(
         mode=settings.qdrant_mode,
         path=settings.qdrant_local_path,

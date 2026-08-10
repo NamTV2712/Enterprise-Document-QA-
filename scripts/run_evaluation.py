@@ -384,7 +384,10 @@ def main() -> None:
     records = list(done_cases.values())
     skipped = []
 
-    embedder = Embedder()
+    embedder = Embedder(
+        model_name=settings.embedding_model_id,
+        revision=settings.embedding_model_revision or None,
+    )
     generation_api_key = settings.groq_api_key_fall_back or None
     generator = Generator(model=GENERATOR_MODEL, api_key=generation_api_key)
     judge_generator = Generator(model=JUDGE_MODEL)

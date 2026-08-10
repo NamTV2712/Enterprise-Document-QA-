@@ -17,8 +17,15 @@ class Settings(BaseSettings):
     # Qdrant configuration. Keep local as the safe default until cloud migration is verified.
     qdrant_mode: str = "local"
     qdrant_local_path: Path = Path("data/processed/qdrant")
+    qdrant_index_manifest_path: Path = Path(
+        "data/processed/qdrant_index_manifest.json"
+    )
     qdrant_cloud_url: str = ""
     qdrant_cloud_api_key: str = ""
+
+    # Required provenance for trusted embedding/index rebuilds.
+    embedding_model_id: str = "nomic-ai/nomic-embed-text-v1.5"
+    embedding_model_revision: str = ""
 
     # Browser origins allowed to call the API. Add the deployed frontend URL via env.
     allowed_origins: str = "http://localhost:3000,http://localhost:5173"

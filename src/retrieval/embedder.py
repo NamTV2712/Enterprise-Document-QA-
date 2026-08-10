@@ -24,11 +24,24 @@ def resolve_torch_device(device: str = AUTO_DEVICE) -> str:
 
 
 class Embedder:
-    def __init__(self, model_name: str = MODEL_NAME, device: str = AUTO_DEVICE):
+    def __init__(
+        self,
+        model_name: str = MODEL_NAME,
+        device: str = AUTO_DEVICE,
+        revision: str | None = None,
+    ):
         self.device = resolve_torch_device(device)
-        logger.info("Loading embedding model: %s on %s", model_name, self.device)
+        self.model_name = model_name
+        self.model_revision = revision
+        logger.info(
+            "Loading embedding model: %s (revision=%s) on %s",
+            model_name,
+            revision or "unversioned",
+            self.device,
+        )
         self.model = SentenceTransformer(
             model_name,
+            revision=revision,
             trust_remote_code=True,
             device=self.device,
         )

@@ -17,9 +17,18 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def process_chunks_file(embedder: Embedder, chunks_path: Path) -> Path:
+def process_chunks_file(
+    embedder: Embedder,
+    chunks_path: Path,
+    *,
+    force: bool = False,
+) -> Path:
     output_path = chunks_path.with_name(f"{chunks_path.stem}_embedded.jsonl")
-    if output_path.exists() and output_path.stat().st_mtime >= chunks_path.stat().st_mtime:
+    if (
+        not force
+        and output_path.exists()
+        and output_path.stat().st_mtime >= chunks_path.stat().st_mtime
+    ):
         logger.info("Skipping already embedded chunks file: %s", output_path)
         return output_path
     if output_path.exists():
@@ -49,7 +58,15 @@ def process_chunks_file(embedder: Embedder, chunks_path: Path) -> Path:
 
 
 def main() -> None:
-    embedder = Embedder()
+    if not settings.embedding_model_revision:
+        raise ValueError(
+            "EMBEDDING_MODEL_REVISION must pin the exact Hugging Face commit "
+            "before rebuilding embedded artifacts"
+        )
+    embedder = Embedder(
+        model_name=settings.embedding_model_id,
+        revision=settings.embedding_model_revision,
+    )
     chunks_files = sorted(settings.data_processed_dir.glob("*/*_chunks.jsonl"))
 
     if not chunks_files:
@@ -57,7 +74,9 @@ def main() -> None:
         return
 
     for chunks_path in chunks_files:
-        process_chunks_file(embedder, chunks_path)
+        # A pinned-revision build must never reuse vectors whose model
+        # provenance was established only by filesystem freshness.
+        process_chunks_file(embedder, chunks_path, force=True)
 
 
 if __name__ == "__main__":

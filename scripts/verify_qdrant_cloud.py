@@ -16,7 +16,10 @@ def main() -> None:
             "QDRANT_CLOUD_URL and QDRANT_CLOUD_API_KEY must be configured in .env"
         )
 
-    embedder = Embedder()
+    embedder = Embedder(
+        model_name=settings.embedding_model_id,
+        revision=settings.embedding_model_revision or None,
+    )
     query_vector = embedder.embed_query("What was Apple's total net sales in 2024?")
 
     with VectorStore(path=settings.qdrant_local_path) as local_store:

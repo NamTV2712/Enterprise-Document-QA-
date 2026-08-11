@@ -3,12 +3,15 @@ Script: embed_chunks.py
 Run: python -m scripts.embed_chunks  (from the project's root directory)
 """
 
-import json
+import argparse
 import logging
-from pathlib import Path
+
+import sentence_transformers
+import torch
 
 from configs.settings import settings
-from src.retrieval.embedder import Embedder
+from src.retrieval.embedder import DOCUMENT_PREFIX, Embedder
+from src.retrieval.embedding_generation import build_embedding_generation
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,48 +19,23 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+EMBEDDING_BUILDER_VERSION = "embedding-builder-v1-generation"
 
-def process_chunks_file(
-    embedder: Embedder,
-    chunks_path: Path,
-    *,
-    force: bool = False,
-) -> Path:
-    output_path = chunks_path.with_name(f"{chunks_path.stem}_embedded.jsonl")
-    if (
-        not force
-        and output_path.exists()
-        and output_path.stat().st_mtime >= chunks_path.stat().st_mtime
-    ):
-        logger.info("Skipping already embedded chunks file: %s", output_path)
-        return output_path
-    if output_path.exists():
-        logger.info("Re-embedding stale chunks file: %s", chunks_path)
 
-    records = [
-        json.loads(line)
-        for line in chunks_path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
-    if not records:
-        logger.warning("Skipping empty chunks file: %s", chunks_path)
-        return output_path
-
-    texts = [record["text"] for record in records]
-    embeddings = embedder.embed_documents(texts)
-
-    for record, embedding in zip(records, embeddings):
-        record["embedding"] = embedding
-
-    with output_path.open("w", encoding="utf-8") as file:
-        for record in records:
-            file.write(json.dumps(record, ensure_ascii=False) + "\n")
-
-    logger.info("Embedded %d chunks -> %s", len(records), output_path)
-    return output_path
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Build a new immutable embedding generation"
+    )
+    parser.add_argument(
+        "--generation-id",
+        required=True,
+        help="Unique generation directory name; existing directories are rejected",
+    )
+    return parser.parse_args()
 
 
 def main() -> None:
+    args = _parse_args()
     if not settings.embedding_model_revision:
         raise ValueError(
             "EMBEDDING_MODEL_REVISION must pin the exact Hugging Face commit "
@@ -67,16 +45,30 @@ def main() -> None:
         model_name=settings.embedding_model_id,
         revision=settings.embedding_model_revision,
     )
-    chunks_files = sorted(settings.data_processed_dir.glob("*/*_chunks.jsonl"))
-
-    if not chunks_files:
-        logger.warning("No *_chunks.jsonl files found in %s", settings.data_processed_dir)
-        return
-
-    for chunks_path in chunks_files:
-        # A pinned-revision build must never reuse vectors whose model
-        # provenance was established only by filesystem freshness.
-        process_chunks_file(embedder, chunks_path, force=True)
+    generation_dir, manifest = build_embedding_generation(
+        source_dir=settings.data_processed_dir,
+        generations_root=settings.embedding_generations_dir,
+        generation_id=args.generation_id,
+        embedder=embedder,
+        metadata={
+            "embedding_model_id": settings.embedding_model_id,
+            "embedding_model_revision": settings.embedding_model_revision,
+            "vector_dimension": embedder.dimension,
+            "document_prefix": DOCUMENT_PREFIX,
+            "sentence_transformers_version": sentence_transformers.__version__,
+            "torch_version": torch.__version__,
+            "compute_device": embedder.device,
+            "torch_cuda_version": torch.version.cuda,
+            "embedding_dtype": embedder.embedding_dtype,
+            "normalize_embeddings": embedder.normalize_embeddings,
+            "builder_version": EMBEDDING_BUILDER_VERSION,
+        },
+    )
+    logger.info(
+        "Completed immutable embedding generation %s (%d points)",
+        generation_dir,
+        manifest["point_count"],
+    )
 
 
 if __name__ == "__main__":

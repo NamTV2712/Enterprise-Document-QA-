@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     # Required provenance for trusted embedding/index rebuilds.
     embedding_model_id: str = "nomic-ai/nomic-embed-text-v1.5"
     embedding_model_revision: str = ""
+    embedding_generations_dir: Path = Path("data/embedding_generations")
+    embedding_generation_path: Path | None = None
 
     # Browser origins allowed to call the API. Add the deployed frontend URL via env.
     allowed_origins: str = "http://localhost:3000,http://localhost:5173"

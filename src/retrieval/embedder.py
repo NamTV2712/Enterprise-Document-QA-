@@ -33,6 +33,8 @@ class Embedder:
         self.device = resolve_torch_device(device)
         self.model_name = model_name
         self.model_revision = revision
+        self.normalize_embeddings = False
+        self.embedding_dtype = "float32"
         logger.info(
             "Loading embedding model: %s (revision=%s) on %s",
             model_name,
@@ -57,10 +59,15 @@ class Embedder:
             batch_size=batch_size,
             show_progress_bar=True,
             convert_to_numpy=True,
+            normalize_embeddings=self.normalize_embeddings,
         )
         return embeddings.tolist()
 
     def embed_query(self, text: str) -> list[float]:
         """Embed a user query for retrieval."""
-        embedding = self.model.encode(QUERY_PREFIX + text, convert_to_numpy=True)
+        embedding = self.model.encode(
+            QUERY_PREFIX + text,
+            convert_to_numpy=True,
+            normalize_embeddings=self.normalize_embeddings,
+        )
         return embedding.tolist()

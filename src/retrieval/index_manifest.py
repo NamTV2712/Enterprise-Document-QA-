@@ -13,7 +13,7 @@ from math import isfinite
 from pathlib import Path
 from typing import Any
 
-INDEX_MANIFEST_SCHEMA_VERSION = 1
+INDEX_MANIFEST_SCHEMA_VERSION = 2
 CORPUS_FINGERPRINT_SCHEMA_VERSION = 1
 VECTOR_SNAPSHOT_SCHEMA_VERSION = 1
 REQUIRED_INDEX_MANIFEST_FIELDS = frozenset(
@@ -28,6 +28,8 @@ REQUIRED_INDEX_MANIFEST_FIELDS = frozenset(
         "distance_metric",
         "build_version",
         "snapshot_id",
+        "embedding_generation_id",
+        "embedding_generation_fingerprint",
     }
 )
 
@@ -148,29 +150,57 @@ def _required_text(value: str, *, field_name: str) -> str:
 def build_index_manifest(
     chunks: Sequence[Mapping[str, Any]],
     *,
+    generation_manifest: Mapping[str, Any],
     collection_name: str,
-    embedding_model_id: str,
-    embedding_model_revision: str,
-    vector_dimension: int,
     distance_metric: str,
     build_version: str,
 ) -> dict[str, Any]:
     if not chunks:
         raise ValueError("Cannot build an index manifest for an empty corpus")
+    required_generation_fields = {
+        "generation_id",
+        "embedding_generation_fingerprint",
+        "corpus_fingerprint",
+        "vector_snapshot_id",
+        "point_count",
+        "embedding_model_id",
+        "embedding_model_revision",
+        "vector_dimension",
+        "status",
+    }
+    missing = required_generation_fields - generation_manifest.keys()
+    if missing:
+        raise ValueError(
+            f"Embedding generation manifest is missing fields: {sorted(missing)}"
+        )
+    if generation_manifest.get("status") != "complete":
+        raise ValueError("Embedding generation must be complete before indexing")
+    vector_dimension = generation_manifest["vector_dimension"]
+    expected_corpus = compute_corpus_fingerprint(chunks)
+    expected_snapshot = compute_vector_snapshot_fingerprint(
+        chunks,
+        vector_dimension=vector_dimension,
+    )
+    if generation_manifest.get("point_count") != len(chunks):
+        raise ValueError("Embedding generation point_count does not match chunks")
+    if generation_manifest.get("corpus_fingerprint") != expected_corpus:
+        raise ValueError("Embedding generation corpus_fingerprint does not match chunks")
+    if generation_manifest.get("vector_snapshot_id") != expected_snapshot:
+        raise ValueError("Embedding generation vector_snapshot_id does not match chunks")
     return {
         "schema_version": INDEX_MANIFEST_SCHEMA_VERSION,
         "collection_name": _required_text(
             collection_name,
             field_name="collection_name",
         ),
-        "corpus_fingerprint": compute_corpus_fingerprint(chunks),
+        "corpus_fingerprint": generation_manifest["corpus_fingerprint"],
         "point_count": len(chunks),
         "embedding_model_id": _required_text(
-            embedding_model_id,
+            generation_manifest["embedding_model_id"],
             field_name="embedding_model_id",
         ),
         "embedding_model_revision": _required_text(
-            embedding_model_revision,
+            generation_manifest["embedding_model_revision"],
             field_name="embedding_model_revision",
         ),
         "vector_dimension": vector_dimension,
@@ -179,9 +209,14 @@ def build_index_manifest(
             field_name="distance_metric",
         ),
         "build_version": _required_text(build_version, field_name="build_version"),
-        "snapshot_id": compute_vector_snapshot_fingerprint(
-            chunks,
-            vector_dimension=vector_dimension,
+        "snapshot_id": generation_manifest["vector_snapshot_id"],
+        "embedding_generation_id": _required_text(
+            generation_manifest["generation_id"],
+            field_name="embedding_generation_id",
+        ),
+        "embedding_generation_fingerprint": _required_text(
+            generation_manifest["embedding_generation_fingerprint"],
+            field_name="embedding_generation_fingerprint",
         ),
     }
 
@@ -190,6 +225,9 @@ def _validate_manifest_shape(manifest: Mapping[str, Any]) -> None:
     missing = REQUIRED_INDEX_MANIFEST_FIELDS - manifest.keys()
     if missing:
         raise ValueError(f"Index manifest is missing required fields: {sorted(missing)}")
+    unexpected = manifest.keys() - REQUIRED_INDEX_MANIFEST_FIELDS
+    if unexpected:
+        raise ValueError(f"Index manifest has unexpected fields: {sorted(unexpected)}")
     if manifest.get("schema_version") != INDEX_MANIFEST_SCHEMA_VERSION:
         raise ValueError("Unsupported index manifest schema version")
 
@@ -240,10 +278,8 @@ def validate_index_manifest(
     manifest: Mapping[str, Any],
     chunks: Sequence[Mapping[str, Any]],
     *,
+    generation_manifest: Mapping[str, Any],
     collection_name: str,
-    embedding_model_id: str,
-    embedding_model_revision: str,
-    vector_dimension: int,
     distance_metric: str,
     build_version: str,
 ) -> None:
@@ -251,10 +287,8 @@ def validate_index_manifest(
     _validate_manifest_shape(manifest)
     expected = build_index_manifest(
         chunks,
+        generation_manifest=generation_manifest,
         collection_name=collection_name,
-        embedding_model_id=embedding_model_id,
-        embedding_model_revision=embedding_model_revision,
-        vector_dimension=vector_dimension,
         distance_metric=distance_metric,
         build_version=build_version,
     )

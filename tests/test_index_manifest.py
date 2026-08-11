@@ -29,13 +29,27 @@ def _chunk(chunk_id: str, value: float, *, chunk_index: int) -> dict:
 def _manifest(chunks: list[dict]) -> dict:
     return build_index_manifest(
         chunks,
+        generation_manifest=_generation_manifest(chunks),
         collection_name="sec_filings",
-        embedding_model_id="nomic-ai/nomic-embed-text-v1.5",
-        embedding_model_revision="embedding-commit",
-        vector_dimension=2,
         distance_metric="cosine",
         build_version="index-builder-v1",
     )
+
+
+def _generation_manifest(chunks: list[dict]) -> dict:
+    return {
+        "status": "complete",
+        "generation_id": "generation-001",
+        "embedding_generation_fingerprint": "sha256:" + "a" * 64,
+        "corpus_fingerprint": compute_corpus_fingerprint(chunks),
+        "vector_snapshot_id": compute_vector_snapshot_fingerprint(
+            chunks, vector_dimension=2
+        ),
+        "point_count": len(chunks),
+        "embedding_model_id": "nomic-ai/nomic-embed-text-v1.5",
+        "embedding_model_revision": "embedding-commit",
+        "vector_dimension": 2,
+    }
 
 
 def _temporary_manifest_path() -> Path:
@@ -91,10 +105,8 @@ def test_manifest_write_is_atomic_and_round_trips_through_validation() -> None:
         validate_index_manifest(
             loaded,
             chunks,
+            generation_manifest=_generation_manifest(chunks),
             collection_name="sec_filings",
-            embedding_model_id="nomic-ai/nomic-embed-text-v1.5",
-            embedding_model_revision="embedding-commit",
-            vector_dimension=2,
             distance_metric="cosine",
             build_version="index-builder-v1",
         )
@@ -112,10 +124,8 @@ def test_manifest_validation_detects_stale_vectors() -> None:
         validate_index_manifest(
             manifest,
             stale,
+            generation_manifest=_generation_manifest(original),
             collection_name="sec_filings",
-            embedding_model_id="nomic-ai/nomic-embed-text-v1.5",
-            embedding_model_revision="embedding-commit",
-            vector_dimension=2,
             distance_metric="cosine",
             build_version="index-builder-v1",
         )
@@ -124,9 +134,22 @@ def test_manifest_validation_detects_stale_vectors() -> None:
 def test_manifest_loader_rejects_missing_required_provenance() -> None:
     path = _temporary_manifest_path()
     try:
-        path.write_text(json.dumps({"schema_version": 1}), encoding="utf-8")
+        path.write_text(json.dumps({"schema_version": 2}), encoding="utf-8")
 
         with pytest.raises(ValueError, match="missing required fields"):
+            load_index_manifest(path)
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def test_legacy_index_manifest_schema_is_not_trusted() -> None:
+    path = _temporary_manifest_path()
+    legacy = _manifest([_chunk("A", 0.1, chunk_index=0)])
+    legacy["schema_version"] = 1
+    try:
+        path.write_text(json.dumps(legacy), encoding="utf-8")
+
+        with pytest.raises(ValueError, match="Unsupported index manifest"):
             load_index_manifest(path)
     finally:
         path.unlink(missing_ok=True)

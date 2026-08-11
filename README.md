@@ -305,6 +305,8 @@ QDRANT_CLOUD_URL=
 QDRANT_CLOUD_API_KEY=
 EMBEDDING_MODEL_ID=nomic-ai/nomic-embed-text-v1.5
 EMBEDDING_MODEL_REVISION=<exact-hugging-face-commit>
+EMBEDDING_GENERATIONS_DIR=data/embedding_generations
+EMBEDDING_GENERATION_PATH=data/embedding_generations/<generation-id>
 ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 LLM_RATE_LIMIT_BURST=10/minute
 LLM_RATE_LIMIT_DAILY=100/day
@@ -321,18 +323,25 @@ Build local artifacts in order:
 .venv\Scripts\python.exe -m scripts.download_filings
 .venv\Scripts\python.exe -m scripts.chunk_filings
 .venv\Scripts\python.exe -m scripts.add_table_chunks
-.venv\Scripts\python.exe -m scripts.embed_chunks
+.venv\Scripts\python.exe -m scripts.embed_chunks --generation-id <generation-id>
 .venv\Scripts\python.exe -m scripts.index_chunks
 ```
 
 `EMBEDDING_MODEL_REVISION` is required for trusted embedding and index rebuilds.
-With a pinned revision, `scripts.embed_chunks` deliberately recomputes every
-embedding instead of trusting file modification times from an older model build.
-The indexing command validates all vector dimensions, hashes the canonical corpus
-and exact vector build inputs, verifies the final Qdrant point count, and only
-then atomically publishes `QDRANT_INDEX_MANIFEST_PATH`. If rebuilding fails after
-the collection is modified, the old manifest remains invalidated rather than
-claiming that a partial index is trusted.
+`scripts.embed_chunks` creates a new immutable directory under
+`EMBEDDING_GENERATIONS_DIR`; the generation ID must be safe and unused. It writes
+each file atomically and publishes its completion manifest only after reloading
+and validating every output from disk. Failed or incomplete generations are
+retained for audit and are never resumed or selected automatically.
+
+Set `EMBEDDING_GENERATION_PATH` to the completed generation before running
+`scripts.index_chunks`. Indexing has no fallback to canonical embedded JSONL: it
+recomputes file, corpus, and vector fingerprints, verifies the active canonical
+corpus identity, and rejects invalid generations before opening Qdrant. The index
+manifest schema binds the validated generation fingerprint and takes model
+provenance directly from its manifest. It is published only after the final
+Qdrant point count is verified. If collection mutation fails, the old index
+manifest remains absent instead of making a stale trust claim.
 
 Run a smoke test:
 

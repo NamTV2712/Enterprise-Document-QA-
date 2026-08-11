@@ -52,9 +52,14 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
       payloads, exact vector build inputs, pinned embedding revision, dimension,
       distance metric, point count, and builder version; it is published only
       after successful verification.
+- [x] Add immutable staged embedding generations. Completion manifests bind
+      deterministic file hashes, corpus/vector fingerprints, pinned model and
+      build metadata; index schema v2 accepts only an explicitly selected,
+      fully revalidated generation and never falls back to canonical vectors.
 - [ ] With explicit approval, force re-embed all chunks using the pinned model
-      revision, rebuild the local Qdrant collection, publish its trusted manifest,
-      verify retrieval, then remigrate Cloud before claiming strict comparability.
+      revision into a new generation, validate it, rebuild the local Qdrant
+      collection, publish its trusted manifest, verify retrieval, then remigrate
+      Cloud before claiming strict comparability.
 
 ## Quality Gates
 

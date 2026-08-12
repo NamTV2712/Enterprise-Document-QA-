@@ -252,6 +252,12 @@ Corpus scale:
 
 - The configured corpus now targets `50` tickers; `44` currently have searchable embedded chunks in local Qdrant.
 - Local Qdrant indexes `7,940` chunks after restoring and embedding `financial_table` chunks for the 50-company scale trial.
+- The local collection now has a trusted schema-v2 build manifest tied to the
+  immutable generation `nomic-e9b6763-corpus-0166056c-builder-v1-attempt-01`,
+  Nomic revision `e9b6763023c676ca8431644204f50c2b100d9aab`, and canonical
+  corpus fingerprint `sha256:0166056c9e2f9f641e4af532ecc6416403b86887a58dfafcde8a4184575a2da3`.
+  This trust status applies only to local Qdrant; Cloud remains untrusted until
+  full ID, payload, and vector-snapshot verification is completed.
 - `financial_table` chunks are available for `33` searchable tickers; the remaining searchable degraded tickers are limited to extracted text sections.
 - Latest extraction quality: `35` clean, `9` degraded, `6` failed/unusable. The main remaining corpus-scale limitation is section extraction for filings that use annual-report cross-reference or non-standard Item 7/8 layouts.
 - The unusable rate stayed stable at `12%` from the 25-company snapshot to the 50-company trial, while clean extraction improved from `56%` to `70%`.

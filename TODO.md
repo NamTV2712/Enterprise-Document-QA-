@@ -56,10 +56,15 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
       deterministic file hashes, corpus/vector fingerprints, pinned model and
       build metadata; index schema v2 accepts only an explicitly selected,
       fully revalidated generation and never falls back to canonical vectors.
-- [ ] With explicit approval, force re-embed all chunks using the pinned model
-      revision into a new generation, validate it, rebuild the local Qdrant
-      collection, publish its trusted manifest, verify retrieval, then remigrate
-      Cloud before claiming strict comparability.
+- [x] With explicit approval, force re-embed all chunks using the pinned model
+      revision into an immutable generation, validate it, rebuild local Qdrant,
+      publish its schema-v2 trusted manifest, and pass deterministic retrieval
+      plus API restart verification.
+- [ ] Persist the pinned embedding revision in the intended runtime environment;
+      the approved execution used process-local variables and did not modify
+      `.env`.
+- [ ] Keep Cloud remigration NO-GO until exact point-ID set, canonical payload
+      fingerprint, and vector snapshot verification are implemented and pass.
 
 ## Quality Gates
 

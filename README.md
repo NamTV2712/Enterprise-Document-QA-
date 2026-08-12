@@ -256,6 +256,8 @@ Corpus scale:
   immutable generation `nomic-e9b6763-corpus-0166056c-builder-v1-attempt-01`,
   Nomic revision `e9b6763023c676ca8431644204f50c2b100d9aab`, and canonical
   corpus fingerprint `sha256:0166056c9e2f9f641e4af532ecc6416403b86887a58dfafcde8a4184575a2da3`.
+  Local runtime and Docker Compose pin the same model revision through
+  `EMBEDDING_MODEL_REVISION` so query embeddings cannot silently drift.
   This trust status applies only to local Qdrant; Cloud remains untrusted until
   full ID, payload, and vector-snapshot verification is completed.
 - `financial_table` chunks are available for `33` searchable tickers; the remaining searchable degraded tickers are limited to extracted text sections.

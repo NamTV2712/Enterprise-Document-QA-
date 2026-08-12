@@ -60,9 +60,9 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
       revision into an immutable generation, validate it, rebuild local Qdrant,
       publish its schema-v2 trusted manifest, and pass deterministic retrieval
       plus API restart verification.
-- [ ] Persist the pinned embedding revision in the intended runtime environment;
-      the approved execution used process-local variables and did not modify
-      `.env`.
+- [x] Persist the pinned embedding revision in local `.env`, document it in
+      `.env.example`, forward it through Docker Compose, and verify host API
+      startup plus deterministic retrieval using the persisted setting.
 - [ ] Keep Cloud remigration NO-GO until exact point-ID set, canonical payload
       fingerprint, and vector snapshot verification are implemented and pass.
 

@@ -5,6 +5,7 @@ Run: python -m scripts.embed_chunks  (from the project's root directory)
 
 import argparse
 import logging
+from pathlib import Path
 
 import sentence_transformers
 import torch
@@ -30,6 +31,14 @@ def _parse_args() -> argparse.Namespace:
         "--generation-id",
         required=True,
         help="Unique generation directory name; existing directories are rejected",
+    )
+    parser.add_argument(
+        "--reuse-from",
+        type=Path,
+        help=(
+            "Optional completed generation whose vectors are reused only when "
+            "the model metadata and canonical payload match exactly"
+        ),
     )
     return parser.parse_args()
 
@@ -63,6 +72,7 @@ def main() -> None:
             "normalize_embeddings": embedder.normalize_embeddings,
             "builder_version": EMBEDDING_BUILDER_VERSION,
         },
+        reuse_generation_dir=args.reuse_from,
     )
     logger.info(
         "Completed immutable embedding generation %s (%d points)",

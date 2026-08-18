@@ -180,6 +180,42 @@ def test_embedding_failure_leaves_generation_without_completion_manifest() -> No
             )
 
 
+def test_generation_reuses_only_exact_matching_payloads() -> None:
+    with _workspace() as root:
+        source = root / "source"
+        generations = root / "generations"
+        _write_source(source, "AAPL", [_record("A", "AAPL")])
+        _write_source(source, "MSFT", [_record("B", "MSFT")])
+        original_embedder = _FakeEmbedder()
+        original_dir, _ = build_embedding_generation(
+            source_dir=source,
+            generations_root=generations,
+            generation_id="generation-original",
+            embedder=original_embedder,
+            metadata=_metadata(),
+        )
+
+        changed = _record("B", "MSFT")
+        changed["text"] = "Changed evidence"
+        _write_source(source, "MSFT", [changed])
+        incremental_embedder = _FakeEmbedder()
+        generation_dir, _ = build_embedding_generation(
+            source_dir=source,
+            generations_root=generations,
+            generation_id="generation-incremental",
+            embedder=incremental_embedder,
+            metadata=_metadata(),
+            reuse_generation_dir=original_dir,
+        )
+
+        assert incremental_embedder.calls == [["Changed evidence"]]
+        aapl = json.loads(
+            (generation_dir / "AAPL" / "AAPL_chunks_embedded.jsonl").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert aapl["embedding"] == [1.0, 1.1]
+
 def test_completion_manifest_is_not_published_when_disk_reload_fails(
     monkeypatch,
 ) -> None:

@@ -372,21 +372,68 @@ def build_embedding_generation(
     generation_id: str,
     embedder: Any,
     metadata: Mapping[str, Any],
+    reuse_generation_dir: Path | None = None,
 ) -> tuple[Path, dict[str, Any]]:
     """Build a new generation and publish completion only after disk reload."""
     validate_generation_id(generation_id)
     generation_dir = generations_root / generation_id
     generation_dir.mkdir(parents=True, exist_ok=False)
+    reusable_files: dict[str, tuple[Path, str]] = {}
+    if reuse_generation_dir is not None:
+        reuse_manifest_path = (
+            reuse_generation_dir / EMBEDDING_GENERATION_MANIFEST_NAME
+        )
+        reuse_manifest = json.loads(reuse_manifest_path.read_text(encoding="utf-8"))
+        _validate_manifest_shape(reuse_manifest)
+        for field_name in (
+            "embedding_model_id",
+            "embedding_model_revision",
+            "vector_dimension",
+            "document_prefix",
+            "embedding_dtype",
+            "normalize_embeddings",
+        ):
+            if reuse_manifest[field_name] != metadata[field_name]:
+                raise ValueError(
+                    f"Reuse generation {field_name!r} does not match requested metadata"
+                )
+        reusable_files = {
+            entry["relative_path"]: (
+                reuse_generation_dir / Path(PurePosixPath(entry["relative_path"])),
+                entry["file_sha256"],
+            )
+            for entry in reuse_manifest["files"]
+        }
     expected_outputs, _ = _expected_output_paths(source_dir)
     for _, relative_path, records in expected_outputs:
-        embeddings = embedder.embed_documents([record["text"] for record in records])
-        if len(embeddings) != len(records):
-            raise ValueError("Embedder output count does not match input records")
-        embedded_records = []
-        for record, embedding in zip(records, embeddings, strict=True):
-            embedded_record = dict(record)
-            embedded_record["embedding"] = embedding
-            embedded_records.append(embedded_record)
+        embedded_records = None
+        reusable = reusable_files.get(relative_path)
+        if reusable is not None:
+            reusable_path, expected_sha256 = reusable
+            if compute_file_sha256(reusable_path) != expected_sha256:
+                raise ValueError(f"Reuse generation file hash mismatch: {relative_path}")
+            candidates = _load_jsonl(reusable_path)
+            canonical = []
+            valid_vectors = True
+            for candidate in candidates:
+                payload = dict(candidate)
+                vector = payload.pop("embedding", None)
+                canonical.append(payload)
+                valid_vectors = valid_vectors and isinstance(vector, list) and len(
+                    vector
+                ) == metadata["vector_dimension"]
+            if canonical == records and valid_vectors:
+                embedded_records = candidates
+
+        if embedded_records is None:
+            embeddings = embedder.embed_documents([record["text"] for record in records])
+            if len(embeddings) != len(records):
+                raise ValueError("Embedder output count does not match input records")
+            embedded_records = []
+            for record, embedding in zip(records, embeddings, strict=True):
+                embedded_record = dict(record)
+                embedded_record["embedding"] = embedding
+                embedded_records.append(embedded_record)
         write_jsonl_atomic(
             generation_dir / Path(PurePosixPath(relative_path)),
             embedded_records,

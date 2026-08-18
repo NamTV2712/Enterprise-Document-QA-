@@ -8,7 +8,9 @@ class Settings(BaseSettings):
 
     # LLM API keys
     groq_api_key: str = ""
+    groq_api_key2: str = ""
     groq_api_key_fall_back: str = ""
+    groq_api_key_fall_back2: str = ""
 
     # Data path (relative path to run on any machine)
     data_raw_dir: Path = Path("data/raw")
@@ -38,6 +40,7 @@ class Settings(BaseSettings):
     decomposed_rate_limit: str = "5/minute"
     cache_test_rate_limit: str = "10/minute"
     enable_cache_clear: bool = False
+    enable_metrics_endpoint: bool = False
 
     @property
     def allowed_origins_list(self) -> list[str]:

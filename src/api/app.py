@@ -10,6 +10,7 @@ import time
 import asyncio
 import functools
 import threading
+import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Callable, Literal, TypeVar
 
@@ -30,7 +31,9 @@ from src.generation.rag_pipeline import RAGPipeline
 from src.retrieval.chunk_loader import load_retrieval_chunks
 from src.retrieval.embedder import Embedder
 from src.retrieval.hybrid_retriever import HybridRetriever
+from src.retrieval.query_normalizer import normalize_retrieval_question
 from src.retrieval.vector_store import VectorStore
+from src.api.telemetry import RequestTelemetry
 
 import json as json_lib
 from fastapi.responses import StreamingResponse
@@ -60,6 +63,7 @@ STREAM_QUERY_TIMEOUT_SECONDS = 60.0
 STREAM_QUEUE_POLL_SECONDS = 0.25
 T = TypeVar("T")
 limiter = Limiter(key_func=get_remote_address)
+telemetry = RequestTelemetry()
 
 
 def _load_supported_tickers() -> list[str]:
@@ -151,6 +155,36 @@ app.add_middleware(
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.middleware("http")
+async def record_request_telemetry(request: Request, call_next: Callable) -> Any:
+    """Log request lifecycle metadata without recording question or session content."""
+    request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+    started_at = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        elapsed = time.perf_counter() - started_at
+        telemetry.record(request.url.path, 500, elapsed)
+        logger.exception(
+            "request_failed request_id=%s route=%s elapsed_ms=%.2f",
+            request_id,
+            request.url.path,
+            elapsed * 1000,
+        )
+        raise
+    elapsed = time.perf_counter() - started_at
+    telemetry.record(request.url.path, response.status_code, elapsed)
+    response.headers["X-Request-ID"] = request_id
+    logger.info(
+        "request_complete request_id=%s route=%s status=%d elapsed_ms=%.2f",
+        request_id,
+        request.url.path,
+        response.status_code,
+        elapsed * 1000,
+    )
+    return response
 
 
 # --- Pydantic models for request/response ---
@@ -263,12 +297,14 @@ async def query(request: Request, body: QueryRequest) -> QueryResponse:
         # This shouldn't happen if the lifespan is running correctly — but it's a precaution
         raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
 
+    normalized = normalize_retrieval_question(body.question)
+    ticker = body.ticker or normalized.detected_ticker
     try:
         response = await _run_query_with_timeout(
             pipeline.query,
-            question=body.question,
+            question=normalized.question,
             top_k=body.top_k,
-            ticker=body.ticker,
+            ticker=ticker,
             section=body.section,
             session_id=body.session_id,
         )
@@ -314,12 +350,14 @@ async def query_decomposed(
     if decomposer is None:
         raise HTTPException(status_code=503, detail="The decomposer is not ready yet")
 
+    normalized = normalize_retrieval_question(body.question)
+    ticker = body.ticker or normalized.detected_ticker
     try:
         result = await _run_query_with_timeout(
             decomposer.run,
-            question=body.question,
+            question=normalized.question,
             top_k=body.top_k,
-            ticker=body.ticker,
+            ticker=ticker,
             section=body.section,
             session_id=body.session_id,
         )
@@ -408,6 +446,14 @@ async def cache_stats() -> dict:
     return pipeline.cache.get_stats()
 
 
+@app.get("/metrics")
+async def metrics() -> dict:
+    """Expose aggregate request, error, and latency counters when enabled."""
+    if not settings.enable_metrics_endpoint:
+        raise HTTPException(status_code=403, detail="Metrics endpoint is disabled")
+    return telemetry.snapshot()
+
+
 @app.post("/cache/clear")
 async def cache_clear() -> dict:
     """Clear semantic cache entries and reset cache metrics."""
@@ -472,11 +518,13 @@ async def query_stream(request: Request, request_body: QueryRequest):
                 cancel_event.set()
 
         def run_stream() -> None:
+            normalized = normalize_retrieval_question(request_body.question)
+            ticker = request_body.ticker or normalized.detected_ticker
             try:
                 for event_type, data in pipeline.query_stream(
-                    question=request_body.question,
+                    question=normalized.question,
                     top_k=request_body.top_k,
-                    ticker=request_body.ticker,
+                    ticker=ticker,
                     section=request_body.section,
                     session_id=request_body.session_id,
                     cancel_event=cancel_event,

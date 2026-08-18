@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from configs.settings import Settings
 from src.api import app as app_module
+from src.api.telemetry import RequestTelemetry
 from src.generation.generator import RAGResponse
 from src.memory.conversation_memory import Turn
 from src.retrieval.retriever import RetrievedChunk
@@ -308,6 +309,22 @@ def test_query_accepts_dash_ticker(client, mock_pipeline) -> None:
 
     assert response.status_code == 200
     assert mock_pipeline.query.call_args.kwargs["ticker"] == "BRK-B"
+
+
+def test_query_auto_scopes_and_translates_supported_vietnamese_metric(
+    client,
+    mock_pipeline,
+) -> None:
+    response = client.post(
+        "/query",
+        json={"question": "Doanh thu của Tesla năm 2024 là bao nhiêu?"},
+    )
+
+    assert response.status_code == 200
+    assert mock_pipeline.query.call_args.kwargs["ticker"] == "TSLA"
+    assert mock_pipeline.query.call_args.kwargs["question"] == (
+        "What was Tesla's total revenue in 2024?"
+    )
 
 
 def test_query_returns_503_when_pipeline_not_ready() -> None:
@@ -658,6 +675,25 @@ def test_cache_stats_endpoint(client) -> None:
     data = response.json()
     assert data["hit_rate"] == 0.0
     assert data["max_entries"] == 500
+
+
+def test_metrics_endpoint_is_opt_in_and_excludes_question_content(
+    client,
+    monkeypatch,
+) -> None:
+    app_module.telemetry = RequestTelemetry()
+    try:
+        assert client.get("/metrics").status_code == 403
+        monkeypatch.setattr(app_module.settings, "enable_metrics_endpoint", True)
+        response = client.get("/health", headers={"X-Request-ID": "trace-123"})
+        assert response.status_code == 200
+        assert response.headers["x-request-id"] == "trace-123"
+
+        metrics = client.get("/metrics").json()
+        assert metrics["requests_by_route"]["/health"] == 1
+        assert "question" not in str(metrics).lower()
+    finally:
+        app_module.telemetry = RequestTelemetry()
 
 
 def test_cache_clear_is_disabled_by_default(client, mock_pipeline) -> None:

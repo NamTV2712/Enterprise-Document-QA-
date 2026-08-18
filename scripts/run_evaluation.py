@@ -43,8 +43,8 @@ RETRY_BACKOFF_SECONDS = [5, 15]
 JUDGE_PARSE_INVALID_STATUS = "JUDGE_PARSE_INVALID"
 JUDGE_SKIPPED_QUOTA_STATUS = "JUDGE_SKIPPED_QUOTA"
 EVALUATION_FINGERPRINT_VERSION = 1
-GENERATOR_MODEL = "llama-3.3-70b-versatile"
-JUDGE_MODEL = "llama-3.3-70b-versatile"
+GENERATOR_MODEL = "openai/gpt-oss-120b"
+JUDGE_MODEL = "openai/gpt-oss-120b"
 
 T = TypeVar("T")
 
@@ -388,8 +388,13 @@ def main() -> None:
         model_name=settings.embedding_model_id,
         revision=settings.embedding_model_revision or None,
     )
-    generation_api_key = settings.groq_api_key_fall_back or None
-    generator = Generator(model=GENERATOR_MODEL, api_key=generation_api_key)
+    generation_api_keys = [
+        settings.groq_api_key_fall_back,
+        settings.groq_api_key_fall_back2,
+    ]
+    if not any(generation_api_keys):
+        generation_api_keys = [settings.groq_api_key, settings.groq_api_key2]
+    generator = Generator(model=GENERATOR_MODEL, api_keys=generation_api_keys)
     judge_generator = Generator(model=JUDGE_MODEL)
     evaluator = RAGEvaluator(judge_generator=judge_generator)
 

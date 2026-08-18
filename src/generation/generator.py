@@ -7,7 +7,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass
-from threading import Event
+from threading import Event, Lock
 
 from src.retrieval.retriever import RetrievedChunk
 
@@ -81,15 +81,34 @@ class Generator:
     # If the best chunk has a score below this threshold, the context may not be
     # relevant enough. Log it instead of silently producing a weak answer.
 
-    def __init__(self, model: str | None = None, api_key: str | None = None):
+    def __init__(
+        self,
+        model: str | None = None,
+        api_key: str | None = None,
+        api_keys: list[str] | None = None,
+    ):
         from configs.settings import settings
         from groq import Groq
 
-        selected_api_key = api_key or settings.groq_api_key
-        if not selected_api_key:
+        configured_keys = (
+            api_keys
+            if api_keys is not None
+            else (
+                [api_key]
+                if api_key
+                else [settings.groq_api_key, settings.groq_api_key2]
+            )
+        )
+        selected_keys = list(dict.fromkeys(key for key in configured_keys if key))
+        if not selected_keys:
             raise ValueError("GROQ_API_KEY is not configured in .env")
-        self.client = Groq(api_key=selected_api_key)
-        self.model = model or "llama-3.3-70b-versatile"
+        self.clients = [Groq(api_key=key) for key in selected_keys]
+        # Preserve the old public attribute for integrations that inspect it.
+        self.client = self.clients[0]
+        self._client_cursor = 0
+        self._client_cooldowns = [0.0] * len(self.clients)
+        self._client_lock = Lock()
+        self.model = model or "openai/gpt-oss-120b"
 
     @staticmethod
     def _groq_retry_delay(error: Exception) -> float | None:
@@ -108,19 +127,56 @@ class Generator:
 
     def _create_groq_chat_completion(self, **kwargs):
         for attempt in range(GROQ_MAX_RETRIES + 1):
+            client_index, client, wait = self._next_available_client()
+            if wait:
+                time.sleep(wait)
             try:
-                return self.client.chat.completions.create(**kwargs)
+                return client.chat.completions.create(**kwargs)
             except Exception as error:
                 delay = self._groq_retry_delay(error)
                 if delay is None or attempt >= GROQ_MAX_RETRIES:
                     raise
+                self._cool_down_client(client_index, delay)
                 logger.warning(
-                    "Groq rate limit hit; retrying in %.2fs (attempt %d/%d)",
-                    delay,
+                    "Groq key %d/%d rate-limited; rotating key (attempt %d/%d)",
+                    client_index + 1,
+                    len(self.clients),
                     attempt + 1,
                     GROQ_MAX_RETRIES,
                 )
-                time.sleep(delay)
+
+    def _next_available_client(self) -> tuple[int, object, float]:
+        """Select a ready key round-robin, or return the shortest cooldown."""
+        # Keep lightweight test doubles and older integrations that assign only
+        # ``client`` compatible with the pooled implementation.
+        if not hasattr(self, "clients"):
+            self.clients = [self.client]
+            self._client_cursor = 0
+            self._client_cooldowns = [0.0]
+        if not hasattr(self, "_client_lock"):
+            self._client_lock = Lock()
+        with self._client_lock:
+            now = time.monotonic()
+            for offset in range(len(self.clients)):
+                index = (self._client_cursor + offset) % len(self.clients)
+                if self._client_cooldowns[index] <= now:
+                    self._client_cursor = (index + 1) % len(self.clients)
+                    return index, self.clients[index], 0.0
+
+            index = min(
+                range(len(self.clients)),
+                key=self._client_cooldowns.__getitem__,
+            )
+            wait = max(0.0, self._client_cooldowns[index] - now)
+            self._client_cursor = (index + 1) % len(self.clients)
+            return index, self.clients[index], wait
+
+    def _cool_down_client(self, client_index: int, delay: float) -> None:
+        with self._client_lock:
+            self._client_cooldowns[client_index] = max(
+                self._client_cooldowns[client_index],
+                time.monotonic() + delay,
+            )
 
     def generate(
         self,
@@ -212,7 +268,7 @@ class Generator:
             messages.extend(conversation_history)
         messages.append({"role": "user", "content": user_message})
 
-        stream = self.client.chat.completions.create(
+        stream = self._create_groq_chat_completion(
             model=self.model,
             messages=messages,
             max_tokens=1024,

@@ -2,6 +2,7 @@
 Script: rag_smoke_test.py — runs manually to perform end-to-end testing before FastAPI is available.
 """
 import logging
+import sys
 
 from configs.settings import settings
 from src.generation.generator import Generator
@@ -14,6 +15,8 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
 def main() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     generator = Generator()
     embedder = Embedder(
         model_name=settings.embedding_model_id,

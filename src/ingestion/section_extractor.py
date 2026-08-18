@@ -41,6 +41,17 @@ SECTION_BOUNDARIES = {
     },
 }
 
+ANNUAL_REPORT_ANCHOR_LABELS = {
+    "business": re.compile(r"^business$", re.IGNORECASE),
+    "risk_factors": re.compile(r"^risk factors$", re.IGNORECASE),
+    "mdna": re.compile(r"^management.?s discussion and analysis", re.IGNORECASE),
+    "financial_statements": re.compile(
+        r"^financial statements(?: and (?:supplementary|supplemental) "
+        r"(?:data|details)| and notes)?$",
+        re.IGNORECASE,
+    ),
+}
+
 MIN_VALID_SECTION_LENGTH = 1000  # Warning threshold, not a rejection threshold.
 
 TRAILING_NOISE_PATTERNS = [
@@ -62,11 +73,14 @@ class ExtractionResult:
 
 def html_to_text(html_content: bytes) -> str:
     soup = BeautifulSoup(html_content, "lxml")
+    return _soup_to_text(soup)
+
+
+def _soup_to_text(soup: BeautifulSoup) -> str:
     for tag in soup(["script", "style"]):
         tag.decompose()
     text = soup.get_text(separator="\n")
-    text = _clean_text(text)
-    return text
+    return _clean_text(text)
 
 
 def _clean_text(text: str) -> str:
@@ -107,6 +121,11 @@ def _strip_trailing_noise(content: str) -> str:
     return content.rstrip()
 
 
+def _strip_leading_noise(content: str) -> str:
+    """Remove a repeated annual-report page header without dropping section text."""
+    return re.sub(r"^\s*table of contents\s*\n+", "", content, flags=re.IGNORECASE)
+
+
 def _find_sections(text: str, text_lower: str) -> dict[str, str]:
     sections: dict[str, str] = {}
 
@@ -126,6 +145,7 @@ def _find_sections(text: str, text_lower: str) -> dict[str, str]:
 
     return sections
 
+
 def extract_sections(text: str) -> ExtractionResult:
     text_lower = text.lower()
     sections = _find_sections(text, text_lower)
@@ -142,3 +162,135 @@ def extract_sections(text: str) -> ExtractionResult:
         warnings.append(f"Section '{name}' NOT found in this filing")
 
     return ExtractionResult(sections=sections, warnings=warnings)
+
+
+def _anchor_sections(soup: BeautifulSoup) -> dict[str, str]:
+    """Extract annual-report sections linked by same-document TOC anchors."""
+    anchors: dict[str, object] = {}
+    for link in soup.find_all("a", href=True):
+        href = str(link.get("href", ""))
+        if not href.startswith("#") or len(href) == 1:
+            continue
+        label = " ".join(link.get_text(" ", strip=True).split())
+        for name, pattern in ANNUAL_REPORT_ANCHOR_LABELS.items():
+            if name not in anchors and pattern.match(label):
+                target = soup.find(id=href[1:])
+                if target is not None:
+                    anchors[name] = target
+                break
+
+    recovered: dict[str, str] = {}
+    ordered = [name for name in ANNUAL_REPORT_ANCHOR_LABELS if name in anchors]
+    for index, name in enumerate(ordered):
+        start = anchors[name]
+        stop = anchors[ordered[index + 1]] if index + 1 < len(ordered) else None
+        fragments: list[str] = []
+        for node in start.next_elements:
+            if node is stop:
+                break
+            if isinstance(node, str):
+                fragments.append(node)
+        content = _strip_leading_noise(
+            _strip_trailing_noise(_clean_text("\n".join(fragments)).strip())
+        )
+        if len(content) >= MIN_VALID_SECTION_LENGTH:
+            recovered[name] = content
+    return recovered
+
+
+def _heading_section_name(label: str) -> str | None:
+    normalized = " ".join(label.split()).casefold().rstrip(".:")
+    if normalized in {
+        "business",
+        "our business",
+        "about mcdonald's",
+        "about ge aerospace",
+        "about honeywell",
+    }:
+        return "business"
+    if normalized == "risk factors":
+        return "risk_factors"
+    if normalized.startswith("management's discussion and analysis"):
+        return "mdna"
+    if normalized in {
+        "financial statements and supplementary data",
+        "financial statements and supplemental details",
+        "consolidated financial statements",
+    }:
+        return "financial_statements"
+    return None
+
+
+def _heading_sections(soup: BeautifulSoup) -> dict[str, str]:
+    """Recover non-anchor annual-report layouts from isolated body headings.
+
+    Table-of-contents labels are naturally rejected because the next canonical
+    heading follows almost immediately. The longest body interval for each
+    label is selected only after it clears the normal section-length threshold.
+    """
+    headings = [
+        (name, node)
+        for node in soup.find_all(string=True)
+        if (name := _heading_section_name(str(node))) is not None
+    ]
+    recovered: dict[str, tuple[int, str]] = {}
+    for index, (name, start) in enumerate(headings):
+        stop = next(
+            (
+                candidate
+                for later_name, candidate in headings[index + 1:]
+                if later_name != name
+            ),
+            None,
+        )
+        fragments: list[str] = []
+        for node in start.next_elements:
+            if node is stop:
+                break
+            if isinstance(node, str):
+                fragments.append(node)
+        content = _strip_leading_noise(
+            _strip_trailing_noise(_clean_text("\n".join(fragments)).strip())
+        )
+        prefix = content[:1000].casefold()
+        required_marker = {
+            "business": "business",
+            "risk_factors": "risk",
+            "mdna": "",
+            "financial_statements": "statement",
+        }[name]
+        if required_marker and required_marker not in prefix:
+            continue
+        if len(content) >= MIN_VALID_SECTION_LENGTH:
+            prior = recovered.get(name)
+            if prior is None or len(content) > prior[0]:
+                recovered[name] = (len(content), content)
+    return {name: content for name, (_, content) in recovered.items()}
+
+
+def extract_sections_from_html(html_content: bytes) -> ExtractionResult:
+    """Use Item boundaries first, then same-document annual-report anchors."""
+    soup = BeautifulSoup(html_content, "lxml")
+    text = _soup_to_text(soup)
+    result = extract_sections(text)
+    anchored = _anchor_sections(soup)
+    heading_sections = _heading_sections(soup)
+    recovered = {**heading_sections, **anchored}
+    missing = {
+        name: content
+        for name, content in recovered.items()
+        if name not in result.sections
+    }
+    if not missing:
+        return result
+
+    warnings = [
+        warning
+        for warning in result.warnings
+        if not any(f"Section '{name}' NOT found" in warning for name in missing)
+    ]
+    warnings.extend(
+        f"Section '{name}' recovered through annual-report layout adapter"
+        for name in sorted(missing)
+    )
+    return ExtractionResult(sections={**result.sections, **missing}, warnings=warnings)

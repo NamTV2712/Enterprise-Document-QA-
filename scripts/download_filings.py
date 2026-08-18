@@ -16,7 +16,7 @@ from pathlib import Path
 from configs.settings import settings
 from configs.tickers import TICKERS, TICKER_CIK_OVERRIDES
 from src.ingestion.sec_client import SECEdgarClient, EdgarClientError
-from src.ingestion.section_extractor import extract_sections, html_to_text
+from src.ingestion.section_extractor import extract_sections_from_html
 
 logging.basicConfig(
     level=logging.INFO,
@@ -118,8 +118,7 @@ def process_ticker(client: SECEdgarClient, ticker: str) -> TickerResult:
         return TickerResult(ticker=ticker, status="failed", error=str(e))
 
     try:
-        text = html_to_text(raw_path.read_bytes())
-        result = extract_sections(text)
+        result = extract_sections_from_html(raw_path.read_bytes())
     except Exception as e:
         logger.exception("FAILED %s during section extraction", ticker)
         return TickerResult(ticker=ticker, status="failed", error=str(e))

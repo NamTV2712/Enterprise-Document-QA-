@@ -14,7 +14,7 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 ## Overview
 
 - Problem type: enterprise document question answering over financial filings.
-- Corpus: latest SEC 10-K filings for 50 configured tickers; 44 currently have searchable embedded chunks.
+- Corpus: latest SEC 10-K filings for 50 configured tickers; all 50 currently have searchable embedded chunks.
 - Serving style: FastAPI REST API with non-streaming and Server-Sent Events streaming responses.
 - Retrieval stack: BM25 keyword search, Qdrant semantic search, Reciprocal Rank Fusion, and cross-encoder re-ranking.
 - Generation stack: strict source-grounded LLM prompting with citations and insufficient-context fallback.
@@ -96,10 +96,10 @@ VZ, T
 
 Current searchable corpus:
 
-- 44 tickers have embedded chunks in local Qdrant.
-- 6 tickers are currently unusable due to annual-report/cross-reference extraction layouts: `MS`, `MCD`, `INTC`, `COST`, `GE`, `HON`.
-- Local Qdrant indexes `7,940` chunks.
-- `financial_table` chunks are available for 33 searchable tickers.
+- All 50 configured tickers have embedded chunks in local Qdrant.
+- Annual-report layout recovery now covers `MS`, `MCD`, `INTC`, `COST`, `GE`, and `HON`.
+- Local Qdrant indexes `9,703` chunks.
+- `financial_table` chunks are available for 39 searchable tickers.
 
 The `/supported-tickers` endpoint returns the live searchable ticker list from embedded chunks, not the full configured list.
 
@@ -207,7 +207,7 @@ LLM provider:
 
 | Provider | Status |
 |---|---|
-| Groq | Only LLM provider; serves `llama-3.3-70b-versatile` |
+| Groq | Only LLM provider; serves `openai/gpt-oss-120b` |
 
 ## Evaluation Results
 
@@ -250,19 +250,18 @@ Retrieval latency optimization:
 
 Corpus scale:
 
-- The configured corpus now targets `50` tickers; `44` currently have searchable embedded chunks in local Qdrant.
-- Local Qdrant indexes `7,940` chunks after restoring and embedding `financial_table` chunks for the 50-company scale trial.
+- The configured corpus targets `50` tickers, and all `50` have searchable embedded chunks in local Qdrant.
+- Local Qdrant indexes `9,703` chunks after annual-report recovery and table restoration.
 - The local collection now has a trusted schema-v2 build manifest tied to the
-  immutable generation `nomic-e9b6763-corpus-0166056c-builder-v1-attempt-01`,
+  immutable generation `nomic-e9b6763-annual-report-rebuild-20260818-attempt-05`,
   Nomic revision `e9b6763023c676ca8431644204f50c2b100d9aab`, and canonical
-  corpus fingerprint `sha256:0166056c9e2f9f641e4af532ecc6416403b86887a58dfafcde8a4184575a2da3`.
+  corpus fingerprint `sha256:dc44c9266856b044e8e928a0681f6f05a5e4889a3217c8eae3cdd0b080d391e2`.
   Local runtime and Docker Compose pin the same model revision through
   `EMBEDDING_MODEL_REVISION` so query embeddings cannot silently drift.
   This trust status applies only to local Qdrant; Cloud remains untrusted until
   full ID, payload, and vector-snapshot verification is completed.
-- `financial_table` chunks are available for `33` searchable tickers; the remaining searchable degraded tickers are limited to extracted text sections.
-- Latest extraction quality: `35` clean, `9` degraded, `6` failed/unusable. The main remaining corpus-scale limitation is section extraction for filings that use annual-report cross-reference or non-standard Item 7/8 layouts.
-- The unusable rate stayed stable at `12%` from the 25-company snapshot to the 50-company trial, while clean extraction improved from `56%` to `70%`.
+- `financial_table` chunks are available for `39` searchable tickers.
+- Latest extraction quality is `41` filings with all four target sections and `9` degraded but searchable filings; no configured ticker is currently unusable.
 
 | Scenario | Filter | Latency |
 |---|---|---:|
@@ -305,7 +304,9 @@ Create `.env`:
 
 ```text
 GROQ_API_KEY=your_groq_key
-GROQ_API_KEY_FALL_BACK=optional_second_groq_key_for_evaluation
+GROQ_API_KEY2=optional_second_serving_key
+GROQ_API_KEY_FALL_BACK=optional_first_evaluation_generation_key
+GROQ_API_KEY_FALL_BACK2=optional_second_evaluation_generation_key
 QDRANT_MODE=local
 QDRANT_LOCAL_PATH=data/processed/qdrant
 QDRANT_INDEX_MANIFEST_PATH=data/processed/qdrant_index_manifest.json
@@ -341,6 +342,8 @@ Build local artifacts in order:
 each file atomically and publishes its completion manifest only after reloading
 and validating every output from disk. Failed or incomplete generations are
 retained for audit and are never resumed or selected automatically.
+Use `--reuse-from <completed-generation>` to reuse vectors only when the pinned
+model metadata, file hash, vector shape, and canonical payload match exactly.
 
 Set `EMBEDDING_GENERATION_PATH` to the completed generation before running
 `scripts.index_chunks`. Indexing has no fallback to canonical embedded JSONL: it
@@ -394,7 +397,7 @@ instead of the repository's configured Vitest/jsdom environment.
 
 Prerequisites: Docker Desktop installed and running, plus corpus artifacts already built locally under `data/processed/`.
 
-1. Copy `.env.example` to `.env` and fill in `GROQ_API_KEY`. `GROQ_API_KEY_FALL_BACK` is optional and can isolate evaluation generation quota from the primary judge key.
+1. Copy `.env.example` to `.env` and fill in `GROQ_API_KEY`. `GROQ_API_KEY2` is an optional serving key. `GROQ_API_KEY_FALL_BACK` and `GROQ_API_KEY_FALL_BACK2` form the optional evaluation-generation pool; evaluation falls back to the primary pair when both are blank. Each pool rotates keys round-robin and cools down a key after a Groq `429` before retrying another key.
 
 2. Build and run the backend:
 

@@ -184,7 +184,7 @@ rules:
 - Return an explicit insufficient-context response when evidence is inadequate.
 
 Groq is the only LLM provider. Serving, rewriting, decomposition, synthesis, and
-evaluation use `llama-3.3-70b-versatile` through the Groq API.
+evaluation use `openai/gpt-oss-120b` through the Groq API.
 Provider streams are closed in `finally` blocks, but provider-side billing
 cancellation remains best effort.
 

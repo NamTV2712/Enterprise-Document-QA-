@@ -3,6 +3,24 @@
 This file tracks only the current actionable queue. Historical results,
 rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
 
+## Active Quality Backlog
+
+1. [x] Finish annual-report extraction adapters for MCD and INTC, which do not
+       expose same-document TOC anchors. Keep the new anchor fallback for MS,
+       COST, GE, and HON covered by fixture tests; do not overwrite generated
+       artifacts until each recovered section passes a dry-run audit.
+2. [x] Review the dry-run anchor sections for MS, COST, GE, and HON for
+       boundary quality, especially the final financial-statements tail.
+3. [x] After both checks pass, explicitly rebuild affected generated artifacts
+       in order: chunking, table chunks, immutable embedding generation, and
+       trusted local index; then run deterministic retrieval checks.
+4. [x] Add evaluation cases for newly searchable tickers without changing the
+       official clean N=30 benchmark.
+5. [ ] Extend Vietnamese retrieval translation only from labelled EN/VI tests;
+       current support is intentionally limited to explicit financial metrics.
+6. [ ] Keep `/metrics` disabled unless the deployment protects it. Monitor
+       429, 5xx, request count, and latency through aggregate telemetry.
+
 ## Always-On Deployment
 
 - [ ] Provision `VM.Standard.A1.Flex` in the Singapore home region, targeting
@@ -86,9 +104,12 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
       Tesla regression coverage and a real pipeline query confirm the correct
       table chunk ranks first and the answer includes `97,690`.
 - [ ] Treat bilingual response generation as a separate product feature.
-- [ ] Add extraction support for MS, MCD, INTC, COST, GE, and HON.
+- [x] Add extraction support for MS, MCD, INTC, COST, GE, and HON.
 - [ ] Expand evaluation coverage across the clean extended corpus.
-- [ ] Reduce near-duplicate context to improve Context Precision.
+- [x] Run the audited near-duplicate context replay on the clean N=30 artifact.
+      It found no exact duplicates or semantic-only pairs at `>=0.95`; adjacent
+      overlap has no negative association with Context Precision, so production
+      deduplication is not justified by the current evidence.
 
 ## Explicitly Rejected
 

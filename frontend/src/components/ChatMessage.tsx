@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import ReactMarkdown from "react-markdown";
-import { User, Cpu, AlertCircle, Loader2 } from "lucide-react";
+import { User, Cpu, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { Message } from "../types";
 import { SourcesPanel } from "./SourcesPanel";
 import { SubQueriesPanel } from "./SubQueriesPanel";
@@ -14,6 +14,7 @@ import { SubQueriesPanel } from "./SubQueriesPanel";
 interface ChatMessageProps {
   message: Message;
   isLatest?: boolean;
+  onRetry?: (text: string) => void;
 }
 
 // Inline content helper to parse and wrap tickers and numbers in monospace font
@@ -103,6 +104,7 @@ const renderFormattedChildren = (
 export const ChatMessage: React.FC<ChatMessageProps> = ({
   message,
   isLatest = false,
+  onRetry,
 }) => {
   const isUser = message.sender === "user";
 
@@ -216,11 +218,23 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                     {message.text}
                   </p>
                 ) : message.error ? (
-                  <div className="p-3 bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-950/50 rounded-lg text-rose-850 dark:text-rose-300 flex items-start gap-2 font-sans">
-                    <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <p className="text-xs md:text-sm font-medium">
-                      {message.text}
-                    </p>
+                  <div className="space-y-2">
+                    <div className="p-3 bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-950/50 rounded-lg text-rose-850 dark:text-rose-300 flex items-start gap-2 font-sans">
+                      <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      <p className="text-xs md:text-sm font-medium">
+                        {message.text}
+                      </p>
+                    </div>
+                    {onRetry && (
+                      <button
+                        type="button"
+                        onClick={() => onRetry(message.text)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        Retry
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="markdown-body select-text">

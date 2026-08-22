@@ -22,6 +22,7 @@ import {
   Square,
   BookOpen,
   MessageSquare,
+  ChevronDown,
 } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { ChatMessage } from "./components/ChatMessage";
@@ -85,6 +86,7 @@ export default function App() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const requestAbortRef = useRef<AbortController | null>(null);
+  const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
 
   // Apply theme class
   useEffect(() => {
@@ -121,11 +123,7 @@ export default function App() {
     // 1. Session ID creation/restoration
     let sid = localStorage.getItem("sec_qa_session_id");
     if (!sid) {
-      sid = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-        const r = (Math.random() * 16) | 0;
-        const v = c === "x" ? r : (r & 0x3) | 0x8;
-        return v.toString(16);
-      });
+      sid = crypto.randomUUID();
       localStorage.setItem("sec_qa_session_id", sid);
     }
     setSessionId(sid);
@@ -203,6 +201,21 @@ export default function App() {
   useEffect(() => {
     if (activeView === "conversation") scrollToBottom();
   }, [activeView, messages]);
+
+  // Detect scroll position to show/hide scroll-to-bottom button
+  useEffect(() => {
+    const scrollContainer = document.querySelector(".overflow-y-auto");
+    if (!scrollContainer) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+      setShowScrollButton(!isNearBottom && messages.length > 0);
+    };
+
+    scrollContainer.addEventListener("scroll", handleScroll, { passive: true });
+    return () => scrollContainer.removeEventListener("scroll", handleScroll);
+  }, [activeView, messages.length]);
 
   // Helper to determine if query is comparative
   const isComparativeQuery = (question: string): boolean => {
@@ -440,14 +453,7 @@ export default function App() {
     } catch (err) {
       console.error("Session clearance exception:", err);
     } finally {
-      const newSid = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
-        /[xy]/g,
-        (c) => {
-          const r = (Math.random() * 16) | 0;
-          const v = c === "x" ? r : (r & 0x3) | 0x8;
-          return v.toString(16);
-        },
-      );
+      const newSid = crypto.randomUUID();
       localStorage.setItem("sec_qa_session_id", newSid);
       setSessionId(newSid);
       setMessages([]);
@@ -790,15 +796,36 @@ export default function App() {
             </div>
           ) : (
             /* Active Chat Stream */
-            <div className="flex flex-col w-full min-h-full py-4 md:py-5 pb-6">
+            <div className="flex flex-col w-full min-h-full py-4 md:py-5 pb-6 relative">
               {messages.map((msg, index) => (
                 <ChatMessage
                   key={msg.id}
                   message={msg}
                   isLatest={index === messages.length - 1}
+                  onRetry={(text) => {
+                    setInputText(text);
+                    handleSendMessage(text);
+                  }}
                 />
               ))}
               <div ref={messagesEndRef} />
+
+              {/* Scroll to bottom button */}
+              <AnimatePresence>
+                {showScrollButton && (
+                  <motion.button
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    type="button"
+                    onClick={scrollToBottom}
+                    className="fixed bottom-32 right-6 md:right-8 p-2.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer z-30"
+                    aria-label="Scroll to bottom"
+                  >
+                    <ChevronDown className="w-5 h-5" />
+                  </motion.button>
+                )}
+              </AnimatePresence>
             </div>
           )}
         </div>

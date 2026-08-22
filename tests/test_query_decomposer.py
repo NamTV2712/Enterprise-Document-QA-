@@ -232,7 +232,7 @@ def test_synthesis_exception_does_not_leak_to_public_response() -> None:
     """Non-retryable synthesis failures must return a stable public message."""
     generator = MagicMock()
     generator.model = "fake-model"
-    generator.client.chat.completions.create.side_effect = RuntimeError(
+    generator._create_groq_chat_completion.side_effect = RuntimeError(
         "Connection failed: api_key=sk-secret-abc123 at /internal/models/path"
     )
     decomposer = QueryDecomposer(

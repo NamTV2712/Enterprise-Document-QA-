@@ -13,6 +13,10 @@ import {
   SessionHistoryResponse,
 } from "../types";
 
+// Note: QueryRequest and QueryResponse types are kept for compatibility
+// but the frontend uses streaming (streamQuery) and decomposed (queryDecomposed) paths.
+// The non-streaming queryDirect function was removed as unused.
+
 export const getApiBaseUrl = (): string => {
   const base = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
   return base.replace(/\/$/, ""); // Remove trailing slash
@@ -69,26 +73,6 @@ export async function getSupportedTickers(
   });
   if (!response.ok) {
     throw new Error(`Failed to fetch supported tickers: ${response.status}`);
-  }
-  return response.json();
-}
-
-export async function queryDirect(
-  payload: QueryRequest,
-  signal?: AbortSignal,
-): Promise<QueryResponse> {
-  const baseUrl = getApiBaseUrl();
-  const response = await apiFetch(`${baseUrl}/query`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify(payload),
-    signal,
-  });
-  if (!response.ok) {
-    throw new Error(`Query failed with status: ${response.status}`);
   }
   return response.json();
 }

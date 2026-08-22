@@ -8,6 +8,7 @@ import re
 import time
 from dataclasses import dataclass
 from threading import Event, Lock
+from typing import Any
 
 from src.retrieval.retriever import RetrievedChunk
 
@@ -125,7 +126,7 @@ class Generator:
         delay = value / 1000 if unit == "ms" else value
         return min(delay + 0.5, 30.0)
 
-    def _create_groq_chat_completion(self, **kwargs):
+    def _create_groq_chat_completion(self, **kwargs: Any) -> Any:
         for attempt in range(GROQ_MAX_RETRIES + 1):
             client_index, client, wait = self._next_available_client()
             if wait:
@@ -145,7 +146,7 @@ class Generator:
                     GROQ_MAX_RETRIES,
                 )
 
-    def _next_available_client(self) -> tuple[int, object, float]:
+    def _next_available_client(self) -> tuple[int, Any, float]:
         """Select a ready key round-robin, or return the shortest cooldown."""
         # Keep lightweight test doubles and older integrations that assign only
         # ``client`` compatible with the pooled implementation.

@@ -96,7 +96,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    // Enter sends, Shift+Enter or Cmd/Ctrl+Enter for newline
+    if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
       e.preventDefault();
       if (isValidLength && !isDisabled) {
         onSendMessage(inputText.trim());

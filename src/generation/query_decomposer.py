@@ -239,7 +239,7 @@ class QueryDecomposer:
     def _plan(self, question: str) -> dict:
         """Use LLM to decide whether decomposition is needed and create sub-queries."""
         try:
-            raw = self.generator.client.chat.completions.create(
+            raw = self.generator._create_groq_chat_completion(
                 model=self.generator.model,
                 messages=[
                     {"role": "system", "content": DECOMPOSE_SYSTEM_PROMPT},
@@ -392,7 +392,7 @@ class QueryDecomposer:
         )
 
         try:
-            return self.generator.client.chat.completions.create(
+            return self.generator._create_groq_chat_completion(
                 model=self.generator.model,
                 messages=[
                     {"role": "system", "content": SYNTHESIS_SYSTEM_PROMPT},

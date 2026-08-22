@@ -407,9 +407,22 @@ async def supported_tickers() -> dict:
     }
 
 
+SESSION_ID_MAX_LENGTH = 100
+
+
+def _validate_session_id(session_id: str) -> None:
+    """Validate session ID format and length to prevent memory abuse."""
+    if len(session_id) > SESSION_ID_MAX_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Session ID must be at most {SESSION_ID_MAX_LENGTH} characters",
+        )
+
+
 @app.delete("/session/{session_id}")
 async def clear_session(session_id: str) -> dict:
     """Clear one conversation session."""
+    _validate_session_id(session_id)
     pipeline: RAGPipeline = _state.get("pipeline")
     if pipeline is None:
         raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
@@ -420,6 +433,7 @@ async def clear_session(session_id: str) -> dict:
 @app.get("/session/{session_id}/history")
 async def get_session_history(session_id: str) -> dict:
     """Return conversation history for debugging and UI rendering."""
+    _validate_session_id(session_id)
     pipeline: RAGPipeline = _state.get("pipeline")
     if pipeline is None:
         raise HTTPException(status_code=503, detail="The pipeline is not ready yet")

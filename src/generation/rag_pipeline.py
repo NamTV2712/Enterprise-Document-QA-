@@ -274,4 +274,4 @@ class RAGPipeline:
         except Exception as e:
             logger.exception("Error in query_stream: %s", e)
             if cancel_event is None or not cancel_event.is_set():
-                yield ("error", str(e))
+                yield ("error", "An internal error occurred while processing your question. Please try again.")

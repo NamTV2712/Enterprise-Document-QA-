@@ -48,7 +48,20 @@ export default function App() {
   const [enableComparative, setEnableComparative] = useState<boolean>(true);
 
   const [inputText, setInputText] = useState<string>("");
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const saved = localStorage.getItem("sec_qa_messages");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch {
+        localStorage.removeItem("sec_qa_messages");
+      }
+    }
+    return [];
+  });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isBackendConnected, setIsBackendConnected] = useState<boolean | null>(
     null,
@@ -82,6 +95,24 @@ export default function App() {
     }
     localStorage.setItem("theme", theme);
   }, [theme]);
+
+  // Persist messages to localStorage with size limit and cleanup
+  useEffect(() => {
+    if (messages.length === 0) {
+      localStorage.removeItem("sec_qa_messages");
+      return;
+    }
+    // Keep only last 50 messages to avoid storage bloat
+    const MAX_MESSAGES = 50;
+    const messagesToSave = messages.slice(-MAX_MESSAGES);
+    try {
+      localStorage.setItem("sec_qa_messages", JSON.stringify(messagesToSave));
+    } catch (e) {
+      console.warn("Failed to save messages to localStorage:", e);
+      // If storage full, clear old messages
+      localStorage.removeItem("sec_qa_messages");
+    }
+  }, [messages]);
 
   // Handle initialization on first load
   useEffect(() => {
@@ -420,6 +451,7 @@ export default function App() {
       localStorage.setItem("sec_qa_session_id", newSid);
       setSessionId(newSid);
       setMessages([]);
+      localStorage.removeItem("sec_qa_messages");
       setActiveView("overview");
       setIsClearingSession(false);
       setSelectedTicker(null);

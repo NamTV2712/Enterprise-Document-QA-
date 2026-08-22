@@ -24,6 +24,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from configs.settings import settings
+from configs.logging_config import setup_logging
 from configs.tickers import TICKERS
 from src.generation.generator import Generator
 from src.generation.query_decomposer import QueryDecomposer
@@ -38,11 +39,9 @@ from src.api.telemetry import RequestTelemetry
 import json as json_lib
 from fastapi.responses import StreamingResponse
 
+# Setup structured logging (use json_mode=True in production)
+setup_logging(level="INFO", json_mode=False)
 logger = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
 
 # Global dictionary for pipeline storage — populated at startup, used in endpoints.
 _state: dict[str, Any] = {}
@@ -350,6 +349,8 @@ async def query_decomposed(
     if decomposer is None:
         raise HTTPException(status_code=503, detail="The decomposer is not ready yet")
 
+    telemetry.record_decomposed_request()
+
     normalized = normalize_retrieval_question(body.question)
     ticker = body.ticker or normalized.detected_ticker
     try:
@@ -503,6 +504,8 @@ async def query_stream(request: Request, request_body: QueryRequest):
     pipeline: RAGPipeline = _state.get("pipeline")
     if pipeline is None:
         raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+
+    telemetry.record_streaming_request()
 
     async def event_generator():
         loop = asyncio.get_running_loop()

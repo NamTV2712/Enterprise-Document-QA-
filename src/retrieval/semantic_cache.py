@@ -31,6 +31,14 @@ class CacheEntry:
     model_used: str
     timestamp: float
     hit_count: int = 0
+    _normalized_embedding: np.ndarray | None = None
+
+    def get_normalized(self) -> np.ndarray:
+        """Return normalized embedding, computing and caching it on first access."""
+        if self._normalized_embedding is None:
+            arr = np.array(self.query_embedding, dtype=np.float32)
+            self._normalized_embedding = arr / (np.linalg.norm(arr) + 1e-10)
+        return self._normalized_embedding
 
 
 @dataclass
@@ -99,7 +107,7 @@ class SemanticCache:
             best_score = -1.0
             best_entry = None
             for entry in candidates:
-                score = float(np.dot(q_norm, self._normalize(entry.query_embedding)))
+                score = float(np.dot(q_norm, entry.get_normalized()))
                 if score > best_score:
                     best_score = score
                     best_entry = entry

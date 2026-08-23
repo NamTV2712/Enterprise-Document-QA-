@@ -403,6 +403,7 @@ def test_non_streaming_query_timeout_returns_504(
     worker = mock_pipeline.query if worker_name == "pipeline" else mock_decomposer.run
     worker.side_effect = blocking_worker
     monkeypatch.setattr(app_module, "QUERY_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(app_module, "DECOMPOSED_TIMEOUT_SECONDS", 0.05)
 
     started_at = time.perf_counter()
     try:
@@ -413,7 +414,12 @@ def test_non_streaming_query_timeout_returns_504(
 
     assert worker_started.is_set()
     assert response.status_code == 504
-    assert response.json()["detail"] == app_module.QUERY_TIMEOUT_DETAIL
+    expected_detail = (
+        app_module.DECOMPOSED_TIMEOUT_DETAIL
+        if worker_name == "decomposer"
+        else app_module.QUERY_TIMEOUT_DETAIL
+    )
+    assert response.json()["detail"] == expected_detail
     assert elapsed < 0.75
 
 

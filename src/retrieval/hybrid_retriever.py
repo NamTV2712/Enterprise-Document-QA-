@@ -90,6 +90,24 @@ class HybridRetriever:
         self._chunks_by_id = {c["chunk_id"]: c for c in all_chunks}
         self._chunk_index_map = {c["chunk_id"]: i for i, c in enumerate(all_chunks)}
 
+        # Pre-build per-ticker and per-section indexes for O(1) filtering
+        self._chunks_by_ticker: dict[str, list[dict]] = {}
+        self._chunks_by_section: dict[str, list[dict]] = {}
+        self._chunks_by_ticker_section: dict[tuple[str, str], list[dict]] = {}
+        for c in all_chunks:
+            ticker = c["ticker"]
+            section = c["section"]
+            if ticker not in self._chunks_by_ticker:
+                self._chunks_by_ticker[ticker] = []
+            self._chunks_by_ticker[ticker].append(c)
+            if section not in self._chunks_by_section:
+                self._chunks_by_section[section] = []
+            self._chunks_by_section[section].append(c)
+            key = (ticker, section)
+            if key not in self._chunks_by_ticker_section:
+                self._chunks_by_ticker_section[key] = []
+            self._chunks_by_ticker_section[key].append(c)
+
         # Build BM25 index
         logger.info("Building BM25 index on %d chunks", len(all_chunks))
         tokenized = [_tokenize(c["text"]) for c in all_chunks]
@@ -176,12 +194,23 @@ class HybridRetriever:
 
         # --- Stage 1: BM25 search ---
         bm25_scores = self.bm25.get_scores(_tokenize(query))
-        # Apply filter for ticker/section here
-        filtered_chunks = [
-            c for c in self._all_chunks
-            if (ticker is None or c["ticker"] == ticker)
-            and (section is None or c["section"] == section)
-        ]
+        # Apply filter using pre-built indexes for O(1) lookup when available
+        if hasattr(self, "_chunks_by_ticker_section"):
+            if ticker and section:
+                filtered_chunks = self._chunks_by_ticker_section.get((ticker, section), [])
+            elif ticker:
+                filtered_chunks = self._chunks_by_ticker.get(ticker, [])
+            elif section:
+                filtered_chunks = self._chunks_by_section.get(section, [])
+            else:
+                filtered_chunks = self._all_chunks
+        else:
+            # Fallback for tests that bypass __init__
+            filtered_chunks = [
+                c for c in self._all_chunks
+                if (ticker is None or c["ticker"] == ticker)
+                and (section is None or c["section"] == section)
+            ]
         bm25_candidates = sorted(
             filtered_chunks,
             key=lambda c: bm25_scores[self._chunk_index_map[c["chunk_id"]]],
@@ -260,26 +289,9 @@ class HybridRetriever:
     ) -> list[RetrievedChunk]:
         result = []
         for chunk, ce_score in reranked:
-            result.append(self._to_retrieved_chunk(chunk, ce_score))
+            result.append(RetrievedChunk.from_raw(chunk, score=ce_score))
         logger.info(
             "HybridRetriever: '%s...' -> %d chunks (top CE score: %.4f)",
             query[:50], len(result), result[0].score if result else 0
         )
         return result
-
-    @staticmethod
-    def _to_retrieved_chunk(chunk: dict, ce_score: float) -> RetrievedChunk:
-        section_label = chunk["section"].replace("_", " ").title()
-        citation = (
-            f"{chunk['ticker']} 10-K (filed {chunk['filing_date']}), "
-            f"Section: {section_label}"
-        )
-        return RetrievedChunk(
-            chunk_id=chunk["chunk_id"],
-            ticker=chunk["ticker"],
-            section=chunk["section"],
-            filing_date=chunk["filing_date"],
-            score=float(ce_score),
-            text=chunk["text"],
-            citation=citation,
-        )

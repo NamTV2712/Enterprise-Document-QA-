@@ -28,6 +28,24 @@ class RetrievedChunk:
     text: str
     citation: str  # Example: "AAPL 10-K (2025-10-31), Section: Risk Factors"
 
+    @classmethod
+    def from_raw(cls, raw: dict, score: float | None = None) -> "RetrievedChunk":
+        """Create a RetrievedChunk from a raw dict, using provided score or raw['score']."""
+        section_label = raw["section"].replace("_", " ").title()
+        citation = (
+            f"{raw['ticker']} 10-K (filed {raw['filing_date']}), "
+            f"Section: {section_label}"
+        )
+        return cls(
+            chunk_id=raw["chunk_id"],
+            ticker=raw["ticker"],
+            section=raw["section"],
+            filing_date=raw["filing_date"],
+            score=float(score if score is not None else raw["score"]),
+            text=raw["text"],
+            citation=citation,
+        )
+
 
 class Retriever:
     def __init__(self, embedder: Embedder, store: VectorStore):
@@ -61,26 +79,9 @@ class Retriever:
             section=section,
         )
 
-        chunks = [self._to_retrieved_chunk(r) for r in raw_results]
+        chunks = [RetrievedChunk.from_raw(r) for r in raw_results]
         logger.info(
             "Query '%s...' → %d chunk (top score: %.4f)",
             query[:50], len(chunks), chunks[0].score if chunks else 0,
         )
         return chunks
-
-    @staticmethod
-    def _to_retrieved_chunk(raw: dict) -> RetrievedChunk:
-        section_label = raw["section"].replace("_", " ").title()
-        citation = (
-            f"{raw['ticker']} 10-K (filed {raw['filing_date']}), "
-            f"Section: {section_label}"
-        )
-        return RetrievedChunk(
-            chunk_id=raw["chunk_id"],
-            ticker=raw["ticker"],
-            section=raw["section"],
-            filing_date=raw["filing_date"],
-            score=raw["score"],
-            text=raw["text"],
-            citation=citation,
-        )

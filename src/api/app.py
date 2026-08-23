@@ -57,6 +57,8 @@ INTERNAL_ERROR_DETAIL = (
 )
 QUERY_TIMEOUT_DETAIL = "The query timed out. Please try again."
 QUERY_TIMEOUT_SECONDS = 60.0
+DECOMPOSED_TIMEOUT_DETAIL = "The comparative query timed out. Please try again."
+DECOMPOSED_TIMEOUT_SECONDS = 120.0
 STREAM_TIMEOUT_DETAIL = "The query timed out. Please try again."
 STREAM_QUERY_TIMEOUT_SECONDS = 60.0
 STREAM_QUEUE_POLL_SECONDS = 0.25
@@ -92,13 +94,15 @@ def _embed_query_pair(
 
 async def _run_query_with_timeout(
     func: Callable[..., T],
+    timeout: float | None = None,
     **kwargs: Any,
 ) -> T:
+    effective_timeout = timeout if timeout is not None else QUERY_TIMEOUT_SECONDS
     worker = anyio.to_thread.run_sync(
         functools.partial(func, **kwargs),
         abandon_on_cancel=True,
     )
-    return await asyncio.wait_for(worker, timeout=QUERY_TIMEOUT_SECONDS)
+    return await asyncio.wait_for(worker, timeout=effective_timeout)
 
 
 @asynccontextmanager
@@ -296,6 +300,13 @@ async def query(request: Request, body: QueryRequest) -> QueryResponse:
         # This shouldn't happen if the lifespan is running correctly — but it's a precaution
         raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
 
+    if _contains_injection_pattern(body.question):
+        logger.warning("Potential injection attempt blocked: %s", body.question[:50])
+        raise HTTPException(
+            status_code=400,
+            detail="Your question contains patterns that cannot be processed. Please rephrase.",
+        )
+
     normalized = normalize_retrieval_question(body.question)
     ticker = body.ticker or normalized.detected_ticker
     try:
@@ -356,6 +367,7 @@ async def query_decomposed(
     try:
         result = await _run_query_with_timeout(
             decomposer.run,
+            timeout=DECOMPOSED_TIMEOUT_SECONDS,
             question=normalized.question,
             top_k=body.top_k,
             ticker=ticker,
@@ -365,9 +377,9 @@ async def query_decomposed(
     except TimeoutError:
         logger.warning(
             "Decomposed query timed out after %.1f seconds",
-            QUERY_TIMEOUT_SECONDS,
+            DECOMPOSED_TIMEOUT_SECONDS,
         )
-        raise HTTPException(status_code=504, detail=QUERY_TIMEOUT_DETAIL)
+        raise HTTPException(status_code=504, detail=DECOMPOSED_TIMEOUT_DETAIL)
     except Exception as e:
         logger.exception("Error occurred while processing decomposed query: %s", e)
         raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
@@ -408,6 +420,26 @@ async def supported_tickers() -> dict:
 
 
 SESSION_ID_MAX_LENGTH = 100
+INJECTION_PATTERNS = [
+    "ignore all previous instructions",
+    "ignore previous instructions",
+    "ignore all instructions",
+    "disregard previous",
+    "disregard all previous",
+    "forget your instructions",
+    "forget previous instructions",
+    "you are now",
+    "act as",
+    "pretend to be",
+    "new instructions:",
+    "system prompt:",
+]
+
+
+def _contains_injection_pattern(text: str) -> bool:
+    """Check if text contains common prompt injection patterns."""
+    lower = text.lower()
+    return any(pattern in lower for pattern in INJECTION_PATTERNS)
 
 
 def _validate_session_id(session_id: str) -> None:

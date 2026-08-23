@@ -127,13 +127,22 @@ class Generator:
         return min(delay + 0.5, 30.0)
 
     def _create_groq_chat_completion(self, **kwargs: Any) -> Any:
+        last_stream = None
         for attempt in range(GROQ_MAX_RETRIES + 1):
             client_index, client, wait = self._next_available_client()
             if wait:
                 time.sleep(wait)
             try:
-                return client.chat.completions.create(**kwargs)
+                result = client.chat.completions.create(**kwargs)
+                # If we got a stream, close any previous failed stream
+                if last_stream is not None:
+                    close = getattr(last_stream, "close", None)
+                    if callable(close):
+                        close()
+                return result
             except Exception as error:
+                # For streaming calls, the result might be a partially-opened stream
+                # that needs cleanup before retrying
                 delay = self._groq_retry_delay(error)
                 if delay is None or attempt >= GROQ_MAX_RETRIES:
                     raise

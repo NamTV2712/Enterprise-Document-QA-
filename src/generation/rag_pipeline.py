@@ -101,11 +101,8 @@ class RAGPipeline:
         ]
 
     def _history_messages(self, session_id: str) -> list[dict]:
-        messages = []
-        for turn in self.memory.get_history(session_id):
-            messages.append({"role": "user", "content": turn.user_message})
-            messages.append({"role": "assistant", "content": turn.assistant_message})
-        return messages
+        session = self.memory.get_or_create(session_id)
+        return session.to_llm_messages()
 
     def query(
         self,

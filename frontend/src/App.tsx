@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Menu,
@@ -38,6 +38,8 @@ import {
   getSessionHistory,
   streamQuery,
 } from "./lib/api";
+
+const STREAM_FLUSH_INTERVAL_MS = 80;
 
 export default function App() {
   const [sessionId, setSessionId] = useState<string>("");
@@ -323,6 +325,27 @@ export default function App() {
 
       let streamingText = "";
       let sourcesList: any[] = [];
+      let pendingFlush: ReturnType<typeof setTimeout> | null = null;
+
+      const cancelPendingFlush = () => {
+        if (pendingFlush !== null) {
+          clearTimeout(pendingFlush);
+          pendingFlush = null;
+        }
+      };
+
+      const scheduleStreamingFlush = () => {
+        if (pendingFlush === null) {
+          pendingFlush = setTimeout(() => {
+            pendingFlush = null;
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMsgId ? { ...m, text: streamingText } : m,
+              ),
+            );
+          }, STREAM_FLUSH_INTERVAL_MS);
+        }
+      };
 
       try {
         await streamQuery(
@@ -343,22 +366,15 @@ export default function App() {
               );
             } else if (event.type === "token") {
               streamingText += event.data;
+              scheduleStreamingFlush();
+            } else if (event.type === "done") {
+              cancelPendingFlush();
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantMsgId
                     ? {
                         ...m,
                         text: streamingText,
-                      }
-                    : m,
-                ),
-              );
-            } else if (event.type === "done") {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantMsgId
-                    ? {
-                        ...m,
                         isStreaming: false,
                       }
                     : m,
@@ -366,6 +382,7 @@ export default function App() {
               );
               setIsLoading(false);
             } else if (event.type === "error") {
+              cancelPendingFlush();
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantMsgId
@@ -385,6 +402,7 @@ export default function App() {
           },
           (error) => {
             if (!isCurrentRequest()) return;
+            cancelPendingFlush();
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantMsgId
@@ -405,6 +423,7 @@ export default function App() {
         );
       } catch (err: any) {
         if (!isCurrentRequest()) return;
+        cancelPendingFlush();
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
@@ -421,6 +440,7 @@ export default function App() {
         );
         setIsLoading(false);
       } finally {
+        cancelPendingFlush();
         if (requestAbortRef.current === controller) {
           requestAbortRef.current = null;
           setIsLoading(false);
@@ -438,6 +458,15 @@ export default function App() {
       console.warn("Could not refresh health data:", e);
     }
   };
+
+  // Stable retry callback so memoized ChatMessage items skip re-renders;
+  // the ref indirection keeps access to the latest send handler.
+  const handleSendMessageRef = useRef(handleSendMessage);
+  handleSendMessageRef.current = handleSendMessage;
+  const handleRetry = useCallback((text: string) => {
+    setInputText(text);
+    handleSendMessageRef.current(text);
+  }, []);
 
   const handleNewConversation = async () => {
     requestAbortRef.current?.abort();
@@ -802,10 +831,7 @@ export default function App() {
                   key={msg.id}
                   message={msg}
                   isLatest={index === messages.length - 1}
-                  onRetry={(text) => {
-                    setInputText(text);
-                    handleSendMessage(text);
-                  }}
+                  onRetry={handleRetry}
                 />
               ))}
               <div ref={messagesEndRef} />

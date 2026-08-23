@@ -17,6 +17,23 @@ interface ChatMessageProps {
   onRetry?: (text: string) => void;
 }
 
+// Tickers rendered with the monospace ticker chip styling
+const COMMON_TICKERS = [
+  "AAPL",
+  "MSFT",
+  "GOOGL",
+  "AMZN",
+  "META",
+  "NVDA",
+  "TSLA",
+  "NFLX",
+  "AMD",
+  "INTC",
+  "SEC",
+  "EDGAR",
+  "RAG",
+];
+
 // Inline content helper to parse and wrap tickers and numbers in monospace font
 const formatMonospaceInline = (text: any): React.ReactNode => {
   if (typeof text !== "string") return text;
@@ -31,22 +48,7 @@ const formatMonospaceInline = (text: any): React.ReactNode => {
       {tokens.map((token, idx) => {
         // Tickers
         if (/^[A-Z]{3,5}$/.test(token)) {
-          const commonTickers = [
-            "AAPL",
-            "MSFT",
-            "GOOGL",
-            "AMZN",
-            "META",
-            "NVDA",
-            "TSLA",
-            "NFLX",
-            "AMD",
-            "INTC",
-            "SEC",
-            "EDGAR",
-            "RAG",
-          ];
-          if (commonTickers.includes(token)) {
+          if (COMMON_TICKERS.includes(token)) {
             return (
               <span
                 key={idx}
@@ -101,7 +103,7 @@ const renderFormattedChildren = (
   });
 };
 
-export const ChatMessage: React.FC<ChatMessageProps> = ({
+const ChatMessageBase: React.FC<ChatMessageProps> = ({
   message,
   isLatest = false,
   onRetry,
@@ -339,3 +341,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     </motion.div>
   );
 };
+
+/**
+ * Memoized so that streaming token updates to the latest message do not
+ * re-render every historical message in the list. Props are shallow-compared:
+ * message objects keep stable identity for untouched items because the parent
+ * maps with immutable updates.
+ */
+export const ChatMessage = React.memo(ChatMessageBase);

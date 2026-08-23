@@ -543,19 +543,20 @@ Secrets are loaded from `.env` and should never be committed.
 
 ## Known Limitations
 
-- The current corpus targets `50` companies, but only `44` have searchable chunks because `6` filings failed section extraction under the current single-document Item-boundary extractor.
-- Extraction quality remains uneven across large-company filing layouts: some annual-report cross-reference and non-standard Item 7/8 formats are degraded or unusable until the extractor is expanded.
+- The corpus targets `50` companies and all `50` are searchable; extraction remediation recovered the `6` filings that previously failed section extraction, leaving `41` filings with all four target sections and `9` degraded but searchable.
+- Extraction quality remains uneven across large-company filing layouts: some annual-report cross-reference and non-standard Item 7/8 formats expose fewer than the four target sections.
 - Financial statements can become verticalized after HTML-to-text conversion; table extraction and structured lookup reduce this issue for common total-line financial questions.
 - Hybrid retrieval improves source quality but adds CPU latency due to cross-encoder re-ranking.
 - Semantic cache and conversation memory are currently in-memory and are lost on process restart.
 - Multi-turn query rewriting adds one LLM call for follow-up questions.
+- The API has no authentication. CORS allowlisting, per-IP rate limits, input validation, and generic error messages mitigate abuse but are not access control; any client that knows the URL can call the public routes (see `ARCHITECTURE.md`).
 - Groq free tier can return `429 Too Many Requests`; SDK retries can recover but increase latency.
 - Docker runs CPU-only for portability. Local development on the Legion RTX 5060 can use CUDA for faster embedding generation.
 
 ## Roadmap
 
 1. Add production logging, quota monitoring, and error alerts before selecting a paid always-on backend.
-2. Improve annual-report/cross-reference extraction layouts for the remaining unusable tickers.
+2. Improve annual-report/cross-reference extraction layouts to close the remaining section-completeness gaps.
 3. Revisit permanent hosting only when always-on public availability is required.
 
 ## Why This Project Matters

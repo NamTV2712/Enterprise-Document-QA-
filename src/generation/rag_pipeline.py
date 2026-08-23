@@ -10,7 +10,7 @@ from threading import Event
 from src.generation.generator import Generator, RAGResponse
 from src.memory.conversation_memory import ConversationMemory, Turn
 from src.memory.query_rewriter import QueryRewriter
-from src.retrieval.retriever import Retriever
+from src.retrieval.hybrid_retriever import HybridRetriever
 from src.retrieval.retriever import RetrievedChunk
 from src.retrieval.semantic_cache import CacheEntry, SemanticCache
 
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class RAGPipeline:
     def __init__(
         self,
-        retriever: Retriever,
+        retriever: HybridRetriever,
         generator: Generator,
         cache: SemanticCache | None = None,
         memory: ConversationMemory | None = None,

@@ -107,6 +107,14 @@ async def _run_query_with_timeout(
     return await asyncio.wait_for(worker, timeout=effective_timeout)
 
 
+def _get_pipeline() -> RAGPipeline:
+    """Return the shared pipeline or raise 503 when startup has not finished."""
+    pipeline = _state.get("pipeline")
+    if pipeline is None:
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    return pipeline
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Initializing hybrid RAG pipeline...")
@@ -297,10 +305,7 @@ async def health() -> dict:
 @limiter.shared_limit(settings.llm_rate_limit_daily, scope="llm-query-daily")
 async def query(request: Request, body: QueryRequest) -> QueryResponse:
     """Main endpoint: receive the question, return the answer + source citation"""
-    pipeline: RAGPipeline = _state.get("pipeline")
-    if pipeline is None:
-        # This shouldn't happen if the lifespan is running correctly — but it's a precaution
-        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    pipeline = _get_pipeline()
 
     if _contains_injection_pattern(body.question):
         logger.warning("Potential injection attempt blocked: %s", body.question[:50])
@@ -575,9 +580,7 @@ async def query_stream(request: Request, request_body: QueryRequest):
 
     Each event is emitted as `data: {json}\n\n` per the SSE spec.
     """
-    pipeline: RAGPipeline = _state.get("pipeline")
-    if pipeline is None:
-        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    pipeline = _get_pipeline()
 
     telemetry.record_streaming_request()
 

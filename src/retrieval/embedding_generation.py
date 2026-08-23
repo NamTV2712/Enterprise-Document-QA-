@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from src.retrieval.canonical_json import canonical_json_bytes as _canonical_json_bytes
 from src.retrieval.index_manifest import (
     compute_corpus_fingerprint,
     compute_vector_snapshot_fingerprint,
@@ -65,16 +66,6 @@ GENERATION_METADATA_FIELDS = frozenset(
 FINGERPRINT_EXCLUDED_FIELDS = frozenset(
     {"completed_at", "embedding_generation_fingerprint"}
 )
-
-
-def _canonical_json_bytes(value: Any) -> bytes:
-    return json.dumps(
-        value,
-        ensure_ascii=False,
-        allow_nan=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
 
 
 def _sha256_bytes(value: bytes) -> str:

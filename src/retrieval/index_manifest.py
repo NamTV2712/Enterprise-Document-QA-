@@ -13,6 +13,8 @@ from math import isfinite
 from pathlib import Path
 from typing import Any
 
+from src.retrieval.canonical_json import canonical_json_bytes as _canonical_json_bytes
+
 INDEX_MANIFEST_SCHEMA_VERSION = 2
 CORPUS_FINGERPRINT_SCHEMA_VERSION = 1
 VECTOR_SNAPSHOT_SCHEMA_VERSION = 1
@@ -32,16 +34,6 @@ REQUIRED_INDEX_MANIFEST_FIELDS = frozenset(
         "embedding_generation_fingerprint",
     }
 )
-
-
-def _canonical_json_bytes(value: Any) -> bytes:
-    return json.dumps(
-        value,
-        ensure_ascii=False,
-        allow_nan=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
 
 
 def _sha256(value: Any) -> str:

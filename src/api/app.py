@@ -6,10 +6,12 @@ at startup via the lifespan context manager.
 """
 
 import logging
+import re
 import time
 import asyncio
 import functools
 import threading
+import unicodedata
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Callable, Literal, TypeVar
@@ -307,7 +309,7 @@ async def query(request: Request, body: QueryRequest) -> QueryResponse:
             detail="Your question contains patterns that cannot be processed. Please rephrase.",
         )
 
-    normalized = normalize_retrieval_question(body.question)
+    normalized = normalize_retrieval_question(_sanitize_question(body.question))
     ticker = body.ticker or normalized.detected_ticker
     try:
         response = await _run_query_with_timeout(
@@ -362,7 +364,14 @@ async def query_decomposed(
 
     telemetry.record_decomposed_request()
 
-    normalized = normalize_retrieval_question(body.question)
+    if _contains_injection_pattern(body.question):
+        logger.warning("Potential injection attempt blocked: %s", body.question[:50])
+        raise HTTPException(
+            status_code=400,
+            detail="Your question contains patterns that cannot be processed. Please rephrase.",
+        )
+
+    normalized = normalize_retrieval_question(_sanitize_question(body.question))
     ticker = body.ticker or normalized.detected_ticker
     try:
         result = await _run_query_with_timeout(
@@ -420,6 +429,7 @@ async def supported_tickers() -> dict:
 
 
 SESSION_ID_MAX_LENGTH = 100
+SESSION_ID_PATTERN = re.compile(rf"[A-Za-z0-9_-]{{1,{SESSION_ID_MAX_LENGTH}}}")
 INJECTION_PATTERNS = [
     "ignore all previous instructions",
     "ignore previous instructions",
@@ -442,12 +452,30 @@ def _contains_injection_pattern(text: str) -> bool:
     return any(pattern in lower for pattern in INJECTION_PATTERNS)
 
 
+def _sanitize_question(text: str) -> str:
+    """Strip control/format characters and normalize Unicode before LLM use.
+
+    Removes Unicode category Cc (control) except tab/newline/carriage return
+    and Cf (format, e.g. zero-width spaces, RTL overrides) so hidden
+    characters cannot alter retrieval or prompt behavior.
+    """
+    cleaned = "".join(
+        ch
+        for ch in text
+        if ch in "\t\n\r" or unicodedata.category(ch) not in ("Cc", "Cf")
+    )
+    return unicodedata.normalize("NFC", cleaned).strip()
+
+
 def _validate_session_id(session_id: str) -> None:
-    """Validate session ID format and length to prevent memory abuse."""
-    if len(session_id) > SESSION_ID_MAX_LENGTH:
+    """Validate session ID charset and length to prevent routing/log abuse."""
+    if not SESSION_ID_PATTERN.fullmatch(session_id):
         raise HTTPException(
             status_code=400,
-            detail=f"Session ID must be at most {SESSION_ID_MAX_LENGTH} characters",
+            detail=(
+                "Session ID may only contain letters, digits, hyphens, "
+                f"and underscores (max {SESSION_ID_MAX_LENGTH} characters)"
+            ),
         )
 
 
@@ -552,6 +580,16 @@ async def query_stream(request: Request, request_body: QueryRequest):
         raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
 
     telemetry.record_streaming_request()
+
+    if _contains_injection_pattern(request_body.question):
+        logger.warning(
+            "Potential injection attempt blocked: %s", request_body.question[:50]
+        )
+        raise HTTPException(
+            status_code=400,
+            detail="Your question contains patterns that cannot be processed. Please rephrase.",
+        )
+    request_body.question = _sanitize_question(request_body.question)
 
     async def event_generator():
         loop = asyncio.get_running_loop()

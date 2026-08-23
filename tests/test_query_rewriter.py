@@ -14,7 +14,7 @@ def _make_mock_generator(rewrite_response: str = "rewritten query"):
     mock_choice.message = mock_message
     mock_response = MagicMock()
     mock_response.choices = [mock_choice]
-    mock_generator.client.chat.completions.create.return_value = mock_response
+    mock_generator._create_groq_chat_completion.return_value = mock_response
 
     return mock_generator
 
@@ -27,7 +27,7 @@ def test_no_history_returns_original_query_unchanged() -> None:
     result = rewriter.rewrite("What are Apple's risks?", history_messages=[])
 
     assert result == "What are Apple's risks?"
-    mock_generator.client.chat.completions.create.assert_not_called()
+    mock_generator._create_groq_chat_completion.assert_not_called()
 
 
 def test_single_turn_trend_query_without_years_is_rewritten() -> None:
@@ -42,8 +42,8 @@ def test_single_turn_trend_query_without_years_is_rewritten() -> None:
     result = rewriter.rewrite("What is Amazon's AWS revenue growth?", history_messages=[])
 
     assert result == "What was Amazon AWS net sales growth for fiscal years 2025, 2024, and 2023?"
-    mock_generator.client.chat.completions.create.assert_called_once()
-    sent_messages = mock_generator.client.chat.completions.create.call_args.kwargs["messages"]
+    mock_generator._create_groq_chat_completion.assert_called_once()
+    sent_messages = mock_generator._create_groq_chat_completion.call_args.kwargs["messages"]
     assert "financial statement table" in sent_messages[0]["content"]
 
 
@@ -62,7 +62,7 @@ def test_single_turn_asset_trend_query_with_years_is_financially_rewritten() -> 
     )
 
     assert "balance sheet total assets" in result
-    mock_generator.client.chat.completions.create.assert_called_once()
+    mock_generator._create_groq_chat_completion.assert_called_once()
 
 
 def test_single_turn_asset_trend_uses_financial_rewrite() -> None:
@@ -81,7 +81,7 @@ def test_single_turn_asset_trend_uses_financial_rewrite() -> None:
 
     assert "balance sheet total assets" in result
     assert "long-lived assets" in result
-    mock_generator.client.chat.completions.create.assert_called_once()
+    mock_generator._create_groq_chat_completion.assert_called_once()
 
 
 def test_total_assets_without_year_needs_financial_expansion() -> None:
@@ -115,13 +115,13 @@ def test_with_history_calls_llm_and_returns_rewritten_query() -> None:
     result = rewriter.rewrite("What about their revenue?", history_messages=history)
 
     assert result == "What is Apple's total revenue?"
-    mock_generator.client.chat.completions.create.assert_called_once()
+    mock_generator._create_groq_chat_completion.assert_called_once()
 
 
 def test_llm_failure_falls_back_to_original_query() -> None:
     """Rewrite failures must not crash the RAG pipeline."""
     mock_generator = _make_mock_generator()
-    mock_generator.client.chat.completions.create.side_effect = Exception("API timeout")
+    mock_generator._create_groq_chat_completion.side_effect = Exception("API timeout")
     rewriter = QueryRewriter(mock_generator)
     history = [
         {"role": "user", "content": "prev Q"},
@@ -158,7 +158,7 @@ def test_history_truncated_to_last_two_turns_in_prompt() -> None:
 
     rewriter.rewrite("follow-up question", history_messages=long_history)
 
-    call_args = mock_generator.client.chat.completions.create.call_args
+    call_args = mock_generator._create_groq_chat_completion.call_args
     sent_messages = call_args.kwargs["messages"]
     user_prompt = sent_messages[-1]["content"]
 

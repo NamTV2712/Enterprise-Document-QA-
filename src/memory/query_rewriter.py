@@ -87,7 +87,7 @@ class QueryRewriter:
         prompt = self._build_prompt(query, history_messages, needs_trend_expansion)
 
         try:
-            rewritten = self._generator.client.chat.completions.create(
+            rewritten = self._generator._create_groq_chat_completion(
                 model=self._generator.model,
                 messages=[
                     {"role": "system", "content": REWRITE_SYSTEM_PROMPT},
@@ -119,7 +119,7 @@ class QueryRewriter:
     def _rewrite_financial_query(self, query: str) -> str:
         """Rewrite table-oriented financial questions without adding new clients."""
         try:
-            rewritten = self._generator.client.chat.completions.create(
+            rewritten = self._generator._create_groq_chat_completion(
                 model=self._generator.model,
                 messages=[
                     {"role": "system", "content": FINANCIAL_EXPANSION_PROMPT},

@@ -255,7 +255,7 @@ Scoring guide:
         return _parse_judge_response(raw)
 
     def _call_judge(self, prompt: str) -> str:
-        response = self.judge.client.chat.completions.create(
+        response = self.judge._create_groq_chat_completion(
             model=self.judge.model,
             messages=[
                 {"role": "system", "content": JUDGE_SYSTEM_PROMPT},

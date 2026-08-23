@@ -272,10 +272,11 @@ class CacheTestRequest(BaseModel):
 
 def _health_payload() -> dict:
     pipeline: RAGPipeline | None = _state.get("pipeline")
+    memory = getattr(pipeline, "memory", None)
     return {
         "status": "ok",
         "pipeline_ready": pipeline is not None,
-        "memory": pipeline.memory.get_stats() if pipeline else {},
+        "memory": memory.get_stats() if memory else {},
     }
 
 

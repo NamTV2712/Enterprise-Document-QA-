@@ -41,6 +41,16 @@ import {
 
 const STREAM_FLUSH_INTERVAL_MS = 80;
 
+// localStorage can throw in private browsing or when quota is exceeded;
+// persistence failures must never crash the UI.
+function safeSetItem(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) {
+    console.warn(`Could not persist "${key}" to localStorage:`, e);
+  }
+}
+
 export default function App() {
   const [sessionId, setSessionId] = useState<string>("");
   const [tickers, setTickers] = useState<string[]>([]);
@@ -87,6 +97,7 @@ export default function App() {
   });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const requestAbortRef = useRef<AbortController | null>(null);
   const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
 
@@ -97,7 +108,7 @@ export default function App() {
     } else {
       document.documentElement.classList.remove("dark");
     }
-    localStorage.setItem("theme", theme);
+    safeSetItem("theme", theme);
   }, [theme]);
 
   // Persist messages to localStorage with size limit and cleanup
@@ -126,7 +137,7 @@ export default function App() {
     let sid = localStorage.getItem("sec_qa_session_id");
     if (!sid) {
       sid = crypto.randomUUID();
-      localStorage.setItem("sec_qa_session_id", sid);
+      safeSetItem("sec_qa_session_id", sid);
     }
     setSessionId(sid);
 
@@ -196,17 +207,17 @@ export default function App() {
   }, []);
 
   // Scroll to bottom helper
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  }, []);
 
   useEffect(() => {
     if (activeView === "conversation") scrollToBottom();
-  }, [activeView, messages]);
+  }, [activeView, messages, scrollToBottom]);
 
   // Detect scroll position to show/hide scroll-to-bottom button
   useEffect(() => {
-    const scrollContainer = document.querySelector(".overflow-y-auto");
+    const scrollContainer = scrollContainerRef.current;
     if (!scrollContainer) return;
 
     const handleScroll = () => {
@@ -483,7 +494,7 @@ export default function App() {
       console.error("Session clearance exception:", err);
     } finally {
       const newSid = crypto.randomUUID();
-      localStorage.setItem("sec_qa_session_id", newSid);
+      safeSetItem("sec_qa_session_id", newSid);
       setSessionId(newSid);
       setMessages([]);
       localStorage.removeItem("sec_qa_messages");
@@ -683,7 +694,10 @@ export default function App() {
         </header>
 
         {/* Content stream area */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 bg-[#F7F7F5] dark:bg-[#12161C] relative z-10">
+        <div
+          ref={scrollContainerRef}
+          className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 bg-[#F7F7F5] dark:bg-[#12161C] relative z-10"
+        >
           {activeView === "overview" ? (
             /* Onboarding splash screen with Framer Motion animations */
             <div

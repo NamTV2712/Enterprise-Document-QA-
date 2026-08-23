@@ -124,7 +124,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("sec_qa_sidebar_width", String(sidebarWidth));
+    try {
+      localStorage.setItem("sec_qa_sidebar_width", String(sidebarWidth));
+    } catch (e) {
+      console.warn("Could not persist sidebar width:", e);
+    }
   }, [sidebarWidth]);
 
   useEffect(() => {

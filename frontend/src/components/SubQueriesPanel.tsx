@@ -80,6 +80,7 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
     // Reset and begin sequential stagger
     setVisibleCount(0);
     let count = 0;
+    let completeTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const interval = setInterval(() => {
       count += 1;
@@ -89,14 +90,16 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
         clearInterval(interval);
         setHasAnimated(true);
         // Call complete after a tiny delay to let the last item fade-in/slide-up
-        const timeout = setTimeout(() => {
+        completeTimeout = setTimeout(() => {
           if (onTraceComplete) onTraceComplete();
         }, 150);
-        return () => clearTimeout(timeout);
       }
     }, 200); // 200ms stagger interval
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      if (completeTimeout !== null) clearTimeout(completeTimeout);
+    };
   }, [subQueries, isLatest, prefersReduced, hasAnimated]);
 
   const isFullyDone =

@@ -24,6 +24,32 @@ RELEVANCE_WINDOW_STRIDE = 200
 JUDGE_SCORE_FIELDS = ("faithfulness", "answer_relevancy", "context_precision")
 JUDGE_REASON_FIELDS = ("faithfulness_reason", "relevancy_reason", "precision_reason")
 
+# Shared prompt contract for judging; extracted so offline replay tooling
+# judges frozen evidence through the exact same instructions.
+JUDGE_PROMPT_TEMPLATE = """Evaluate this RAG system response on 3 metrics. Return ONLY a JSON object.
+
+QUESTION: {question}
+GROUND TRUTH: {ground_truth}
+RETRIEVED CONTEXT:
+{context_str}
+
+SYSTEM ANSWER: {answer}
+
+Evaluate and return this JSON (all scores 0.0 to 1.0):
+{{
+  "faithfulness": <float>,
+  "faithfulness_reason": "<one sentence>",
+  "answer_relevancy": <float>,
+  "relevancy_reason": "<one sentence>",
+  "context_precision": <float>,
+  "precision_reason": "<one sentence>"
+}}
+
+Scoring guide:
+- faithfulness: fraction of claims in ANSWER that are supported by CONTEXT (1.0 = all claims grounded)
+- answer_relevancy: how well ANSWER addresses QUESTION compared to GROUND TRUTH (1.0 = complete match)
+- context_precision: fraction of retrieved chunks that were actually useful for the answer (1.0 = all chunks relevant)"""
+
 
 class JudgeParseError(ValueError):
     """The judge response is not a valid evaluation result."""
@@ -226,29 +252,12 @@ class RAGEvaluator:
             f"[Chunk {i+1}]: {_extract_relevant_window(t, question)}"
             for i, t in enumerate(context_texts)
         )
-        prompt = f"""Evaluate this RAG system response on 3 metrics. Return ONLY a JSON object.
-
-QUESTION: {question}
-GROUND TRUTH: {ground_truth}
-RETRIEVED CONTEXT:
-{context_str}
-
-SYSTEM ANSWER: {answer}
-
-Evaluate and return this JSON (all scores 0.0 to 1.0):
-{{
-  "faithfulness": <float>,
-  "faithfulness_reason": "<one sentence>",
-  "answer_relevancy": <float>,
-  "relevancy_reason": "<one sentence>",
-  "context_precision": <float>,
-  "precision_reason": "<one sentence>"
-}}
-
-Scoring guide:
-- faithfulness: fraction of claims in ANSWER that are supported by CONTEXT (1.0 = all claims grounded)
-- answer_relevancy: how well ANSWER addresses QUESTION compared to GROUND TRUTH (1.0 = complete match)
-- context_precision: fraction of retrieved chunks that were actually useful for the answer (1.0 = all chunks relevant)"""
+        prompt = JUDGE_PROMPT_TEMPLATE.format(
+            question=question,
+            ground_truth=ground_truth,
+            context_str=context_str,
+            answer=answer,
+        )
 
         raw = self._call_judge(prompt)
 

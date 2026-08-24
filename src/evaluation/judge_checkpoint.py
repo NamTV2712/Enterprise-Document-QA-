@@ -97,12 +97,16 @@ def run_judge_phase(
     max_retries: int = 2,
     retry_backoff_seconds: tuple[float, ...] = (5.0, 15.0),
     sleep_fn: Callable[[float], None] = time.sleep,
+    judge_prompt_builder: Callable[[str, str, str, str], str] | None = None,
 ) -> list[dict[str, Any]]:
     """Judge frozen answers; ``judge_fn`` is the only provider touchpoint.
 
-    A judge failure never destroys the underlying generation record —
-    failures are checkpointed with their own status and can be retried by
-    rerunning this phase against the same generation store.
+    ``judge_prompt_builder`` optionally overrides the naive prompt
+    composition with production judging instructions; it receives
+    (question, answer, evidence_context, ground_truth). A judge failure
+    never destroys the underlying generation record — failures are
+    checkpointed with their own status and can be retried by rerunning
+    this phase against the same generation store.
     """
     ok_generations = [
         question for question in selected_questions
@@ -154,12 +158,20 @@ def run_judge_phase(
             records.append(done[question])
             continue
 
-        prompt = (
-            f"{evidence_context_by_question[question]}\n\n"
-            f"Question: {question}\n"
-            f"Answer: {generation_record['answer']}\n"
-            f"Ground truth: {ground_truth_by_question[question]}"
-        )
+        if judge_prompt_builder is not None:
+            prompt = judge_prompt_builder(
+                question,
+                generation_record["answer"],
+                evidence_context_by_question[question],
+                ground_truth_by_question[question],
+            )
+        else:
+            prompt = (
+                f"{evidence_context_by_question[question]}\n\n"
+                f"Question: {question}\n"
+                f"Answer: {generation_record['answer']}\n"
+                f"Ground truth: {ground_truth_by_question[question]}"
+            )
 
         scores: Any = None
         error: str | None = None

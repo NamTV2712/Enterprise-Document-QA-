@@ -383,6 +383,11 @@ Run the same checks locally:
 .venv\Scripts\python.exe -m compileall src scripts configs
 ```
 
+The backend suite is hermetic: a pytest socket guard fails any unmocked
+external network call, and `live_network` tests are deselected by default.
+Real SEC connectivity can be checked separately with the opt-in smoke
+`python -m scripts.diagnostics.sec_live_smoke`.
+
 ```bash
 cd frontend
 bun install --frozen-lockfile

@@ -26,6 +26,7 @@ This file is the stable operating guide for AI coding agents working in this rep
 ## Project-Specific Traps
 
 - Qdrant local mode uses a file lock. Run the API with one worker when `QDRANT_MODE=local`; use Qdrant server or Qdrant Cloud before enabling multi-worker serving.
+- The backend test suite is hermetic: an autouse socket guard in `tests/conftest.py` blocks unmocked external network calls. Never add tests that reach SEC, Hugging Face, Groq, or Qdrant Cloud without `@pytest.mark.integration` or `@pytest.mark.live_network` markers; use `scripts/diagnostics/sec_live_smoke.py` for real SEC checks instead of live tests.
 - Qdrant Cloud mode hydrates chunk payloads at startup to rebuild BM25 and structured lookup. A stateless cloud image does not require git-ignored `data/` artifacts.
 - Docker intentionally installs CPU-only PyTorch before `requirements.txt`. Do not pin CUDA PyTorch in `requirements.txt`; local Legion development can use CUDA separately.
 - `scripts.chunk_filings` can overwrite chunk files and remove appended `financial_table` chunks. If rechunking, rerun `scripts.add_table_chunks`, `scripts.embed_chunks`, and `scripts.index_chunks` in order.

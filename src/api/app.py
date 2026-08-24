@@ -23,7 +23,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from configs.settings import settings
 from configs.logging_config import setup_logging
@@ -37,6 +36,7 @@ from src.retrieval.hybrid_retriever import HybridRetriever
 from src.retrieval.query_normalizer import normalize_retrieval_question
 from src.retrieval.vector_store import VectorStore
 from src.api.telemetry import RequestTelemetry
+from src.api.proxy import get_rate_limit_key
 
 import json as json_lib
 from fastapi.responses import StreamingResponse
@@ -65,7 +65,7 @@ STREAM_TIMEOUT_DETAIL = "The query timed out. Please try again."
 STREAM_QUERY_TIMEOUT_SECONDS = 60.0
 STREAM_QUEUE_POLL_SECONDS = 0.25
 T = TypeVar("T")
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=get_rate_limit_key)
 telemetry = RequestTelemetry()
 
 

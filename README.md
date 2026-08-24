@@ -136,7 +136,7 @@ The two non-streaming query endpoints enforce a 60-second request timeout and re
 
 The three LLM query routes share per-IP limits of `10/minute` and `100/day`; decomposed queries also have a `5/minute` limit because each request can make multiple provider calls. `/cache/test` is limited to `10/minute`, and `/cache/clear` returns `403` unless `ENABLE_CACHE_CLEAR=true`. Limits use in-memory storage, matching the required single-worker local-Qdrant runtime. A multi-instance deployment must use shared rate-limit storage such as Redis.
 
-Rate-limit identity uses the ASGI client address. When deploying behind a reverse proxy, configure Uvicorn proxy headers and trust only the platform's documented proxy addresses. Do not trust arbitrary client-supplied forwarding headers.
+Rate-limit identity uses the ASGI client address by default. When deploying behind a reverse proxy such as ngrok or a Docker gateway, set `TRUSTED_PROXY_CIDRS` to that proxy's comma-separated CIDR ranges (for example `203.0.113.0/24,10.0.0.0/8`). Only requests whose socket peer falls inside those ranges have `X-Forwarded-For` honored, and the header is then walked right-to-left past trusted hops to the first non-trusted client address. A malformed header, an untrusted peer, or an empty configuration all fall back to the socket peer, so direct clients cannot choose their rate-limit bucket by forging headers.
 
 Session history returns the full stored assistant answer for each of the five retained turns, so reloading the frontend does not truncate earlier responses. LLM rewrite context already used the full stored messages independently of this API representation.
 
@@ -322,9 +322,10 @@ LLM_RATE_LIMIT_DAILY=100/day
 DECOMPOSED_RATE_LIMIT=5/minute
 CACHE_TEST_RATE_LIMIT=10/minute
 ENABLE_CACHE_CLEAR=false
+TRUSTED_PROXY_CIDRS=
 ```
 
-`ALLOWED_ORIGINS` is a comma-separated allowlist. Add the final Vercel domain before public deployment; do not use `*`.
+`ALLOWED_ORIGINS` is a comma-separated allowlist. Add the final Vercel domain before public deployment; do not use `*`. `TRUSTED_PROXY_CIDRS` is empty by default; set it to the proxy CIDR ranges only when the API runs behind ngrok or another reverse proxy, as described in the rate-limit section above.
 
 Build local artifacts in order:
 

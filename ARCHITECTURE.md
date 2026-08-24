@@ -215,15 +215,17 @@ The API uses layered controls:
 | CORS | Allows configured browser origins, methods, and headers only |
 | Error sanitization | Hides internal provider, path, and credential details |
 | Query timeouts | Bounds non-streaming and streaming response duration |
-| Per-IP rate limits | Shared burst and daily budgets across LLM routes |
+| Per-IP rate limits | Shared burst and daily budgets across LLM routes; identity resolves through configured trusted proxies only |
 | Cache protection | Limits cache diagnostics and disables cache clearing by default |
 | Liveness | `/health/live` reports process availability |
 | Readiness | `/health/ready` returns `503` until the pipeline is ready |
 
 CORS is not authentication. Direct non-browser clients can call public routes.
-Rate-limit identity comes from the ASGI client address, so a hosted deployment
-must trust only the reverse proxy addresses documented by its platform. The
-current in-memory limiter is suitable only for the single-worker topology.
+Rate-limit identity comes from the ASGI client address unless the socket peer
+belongs to `TRUSTED_PROXY_CIDRS`; only then is `X-Forwarded-For` walked
+right-to-left through trusted hops to the first non-trusted address. Malformed
+headers and unconfigured deployments fall back to the socket peer. The current
+in-memory limiter is suitable only for the single-worker topology.
 
 ## Evaluation Architecture
 

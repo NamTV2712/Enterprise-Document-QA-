@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     enable_cache_clear: bool = False
     enable_metrics_endpoint: bool = False
 
+    # Comma-separated CIDR ranges of reverse proxies trusted to set
+    # X-Forwarded-For (for example an ngrok tunnel or Docker gateway).
+    # Empty by default: rate limits then key on the socket peer address,
+    # and forwarded headers from anyone are ignored.
+    trusted_proxy_cidrs: str = ""
+
     @property
     def allowed_origins_list(self) -> list[str]:
         return [

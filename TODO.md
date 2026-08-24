@@ -93,9 +93,11 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
 
 ## Backlog
 
-- [ ] Add entity/ticker auto-detection only if diagnostics show that unfiltered
-      company scoping is a material failure mode. The Tesla diagnostic confirms
-      this is material, but it is not sufficient by itself.
+- [x] Add entity/ticker auto-detection for unambiguous company names.
+      Implemented via deterministic `query_normalizer` scoping; see
+      `PROJECT_STATE.md` and `tests/test_api.py::test_query_auto_scopes_and_translates_supported_vietnamese_metric`.
+      The Tesla diagnostic showed scoping is necessary but not sufficient
+      by itself, so unfiltered ambiguity handling remains out of scope.
 - [ ] Add query translation or multilingual retrieval only if diagnostics show
       a cross-language retrieval gap. Vietnamese reranker scores were all
       negative (`-6.1564` best with `ticker=TSLA`) versus positive English

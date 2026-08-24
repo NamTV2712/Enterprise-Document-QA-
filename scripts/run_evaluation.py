@@ -2,6 +2,13 @@
 Script: run_evaluation.py
 Run the test set through QueryDecomposer, checkpoint every case, print grouped results,
 and save final JSON output.
+
+DEPRECATED for new official baselines: this single-phase CLI interleaves
+retrieval, generation, and judging, so a quota interruption mixes
+phases inside one checkpoint. Use the two-phase flow instead:
+scripts.run_evaluation_phase1 writes a frozen retrieval artifact, then the
+generation/judge checkpoint modules consume it without re-retrieving.
+This script still works unchanged for legacy reruns.
 """
 
 import json

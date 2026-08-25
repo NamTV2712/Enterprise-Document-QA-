@@ -33,6 +33,7 @@ from src.evaluation.evaluator import (
     JudgeParseError,
     _extract_relevant_window,
     _parse_judge_response,
+    compute_citation_correctness,
 )
 from src.evaluation.generation_checkpoint import (
     GEN_STATUS_OK,
@@ -63,7 +64,7 @@ logger = logging.getLogger(__name__)
 
 ARTIFACT_PATH = Path("data/eval_artifacts/phase1_priority2.json")
 EXPECTED_ARTIFACT_FINGERPRINT = (
-    "sha256:d7aadd8b85004fa89135659760c9d1caeaf8b147da21618f67d688ac35002cb1"
+    "sha256:f1129d814274e95d3b2019aa58ef840fc28817c1d82b548a613e2de697986841"
 )
 GEN_CHECKPOINT_PATH = Path("data/eval_artifacts/probe_gen.jsonl")
 JUDGE_CHECKPOINT_PATH = Path("data/eval_artifacts/probe_judge.jsonl")
@@ -87,6 +88,38 @@ GROUND_TRUTHS = {
         "Microsoft's total assets grew from $512,163M to $619,003M."
     ),
 }
+
+COMPARATIVE_ACCEPTANCE_VALUES = ("391,035", "637,959")
+
+
+def build_probe_acceptance(
+    question: str,
+    answer: str,
+    citation_correctness: float | None,
+) -> dict | None:
+    """Deterministic acceptance checks for the comparative re-probe.
+
+    The original test question is year-ambiguous, while the approved probe
+    acceptance pins the FY2024 figures. Keep that distinction visible instead
+    of silently treating a correct latest-year comparison as the requested
+    FY2024 answer.
+    """
+    if question != PROBE_QUESTIONS[1]:
+        return None
+    compact = "".join(answer.split())
+    lowered = answer.casefold()
+    values = {
+        value: value in compact
+        for value in COMPARATIVE_ACCEPTANCE_VALUES
+    }
+    identifies_amazon_higher = "amazon" in lowered and "higher" in lowered
+    citations_pass = citation_correctness == 1.0
+    return {
+        "expected_fy2024_values": values,
+        "identifies_amazon_higher": identifies_amazon_higher,
+        "citation_correctness_pass": citations_pass,
+        "passed": all(values.values()) and identifies_amazon_higher and citations_pass,
+    }
 
 
 class ProbeQuotaStop(Exception):
@@ -225,7 +258,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Delete existing probe checkpoints before running.",
     )
+    parser.add_argument(
+        "--question",
+        action="append",
+        choices=PROBE_QUESTIONS,
+        help=(
+            "Probe only this question; repeat for multiple questions. "
+            "Defaults to the original three-case probe."
+        ),
+    )
     args = parser.parse_args(argv)
+    selected_questions = args.question or PROBE_QUESTIONS
 
     for path in (GEN_CHECKPOINT_PATH, JUDGE_CHECKPOINT_PATH):
         if args.fresh and path.exists():
@@ -234,7 +277,7 @@ def main(argv: list[str] | None = None) -> int:
 
     artifact, upstream = _load_artifact_and_binding()
     case_by_question = {case["question"]: case for case in artifact["cases"]}
-    missing = [q for q in PROBE_QUESTIONS if q not in case_by_question]
+    missing = [q for q in selected_questions if q not in case_by_question]
     if missing:
         raise RuntimeError(f"Probe questions absent from artifact: {missing}")
 
@@ -266,7 +309,7 @@ def main(argv: list[str] | None = None) -> int:
 
     per_case: list[dict] = []
     stopped_reason = None
-    for question in PROBE_QUESTIONS:
+    for question in selected_questions:
         logger.info("=== PROBE CASE: %s", question[:70])
 
         gen_records = run_generation_phase(
@@ -295,7 +338,7 @@ def main(argv: list[str] | None = None) -> int:
                 question: build_evidence_context(case_by_question[question])
             },
             ground_truth_by_question={
-                q: GROUND_TRUTHS[q] for q in PROBE_QUESTIONS
+                q: GROUND_TRUTHS[q] for q in selected_questions
             },
             judge_model=PROBE_MODEL,
             judge_prompt_template_sha256=sha256_text(JUDGE_PROMPT_TEMPLATE),
@@ -324,9 +367,58 @@ def main(argv: list[str] | None = None) -> int:
 
     stored_judge = load_judge_records(JUDGE_CHECKPOINT_PATH)
     generation_records = [entry["generation"] for entry in per_case]
-    aggregate = build_official_aggregate(
+    raw_aggregate = build_official_aggregate(
         generation_records=generation_records,
         judge_records=list(stored_judge.values()),
+    )
+    aggregate = {
+        **raw_aggregate,
+        "official": False,
+        "reason": (
+            "forced false: quota probe subset with self-judge bias; "
+            "never a benchmark"
+        ),
+    }
+
+    case_summaries = []
+    for entry in per_case:
+        question = entry["question"]
+        answer = entry["generation"].get("answer") or ""
+        citation_correctness = compute_citation_correctness(
+            answer,
+            len(case_by_question[question]["final_chunk_ids"]),
+        )
+        case_summaries.append({
+            "question": question,
+            "generation_status": entry["generation"]["status"],
+            "answer": entry["generation"].get("answer"),
+            "citation_correctness": citation_correctness,
+            "acceptance": build_probe_acceptance(
+                question, answer, citation_correctness
+            ),
+            "judge_status": entry.get("judge", {}).get("status"),
+            "scores": {
+                key: entry["judge"]["scores"][key]
+                for key in (
+                    "faithfulness",
+                    "answer_relevancy",
+                    "context_precision",
+                    "faithfulness_reason",
+                    "relevancy_reason",
+                    "precision_reason",
+                )
+            } if entry.get("judge") and entry["judge"]["status"] == JUDGE_STATUS_OK else None,
+            "error": entry["generation"].get("error")
+            or entry.get("judge", {}).get("error"),
+        })
+
+    acceptance_results = [
+        case["acceptance"] for case in case_summaries
+        if case["acceptance"] is not None
+    ]
+    probe_acceptance_passed = (
+        stopped_reason is None
+        and all(result["passed"] for result in acceptance_results)
     )
 
     summary = {
@@ -341,31 +433,12 @@ def main(argv: list[str] | None = None) -> int:
         ),
         "bound_artifact_fingerprint": EXPECTED_ARTIFACT_FINGERPRINT,
         "binding": upstream.binding,
+        "selected_questions": selected_questions,
         "stopped_reason": stopped_reason,
+        "probe_acceptance_passed": probe_acceptance_passed,
         "token_usage_totals": _USAGE_TOTALS,
         "aggregate_check": aggregate,
-        "cases": [
-            {
-                "question": entry["question"],
-                "generation_status": entry["generation"]["status"],
-                "answer": entry["generation"].get("answer"),
-                "judge_status": entry.get("judge", {}).get("status"),
-                "scores": {
-                    key: entry["judge"]["scores"][key]
-                    for key in (
-                        "faithfulness",
-                        "answer_relevancy",
-                        "context_precision",
-                        "faithfulness_reason",
-                        "relevancy_reason",
-                        "precision_reason",
-                    )
-                } if entry.get("judge") and entry["judge"]["status"] == JUDGE_STATUS_OK else None,
-                "error": entry["generation"].get("error")
-                or entry.get("judge", {}).get("error"),
-            }
-            for entry in per_case
-        ],
+        "cases": case_summaries,
     }
     SUMMARY_PATH.write_text(
         json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8"
@@ -373,7 +446,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print(json.dumps(summary, indent=2, ensure_ascii=False))
     logger.info("Probe summary written: %s", SUMMARY_PATH)
-    return 0 if stopped_reason is None else 1
+    return 0 if probe_acceptance_passed else 1
 
 
 if __name__ == "__main__":

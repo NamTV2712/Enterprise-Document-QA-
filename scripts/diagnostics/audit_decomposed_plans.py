@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from src.evaluation.test_set import TEST_SET
+from src.retrieval.query_normalizer import COMPANY_ALIASES
 
 STATUS_PLAN_GAP = "plan_gap"
 STATUS_RETRIEVAL_MISS = "retrieval_miss"
@@ -62,6 +63,21 @@ def _compact(text: str) -> str:
 def _chunk_ticker(chunk_id: str) -> str:
     """Chunk ids are prefixed with the ticker, e.g. ``AAPL_0000...``."""
     return chunk_id.split("_", 1)[0]
+
+
+def _chunk_audit_text(chunk: dict[str, Any]) -> str:
+    """Searchable evidence including deterministic entity attribution.
+
+    Financial-table bodies often omit the company name because ticker and
+    filing identity live in chunk metadata. Treat known aliases for that
+    ticker as evidence attribution while still requiring numeric and topical
+    facts to occur in the actual chunk text.
+    """
+    ticker = chunk.get("ticker") or _chunk_ticker(chunk.get("chunk_id", ""))
+    aliases = COMPANY_ALIASES.get(ticker, ())
+    return " ".join(
+        [ticker, *aliases, chunk.get("citation", ""), chunk.get("text", "")]
+    )
 
 
 def extract_required_numbers(ground_truth: str) -> list[str]:
@@ -126,7 +142,7 @@ def audit_decomposed_case(
     }
 
     compact_evidence = " ".join(
-        _compact(final_chunks_by_id[cid].get("text", ""))
+        _compact(_chunk_audit_text(final_chunks_by_id[cid]))
         for cid in case_payload.get("final_chunk_ids", [])
         if cid in final_chunks_by_id
     )

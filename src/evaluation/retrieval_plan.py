@@ -31,6 +31,7 @@ class PlanQuery:
         "original_question",
         "saved_subquery",
         "original_proxy_missing_rewrite",
+        "planner_snapshot",
     ]
 
 

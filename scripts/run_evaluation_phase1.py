@@ -27,6 +27,9 @@ from scripts.diagnostics.replay_contract import (
     EvaluationReplayPlan,
     build_replay_plan_from_evaluation_record,
 )
+from src.evaluation.frozen_plan_overrides import (
+    apply_frozen_plan_overrides,
+)
 from src.evaluation.retrieval_artifact import (
     CaseRetrievalResult,
     QueryRetrievalResult,
@@ -184,6 +187,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     plans = load_fixed_plans(args.official_artifact, selected_questions)
+    plans, plan_provenance = apply_frozen_plan_overrides(plans)
     validate_plans_cover(plans, test_cases)
 
     def build_once(retriever: HybridRetriever, all_chunks: list[dict]) -> dict:
@@ -204,6 +208,7 @@ def main(argv: list[str] | None = None) -> int:
             results=results,
             all_chunks=all_chunks,
             top_k=5,
+            plan_provenance=plan_provenance,
         )
 
     guard = None if args.allow_network else offline_socket_guard()

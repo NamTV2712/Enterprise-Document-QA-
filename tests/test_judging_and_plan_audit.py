@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from scripts.run_quota_probe import build_probe_acceptance
 from scripts.diagnostics.audit_decomposed_plans import (
     STATUS_EVIDENCE_OK,
     STATUS_PLAN_GAP,
@@ -19,9 +20,19 @@ from src.evaluation.evaluator import (
     JUDGE_MAX_TOKENS,
     compute_citation_correctness,
 )
+from src.evaluation.frozen_plan_overrides import (
+    OVERRIDE_QUESTION,
+    RAW_PLANNER_OUTPUT,
+    apply_frozen_plan_overrides,
+    build_override_plan,
+    canonical_sha256,
+    compute_planner_provenance,
+)
 from src.evaluation.judge_checkpoint import (
     compute_judge_binding,
 )
+from src.evaluation.retrieval_plan import PlanQuery, RetrievalPlan
+from src.evaluation.test_set import TestCase as EvalTestCase
 
 
 # ---------------------------------------------------------------------------
@@ -70,9 +81,115 @@ def test_citation_metric_returns_none_without_citations() -> None:
     assert compute_citation_correctness("no citations here", num_sources=3) is None
 
 
+def test_comparative_probe_acceptance_distinguishes_years() -> None:
+    question = "Which company, Apple or Amazon, has higher total revenue?"
+
+    latest_year = build_probe_acceptance(
+        question,
+        "Amazon is higher: Apple $416,161 and Amazon $716,924 [Source 1].",
+        1.0,
+    )
+    fiscal_2024 = build_probe_acceptance(
+        question,
+        "Amazon is higher: Apple $391,035 and Amazon $637,959 [Source 1].",
+        1.0,
+    )
+
+    assert latest_year is not None and latest_year["passed"] is False
+    assert fiscal_2024 is not None and fiscal_2024["passed"] is True
+
+
 # ---------------------------------------------------------------------------
-# Decomposed plan audit classification
+# Frozen planner-snapshot plan overrides
 # ---------------------------------------------------------------------------
+
+
+def test_override_plan_matches_captured_planner_output() -> None:
+    plan = build_override_plan()
+
+    assert plan.question == OVERRIDE_QUESTION
+    assert plan.route == "decomposed"
+    assert [
+        (q.effective_query, q.ticker, q.section)
+        for q in plan.queries
+    ] == [
+        ("Apple total revenue", "AAPL", "financial_table"),
+        ("Amazon total revenue", "AMZN", "financial_table"),
+    ]
+    assert all(q.query_source == "planner_snapshot" for q in plan.queries)
+
+
+def test_apply_overrides_replaces_only_target_question() -> None:
+    other = RetrievalPlan(
+        question="Summarize Apple competition risks",
+        category="summary",
+        route="direct",
+        queries=(
+            PlanQuery(
+                effective_query="Apple competition risks",
+                ticker="AAPL",
+                section="risk_factors",
+                query_source="original_question",
+            ),
+        ),
+    )
+    plans = [other, build_override_plan()]  # target already present once
+
+    replaced, provenance = apply_frozen_plan_overrides(plans)
+
+    assert len(replaced) == 2
+    target = next(p for p in replaced if p.question == OVERRIDE_QUESTION)
+    assert all(q.query_source == "planner_snapshot" for q in target.queries)
+    untouched = next(p for p in replaced if p.question == other.question)
+    assert untouched is other
+    assert set(provenance["plan_overrides"]) == {OVERRIDE_QUESTION}
+
+
+def test_apply_overrides_allows_category_subset_without_target() -> None:
+    from src.evaluation.retrieval_plan import validate_plans_cover
+
+    unrelated = RetrievalPlan(
+        question="Unrelated question",
+        category="summary",
+        route="direct",
+        queries=(
+            PlanQuery(
+                effective_query="q", ticker=None, section=None,
+                query_source="original_question",
+            ),
+        ),
+    )
+
+    replaced, provenance = apply_frozen_plan_overrides([unrelated])
+
+    assert replaced == [unrelated]
+    assert provenance == {"plan_overrides": {}}
+    # Full-set coverage validation still rejects an incomplete selection.
+    with pytest.raises(ValueError, match="Missing fixed retrieval plans"):
+        validate_plans_cover(
+            [unrelated],
+            [EvalTestCase(question=OVERRIDE_QUESTION, category="comparative",
+                          ticker=None, section=None, ground_truth="gt")],
+        )
+
+
+def test_planner_provenance_records_model_prompt_and_raw_hashes() -> None:
+    provenance = compute_planner_provenance()
+
+    assert provenance["kind"] == "live_planner_snapshot"
+    assert provenance["model"] == "openai/gpt-oss-120b"
+    assert provenance["max_tokens"] == 700
+    assert provenance["prompt_schema_sha256"].startswith("sha256:")
+    assert provenance["raw_plan_sha256"].startswith("sha256:")
+    # Raw hash is derived from the verbatim captured output.
+    assert provenance["raw_plan_sha256"] == canonical_sha256(RAW_PLANNER_OUTPUT)
+
+
+def test_provenance_snapshot_note_prevents_variance_claims() -> None:
+    note = compute_planner_provenance()["variance_note"]
+
+    assert "snapshot" in note
+    assert "variance" in note
 
 
 def _case_payload(
@@ -201,6 +318,50 @@ def test_audit_marks_balanced_complete_evidence_ok() -> None:
     assert report["status"] == STATUS_EVIDENCE_OK
     assert report["missing_keywords"] == []
     assert report["missing_ground_truth_numbers"] == []
+
+
+def test_audit_uses_ticker_metadata_for_company_attribution() -> None:
+    payload = _case_payload(
+        queries=[
+            {
+                "effective_query": "Apple total revenue",
+                "ticker": "AAPL",
+                "section": "financial_table",
+                "query_source": "planner_snapshot",
+                "chunk_ids": ["AAPL_table"],
+            },
+            {
+                "effective_query": "Amazon total revenue",
+                "ticker": "AMZN",
+                "section": "financial_table",
+                "query_source": "planner_snapshot",
+                "chunk_ids": ["AMZN_table"],
+            },
+        ],
+        final_chunk_ids=["AAPL_table", "AMZN_table"],
+        chunks_by_id={
+            "AAPL_table": {
+                "chunk_id": "AAPL_table",
+                "ticker": "AAPL",
+                "text": "Total net sales | 416,161 | 391,035 | 383,285",
+            },
+            "AMZN_table": {
+                "chunk_id": "AMZN_table",
+                "ticker": "AMZN",
+                "text": "Total net sales | 716,924 | 637,959 | 574,785",
+            },
+        },
+    )
+    payload["question"] = OVERRIDE_QUESTION
+
+    report = audit_decomposed_case(
+        payload,
+        ["Amazon"],
+        "Amazon's consolidated net sales are higher than Apple's.",
+    )
+
+    assert report["status"] == STATUS_EVIDENCE_OK
+    assert report["missing_keywords"] == []
 
 
 def test_expected_fact_override_catches_vague_ground_truth() -> None:

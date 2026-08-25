@@ -155,6 +155,7 @@ def build_retrieval_artifact(
     results: list[CaseRetrievalResult],
     all_chunks: list[dict],
     top_k: int,
+    plan_provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble the canonical Phase 1 artifact (no timestamps inside)."""
     plan_by_question = {plan.question: plan for plan in plans}
@@ -211,6 +212,8 @@ def build_retrieval_artifact(
         "cases": case_payloads,
         "fingerprints": fingerprints,
     }
+    if plan_provenance is not None:
+        artifact_core["provenance"] = plan_provenance
     artifact_core["fingerprints"]["artifact"] = _sha256_text(
         canonical_json(artifact_core).decode("utf-8")
     )

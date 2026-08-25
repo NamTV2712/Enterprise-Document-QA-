@@ -23,6 +23,7 @@ from src.evaluation.generation_checkpoint import (
     aggregate_generation,
     sha256_text,
 )
+from src.evaluation.evaluator import JUDGE_MAX_TOKENS
 
 logger = logging.getLogger(__name__)
 
@@ -37,14 +38,21 @@ def compute_judge_binding(
     generation_answer_sha256s: str,
     judge_model: str,
     judge_prompt_template_sha256: str,
+    judge_max_tokens: int = JUDGE_MAX_TOKENS,
 ) -> str:
-    """Identity tying judge scores to exactly these generated answers."""
+    """Identity tying judge scores to exactly these generated answers.
+
+    The completion budget participates in the binding: changing it can
+    change whether long rationales survive truncation, so scores produced
+    under different caps are never mixed.
+    """
     payload = {
         "schema_version": JUDGE_SCHEMA_VERSION,
         "generation_binding": generation_binding,
         "generation_answer_sha256s": generation_answer_sha256s,
         "judge_model": judge_model,
         "judge_prompt_template_sha256": judge_prompt_template_sha256,
+        "judge_max_tokens": judge_max_tokens,
     }
     return sha256_text(json.dumps(payload, sort_keys=True))
 
@@ -98,6 +106,7 @@ def run_judge_phase(
     retry_backoff_seconds: tuple[float, ...] = (5.0, 15.0),
     sleep_fn: Callable[[float], None] = time.sleep,
     judge_prompt_builder: Callable[[str, str, str, str], str] | None = None,
+    judge_max_tokens: int = JUDGE_MAX_TOKENS,
 ) -> list[dict[str, Any]]:
     """Judge frozen answers; ``judge_fn`` is the only provider touchpoint.
 
@@ -136,6 +145,7 @@ def run_judge_phase(
         generation_answer_sha256s=answer_hashes,
         judge_model=judge_model,
         judge_prompt_template_sha256=judge_prompt_template_sha256,
+        judge_max_tokens=judge_max_tokens,
     )
 
     done = checkpoint_store.load_compatible(binding)
@@ -199,6 +209,7 @@ def run_judge_phase(
             "binding": binding,
             "model": judge_model,
             "judge_prompt_template_sha256": judge_prompt_template_sha256,
+            "judge_max_tokens": judge_max_tokens,
         }
         if scores is not None:
             record.update({"status": JUDGE_STATUS_OK, "scores": scores})

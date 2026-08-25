@@ -23,6 +23,9 @@ JUDGE_CONTEXT_CHARS_PER_CHUNK = 1000
 RELEVANCE_WINDOW_STRIDE = 200
 JUDGE_SCORE_FIELDS = ("faithfulness", "answer_relevancy", "context_precision")
 JUDGE_REASON_FIELDS = ("faithfulness_reason", "relevancy_reason", "precision_reason")
+# gpt-oss-120b writes longer rationales than the legacy 70B judge; the old
+# 320-token cap truncated its JSON mid-object during the quota probe.
+JUDGE_MAX_TOKENS = 1024
 
 # Shared prompt contract for judging; extracted so offline replay tooling
 # judges frozen evidence through the exact same instructions.
@@ -53,6 +56,10 @@ Scoring guide:
 
 class JudgeParseError(ValueError):
     """The judge response is not a valid evaluation result."""
+
+
+# CJK corner brackets some models emit instead of ASCII square brackets.
+_CITATION_BRACKET_TRANSLATION = str.maketrans({"【": "[", "】": "]"})
 
 
 @dataclass
@@ -132,8 +139,11 @@ def compute_citation_correctness(answer: str, num_sources: int) -> float | None:
     This deterministic check catches citation hallucinations such as citing
     Source 7 when only five chunks were retrieved. It returns None when the
     answer contains no source citations, which is usually a fallback case.
+    Both ASCII ``[Source N]`` and CJK ``【Source N】`` bracket styles are
+    recognized; the original answer text is never mutated.
     """
-    citation_numbers = [int(n) for n in re.findall(r"Source\s+(\d+)", answer)]
+    normalized = answer.translate(_CITATION_BRACKET_TRANSLATION)
+    citation_numbers = [int(n) for n in re.findall(r"Source\s+(\d+)", normalized)]
     if not citation_numbers:
         return None
 
@@ -270,7 +280,7 @@ class RAGEvaluator:
                 {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
-            max_tokens=320,
+            max_tokens=JUDGE_MAX_TOKENS,
             temperature=0,
         )
         return response.choices[0].message.content or ""

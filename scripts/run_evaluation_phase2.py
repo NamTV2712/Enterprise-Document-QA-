@@ -482,12 +482,12 @@ def main(argv: list[str] | None = None) -> int:
             CONTEXT_STRATEGY_ROUTE_AWARE,
             CONTEXT_STRATEGY_SELECTIVE,
         ],
-        default=CONTEXT_STRATEGY_FULL_EVIDENCE,
+        default=CONTEXT_STRATEGY_SELECTIVE,
         help=(
-            "full_evidence_v1 renders every frozen chunk; route_aware_v2 "
-            "packs every case; selective_packed_v1 packs only the "
+            "selective_packed_v1 is the merged default: it packs only the "
             "fact_lookup/multi_hop/summary categories whose paired A/B "
-            "evidence was faithfulness-neutral."
+            "evidence passed all pre-registered gates. full_evidence_v1 "
+            "renders every frozen chunk and remains available for replay."
         ),
     )
     args = parser.parse_args(argv)

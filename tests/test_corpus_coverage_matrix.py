@@ -18,19 +18,21 @@ from scripts.corpus_coverage_matrix import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-# Baseline documented in PROJECT_STATE.md after annual-report recovery.
+# Baseline documented in PROJECT_STATE.md after the FY2026 corpus
+# recovery (generation nomic-e9b6763-fy2026-corpus-recovery-20260826).
 EXPECTED_BASELINE = {
     "configured_tickers": 50,
     "searchable_tickers": 50,
-    "clean_tickers": 41,
-    "degraded_tickers": 9,
+    "clean_tickers": 46,
+    "degraded_tickers": 4,
     "missing_tickers": 0,
-    "tickers_with_financial_table": 39,
+    "tickers_with_financial_table": 40,
+    "total_chunks": 9935,
 }
-EXPECTED_DEGRADED = {"CVX", "IBM", "JPM", "NOW", "NVDA", "ORCL", "PEP", "PFE", "XOM"}
+EXPECTED_DEGRADED = {"CVX", "IBM", "JPM", "XOM"}
 EXPECTED_NO_TABLE = {
     "AVGO", "CVX", "GS", "HD", "IBM",
-    "JPM", "NOW", "NVDA", "ORCL", "PEP", "XOM",
+    "JPM", "NVDA", "ORCL", "PEP", "XOM",
 }
 
 

@@ -97,9 +97,15 @@ VZ, T
 Current searchable corpus:
 
 - All 50 configured tickers have embedded chunks in local Qdrant.
-- Annual-report layout recovery now covers `MS`, `MCD`, `INTC`, `COST`, `GE`, and `HON`.
-- Local Qdrant indexes `9,703` chunks.
-- `financial_table` chunks are available for 39 searchable tickers.
+- Annual-report layout recovery covers `MS`, `MCD`, `INTC`, `COST`, `GE`,
+  and `HON`; the FY2026 recovery pass additionally restored
+  `financial_statements` for `NOW`, `NVDA`, `ORCL`, and `PEP` plus `mdna`
+  for `PFE`.
+- Local Qdrant indexes `9,935` chunks from trusted generation
+  `nomic-e9b6763-fy2026-corpus-recovery-20260826-attempt-01`.
+- Extraction quality is `46` filings with all four target sections and
+  `4` degraded but searchable filings (`CVX`, `IBM`, `JPM`, `XOM`).
+- `financial_table` chunks are available for `40` searchable tickers.
 
 The `/supported-tickers` endpoint returns the live searchable ticker list from embedded chunks, not the full configured list.
 
@@ -217,7 +223,14 @@ retrieval artifact, then frozen-evidence generation and judging) over all
 and judging. All `30` generations and `30` judgments completed OK with no
 skipped records, no parse failures, and one shared binding. Contexts are
 rendered under `selective_packed_v1`, a route-aware packing strategy that
-kept every pre-registered merge gate (see below):
+kept every pre-registered merge gate (see below).
+Corpus provenance note: this run was measured against trusted generation
+`nomic-e9b6763-annual-report-rebuild-20260818-attempt-05` (corpus
+`sha256:dc44c926…`). The local index has since advanced to the FY2026
+recovery generation `nomic-e9b6763-fy2026-corpus-recovery-20260826-attempt-01`
+(corpus `sha256:e2499754…`), so the published table is a historical result
+of the earlier corpus, and the Phase 1 artifact must be rebuilt against the
+new trusted index before any future Phase 2 claim.
 
 | Metric | Score |
 |---|---:|
@@ -288,17 +301,18 @@ Retrieval latency optimization:
 Corpus scale:
 
 - The configured corpus targets `50` tickers, and all `50` have searchable embedded chunks in local Qdrant.
-- Local Qdrant indexes `9,703` chunks after annual-report recovery and table restoration.
-- The local collection now has a trusted schema-v2 build manifest tied to the
-  immutable generation `nomic-e9b6763-annual-report-rebuild-20260818-attempt-05`,
-  Nomic revision `e9b6763023c676ca8431644204f50c2b100d9aab`, and canonical
-  corpus fingerprint `sha256:dc44c9266856b044e8e928a0681f6f05a5e4889a3217c8eae3cdd0b080d391e2`.
+- Local Qdrant indexes `9,935` chunks after the FY2026 corpus recovery pass.
+- The local collection has a trusted schema-v2 build manifest tied to the
+  immutable generation `nomic-e9b6763-fy2026-corpus-recovery-20260826-attempt-01`,
+  Nomic revision `e9b6763023c676ca8431644204f50c2b100d9aab`, canonical
+  corpus fingerprint `sha256:e2499754d522d5f4d85a639a177a451973ba1b5415cb6cb6c3fd6df29ea0bc0a`,
+  and generation fingerprint `sha256:65cc3f9f84d965f825a968e576529b74b6d80bdd9631ca9be359907809dbc3fb`.
   Local runtime and Docker Compose pin the same model revision through
   `EMBEDDING_MODEL_REVISION` so query embeddings cannot silently drift.
   This trust status applies only to local Qdrant; Cloud remains untrusted until
   full ID, payload, and vector-snapshot verification is completed.
-- `financial_table` chunks are available for `39` searchable tickers.
-- Latest extraction quality is `41` filings with all four target sections and `9` degraded but searchable filings; no configured ticker is currently unusable.
+- `financial_table` chunks are available for `40` searchable tickers.
+- Latest extraction quality is `46` filings with all four target sections and `4` degraded but searchable filings (`CVX`, `IBM`, `JPM`, `XOM`); no configured ticker is currently unusable.
 
 | Scenario | Filter | Latency |
 |---|---|---:|
@@ -595,7 +609,7 @@ Secrets are loaded from `.env` and should never be committed.
 
 ## Known Limitations
 
-- The corpus targets `50` companies and all `50` are searchable; extraction remediation recovered the `6` filings that previously failed section extraction, leaving `41` filings with all four target sections and `9` degraded but searchable.
+- The corpus targets `50` companies and all `50` are searchable; extraction remediation plus the FY2026 recovery pass restored `10` previously incomplete filings, leaving `46` filings with all four target sections and `4` degraded but searchable (`CVX`, `IBM`, `JPM`, `XOM`).
 - Extraction quality remains uneven across large-company filing layouts: some annual-report cross-reference and non-standard Item 7/8 formats expose fewer than the four target sections.
 - Financial statements can become verticalized after HTML-to-text conversion; table extraction and structured lookup reduce this issue for common total-line financial questions.
 - Hybrid retrieval improves source quality but adds CPU latency due to cross-encoder re-ranking.

@@ -20,6 +20,15 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        current support is intentionally limited to explicit financial metrics.
 6. [ ] Keep `/metrics` disabled unless the deployment protects it. Monitor
        429, 5xx, request count, and latency through aggregate telemetry.
+7. [x] Finalize the FY2026 corpus recovery: NOW/NVDA/ORCL financial_statements
+       and PFE mdna restored (46 clean / 4 degraded / 40 table / 9,935 chunks)
+       on trusted generation nomic-e9b6763-fy2026-corpus-recovery-20260826-
+       attempt-01; deterministic spot-checks and coverage baseline pinned.
+8. [ ] Audit why NVDA, ORCL, and PEP recovered statements still yield zero
+       financial_table chunks (statement tables live in layouts the current
+       table extractor misses); same audit covers AVGO, GS, and HD.
+9. [ ] Rebuild the Phase 1 retrieval artifact against the new trusted index
+       before any future Phase 2 evaluation claim.
 
 ## Always-On Deployment
 

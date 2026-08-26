@@ -228,9 +228,11 @@ Corpus provenance note: this run was measured against trusted generation
 `nomic-e9b6763-annual-report-rebuild-20260818-attempt-05` (corpus
 `sha256:dc44c926…`). The local index has since advanced to the FY2026
 recovery generation `nomic-e9b6763-fy2026-corpus-recovery-20260826-attempt-01`
-(corpus `sha256:e2499754…`), so the published table is a historical result
-of the earlier corpus, and the Phase 1 artifact must be rebuilt against the
-new trusted index before any future Phase 2 claim.
+(corpus `sha256:e2499754…`). The deterministic Phase 1 artifact has been
+rebuilt and verified on the new corpus (artifact `sha256:6341419c…`,
+12/12 decomposed-plan evidence_ok), so future Phase 2 runs bind to it;
+the published score table above remains the historical result of the
+earlier corpus until a new Phase 2 run is executed.
 
 | Metric | Score |
 |---|---:|

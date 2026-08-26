@@ -296,6 +296,69 @@ def test_load_bound_artifact_refuses_fingerprint_drift(
         load_bound_artifact(path, "sha256:" + "f" * 64)
 
 
+# The FY2026-corpus Phase 1 rebuild; both runners must bind to exactly this.
+CURRENT_ARTIFACT_FINGERPRINT = (
+    "sha256:6341419c1922e465637f1881810f82a7d6c547a51ab4119ad13e22c4ea03cb87"
+)
+SUPERSEDED_FINGERPRINTS = {
+    # Pre-FY2024-contract corpus.
+    "sha256:f1129d814274e95d3b2019aa58ef840fc28817c1d82b548a613e2de697986841",
+    # FY2024 contract on the annual-report-rebuild corpus.
+    "sha256:8848d68b4236afbb1df5cef1be6cf9980d104bd1291703506a98d7cccd67f2ad",
+}
+
+
+def test_both_phase_two_runners_pin_the_current_artifact() -> None:
+    from scripts import run_evaluation_phase2 as runner
+    from scripts import run_quota_probe as probe
+
+    assert probe.EXPECTED_ARTIFACT_FINGERPRINT == CURRENT_ARTIFACT_FINGERPRINT
+    assert runner.EXPECTED_ARTIFACT_FINGERPRINT == CURRENT_ARTIFACT_FINGERPRINT
+    assert (
+        probe.EXPECTED_ARTIFACT_FINGERPRINT not in SUPERSEDED_FINGERPRINTS
+    )
+    assert (
+        probe.EXPECTED_ARTIFACT_FINGERPRINT
+        == runner.EXPECTED_ARTIFACT_FINGERPRINT
+    )
+
+
+@pytest.mark.parametrize("superseded", sorted(SUPERSEDED_FINGERPRINTS))
+def test_superseded_artifact_fingerprints_are_refused(
+    tmp_path: Path, superseded: str
+) -> None:
+    path = tmp_path / "artifact.json"
+    payload = _artifact_payload()
+    payload["fingerprints"]["artifact"] = superseded
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="fingerprint drift"):
+        load_bound_artifact(path, CURRENT_ARTIFACT_FINGERPRINT)
+
+
+def test_phase_two_main_never_imports_retrieval_machinery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Phase 2 must consume only the frozen artifact; if any heavier
+    retrieval module is loaded when main() runs its hermeticity gate,
+    the run must fail instead of silently rerunning retrieval."""
+    import sys
+
+    from scripts import run_evaluation_phase2 as runner
+
+    monkeypatch.setattr(
+        sys, "modules",
+        {**sys.modules, "src.retrieval.hybrid_retriever": object()},
+    )
+    with pytest.raises(RuntimeError, match="Retrieval machinery loaded"):
+        runner.main([])
+
+    monkeypatch.undo()
+    # Without forbidden modules the gate itself passes (argparse exits).
+    with pytest.raises(SystemExit):
+        runner.main(["--help"])
+
+
 def test_compute_case_metrics_handles_missing_citations() -> None:
     case_payload = _artifact_payload()["cases"][0]
     metrics = compute_case_metrics(

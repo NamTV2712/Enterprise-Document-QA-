@@ -27,8 +27,16 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
 8. [ ] Audit why NVDA, ORCL, and PEP recovered statements still yield zero
        financial_table chunks (statement tables live in layouts the current
        table extractor misses); same audit covers AVGO, GS, and HD.
-9. [ ] Rebuild the Phase 1 retrieval artifact against the new trusted index
-       before any future Phase 2 evaluation claim.
+9. [x] Rebuild the Phase 1 retrieval artifact against the new trusted index
+       before any future Phase 2 evaluation claim. Done offline with
+       determinism verification: artifact 6341419c... bound to corpus
+       e2499754..., 12/12 decomposed evidence_ok; both runners re-pinned.
+10. [ ] Financial-table remediation order from the read-only audit
+        (data/diagnostics/financial_table_audit.json): first extend table
+        discovery to reuse the recovery TOC-anchor path for NVDA -> ORCL ->
+        PEP; then AVGO/HD window extension plus year-header tolerance; then
+        GS exhibit following. CVX/IBM/JPM/XOM stay deferred to the separate
+        incorporation-by-reference extraction milestone.
 
 ## Always-On Deployment
 

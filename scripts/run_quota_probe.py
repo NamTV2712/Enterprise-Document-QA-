@@ -73,7 +73,7 @@ SUMMARY_PATH = Path("data/eval_artifacts/probe_summary.json")
 PROBE_MODEL = "openai/gpt-oss-120b"
 PROBE_QUESTIONS = [
     "What was Apple's total net sales in fiscal year 2024?",
-    "Which company, Apple or Amazon, has higher total revenue?",
+    "Which company, Apple or Amazon, had higher total revenue in fiscal year 2024?",
     "How did Microsoft's total assets change year over year?",
 ]
 GROUND_TRUTHS = {
@@ -81,8 +81,9 @@ GROUND_TRUTHS = {
         "Apple's total net sales in fiscal year 2024 were $391,035 million."
     ),
     PROBE_QUESTIONS[1]: (
-        "Amazon's consolidated net sales are significantly higher than "
-        "Apple's total net sales."
+        "In fiscal year 2024, Amazon's consolidated net sales ($637,959 "
+        "million) were significantly higher than Apple's total net sales "
+        "($391,035 million)."
     ),
     PROBE_QUESTIONS[2]: (
         "Microsoft's total assets grew from $512,163M to $619,003M."
@@ -99,10 +100,10 @@ def build_probe_acceptance(
 ) -> dict | None:
     """Deterministic acceptance checks for the comparative re-probe.
 
-    The original test question is year-ambiguous, while the approved probe
-    acceptance pins the FY2024 figures. Keep that distinction visible instead
-    of silently treating a correct latest-year comparison as the requested
-    FY2024 answer.
+    The evaluation contract pins fiscal year 2024 inside the question
+    itself, so the acceptance values and the question now agree by
+    construction; a latest-year answer is a contract violation instead of
+    an ambiguous judgment call.
     """
     if question != PROBE_QUESTIONS[1]:
         return None

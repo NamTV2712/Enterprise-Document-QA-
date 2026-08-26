@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.run_quota_probe import build_probe_acceptance
+from scripts.run_quota_probe import PROBE_QUESTIONS, build_probe_acceptance
 from scripts.diagnostics.audit_decomposed_plans import (
     STATUS_EVIDENCE_OK,
     STATUS_PLAN_GAP,
@@ -82,7 +82,7 @@ def test_citation_metric_returns_none_without_citations() -> None:
 
 
 def test_comparative_probe_acceptance_distinguishes_years() -> None:
-    question = "Which company, Apple or Amazon, has higher total revenue?"
+    question = PROBE_QUESTIONS[1]
 
     latest_year = build_probe_acceptance(
         question,
@@ -113,8 +113,8 @@ def test_override_plan_matches_captured_planner_output() -> None:
         (q.effective_query, q.ticker, q.section)
         for q in plan.queries
     ] == [
-        ("Apple total revenue", "AAPL", "financial_table"),
-        ("Amazon total revenue", "AMZN", "financial_table"),
+        ("Apple total revenue fiscal year 2024", "AAPL", "financial_table"),
+        ("Amazon total revenue fiscal year 2024", "AMZN", "financial_table"),
     ]
     assert all(q.query_source == "planner_snapshot" for q in plan.queries)
 
@@ -220,6 +220,20 @@ def test_extract_required_numbers_handles_currency_and_years() -> None:
 
     assert "512,163" in facts
     assert "619,003" in facts
+
+
+def test_extract_required_numbers_excludes_bare_calendar_years() -> None:
+    """A calendar year is period metadata; financial-table chunk bodies
+    frequently omit year headers, so requiring them would create false
+    retrieval-miss classifications."""
+    facts = extract_required_numbers(
+        "In fiscal year 2024, Amazon's consolidated net sales ($637,959 "
+        "million) were significantly higher than Apple's total net sales "
+        "($391,035 million)."
+    )
+
+    assert facts == ["391,035", "637,959"]
+    assert "2024" not in facts
 
 
 def test_audit_flags_plan_gap_when_a_ticker_has_no_evidence() -> None:
@@ -365,7 +379,8 @@ def test_audit_uses_ticker_metadata_for_company_attribution() -> None:
 
 
 def test_expected_fact_override_catches_vague_ground_truth() -> None:
-    """The AAPL-vs-AMZN revenue GT is qualitative; the override pins totals."""
+    """Even with a qualitative ground truth, the override pins the FY2024
+    totals so EPS-table noise on the AMZN branch cannot pass the audit."""
     payload = _case_payload(
         queries=[
             {
@@ -396,9 +411,7 @@ def test_expected_fact_override_catches_vague_ground_truth() -> None:
             },
         },
     )
-    payload["question"] = (
-        "Which company, Apple or Amazon, has higher total revenue?"
-    )
+    payload["question"] = OVERRIDE_QUESTION
     report = audit_decomposed_case(
         payload,
         ["Amazon"],

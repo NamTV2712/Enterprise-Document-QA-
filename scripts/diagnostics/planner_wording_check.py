@@ -1,8 +1,9 @@
 """Single-call diagnostic: what does the gpt-oss planner produce?
 
 Exactly one LLM call to the production QueryDecomposer planner for the
-AAPL-vs-AMZN revenue comparison. Compares the planned subquery wording
-against the counterfactual winner ("Amazon consolidated net sales").
+AAPL-vs-AMZN FY2024 revenue comparison. Compares the planned subquery
+wording against the counterfactual winner ("Amazon consolidated net
+sales").
 
 This is a DIAGNOSTIC; it freezes nothing.
 """
@@ -24,7 +25,7 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger(__name__)
 
 TARGET_QUESTION = (
-    "Which company, Apple or Amazon, has higher total revenue?"
+    "Which company, Apple or Amazon, had higher total revenue in fiscal year 2024?"
 )
 COUNTERFACTUAL_WINNER = "Amazon consolidated net sales"
 PLANNER_MODEL = "openai/gpt-oss-120b"

@@ -287,12 +287,19 @@ TEST_SET: list[TestCase] = [
         expects_decomposition=True,
     ),
     TestCase(
-        question="Which company, Apple or Amazon, has higher total revenue?",
+        question="Which company, Apple or Amazon, had higher total revenue in fiscal year 2024?",
         category="comparative",
         ticker=None,
         section=None,
-        ground_truth="Amazon's consolidated net sales are significantly higher than Apple's total net sales.",
-        required_keywords=["Amazon"],
+        ground_truth=(
+            "In fiscal year 2024, Amazon's consolidated net sales "
+            "($637,959 million) were significantly higher than Apple's "
+            "total net sales ($391,035 million)."
+        ),
+        # Only the two FY2024 totals are pinned here. Company-name keywords
+        # would be unfair because financial-table chunk texts carry figures
+        # while ticker identity lives in chunk metadata, not in the text.
+        required_keywords=["391,035", "637,959"],
         expects_decomposition=True,
     ),
     TestCase(

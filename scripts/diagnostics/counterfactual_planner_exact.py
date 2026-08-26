@@ -6,6 +6,12 @@ The live planner produced:
 
 If this passes, the new planner's plans are executable as-is and the
 failure was stale-frozen-plan drift, not planner wording.
+
+SUPERSEDED: this replays the snapshot captured for the year-ambiguous
+question before the FY2024 evaluation contract. It is retained as
+historical evidence for commit f73bcba; the current frozen snapshot in
+src/evaluation/frozen_plan_overrides.py was re-captured for the FY2024
+question.
 """
 
 from __future__ import annotations

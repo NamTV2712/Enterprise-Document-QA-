@@ -6,6 +6,11 @@ miss, by re-executing ONLY that case through pure retrieval with a
 candidate subquery ("Amazon consolidated net sales") while keeping the
 frozen official plans untouched.
 
+SUPERSEDED: this targets the year-ambiguous question that existed before
+the FY2024 evaluation contract. It is retained as historical evidence
+for commit b6c35a4 and does not match the current test set or Phase 1
+artifact; do not rerun it against current artifacts.
+
 This is a DIAGNOSTIC: nothing here freezes plans or writes official
 artifacts. Output lands under data/diagnostics/.
 

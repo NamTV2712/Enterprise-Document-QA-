@@ -3,10 +3,16 @@
 The stale llama-era frozen plan for the AAPL-vs-AMZN revenue comparison
 filtered ``financial_statements``, which defeats structured-lookup
 promotion and produced EPS-table noise on the Amazon branch. The live
-``openai/gpt-oss-120b`` planner (one captured call, schema-validated)
-instead selects ``financial_table``, and executing that exact plan
-promotes the true "Total net sales" rows at score 10.0 on both branches
-(see scripts/diagnostics/counterfactual_planner_exact.py).
+``openai/gpt-oss-120b`` planner instead selects ``financial_table``,
+and executing that exact plan promotes the true "Total net sales"
+rows at score 10.0 on both branches.
+
+The evaluation contract pins fiscal year 2024 inside the question
+itself, resolving the earlier year ambiguity: a latest-year answer can
+no longer satisfy an acceptance that checks FY2024 totals. The current
+snapshot below was re-captured from one schema-validated planner call
+against the FY2024 question; it keeps ``financial_table`` on both
+branches and adds explicit fiscal-year wording to each subquery.
 
 This module freezes that planner snapshot into versioned code so Phase 1
 is reproducible. Provenance is explicit: this is a SNAPSHOT of one
@@ -28,20 +34,23 @@ from src.evaluation.retrieval_plan import (
 )
 
 OVERRIDE_QUESTION = (
-    "Which company, Apple or Amazon, has higher total revenue?"
+    "Which company, Apple or Amazon, had higher total revenue in "
+    "fiscal year 2024?"
 )
 
-# Verbatim validated output of the single captured planner call.
+# Verbatim validated output of the single captured planner call for
+# OVERRIDE_QUESTION above (captured 2026-08-26 after the year contract
+# change; see scripts/diagnostics/planner_wording_check.json).
 RAW_PLANNER_OUTPUT: dict[str, Any] = {
     "needs_decomposition": True,
     "sub_queries": [
         {
-            "query": "Apple total revenue",
+            "query": "Apple total revenue fiscal year 2024",
             "ticker": "AAPL",
             "section": "financial_table",
         },
         {
-            "query": "Amazon total revenue",
+            "query": "Amazon total revenue fiscal year 2024",
             "ticker": "AMZN",
             "section": "financial_table",
         },

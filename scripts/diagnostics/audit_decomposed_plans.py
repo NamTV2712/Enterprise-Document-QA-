@@ -43,13 +43,12 @@ _FALLBACK_PHRASES = (
     "do not have enough",
 )
 
-# Some comparative ground truths are qualitative ("significantly higher")
-# and carry no concrete figures, which would let thin evidence pass the
-# numeric check. These overrides pin the fiscal-2024 totals already
-# asserted by the fact_lookup cases so missing-revenue evidence cannot
-# hide behind a vague ground truth.
+# Ground-truth figures are pinned here in addition to whatever the ground
+# truth text itself yields, so thin or reworded evidence can never hide
+# behind a qualitative comparison. The pinned totals match the FY2024
+# contract fixed inside the question itself.
 EXPECTED_FACT_OVERRIDES: dict[str, tuple[str, ...]] = {
-    "Which company, Apple or Amazon, has higher total revenue?": (
+    "Which company, Apple or Amazon, had higher total revenue in fiscal year 2024?": (
         "391,035",   # Apple FY2024 total net sales (fact_lookup GT)
         "637,959",   # Amazon FY2024 consolidated net sales (fact_lookup GT)
     ),
@@ -81,10 +80,17 @@ def _chunk_audit_text(chunk: dict[str, Any]) -> str:
 
 
 def extract_required_numbers(ground_truth: str) -> list[str]:
-    """Numeric facts the evidence must contain (comma-formatted aware)."""
+    """Numeric facts the evidence must contain (comma-formatted aware).
+
+    Bare four-digit years such as ``2024`` are excluded: a calendar year is
+    period metadata, not a financial fact, and financial-table chunk bodies
+    frequently omit year headers while carrying the required amounts.
+    """
     candidates = []
     for match in _NUMBER_PATTERN.findall(ground_truth):
-        cleaned = match.strip("$")
+        cleaned = match.strip("$").rstrip(",.")
+        if re.fullmatch(r"(?:19|20)\d{2}", cleaned):
+            continue
         if len(cleaned.replace(",", "").replace(".", "")) >= 3:
             candidates.append(cleaned)
     return sorted(set(candidates))

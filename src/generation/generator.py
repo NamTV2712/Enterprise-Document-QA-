@@ -35,7 +35,11 @@ STRICT RULES - violation of these rules is worse than saying "I don't know":
    for each year or period mentioned, in addition to any percentage or
    qualitative description. A percentage alone is not sufficient when specific
    numbers are available in the context.
-7. Always respond in English."""
+7. When the question does not specify a fiscal year or period, use the most
+   recent fiscal year available in the provided context and state that
+   fiscal year explicitly in your answer. Never present figures from an
+   unstated period.
+8. Always respond in English."""
 
 CONTEXT_TEMPLATE = """--- Context Section {index} ---
 Source: {citation}

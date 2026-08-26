@@ -64,7 +64,7 @@ logger = logging.getLogger(__name__)
 
 ARTIFACT_PATH = Path("data/eval_artifacts/phase1_priority2.json")
 EXPECTED_ARTIFACT_FINGERPRINT = (
-    "sha256:f1129d814274e95d3b2019aa58ef840fc28817c1d82b548a613e2de697986841"
+    "sha256:8848d68b4236afbb1df5cef1be6cf9980d104bd1291703506a98d7cccd67f2ad"
 )
 GEN_CHECKPOINT_PATH = Path("data/eval_artifacts/probe_gen.jsonl")
 JUDGE_CHECKPOINT_PATH = Path("data/eval_artifacts/probe_judge.jsonl")

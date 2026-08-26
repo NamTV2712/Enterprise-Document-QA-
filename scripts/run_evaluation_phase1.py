@@ -28,6 +28,7 @@ from scripts.diagnostics.replay_contract import (
     build_replay_plan_from_evaluation_record,
 )
 from src.evaluation.frozen_plan_overrides import (
+    OVERRIDE_QUESTION,
     apply_frozen_plan_overrides,
 )
 from src.evaluation.retrieval_artifact import (
@@ -186,8 +187,15 @@ def main(argv: list[str] | None = None) -> int:
         len(test_cases), len(TEST_SET), args.priority,
     )
 
-    plans = load_fixed_plans(args.official_artifact, selected_questions)
-    plans, plan_provenance = apply_frozen_plan_overrides(plans)
+    # Code-owned override questions have no legacy official-artifact
+    # record (e.g. after the FY2024 contract rename); their plans come
+    # entirely from the frozen planner snapshot.
+    plans = load_fixed_plans(
+        args.official_artifact, selected_questions - {OVERRIDE_QUESTION}
+    )
+    plans, plan_provenance = apply_frozen_plan_overrides(
+        plans, selected_questions
+    )
     validate_plans_cover(plans, test_cases)
 
     def build_once(retriever: HybridRetriever, all_chunks: list[dict]) -> dict:

@@ -135,7 +135,9 @@ def test_apply_overrides_replaces_only_target_question() -> None:
     )
     plans = [other, build_override_plan()]  # target already present once
 
-    replaced, provenance = apply_frozen_plan_overrides(plans)
+    replaced, provenance = apply_frozen_plan_overrides(
+        plans, selected_questions={other.question, OVERRIDE_QUESTION}
+    )
 
     assert len(replaced) == 2
     target = next(p for p in replaced if p.question == OVERRIDE_QUESTION)
@@ -160,7 +162,9 @@ def test_apply_overrides_allows_category_subset_without_target() -> None:
         ),
     )
 
-    replaced, provenance = apply_frozen_plan_overrides([unrelated])
+    replaced, provenance = apply_frozen_plan_overrides(
+        [unrelated], selected_questions={unrelated.question}
+    )
 
     assert replaced == [unrelated]
     assert provenance == {"plan_overrides": {}}
@@ -171,6 +175,49 @@ def test_apply_overrides_allows_category_subset_without_target() -> None:
             [EvalTestCase(question=OVERRIDE_QUESTION, category="comparative",
                           ticker=None, section=None, ground_truth="gt")],
         )
+
+
+def test_apply_overrides_injects_selected_question_without_legacy_record() -> None:
+    """After the FY2024 rename no official-artifact record exists under the
+    new wording; the code-owned snapshot plan must be injected instead of
+    failing Phase 1."""
+    unrelated = RetrievalPlan(
+        question="Unrelated question",
+        category="summary",
+        route="direct",
+        queries=(
+            PlanQuery(
+                effective_query="q", ticker=None, section=None,
+                query_source="original_question",
+            ),
+        ),
+    )
+
+    replaced, provenance = apply_frozen_plan_overrides(
+        [unrelated],
+        selected_questions={unrelated.question, OVERRIDE_QUESTION},
+    )
+
+    assert [p.question for p in replaced] == [
+        unrelated.question, OVERRIDE_QUESTION
+    ]
+    injected = replaced[-1]
+    assert injected is not unrelated
+    assert all(q.query_source == "planner_snapshot" for q in injected.queries)
+    assert set(provenance["plan_overrides"]) == {OVERRIDE_QUESTION}
+
+    # Injected plan plus the other selected plan exactly cover a test set.
+    from src.evaluation.retrieval_plan import validate_plans_cover
+
+    validate_plans_cover(
+        replaced,
+        [
+            EvalTestCase(question=unrelated.question, category="summary",
+                         ticker=None, section=None, ground_truth="gt"),
+            EvalTestCase(question=OVERRIDE_QUESTION, category="comparative",
+                         ticker=None, section=None, ground_truth="gt"),
+        ],
+    )
 
 
 def test_planner_provenance_records_model_prompt_and_raw_hashes() -> None:

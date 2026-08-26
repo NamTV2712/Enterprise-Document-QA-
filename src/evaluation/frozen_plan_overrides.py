@@ -118,13 +118,18 @@ def build_override_plan() -> RetrievalPlan:
 
 def apply_frozen_plan_overrides(
     plans: list[RetrievalPlan],
+    selected_questions: set[str],
 ) -> tuple[list[RetrievalPlan], dict[str, Any]]:
-    """Replace overrides present in the selected plan subset.
+    """Replace or inject overrides for code-owned selected questions.
 
     Phase 1 supports category-filtered runs, so an override target may be
-    legitimately absent from ``plans``. Unknown questions are still
-    impossible here because the override registry is code-owned and every
-    applied replacement must match an existing selected question exactly.
+    legitimately absent from ``plans`` AND from ``selected_questions``;
+    in that case nothing is applied. When an override question IS
+    selected it may still have no legacy plan — for example after the
+    evaluation contract renamed the FY2024 comparative case, no official-
+    artifact record exists under the new wording — so the code-owned
+    snapshot plan is injected instead of failing. Coverage against the
+    selected test set is still enforced by ``validate_plans_cover``.
     """
     overrides = {build_override_plan().question: build_override_plan()}
     replaced: list[RetrievalPlan] = []
@@ -137,6 +142,12 @@ def apply_frozen_plan_overrides(
         else:
             replaced.append(override)
             applied_questions.append(plan.question)
+
+    present = {plan.question for plan in replaced}
+    for question, override in overrides.items():
+        if question in selected_questions and question not in present:
+            replaced.append(override)
+            applied_questions.append(question)
 
     provenance = {
         "plan_overrides": {

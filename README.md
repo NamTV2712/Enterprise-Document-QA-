@@ -215,28 +215,40 @@ Official benchmark: the two-phase pipeline (offline Phase 1 frozen
 retrieval artifact, then frozen-evidence generation and judging) over all
 `30` priority <= 2 cases, using `openai/gpt-oss-120b` for BOTH generation
 and judging. All `30` generations and `30` judgments completed OK with no
-skipped records, no parse failures, and one shared binding:
+skipped records, no parse failures, and one shared binding. Contexts are
+rendered under `selective_packed_v1`, a route-aware packing strategy that
+kept every pre-registered merge gate (see below):
 
 | Metric | Score |
 |---|---:|
-| Faithfulness | `0.6013` |
-| Answer relevancy | `0.9283` |
-| Context precision | `0.2872` |
-| Overall judge average | `0.6056` |
+| Faithfulness | `0.5663` |
+| Answer relevancy | `0.9417` |
+| Context precision | `0.3983` |
+| Overall judge average | `0.6354` |
 | Citation correctness | `1.0000` |
 | Recall proxy | `1.0000` |
-| Fallback accuracy | `0.9667` |
+| Fallback accuracy | `1.0000` |
 
 Category table (faithfulness / relevancy / precision):
 
 | Category | N | Scores |
 |---|---:|---|
-| fact_lookup | 8 | `0.6875 / 1.0000 / 0.2162` |
-| summary | 6 | `0.5083 / 0.9250 / 0.5600` |
-| enumeration | 4 | `0.5225 / 0.9000 / 0.3200` |
-| comparative | 6 | `0.4833 / 0.8000 / 0.2867` |
-| multi_hop | 3 | `0.6667 / 1.0000 / 0.1750` |
-| out_of_corpus | 3 | `0.8333 / 0.9667 / 0.0000` |
+| fact_lookup | 8 | `0.6875 / 1.0000 / 0.3850` |
+| summary | 6 | `0.4667 / 0.9167 / 0.6467` |
+| enumeration | 4 | `0.5150 / 0.8125 / 0.3200` |
+| comparative | 6 | `0.3217 / 0.9333 / 0.2850` |
+| multi_hop | 3 | `0.6667 / 1.0000 / 0.6667` |
+| out_of_corpus | 3 | `0.9000 / 0.9667 / 0.0000` |
+
+Context-packing A/B (same frozen Phase 1 artifact, paired per-case,
+pre-registered merge gates): packing only the `fact_lookup`, `multi_hop`,
+and `summary` categories moved context precision from `0.2872` to
+`0.3983` (`+0.1111 >= +0.08`), kept recall proxy at `1.0000`, stayed
+within the faithfulness significance bar (`-0.0350 >= -0.05`), and cut
+rendered evidence tokens by `20.19%` (`>= 20%`). The packed-all variant
+was rejected: it raised context precision further (`+0.1295`) but broke
+the faithfulness bar (`-0.0800`) with regressions concentrated in
+enumeration, comparative-topical, and out-of-corpus cases.
 
 Interpretation:
 
@@ -244,26 +256,23 @@ Interpretation:
   self-judge. It is substantially stricter than the previous official
   table's Groq `llama-3.3-70b-versatile` judge (`Faithfulness 0.8533`,
   overall `0.7501`), so the two tables must NOT be compared directly.
-  The deterministic checks are model-independent: citation correctness,
-  recall proxy, and fallback accuracy stay at `1.0000`, `1.0000`, and
-  `0.9667`.
+  The deterministic checks are model-independent and stay perfect under
+  both judges: citation correctness, recall proxy, and fallback accuracy.
 - The comparative Apple-vs-Amazon revenue question now pins fiscal year
   2024 inside the question itself, resolving the earlier year-ambiguity
-  blocker. Under the FY2024 contract that case scores
-  `1.00 / 1.00 / 0.75` with both totals (`391,035`, `637,959`) cited.
+  blocker; that case cites both FY2024 totals (`391,035`, `637,959`).
 - Production generation states the fiscal year used whenever a question
   does not specify one, using the latest fiscal year available in the
   retrieved context.
+- Multi-hop context precision improved from `0.1750` (full evidence) to
+  `0.6667` under packing because required-number donors keep exactly the
+  fact-bearing chunks.
 - Out-of-corpus context precision is `0.0` by design: chunks retrieved
   for out-of-corpus questions are intentionally irrelevant because the
   correct behavior is abstention.
-- The single fallback-accuracy miss is the AWS-vs-Azure growth
-  comparison answering with the explicit insufficient-context fallback;
-  retrieval found no directly comparable growth evidence, so the system
-  abstained instead of guessing.
-- Latency from this run is not used as a performance benchmark because
-  Groq returned repeated `429 Too Many Requests` responses and SDK
-  retry backoff during judging.
+- Latency from these runs is not used as a performance benchmark because
+  Groq returned repeated `429 Too Many Requests` responses and SDK retry
+  backoff during judging.
 - Historical note: an earlier `llama-3.1-8b-instant` judge was rejected
   after producing false negatives on exact numbers present in context.
 

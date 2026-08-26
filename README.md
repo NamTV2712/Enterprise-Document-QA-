@@ -211,33 +211,61 @@ LLM provider:
 
 ## Evaluation Results
 
-Latest priority-1 and priority-2 LLM-as-judge run, using Groq `llama-3.3-70b-versatile` as judge:
+Official benchmark: the two-phase pipeline (offline Phase 1 frozen
+retrieval artifact, then frozen-evidence generation and judging) over all
+`30` priority <= 2 cases, using `openai/gpt-oss-120b` for BOTH generation
+and judging. All `30` generations and `30` judgments completed OK with no
+skipped records, no parse failures, and one shared binding:
 
 | Metric | Score |
 |---|---:|
-| Faithfulness | `0.8533` |
-| Answer relevancy | `0.9300` |
-| Context precision | `0.4670` |
-| Overall judge average | `0.7501` |
+| Faithfulness | `0.6013` |
+| Answer relevancy | `0.9283` |
+| Context precision | `0.2872` |
+| Overall judge average | `0.6056` |
 | Citation correctness | `1.0000` |
 | Recall proxy | `1.0000` |
-| Fallback accuracy | `1.0000` |
+| Fallback accuracy | `0.9667` |
 
-Coverage:
+Category table (faithfulness / relevancy / precision):
 
-- `30/30` priority <= 2 cases completed with no skipped records.
-- Covered categories: fact lookup `8/8`, summary `6/6`, enumeration `4/4`, comparative `6/6`, multi-hop `3/3`, out-of-corpus `3/3`.
+| Category | N | Scores |
+|---|---:|---|
+| fact_lookup | 8 | `0.6875 / 1.0000 / 0.2162` |
+| summary | 6 | `0.5083 / 0.9250 / 0.5600` |
+| enumeration | 4 | `0.5225 / 0.9000 / 0.3200` |
+| comparative | 6 | `0.4833 / 0.8000 / 0.2867` |
+| multi_hop | 3 | `0.6667 / 1.0000 / 0.1750` |
+| out_of_corpus | 3 | `0.8333 / 0.9667 / 0.0000` |
 
 Interpretation:
 
-- Achieved `0.85` faithfulness, `0.93` answer relevancy, and `1.00` recall proxy across 30 cases spanning 6 query categories.
-- Overall context precision remains the primary optimization target: correct answers are reliably retrieved, but retrieval still includes extra non-essential chunks.
-- Balance-sheet `total X` questions use a lightweight structured lookup over financial-table row labels before semantic re-ranking. This fixes known total-assets retrieval failures without regenerating table chunks; Microsoft total-assets year-over-year now answers with `619,003`, `512,163`, and the computed increase `106,840`.
-- Multi-hop improved most significantly after structured lookup: category faithfulness moved from `0.50` to `0.83`, with Microsoft total-assets year-over-year now scoring `1.00/1.00/0.50` instead of the previous `0.00/0.20/0.00`.
-- The fresh checkpoint-resumed run confirms the Microsoft auditor retrieval fix: it answers `Deloitte & Touche LLP` with citation correctness and recall proxy both at `1.00`. The judge still scored that case's faithfulness and context precision at `0.00` while claiming the auditor evidence was absent, so the aggregate keeps the measured score unchanged and treats this case as a judge/context-window outlier rather than manually correcting it.
-- Extended validation: 6 additional `priority=3` cases for `V`, `MA`, `LLY`, `KO`, and `RTX` were judged separately after the official N=30 run. They confirm structured lookup generalizes to new tickers: `V`, `MA`, and `LLY` total-assets cases all scored `1.00` faithfulness, and the RTX total-net-sales trend case also scored `1.00` faithfulness. One outlier, Coca-Cola competition risk factors, scored `0.50/0.60/0.20` despite recall `1.00` because retrieved context discussed competition only indirectly and included extra risk-factor context. The checkpoint-merged N=36 aggregate is not used as the official benchmark because it reused stale N=30 records, including the pre-fix MSFT auditor recall record.
-- Latency from the 30-case judge run is not used as a performance benchmark because Groq returned repeated `429 Too Many Requests` responses and SDK backoff delays during generation/judging.
-- A smaller `llama-3.1-8b-instant` judge was rejected after producing false negatives on exact numbers that were present in context.
+- Judge-model confound: this table uses `openai/gpt-oss-120b` as a
+  self-judge. It is substantially stricter than the previous official
+  table's Groq `llama-3.3-70b-versatile` judge (`Faithfulness 0.8533`,
+  overall `0.7501`), so the two tables must NOT be compared directly.
+  The deterministic checks are model-independent: citation correctness,
+  recall proxy, and fallback accuracy stay at `1.0000`, `1.0000`, and
+  `0.9667`.
+- The comparative Apple-vs-Amazon revenue question now pins fiscal year
+  2024 inside the question itself, resolving the earlier year-ambiguity
+  blocker. Under the FY2024 contract that case scores
+  `1.00 / 1.00 / 0.75` with both totals (`391,035`, `637,959`) cited.
+- Production generation states the fiscal year used whenever a question
+  does not specify one, using the latest fiscal year available in the
+  retrieved context.
+- Out-of-corpus context precision is `0.0` by design: chunks retrieved
+  for out-of-corpus questions are intentionally irrelevant because the
+  correct behavior is abstention.
+- The single fallback-accuracy miss is the AWS-vs-Azure growth
+  comparison answering with the explicit insufficient-context fallback;
+  retrieval found no directly comparable growth evidence, so the system
+  abstained instead of guessing.
+- Latency from this run is not used as a performance benchmark because
+  Groq returned repeated `429 Too Many Requests` responses and SDK
+  retry backoff during judging.
+- Historical note: an earlier `llama-3.1-8b-instant` judge was rejected
+  after producing false negatives on exact numbers present in context.
 
 ## Performance Notes
 
@@ -361,7 +389,16 @@ Run a smoke test:
 .venv\Scripts\python.exe -m scripts.diagnostics.rag_smoke_test
 ```
 
-Run evaluation:
+Run the two-phase evaluation (Phase 1 builds a deterministic offline
+retrieval artifact; Phase 2 generates and judges against frozen evidence
+with checkpointed, binding-verified resume):
+
+```powershell
+.venv\Scripts\python.exe -m scripts.run_evaluation_phase1 --priority 2 --output data/eval_artifacts/phase1_priority2.json --verify-determinism
+.venv\Scripts\python.exe -m scripts.run_evaluation_phase2 --priority 2
+```
+
+The legacy single-phase runner remains available:
 
 ```powershell
 .venv\Scripts\python.exe -m scripts.run_evaluation

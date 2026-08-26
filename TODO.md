@@ -81,11 +81,11 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
 - [x] Persist the pinned embedding revision in local `.env`, document it in
       `.env.example`, forward it through Docker Compose, and verify host API
       startup plus deterministic retrieval using the persisted setting.
-- [ ] Resolve the year contract for the year-unspecified Apple-vs-Amazon
-      revenue comparison before the current-model N=30 Phase 2 run. The
-      current planner snapshot retrieves both 2024 and 2025 correctly, while
-      `gpt-oss-120b` reasonably answers with the latest 2025 column and the
-      approved probe acceptance still pins FY2024 values.
+- [x] Resolve the year contract for the year-unspecified Apple-vs-Amazon
+       revenue comparison before the current-model N=30 Phase 2 run. The
+       question now pins FY2024, production states the fiscal year used
+       for year-unspecified questions, and the official two-phase N=30
+       run completed with gpt-oss-120b generation and judging.
 - [ ] Keep Cloud remigration NO-GO until exact point-ID set, canonical payload
       fingerprint, and vector snapshot verification are implemented and pass.
 

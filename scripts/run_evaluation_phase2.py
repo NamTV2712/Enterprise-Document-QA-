@@ -59,6 +59,7 @@ from src.evaluation.phase2_runtime import (
     make_judge_call,
 )
 from src.evaluation.test_set import TEST_SET, TestCase
+from src.generation.generator import Generator
 
 logging.basicConfig(
     level=logging.INFO,

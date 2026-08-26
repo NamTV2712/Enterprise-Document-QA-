@@ -26,9 +26,12 @@ from src.generation.generator import SYSTEM_PROMPT, Generator
 
 logger = logging.getLogger(__name__)
 
-# gpt-oss-120b writes longer completions than the legacy 70B; the old
-# 320-token cap truncated judge JSON mid-object during the first probe.
-PHASE2_MAX_TOKENS = 1024
+# gpt-oss-120b writes longer completions than the legacy 70B. At a
+# 1024-token cap the judge occasionally spent the entire budget on
+# reasoning and returned empty content mid-run, so Phase 2 budgets 2048.
+# The judge binding includes this cap by design: scores produced under
+# different budgets are never mixed.
+PHASE2_MAX_TOKENS = 2048
 
 
 class UsageTracker:

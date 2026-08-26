@@ -48,6 +48,7 @@ from src.evaluation.judge_checkpoint import (
     run_judge_phase,
 )
 from src.evaluation.phase2_runtime import (
+    PHASE2_MAX_TOKENS,
     UsageTracker,
     build_production_judge_prompt,
     generation_pool_keys,
@@ -259,6 +260,7 @@ def main(argv: list[str] | None = None) -> int:
             max_retries=1,
             sleep_fn=lambda seconds: None,
             judge_prompt_builder=build_production_judge_prompt,
+            judge_max_tokens=PHASE2_MAX_TOKENS,
         )
         judge_record = judge_records[0]
         per_case.append({

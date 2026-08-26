@@ -58,6 +58,12 @@ from src.evaluation.phase2_runtime import (
     make_generation_call,
     make_judge_call,
 )
+from src.evaluation.context_packing import (
+    CONTEXT_STRATEGY_FULL_EVIDENCE,
+    CONTEXT_STRATEGY_ROUTE_AWARE,
+    pack_case_context,
+    render_packed_blocks,
+)
 from src.evaluation.test_set import TEST_SET, TestCase
 from src.generation.generator import Generator
 
@@ -88,7 +94,9 @@ _JUDGE_SCORE_KEYS = (
 
 
 def load_bound_artifact(
-    artifact_path: Path, expected_fingerprint: str
+    artifact_path: Path,
+    expected_fingerprint: str,
+    context_strategy: str = CONTEXT_STRATEGY_FULL_EVIDENCE,
 ) -> tuple[dict[str, Any], GenerationUpstream]:
     """Load the artifact and refuse any fingerprint drift."""
     if not artifact_path.exists():
@@ -111,6 +119,7 @@ def load_bound_artifact(
         artifact_sha256=file_sha,
         artifact_schema_version=artifact["schema_version"],
         model=EVAL_MODEL,
+        context_strategy=context_strategy,
     )
     return artifact, upstream
 
@@ -261,13 +270,19 @@ def run_phase2(
     max_gen_retries: int = 2,
     max_judge_retries: int = 2,
     sleep_fn: Callable[[float], None] = time.sleep,
+    evidence_context_fn: Callable[[dict], str] | None = None,
 ) -> dict[str, Any]:
     """Execute both phases sequentially and compose the results payload.
 
     ``generate_fn``/``judge_fn`` are the only provider touchpoints.
+    ``evidence_context_fn`` renders a case payload into prompt blocks;
+    it defaults to full-evidence rendering and may substitute a packed
+    subset, which participates in the upstream ``context_strategy``
+    binding so mixed strategies can never resume against each other.
     Quota or hard failures stop the whole run immediately after
     checkpointing so remaining quota is not burned against a dead run.
     """
+    render_context = evidence_context_fn or build_evidence_context
     tracker = UsageTracker()
     meta_by_question = {tc.question: tc for tc in selected}
 
@@ -315,7 +330,7 @@ def run_phase2(
                 selected_questions=[question],
                 generation_records_by_question={question: question_record},
                 evidence_context_by_question={
-                    question: build_evidence_context(
+                    question: render_context(
                         case_by_question[question]
                     )
                 },
@@ -408,6 +423,7 @@ def run_phase2(
         "reason": reason,
         "model": EVAL_MODEL,
         "judge_model": EVAL_MODEL,
+        "context_strategy": upstream.context_strategy,
         "num_selected": len(selected),
         "num_generation_ok": sum(
             1 for r in generation_records if r["status"] == GEN_STATUS_OK
@@ -438,12 +454,18 @@ def main(argv: list[str] | None = None) -> int:
         help="Embedded artifact fingerprint the run binds to.",
     )
     parser.add_argument(
-        "--gen-checkpoint", type=Path, default=GEN_CHECKPOINT_PATH
+        "--gen-checkpoint",
+        type=Path,
+        default=None,
+        help="Override the generation checkpoint path (strategy-aware default).",
     )
     parser.add_argument(
-        "--judge-checkpoint", type=Path, default=JUDGE_CHECKPOINT_PATH
+        "--judge-checkpoint",
+        type=Path,
+        default=None,
+        help="Override the judge checkpoint path (strategy-aware default).",
     )
-    parser.add_argument("--output", type=Path, default=RESULTS_PATH)
+    parser.add_argument("--output", type=Path, default=None)
     parser.add_argument(
         "--fresh",
         action="store_true",
@@ -451,7 +473,29 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--max-gen-retries", type=int, default=2)
     parser.add_argument("--max-judge-retries", type=int, default=2)
+    parser.add_argument(
+        "--context-strategy",
+        choices=[CONTEXT_STRATEGY_FULL_EVIDENCE, CONTEXT_STRATEGY_ROUTE_AWARE],
+        default=CONTEXT_STRATEGY_FULL_EVIDENCE,
+        help=(
+            "full_evidence_v1 renders every frozen chunk; route_aware_v2 "
+            "packs a coverage-preserving subset per case before prompting."
+        ),
+    )
     args = parser.parse_args(argv)
+
+    packed_mode = args.context_strategy == CONTEXT_STRATEGY_ROUTE_AWARE
+    suffix = "_packed" if packed_mode else ""
+    if args.gen_checkpoint is None:
+        args.gen_checkpoint = Path(
+            str(GEN_CHECKPOINT_PATH).replace(".jsonl", f"{suffix}.jsonl")
+        )
+    if args.judge_checkpoint is None:
+        args.judge_checkpoint = Path(
+            str(JUDGE_CHECKPOINT_PATH).replace(".jsonl", f"{suffix}.jsonl")
+        )
+    if args.output is None:
+        args.output = Path(str(RESULTS_PATH).replace(".json", f"{suffix}.json"))
 
     for path in (args.gen_checkpoint, args.judge_checkpoint, args.output):
         if args.fresh and path.exists():
@@ -459,14 +503,28 @@ def main(argv: list[str] | None = None) -> int:
             logger.info("Deleted stale evaluation file: %s", path)
 
     artifact, upstream = load_bound_artifact(
-        args.artifact, args.expected_fingerprint
+        args.artifact, args.expected_fingerprint, args.context_strategy
     )
     selected = select_questions(artifact, args.priority)
     case_by_question = {
         case["question"]: case for case in artifact["cases"]
     }
+    meta_by_question = {tc.question: tc for tc in selected}
+    evidence_context_fn: Callable[[dict], str] | None = None
+    if packed_mode:
+        def evidence_context_fn(case_payload: dict) -> str:
+            packed = pack_case_context(
+                case_payload,
+                required_keywords=meta_by_question[
+                    case_payload["question"]
+                ].required_keywords,
+                strategy=args.context_strategy,
+            )
+            return render_packed_blocks(packed)
+
     logger.info(
-        "Phase 2 over %d cases bound to %s", len(selected), args.artifact
+        "Phase 2 over %d cases bound to %s (strategy=%s)",
+        len(selected), args.artifact, args.context_strategy,
     )
 
     # Hermeticity by construction instead of a socket guard: no retrieval
@@ -505,6 +563,7 @@ def main(argv: list[str] | None = None) -> int:
         judge_store=JudgeCheckpointStore(args.judge_checkpoint),
         max_gen_retries=args.max_gen_retries,
         max_judge_retries=args.max_judge_retries,
+        evidence_context_fn=evidence_context_fn,
     )
     summary["token_usage_totals"] = tracker.totals
 

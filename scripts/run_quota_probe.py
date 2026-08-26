@@ -23,16 +23,10 @@ import hashlib
 import json
 import logging
 import sys
-import time
 from pathlib import Path
 
-from configs.settings import settings
 from src.evaluation.evaluator import (
     JUDGE_PROMPT_TEMPLATE,
-    JUDGE_SYSTEM_PROMPT,
-    JudgeParseError,
-    _extract_relevant_window,
-    _parse_judge_response,
     compute_citation_correctness,
 )
 from src.evaluation.generation_checkpoint import (
@@ -49,12 +43,19 @@ from src.evaluation.judge_checkpoint import (
     JUDGE_STATUS_PARSE_INVALID,
     JUDGE_STATUS_SKIPPED_QUOTA,
     JudgeCheckpointStore,
-    JudgeParseErrorStub,
     build_official_aggregate,
     load_judge_records,
     run_judge_phase,
 )
-from src.generation.generator import SYSTEM_PROMPT, Generator
+from src.evaluation.phase2_runtime import (
+    UsageTracker,
+    build_production_judge_prompt,
+    generation_pool_keys,
+    judging_pool_keys,
+    make_generation_call,
+    make_judge_call,
+)
+from src.generation.generator import Generator
 
 logging.basicConfig(
     level=logging.INFO,
@@ -152,102 +153,10 @@ def _load_artifact_and_binding() -> tuple[dict, GenerationUpstream]:
 
 
 def _generation_pool_keys() -> list[str]:
-    keys = [settings.groq_api_key_fall_back, settings.groq_api_key_fall_back2]
-    if not any(keys):
-        keys = [settings.groq_api_key, settings.groq_api_key2]
-    return keys
+    return generation_pool_keys()
 
 
-def _make_generation_call(generator: Generator):
-    def generate(prompt: str) -> str:
-        started = time.perf_counter()
-        response = generator._create_groq_chat_completion(
-            model=generator.model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            max_tokens=1024,
-            temperature=0,
-        )
-        elapsed = time.perf_counter() - started
-        usage = getattr(response, "usage", None)
-        _record_usage("generation", usage, elapsed)
-        return response.choices[0].message.content or ""
-
-    return generate
-
-
-def _make_judge_call(generator: Generator):
-    def judge(prompt: str) -> dict:
-        started = time.perf_counter()
-        # gpt-oss-120b writes longer rationales than the legacy 70B; the
-        # production 320-token cap truncated its JSON mid-object during the
-        # first probe pass, so the probe budgets generously here instead.
-        response = generator._create_groq_chat_completion(
-            model=generator.model,
-            messages=[
-                {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            max_tokens=1024,
-            temperature=0,
-        )
-        elapsed = time.perf_counter() - started
-        usage = getattr(response, "usage", None)
-        _record_usage("judging", usage, elapsed)
-        raw = response.choices[0].message.content or ""
-        try:
-            return _parse_judge_response(raw)
-        except JudgeParseError as parse_error:
-            raise JudgeParseErrorStub(str(parse_error)) from parse_error
-
-    return judge
-
-
-def build_production_judge_prompt(
-    question: str, answer: str, evidence_context: str, ground_truth: str
-) -> str:
-    """Production judging instructions over the frozen evidence blocks."""
-    context_texts = [
-        block.split("\n", 1)[1]
-        for block in evidence_context.split("\n\n")
-        if "\n" in block
-    ]
-    context_str = "\n\n".join(
-        f"[Chunk {i+1}]: {_extract_relevant_window(text, question)}"
-        for i, text in enumerate(context_texts)
-    )
-    return JUDGE_PROMPT_TEMPLATE.format(
-        question=question,
-        ground_truth=ground_truth,
-        context_str=context_str,
-        answer=answer,
-    )
-
-
-_USAGE_TOTALS: dict[str, int] = {
-    "generation_prompt_tokens": 0,
-    "generation_completion_tokens": 0,
-    "judging_prompt_tokens": 0,
-    "judging_completion_tokens": 0,
-}
-
-
-def _record_usage(phase: str, usage, elapsed: float) -> None:
-    prompt_tokens = getattr(usage, "prompt_tokens", None)
-    completion_tokens = getattr(usage, "completion_tokens", None)
-    if prompt_tokens is not None:
-        _USAGE_TOTALS[f"{phase}_prompt_tokens"] += int(prompt_tokens)
-    if completion_tokens is not None:
-        _USAGE_TOTALS[f"{phase}_completion_tokens"] += int(completion_tokens)
-    logger.info(
-        "%s call done in %.2fs (prompt=%s, completion=%s tokens)",
-        phase,
-        elapsed,
-        prompt_tokens,
-        completion_tokens,
-    )
+_usage_tracker = UsageTracker()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -304,7 +213,7 @@ def main(argv: list[str] | None = None) -> int:
     generation_generator = Generator(
         model=PROBE_MODEL, api_keys=_generation_pool_keys()
     )
-    judge_generator = Generator(model=PROBE_MODEL)
+    judge_generator = Generator(model=PROBE_MODEL, api_keys=judging_pool_keys())
     generation_store = GenerationCheckpointStore(GEN_CHECKPOINT_PATH)
     judge_store = JudgeCheckpointStore(JUDGE_CHECKPOINT_PATH)
 
@@ -317,7 +226,9 @@ def main(argv: list[str] | None = None) -> int:
             selected_questions=[question],
             artifact_cases=case_by_question,
             upstream=upstream,
-            generate_fn=_make_generation_call(generation_generator),
+            generate_fn=make_generation_call(
+                generation_generator, _usage_tracker
+            ),
             checkpoint_store=generation_store,
             max_retries=0,
             sleep_fn=lambda seconds: None,
@@ -343,7 +254,7 @@ def main(argv: list[str] | None = None) -> int:
             },
             judge_model=PROBE_MODEL,
             judge_prompt_template_sha256=sha256_text(JUDGE_PROMPT_TEMPLATE),
-            judge_fn=_make_judge_call(judge_generator),
+            judge_fn=make_judge_call(judge_generator, _usage_tracker),
             checkpoint_store=judge_store,
             max_retries=1,
             sleep_fn=lambda seconds: None,
@@ -437,7 +348,7 @@ def main(argv: list[str] | None = None) -> int:
         "selected_questions": selected_questions,
         "stopped_reason": stopped_reason,
         "probe_acceptance_passed": probe_acceptance_passed,
-        "token_usage_totals": _USAGE_TOTALS,
+        "token_usage_totals": _usage_tracker.totals,
         "aggregate_check": aggregate,
         "cases": case_summaries,
     }

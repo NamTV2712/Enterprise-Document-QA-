@@ -53,6 +53,9 @@ ANNUAL_REPORT_ANCHOR_LABELS = {
 }
 
 MIN_VALID_SECTION_LENGTH = 1000  # Warning threshold, not a rejection threshold.
+# A genuine body heading is followed by at least this much text before any
+# end boundary; tighter intervals are table-of-contents page references.
+MIN_GENUINE_START_INTERVAL = 200
 
 TRAILING_NOISE_PATTERNS = [
     r"\n+\d{1,4}\s*\n+part\s+[ivx]+\s*(item\s+\d+[a-c]?\.?)?\s*$",
@@ -105,6 +108,60 @@ def _find_next_boundary(text_lower: str, patterns: list[str], start_pos: int) ->
     return min(positions) if positions else len(text_lower)
 
 
+def _iter_end_candidates(
+    text_lower: str, patterns: list[str], start_pos: int
+):
+    """All end-boundary offsets after ``start_pos``, nearest first."""
+    candidates: list[int] = []
+    for pattern in patterns:
+        for match in re.finditer(pattern, text_lower[start_pos:]):
+            candidates.append(start_pos + match.start())
+    return sorted(set(candidates))
+
+
+def _extract_valid_content(
+    text: str,
+    text_lower: str,
+    boundary: dict,
+    start_match: re.Match,
+) -> str | None:
+    """Slice from a start heading through the first end boundary that
+    yields real section body text.
+
+    Filings embed inline cross-references such as "...related notes in
+    Item 8." inside section prose; the nearest end candidate can then cut
+    the section after only its introduction. Mirroring the start-side
+    rule, too-short slices are skipped and the next end candidate is
+    tried while keeping the same start heading.
+
+    A start heading whose very first end candidate sits within
+    ``MIN_GENUINE_START_INTERVAL`` characters is a table-of-contents page
+    reference, not a section heading, so that candidate is rejected
+    outright instead of stretching a slice across unrelated sections.
+    """
+    first_candidates = _iter_end_candidates(
+        text_lower, boundary["end"], start_match.end()
+    )
+    if not first_candidates:
+        content = _strip_trailing_noise(text[start_match.start():].strip())
+        return content if len(content) >= MIN_VALID_SECTION_LENGTH else None
+    first_interval = first_candidates[0] - start_match.end()
+    if first_interval < MIN_GENUINE_START_INTERVAL:
+        return None
+
+    cursor = start_match.end()
+    while True:
+        candidates = _iter_end_candidates(text_lower, boundary["end"], cursor)
+        if not candidates:
+            content = _strip_trailing_noise(text[start_match.start():].strip())
+            return content if len(content) >= MIN_VALID_SECTION_LENGTH else None
+        end = candidates[0]
+        content = _strip_trailing_noise(text[start_match.start():end].strip())
+        if len(content) >= MIN_VALID_SECTION_LENGTH:
+            return content
+        cursor = end + 1
+
+
 def _is_reference_match(name: str, text_lower: str, end_pos: int) -> bool:
     suffix = text_lower[end_pos:end_pos + 80].lstrip()
     if suffix.startswith(("of this", "in this")):
@@ -134,11 +191,12 @@ def _find_sections(text: str, text_lower: str) -> dict[str, str]:
             if _is_reference_match(name, text_lower, match.end()):
                 continue
 
-            end = _find_next_boundary(text_lower, boundary["end"], match.end())
-            content = _strip_trailing_noise(text[match.start():end].strip())
+            content = _extract_valid_content(text, text_lower, boundary, match)
+            if content is None:
+                continue
 
-            # The first match is often in the table of contents. Use the first
-            # candidate long enough to contain real section body text.
+            # The first match is often in the table of contents. Use the
+            # first candidate long enough to contain real section body text.
             if len(content) >= MIN_VALID_SECTION_LENGTH:
                 sections[name] = content
                 break

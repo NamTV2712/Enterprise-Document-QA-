@@ -1,4 +1,4 @@
-from src.ingestion.section_extractor import extract_sections_from_html
+from src.ingestion.section_extractor import extract_sections, extract_sections_from_html
 
 
 def _section(name: str, body: str) -> str:
@@ -72,3 +72,40 @@ def test_annual_report_anchor_does_not_replace_item_boundary_section() -> None:
 
     assert "business" in result.sections
     assert "Anchor-only business evidence" not in result.sections["business"]
+
+
+def test_mdna_end_skips_inline_item_cross_reference() -> None:
+    """PFE regression: a mid-sentence 'Item 8' cross-reference inside the
+    MD&A intro must not terminate the section; extraction advances to the
+    next real end boundary instead of keeping a too-short slice."""
+    filler = "Discussion " * 400
+    text = (
+        # Table-of-contents block: both entries are short page references.
+        "ITEM 7. MANAGEMENT'S DISCUSSION AND ANALYSIS OF FINANCIAL CONDITION "
+        "AND RESULTS OF OPERATIONS 30\n"
+        "ITEM 7A. QUANTITATIVE AND QUALITATIVE DISCLOSURES ABOUT MARKET RISK 49\n"
+        "ITEM 8. FINANCIAL STATEMENTS AND SUPPLEMENTARY DATA 50\n"
+        # Body heading with an inline Item 8 cross-reference in the intro.
+        "ITEM 7. MANAGEMENT'S DISCUSSION AND ANALYSIS OF FINANCIAL CONDITION "
+        "AND RESULTS OF OPERATIONS\n"
+        "The following discussion should be read in conjunction with the "
+        "consolidated financial statements and related notes in Item 8. "
+        f"{filler}\n"
+        "ITEM 7A. QUANTITATIVE AND QUALITATIVE DISCLOSURES ABOUT MARKET RISK\n"
+        + ("Market risk body " + "Risk " * 300 + "\n")
+        + "ITEM 8. FINANCIAL STATEMENTS AND SUPPLEMENTARY DATA\n"
+        + "Statement " * 300 + "\n"
+        "ITEM 9. CHANGES IN AND DISAGREEMENTS WITH ACCOUNTANTS\n"
+    )
+
+    result = extract_sections(text)
+
+    mdna = result.sections["mdna"]
+    assert len(mdna) > 4000
+    # The slice starts at the real body heading, not the TOC reference.
+    assert mdna.startswith(
+        "ITEM 7. MANAGEMENT'S DISCUSSION AND ANALYSIS OF FINANCIAL CONDITION"
+    )
+    assert "OPERATIONS 30" not in mdna
+    assert "read in conjunction" in mdna
+    assert filler.strip() in mdna

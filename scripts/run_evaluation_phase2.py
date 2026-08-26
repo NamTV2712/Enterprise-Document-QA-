@@ -1,0 +1,531 @@
+"""Evaluation Phase 2: frozen-evidence generation and judging, full set.
+
+Consumes ONLY the Phase 1 artifact — retrieval never reruns here. Every
+generation/judge record is checkpointed against the artifact binding, so
+interrupted runs resume without mixing evidence, prompts, or models.
+
+The run is OFFICIAL only when every selected case completes both phases
+with OK status under one shared binding (see
+``judge_checkpoint.build_official_aggregate`` plus the explicit coverage
+check in ``run_phase2``). Any quota skip, provider error, invalid judge
+schema, or early stop forces ``official=false`` and a nonzero exit;
+partial output must never be published as a benchmark.
+
+Usage:
+    python -m scripts.run_evaluation_phase2 --priority 2 --fresh
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import logging
+import sys
+import time
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, Callable
+
+from src.evaluation.evaluator import (
+    JUDGE_PROMPT_TEMPLATE,
+    check_fallback_correctness,
+    compute_citation_correctness,
+    compute_recall_proxy,
+)
+from src.evaluation.generation_checkpoint import (
+    GEN_STATUS_OK,
+    GenerationCheckpointStore,
+    GenerationUpstream,
+    build_evidence_context,
+    run_generation_phase,
+    sha256_text,
+)
+from src.evaluation.judge_checkpoint import (
+    JUDGE_STATUS_OK,
+    JUDGE_STATUS_PARSE_INVALID,
+    JUDGE_STATUS_SKIPPED_QUOTA,
+    JudgeCheckpointStore,
+    build_official_aggregate,
+    run_judge_phase,
+)
+from src.evaluation.phase2_runtime import (
+    PHASE2_MAX_TOKENS,
+    UsageTracker,
+    build_production_judge_prompt,
+    generation_pool_keys,
+    judging_pool_keys,
+    make_generation_call,
+    make_judge_call,
+)
+from src.evaluation.test_set import TEST_SET, TestCase
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+EVAL_MODEL = "openai/gpt-oss-120b"
+ARTIFACT_PATH = Path("data/eval_artifacts/phase1_priority2.json")
+# Must match scripts.run_quota_probe.EXPECTED_ARTIFACT_FINGERPRINT; both
+# runners refuse to bind to any other frozen evidence.
+EXPECTED_ARTIFACT_FINGERPRINT = (
+    "sha256:8848d68b4236afbb1df5cef1be6cf9980d104bd1291703506a98d7cccd67f2ad"
+)
+GEN_CHECKPOINT_PATH = Path("data/eval_artifacts/phase2_gen.jsonl")
+JUDGE_CHECKPOINT_PATH = Path("data/eval_artifacts/phase2_judge.jsonl")
+RESULTS_PATH = Path("data/eval_artifacts/phase2_results.json")
+
+RESULTS_SCHEMA_VERSION = 1
+
+_JUDGE_SCORE_KEYS = (
+    "faithfulness",
+    "answer_relevancy",
+    "context_precision",
+)
+
+
+def load_bound_artifact(
+    artifact_path: Path, expected_fingerprint: str
+) -> tuple[dict[str, Any], GenerationUpstream]:
+    """Load the artifact and refuse any fingerprint drift."""
+    if not artifact_path.exists():
+        raise FileNotFoundError(
+            f"Phase 1 artifact missing: {artifact_path}. Run "
+            "scripts.run_evaluation_phase1 first."
+        )
+    raw_bytes = artifact_path.read_bytes()
+    artifact = json.loads(raw_bytes.decode("utf-8"))
+    embedded = artifact["fingerprints"]["artifact"]
+    if embedded != expected_fingerprint:
+        raise RuntimeError(
+            f"Artifact fingerprint drift: expected {expected_fingerprint}, "
+            f"found {embedded}. Rebuild the artifact or update the pin; "
+            "refusing to bind official results to unknown evidence."
+        )
+    file_sha = f"sha256:{hashlib.sha256(raw_bytes).hexdigest()}"
+    upstream = GenerationUpstream(
+        artifact_path=artifact_path,
+        artifact_sha256=file_sha,
+        artifact_schema_version=artifact["schema_version"],
+        model=EVAL_MODEL,
+    )
+    return artifact, upstream
+
+
+def select_questions(
+    artifact: dict[str, Any], priority: int
+) -> list[TestCase]:
+    """Selected test cases whose frozen evidence exists in the artifact."""
+    case_by_question = {
+        case["question"]: case for case in artifact["cases"]
+    }
+    selected = [tc for tc in TEST_SET if tc.priority <= priority]
+    missing = [
+        tc.question for tc in selected if tc.question not in case_by_question
+    ]
+    if missing:
+        raise RuntimeError(
+            "Artifact lacks evidence for selected questions: "
+            f"{sorted(missing)}"
+        )
+    return selected
+
+
+def unique_evidence_texts(case_payload: dict[str, Any]) -> list[str]:
+    """Deduplicated chunk texts in deterministic source order."""
+    texts: list[str] = []
+    seen: set[str] = set()
+    for query_entry in case_payload.get("queries", []):
+        for chunk in query_entry.get("chunks", []):
+            chunk_id = chunk.get("chunk_id")
+            if chunk_id in seen:
+                continue
+            seen.add(chunk_id)
+            texts.append(chunk.get("text", ""))
+    return texts
+
+
+def compute_case_metrics(
+    case_payload: dict[str, Any],
+    answer: str,
+    required_keywords: list[str],
+    expects_fallback: bool,
+) -> dict[str, Any]:
+    """Deterministic per-case checks over frozen evidence + the answer."""
+    citation_correctness = compute_citation_correctness(
+        answer, len(case_payload.get("final_chunk_ids", []))
+    )
+    chunks = [
+        SimpleNamespace(text=text)
+        for text in unique_evidence_texts(case_payload)
+    ]
+    recall_proxy = compute_recall_proxy(required_keywords, chunks)
+    fallback_correct = check_fallback_correctness(answer, expects_fallback)
+    return {
+        "citation_correctness": citation_correctness,
+        "recall_proxy": recall_proxy,
+        "fallback_correct": fallback_correct,
+    }
+
+
+def _mean(values: list[float]) -> float | None:
+    return round(sum(values) / len(values), 4) if values else None
+
+
+def aggregate_scores(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """Judge averages plus a category table over OK judged records only."""
+    ok = [
+        r for r in records
+        if r.get("status") == JUDGE_STATUS_OK
+        and isinstance(r.get("scores"), dict)
+    ]
+    metrics: dict[str, float | None] = {}
+    for key in _JUDGE_SCORE_KEYS:
+        values = [
+            float(r["scores"][key]) for r in ok
+            if isinstance(r["scores"].get(key), (int, float))
+        ]
+        metrics[key] = _mean(values)
+    overall = (
+        round(
+            sum(metrics[key] for key in _JUDGE_SCORE_KEYS)
+            / len(_JUDGE_SCORE_KEYS),
+            4,
+        ) if all(v is not None for v in metrics.values()) else None
+    )
+
+    by_category: dict[str, list[dict[str, Any]]] = {}
+    for record in ok:
+        by_category.setdefault(record.get("category", ""), []).append(record)
+
+    category_table: dict[str, dict[str, Any]] = {}
+    for category, cat_records in sorted(by_category.items()):
+        entry: dict[str, Any] = {"num_cases": len(cat_records)}
+        for key in _JUDGE_SCORE_KEYS:
+            values = [
+                float(r["scores"][key]) for r in cat_records
+                if isinstance(r["scores"].get(key), (int, float))
+            ]
+            entry[key] = _mean(values)
+        category_table[category] = entry
+
+    return {
+        "num_judged_ok": len(ok),
+        **metrics,
+        "overall_judge_average": overall,
+        "categories": category_table,
+    }
+
+
+def aggregate_deterministic(
+    metric_rows: list[dict[str, Any]],
+) -> dict[str, float | None]:
+    """Averages for the deterministic checks over generation-OK cases."""
+    citations = [
+        row["citation_correctness"] for row in metric_rows
+        if row["citation_correctness"] is not None
+    ]
+    recalls = [
+        row["recall_proxy"] for row in metric_rows
+        if row["recall_proxy"] is not None
+    ]
+    fallback_accuracy = (
+        round(
+            sum(1 for row in metric_rows if row["fallback_correct"])
+            / len(metric_rows),
+            4,
+        ) if metric_rows else None
+    )
+    return {
+        "citation_correctness_avg": _mean(citations),
+        "recall_proxy_avg": _mean(recalls),
+        "fallback_accuracy": fallback_accuracy,
+        "num_citation_scored": len(citations),
+        "num_recall_scored": len(recalls),
+    }
+
+
+def run_phase2(
+    *,
+    selected: list[TestCase],
+    case_by_question: dict[str, dict[str, Any]],
+    upstream: GenerationUpstream,
+    bound_fingerprint: str,
+    generate_fn: Callable[[str], str],
+    judge_fn: Callable[[str], dict],
+    generation_store: GenerationCheckpointStore,
+    judge_store: JudgeCheckpointStore,
+    max_gen_retries: int = 2,
+    max_judge_retries: int = 2,
+    sleep_fn: Callable[[float], None] = time.sleep,
+) -> dict[str, Any]:
+    """Execute both phases sequentially and compose the results payload.
+
+    ``generate_fn``/``judge_fn`` are the only provider touchpoints.
+    Quota or hard failures stop the whole run immediately after
+    checkpointing so remaining quota is not burned against a dead run.
+    """
+    tracker = UsageTracker()
+    meta_by_question = {tc.question: tc for tc in selected}
+
+    generation_records: list[dict[str, Any]] = []
+    judge_records: list[dict[str, Any]] = []
+    metric_rows: list[dict[str, Any]] = []
+    stopped_reason: str | None = None
+
+    for tc in selected:
+        records = run_generation_phase(
+            selected_questions=[tc.question],
+            artifact_cases=case_by_question,
+            upstream=upstream,
+            generate_fn=generate_fn,
+            checkpoint_store=generation_store,
+            max_retries=max_gen_retries,
+            sleep_fn=sleep_fn,
+        )
+        gen_record = records[0]
+        generation_records.append({**gen_record, "question": tc.question})
+        if gen_record["status"] != GEN_STATUS_OK:
+            stopped_reason = (
+                f"generation {gen_record['status']} at: {tc.question[:60]}"
+            )
+            logger.error("Stopping before judging: %s", stopped_reason)
+            break
+        metric_rows.append({
+            **compute_case_metrics(
+                case_by_question[tc.question],
+                gen_record["answer"],
+                tc.required_keywords,
+                tc.expects_fallback,
+            ),
+            "question": tc.question,
+        })
+
+    if stopped_reason is None:
+        ok_generations = [
+            r for r in generation_records if r["status"] == GEN_STATUS_OK
+        ]
+        for question_record in ok_generations:
+            question = question_record["question"]
+            tc = meta_by_question[question]
+            judge_out = run_judge_phase(
+                selected_questions=[question],
+                generation_records_by_question={question: question_record},
+                evidence_context_by_question={
+                    question: build_evidence_context(
+                        case_by_question[question]
+                    )
+                },
+                ground_truth_by_question={
+                    question: tc.ground_truth
+                },
+                judge_model=EVAL_MODEL,
+                judge_prompt_template_sha256=sha256_text(
+                    JUDGE_PROMPT_TEMPLATE
+                ),
+                judge_fn=judge_fn,
+                checkpoint_store=judge_store,
+                max_retries=max_judge_retries,
+                sleep_fn=sleep_fn,
+                judge_prompt_builder=build_production_judge_prompt,
+                judge_max_tokens=PHASE2_MAX_TOKENS,
+            )
+            judge_record = judge_out[0]
+            judge_records.append({
+                **judge_record,
+                "question": question,
+                "category": tc.category,
+            })
+            if judge_record["status"] == JUDGE_STATUS_SKIPPED_QUOTA:
+                stopped_reason = f"judge quota at: {question[:60]}"
+                break
+            if judge_record["status"] == JUDGE_STATUS_PARSE_INVALID:
+                stopped_reason = f"judge invalid schema at: {question[:60]}"
+                break
+            if judge_record["status"] != JUDGE_STATUS_OK:
+                stopped_reason = f"judge error at: {question[:60]}"
+                break
+
+    aggregate = build_official_aggregate(
+        generation_records=generation_records,
+        judge_records=judge_records,
+    )
+    # Explicit completeness gate: an early stop leaves later questions
+    # without any record, which build_official_aggregate cannot see.
+    complete = (
+        len(generation_records) == len(selected)
+        and all(
+            r["status"] == GEN_STATUS_OK for r in generation_records
+        )
+        and len([
+            r for r in judge_records if r["status"] == JUDGE_STATUS_OK
+        ]) == len(selected)
+        and stopped_reason is None
+    )
+    official = bool(aggregate.get("official")) and complete
+    reason = aggregate.get("reason") if not official else ""
+    if not official and not reason:
+        reason = (
+            f"incomplete run: stopped_reason={stopped_reason!r}, "
+            f"generation_records={len(generation_records)}/{len(selected)}"
+        )
+
+    cases: list[dict[str, Any]] = []
+    metric_by_question = {row.pop("question"): row for row in metric_rows}
+    gen_by_question = {r["question"]: r for r in generation_records}
+    judge_by_question = {r["question"]: r for r in judge_records}
+    for tc in selected:
+        gen_record = gen_by_question.get(tc.question)
+        judge_record = judge_by_question.get(tc.question)
+        case_entry: dict[str, Any] = {
+            "question": tc.question,
+            "category": tc.category,
+            "route": "decomposed" if tc.expects_decomposition else "direct",
+            "generation_status": (
+                gen_record["status"] if gen_record else "NOT_RUN"
+            ),
+            "judge_status": (
+                judge_record["status"] if judge_record else "NOT_RUN"
+            ),
+            "answer": (gen_record or {}).get("answer"),
+            "error": (gen_record or {}).get("error")
+            or (judge_record or {}).get("error"),
+            "deterministic": metric_by_question.get(tc.question),
+            "scores": (
+                {key: judge_record["scores"][key] for key in _JUDGE_SCORE_KEYS}
+                if judge_record and judge_record.get("status") == JUDGE_STATUS_OK
+                else None
+            ),
+        }
+        cases.append(case_entry)
+
+    return {
+        "schema_version": RESULTS_SCHEMA_VERSION,
+        "official": official,
+        "reason": reason,
+        "model": EVAL_MODEL,
+        "judge_model": EVAL_MODEL,
+        "num_selected": len(selected),
+        "num_generation_ok": sum(
+            1 for r in generation_records if r["status"] == GEN_STATUS_OK
+        ),
+        "num_judged_ok": sum(
+            1 for r in judge_records if r["status"] == JUDGE_STATUS_OK
+        ),
+        "stopped_reason": stopped_reason,
+        "binding": upstream.binding,
+        "upstream_artifact_sha256": upstream.artifact_sha256,
+        "bound_artifact_fingerprint": bound_fingerprint,
+        "token_usage_totals": tracker.totals,
+        "metrics": aggregate_scores(judge_records),
+        "deterministic": aggregate_deterministic(metric_rows),
+        "cases": cases,
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--priority", type=int, default=2)
+    parser.add_argument("--artifact", type=Path, default=ARTIFACT_PATH)
+    parser.add_argument(
+        "--expected-fingerprint",
+        default=EXPECTED_ARTIFACT_FINGERPRINT,
+        help="Embedded artifact fingerprint the run binds to.",
+    )
+    parser.add_argument(
+        "--gen-checkpoint", type=Path, default=GEN_CHECKPOINT_PATH
+    )
+    parser.add_argument(
+        "--judge-checkpoint", type=Path, default=JUDGE_CHECKPOINT_PATH
+    )
+    parser.add_argument("--output", type=Path, default=RESULTS_PATH)
+    parser.add_argument(
+        "--fresh",
+        action="store_true",
+        help="Delete existing checkpoints and results before running.",
+    )
+    parser.add_argument("--max-gen-retries", type=int, default=2)
+    parser.add_argument("--max-judge-retries", type=int, default=2)
+    args = parser.parse_args(argv)
+
+    for path in (args.gen_checkpoint, args.judge_checkpoint, args.output):
+        if args.fresh and path.exists():
+            path.unlink()
+            logger.info("Deleted stale evaluation file: %s", path)
+
+    artifact, upstream = load_bound_artifact(
+        args.artifact, args.expected_fingerprint
+    )
+    selected = select_questions(artifact, args.priority)
+    case_by_question = {
+        case["question"]: case for case in artifact["cases"]
+    }
+    logger.info(
+        "Phase 2 over %d cases bound to %s", len(selected), args.artifact
+    )
+
+    # Hermeticity by construction instead of a socket guard: no retrieval
+    # EXECUTION happens here. The generator's type-only import chain
+    # (retriever.RetrievedChunk -> embedder -> vector_store) is allowed;
+    # any heavier retrieval machinery (hybrid, chunk loader, manifests)
+    # would indicate retrieval work sneaking back into Phase 2.
+    _allowed_retrieval_modules = {
+        "src.retrieval",
+        "src.retrieval.retriever",
+        "src.retrieval.embedder",
+        "src.retrieval.vector_store",
+    }
+    forbidden = [
+        name for name in sys.modules
+        if name.startswith("src.retrieval")
+        and name not in _allowed_retrieval_modules
+    ]
+    if forbidden:
+        raise RuntimeError(f"Retrieval machinery loaded in phase 2: {forbidden}")
+
+    generation_generator = Generator(
+        model=EVAL_MODEL, api_keys=generation_pool_keys()
+    )
+    judge_generator = Generator(model=EVAL_MODEL, api_keys=judging_pool_keys())
+    tracker = UsageTracker()
+
+    summary = run_phase2(
+        selected=selected,
+        case_by_question=case_by_question,
+        upstream=upstream,
+        bound_fingerprint=args.expected_fingerprint,
+        generate_fn=make_generation_call(generation_generator, tracker),
+        judge_fn=make_judge_call(judge_generator, tracker),
+        generation_store=GenerationCheckpointStore(args.gen_checkpoint),
+        judge_store=JudgeCheckpointStore(args.judge_checkpoint),
+        max_gen_retries=args.max_gen_retries,
+        max_judge_retries=args.max_judge_retries,
+    )
+    summary["token_usage_totals"] = tracker.totals
+
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(
+        json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+    print("\n=== Phase 2 summary ===")
+    print(f"  official           : {summary['official']}")
+    print(f"  reason             : {summary['reason']}")
+    print(f"  selected           : {summary['num_selected']}")
+    print(f"  generation OK      : {summary['num_generation_ok']}")
+    print(f"  judged OK          : {summary['num_judged_ok']}")
+    print(f"  stopped_reason     : {summary['stopped_reason']}")
+    metrics = summary["metrics"]
+    for key in (*_JUDGE_SCORE_KEYS, "overall_judge_average"):
+        print(f"  {key:<19}: {metrics[key]}")
+    print(f"  Results written    : {args.output}")
+
+    return 0 if summary["official"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

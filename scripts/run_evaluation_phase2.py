@@ -61,6 +61,8 @@ from src.evaluation.phase2_runtime import (
 from src.evaluation.context_packing import (
     CONTEXT_STRATEGY_FULL_EVIDENCE,
     CONTEXT_STRATEGY_ROUTE_AWARE,
+    CONTEXT_STRATEGY_SELECTIVE,
+    SELECTIVE_PACKED_CATEGORIES,
     pack_case_context,
     render_packed_blocks,
 )
@@ -475,17 +477,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-judge-retries", type=int, default=2)
     parser.add_argument(
         "--context-strategy",
-        choices=[CONTEXT_STRATEGY_FULL_EVIDENCE, CONTEXT_STRATEGY_ROUTE_AWARE],
+        choices=[
+            CONTEXT_STRATEGY_FULL_EVIDENCE,
+            CONTEXT_STRATEGY_ROUTE_AWARE,
+            CONTEXT_STRATEGY_SELECTIVE,
+        ],
         default=CONTEXT_STRATEGY_FULL_EVIDENCE,
         help=(
             "full_evidence_v1 renders every frozen chunk; route_aware_v2 "
-            "packs a coverage-preserving subset per case before prompting."
+            "packs every case; selective_packed_v1 packs only the "
+            "fact_lookup/multi_hop/summary categories whose paired A/B "
+            "evidence was faithfulness-neutral."
         ),
     )
     args = parser.parse_args(argv)
 
-    packed_mode = args.context_strategy == CONTEXT_STRATEGY_ROUTE_AWARE
-    suffix = "_packed" if packed_mode else ""
+    packed_mode = args.context_strategy != CONTEXT_STRATEGY_FULL_EVIDENCE
+    suffix = {
+        CONTEXT_STRATEGY_ROUTE_AWARE: "_packed",
+        CONTEXT_STRATEGY_SELECTIVE: "_packed_selective",
+    }.get(args.context_strategy, "")
     if args.gen_checkpoint is None:
         args.gen_checkpoint = Path(
             str(GEN_CHECKPOINT_PATH).replace(".jsonl", f"{suffix}.jsonl")
@@ -511,7 +522,22 @@ def main(argv: list[str] | None = None) -> int:
     }
     meta_by_question = {tc.question: tc for tc in selected}
     evidence_context_fn: Callable[[dict], str] | None = None
-    if packed_mode:
+    if args.context_strategy == CONTEXT_STRATEGY_SELECTIVE:
+        def evidence_context_fn(case_payload: dict) -> str:
+            if (
+                case_payload.get("category")
+                not in SELECTIVE_PACKED_CATEGORIES
+            ):
+                return build_evidence_context(case_payload)
+            packed = pack_case_context(
+                case_payload,
+                required_keywords=meta_by_question[
+                    case_payload["question"]
+                ].required_keywords,
+                strategy=CONTEXT_STRATEGY_ROUTE_AWARE,
+            )
+            return render_packed_blocks(packed)
+    elif packed_mode:
         def evidence_context_fn(case_payload: dict) -> str:
             packed = pack_case_context(
                 case_payload,

@@ -31,6 +31,12 @@ from dataclasses import dataclass, field
 
 CONTEXT_STRATEGY_FULL_EVIDENCE = "full_evidence_v1"
 CONTEXT_STRATEGY_ROUTE_AWARE = "route_aware_v2"
+# Packs only the categories whose A/B paired evidence showed faithfulness-
+# neutral, precision-positive behavior (fact_lookup, multi_hop, summary).
+# Enumeration/comparative-topical/out-of-corpus stay full-evidence because
+# packed-all regressed their faithfulness in the measured arms.
+CONTEXT_STRATEGY_SELECTIVE = "selective_packed_v1"
+SELECTIVE_PACKED_CATEGORIES = {"fact_lookup", "multi_hop", "summary"}
 
 # Structured lookup promotes exact table rows/auditor signatures to
 # exactly 10.0 before hybrid scoring; anything at that ceiling is an

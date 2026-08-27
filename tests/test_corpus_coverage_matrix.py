@@ -26,13 +26,12 @@ EXPECTED_BASELINE = {
     "clean_tickers": 46,
     "degraded_tickers": 4,
     "missing_tickers": 0,
-    "tickers_with_financial_table": 40,
-    "total_chunks": 9935,
+    "tickers_with_financial_table": 44,
+    "total_chunks": 9947,
 }
 EXPECTED_DEGRADED = {"CVX", "IBM", "JPM", "XOM"}
 EXPECTED_NO_TABLE = {
-    "AVGO", "CVX", "GS", "HD", "IBM",
-    "JPM", "NVDA", "ORCL", "PEP", "XOM",
+    "CVX", "HD", "IBM", "JPM", "PEP", "XOM",
 }
 
 

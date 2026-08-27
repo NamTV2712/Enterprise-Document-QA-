@@ -17,7 +17,7 @@ from pathlib import Path
 
 from configs.settings import settings
 from src.ingestion.chunker import build_table_chunks
-from scripts.diagnostics.diagnose_all_financial_tables import find_tables_in_financial_section
+from src.ingestion.table_discovery import discover_financial_tables
 
 logging.basicConfig(
     level=logging.INFO,
@@ -60,7 +60,7 @@ def main() -> None:
             logger.warning("Skipping %s table chunks because financial_statements is missing", ticker)
             continue
 
-        tables = find_tables_in_financial_section(html_path, sections_path)
+        tables, discovery_mode = discover_financial_tables(html_path, sections_path)
         table_chunks = build_table_chunks(html_path, tables, filing_data)
 
         existing_ids = _load_existing_chunk_ids(chunks_path)
@@ -72,8 +72,9 @@ def main() -> None:
                 file.write(json.dumps(asdict(chunk), ensure_ascii=False) + "\n")
 
         logger.info(
-            "%s: %d table chunks generated, %d appended, %d already existed",
+            "%s: mode=%s, %d table chunks generated, %d appended, %d already existed",
             ticker,
+            discovery_mode,
             len(table_chunks),
             len(new_chunks),
             len(table_chunks) - len(new_chunks),

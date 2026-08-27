@@ -2,6 +2,8 @@
 
 ## Current Milestone
 
+The TOC-link financial-table fallback is now implemented and verified. Production table discovery preserves the Item-8..Item-9 primary path and follows individual statement TOC links only when the primary path yields no parseable tables. NVDA and ORCL passed the counterfactual gates; PEP remains deferred because its tables have no parseable year header. The corpus pipeline then appended 12 chunks (NVDA 5, ORCL 5, AVGO 1, GS 1), built immutable generation `nomic-e9b6763-fy2026-table-fallback-20260827-attempt-01` with 9,947 points and corpus fingerprint `sha256:db1e48cee87a31114b97bb3055c3d89513f6a988e1750881feedff25766cadca`, promoted canonical payloads, and rebuilt the trusted local index green at 9,947 points. Phase 1 was rebuilt offline and deterministically with artifact fingerprint `sha256:d91def3d89e93dfb536f9e4fefb34d7df1553f4347f25931c05ec9ee64212d9e`. Coverage is now 46 clean / 4 degraded / 44 financial-table; full backend suite passes 337 tests. Phase 2 was not run.
+
 Steps 1-12 are complete for the MVP Enterprise Document QA / SEC 10-K RAG pipeline.
 Phase 2A Step A, Streaming Response, is complete and verified.
 Phase 2A Step A.1, Semantic Query Cache, is complete and verified.

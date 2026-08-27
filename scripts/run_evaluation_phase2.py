@@ -80,7 +80,7 @@ ARTIFACT_PATH = Path("data/eval_artifacts/phase1_priority2.json")
 # Must match scripts.run_quota_probe.EXPECTED_ARTIFACT_FINGERPRINT; both
 # runners refuse to bind to any other frozen evidence.
 EXPECTED_ARTIFACT_FINGERPRINT = (
-    "sha256:6341419c1922e465637f1881810f82a7d6c547a51ab4119ad13e22c4ea03cb87"
+    "sha256:d91def3d89e93dfb536f9e4fefb34d7df1553f4347f25931c05ec9ee64212d9e"
 )
 GEN_CHECKPOINT_PATH = Path("data/eval_artifacts/phase2_gen.jsonl")
 JUDGE_CHECKPOINT_PATH = Path("data/eval_artifacts/phase2_judge.jsonl")

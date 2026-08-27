@@ -105,7 +105,7 @@ Current searchable corpus:
   `nomic-e9b6763-fy2026-corpus-recovery-20260826-attempt-01`.
 - Extraction quality is `46` filings with all four target sections and
   `4` degraded but searchable filings (`CVX`, `IBM`, `JPM`, `XOM`).
-- `financial_table` chunks are available for `40` searchable tickers.
+- `financial_table` chunks are available for `44` searchable tickers.
 
 The `/supported-tickers` endpoint returns the live searchable ticker list from embedded chunks, not the full configured list.
 
@@ -303,17 +303,16 @@ Retrieval latency optimization:
 Corpus scale:
 
 - The configured corpus targets `50` tickers, and all `50` have searchable embedded chunks in local Qdrant.
-- Local Qdrant indexes `9,935` chunks after the FY2026 corpus recovery pass.
+- Local Qdrant indexes `9,947` chunks after the TOC-link table fallback pass.
 - The local collection has a trusted schema-v2 build manifest tied to the
-  immutable generation `nomic-e9b6763-fy2026-corpus-recovery-20260826-attempt-01`,
+  immutable generation `nomic-e9b6763-fy2026-table-fallback-20260827-attempt-01`,
   Nomic revision `e9b6763023c676ca8431644204f50c2b100d9aab`, canonical
-  corpus fingerprint `sha256:e2499754d522d5f4d85a639a177a451973ba1b5415cb6cb6c3fd6df29ea0bc0a`,
-  and generation fingerprint `sha256:65cc3f9f84d965f825a968e576529b74b6d80bdd9631ca9be359907809dbc3fb`.
+  corpus fingerprint `sha256:db1e48cee87a31114b97bb3055c3d89513f6a988e1750881feedff25766cadca`.
   Local runtime and Docker Compose pin the same model revision through
   `EMBEDDING_MODEL_REVISION` so query embeddings cannot silently drift.
   This trust status applies only to local Qdrant; Cloud remains untrusted until
   full ID, payload, and vector-snapshot verification is completed.
-- `financial_table` chunks are available for `40` searchable tickers.
+- `financial_table` chunks are available for `44` searchable tickers.
 - Latest extraction quality is `46` filings with all four target sections and `4` degraded but searchable filings (`CVX`, `IBM`, `JPM`, `XOM`); no configured ticker is currently unusable.
 
 | Scenario | Filter | Latency |

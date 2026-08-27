@@ -37,7 +37,7 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        before any future Phase 2 evaluation claim. Done offline with
        determinism verification: artifact 6341419c... bound to corpus
        e2499754..., 12/12 decomposed evidence_ok; both runners re-pinned.
-10. [ ] Financial-table remediation order from the read-only audit
+10. [x] Financial-table remediation order from the read-only audit
         (data/diagnostics/financial_table_audit.json): first extend table
         discovery to reuse the recovery TOC-anchor path for NVDA -> ORCL ->
         PEP; then AVGO/HD window extension plus year-header tolerance; then
@@ -45,9 +45,9 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
         incorporation-by-reference extraction milestone.
 11. [ ] Rebuild the Phase 1 retrieval artifact against the new trusted index
         before any future Phase 2 evaluation claim.
-12. [ ] Conditional TOC-anchor fallback: only if counterfactual gates pass for
-       NVDA/ORCL/PEP. Current status: ORCL PASS, NVDA FAIL (duplicate chunks),
-       PEP FAIL (zero parsed/buildable). NOT merged.
+12. [x] Conditional TOC-anchor fallback: NVDA and ORCL passed the corrected
+       counterfactual gates and are active in `add_table_chunks`; PEP remains
+       deferred because its tables have no parseable year header.
 
 ## Always-On Deployment
 

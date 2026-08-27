@@ -298,7 +298,7 @@ def test_load_bound_artifact_refuses_fingerprint_drift(
 
 # The FY2026-corpus Phase 1 rebuild; both runners must bind to exactly this.
 CURRENT_ARTIFACT_FINGERPRINT = (
-    "sha256:6341419c1922e465637f1881810f82a7d6c547a51ab4119ad13e22c4ea03cb87"
+    "sha256:d91def3d89e93dfb536f9e4fefb34d7df1553f4347f25931c05ec9ee64212d9e"
 )
 SUPERSEDED_FINGERPRINTS = {
     # Pre-FY2024-contract corpus.

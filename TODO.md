@@ -24,9 +24,15 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        and PFE mdna restored (46 clean / 4 degraded / 40 table / 9,935 chunks)
        on trusted generation nomic-e9b6763-fy2026-corpus-recovery-20260826-
        attempt-01; deterministic spot-checks and coverage baseline pinned.
-8. [ ] Audit why NVDA, ORCL, and PEP recovered statements still yield zero
+8. [x] Audit why NVDA, ORCL, and PEP recovered statements still yield zero
        financial_table chunks (statement tables live in layouts the current
        table extractor misses); same audit covers AVGO, GS, and HD.
+       - Result: audit v2 complete; classification recorded in
+         `data/diagnostics/financial_table_audit.json` (schema v2).
+       - NVDA/ORCL/PEP = `layout_or_exhibit` (statements outside Item-8 window)
+       - AVGO/HD = `layout_or_exhibit` + `row_filter_miss`
+       - GS = `layout_or_exhibit` with stub FS
+       - CVX/IBM/JPM/XOM = `financial_statements_missing`
 9. [x] Rebuild the Phase 1 retrieval artifact against the new trusted index
        before any future Phase 2 evaluation claim. Done offline with
        determinism verification: artifact 6341419c... bound to corpus
@@ -37,6 +43,11 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
         PEP; then AVGO/HD window extension plus year-header tolerance; then
         GS exhibit following. CVX/IBM/JPM/XOM stay deferred to the separate
         incorporation-by-reference extraction milestone.
+11. [ ] Rebuild the Phase 1 retrieval artifact against the new trusted index
+        before any future Phase 2 evaluation claim.
+12. [ ] Conditional TOC-anchor fallback: only if counterfactual gates pass for
+       NVDA/ORCL/PEP. Current status: ORCL PASS, NVDA FAIL (duplicate chunks),
+       PEP FAIL (zero parsed/buildable). NOT merged.
 
 ## Always-On Deployment
 

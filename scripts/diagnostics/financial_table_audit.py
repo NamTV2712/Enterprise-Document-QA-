@@ -16,8 +16,8 @@ the tables are lost:
 7. ``pipeline_stale``            chunks WOULD be built now but the embedded
                                  artifacts contain no financial_table records
 
-The script never writes under ``data/``; it proves immutability by hashing
-every file before and after the run.
+The script never writes under ``data/``; it creates an ignored report artifact
+under ``data/diagnostics/`` but does not modify raw/processed corpus inputs.
 
 Usage:
     python -m scripts.diagnostics.financial_table_audit [--output PATH]
@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any
 
 from bs4 import BeautifulSoup
+
 from configs.settings import settings
 from scripts.diagnostics.diagnose_all_financial_tables import (
     _candidate_start_snippets,
@@ -80,7 +81,7 @@ def _embedded_table_count(ticker_dir: Path) -> int | None:
     return sum(counts) if counts else None
 
 
-def _doc_statement_caption_samples(soup: BeautifulSoup, limit: int = 3) -> list[str]:
+def _doc_statement_caption_samples(soup: BeautifulSoup, limit: int = 5) -> list[str]:
     """Short captions of statement-like tables anywhere in the document."""
     samples: list[str] = []
     for table in soup.find_all("table"):
@@ -92,6 +93,13 @@ def _doc_statement_caption_samples(soup: BeautifulSoup, limit: int = 3) -> list[
             if sample not in samples:
                 samples.append(sample)
     return samples
+
+
+STATEMENT_CAPTION_PATTERN = re.compile(
+    r"(balance\s+sheet|statements?\s+of\s+operations|statements?\s+of\s+income"
+    r"|cash\s+flow|stockholders?.{0,3}\s+equity)",
+    re.IGNORECASE,
+)
 
 
 def _audit_one(
@@ -111,23 +119,38 @@ def _audit_one(
     )
 
     soup = BeautifulSoup(html_path.read_bytes(), "lxml")
+    report["total_html_tables"] = len(soup.find_all("table"))
+
+    # Statement-like tables anywhere in the document
+    statement_like_anywhere = _doc_statement_caption_samples(soup)
+    report["statement_like_tables_anywhere"] = statement_like_anywhere
 
     if "financial_statements" not in sections:
+        report["has_financial_statements"] = False
+        report["fs_text_chars"] = 0
+        report["window_table_count"] = 0
+        report["statement_like_tables_outside_window"] = []
+        report["tables_with_parsed_rows"] = 0
+        report["chunks_buildable_now"] = 0
         report["causes"] = ["financial_statements_missing"]
-        report["total_html_tables"] = len(soup.find_all("table"))
-        report["statement_caption_samples_anywhere"] = (
-            _doc_statement_caption_samples(soup)
-        )
+        report["evidence"] = {
+            "total_html_tables": report["total_html_tables"],
+            "statement_like_tables_anywhere": statement_like_anywhere,
+        }
+        report["confidence"] = "high"
         report["remediation"] = (
             "Extend extraction recovery (incorporation-by-reference / "
             "annual-report TOC layouts) before table work can apply."
         )
-        report["confidence"] = "high"
         return report
+
+    report["has_financial_statements"] = True
+    fs_text = sections.get("financial_statements", "")
+    report["fs_text_chars"] = len(fs_text)
 
     # Stage 1: production window discovery.
     tables = find_tables_in_financial_section(html_path, sections_path)
-    report["window_tables"] = len(tables)
+    report["window_table_count"] = len(tables)
 
     causes: list[str] = []
     if not tables:
@@ -139,16 +162,27 @@ def _audit_one(
             )
         )
         report["start_anchor_found"] = bool(start_node_found)
-        report["statement_caption_samples_anywhere"] = (
-            _doc_statement_caption_samples(soup)
-        )
+        report["statement_like_tables_outside_window"] = statement_like_anywhere
+        report["window_table_count"] = 0
+        report["tables_with_parsed_rows"] = 0
+        report["chunks_buildable_now"] = 0
+
         if start_node_found:
-            causes.append("layout_or_exhibit")
-            report["remediation"] = (
-                "Statements live outside the Item-8..Item-9 DOM window "
-                "(separate part/exhibit); extend the table-discovery "
-                "window or follow exhibit references."
-            )
+            # Anchor found but no tables in window - check if statement tables exist elsewhere
+            if statement_like_anywhere:
+                causes.append("layout_or_exhibit")
+                report["remediation"] = (
+                    "Statements live outside the Item-8..Item-9 DOM window "
+                    "(separate part/exhibit); extend the table-discovery "
+                    "window or follow exhibit references."
+                )
+            else:
+                # Anchor found but no tables anywhere
+                causes.append("html_table_missing")
+                report["remediation"] = (
+                    "Valid FS anchor but no <table> elements in window "
+                    "and no statement-like tables anywhere in document."
+                )
         else:
             causes.append("parser_miss")
             report["remediation"] = (
@@ -157,6 +191,9 @@ def _audit_one(
             )
         report["causes"] = causes
         report["confidence"] = "high" if start_node_found else "medium"
+        report["tables_with_parsed_rows"] = 0
+        report["chunks_buildable_now"] = 0
+        report["statement_like_tables_outside_window"] = statement_like_anywhere
         return report
 
     # Stage 2: year-header row parsing.
@@ -169,7 +206,9 @@ def _audit_one(
             caption = get_table_caption(table)
             if caption:
                 captions.append(" ".join(caption.split())[:80])
-    report["tables_with_parsed_rows"] = sum(1 for n in parsed_rows if n)
+
+    tables_with_parsed = sum(1 for n in parsed_rows if n > 0)
+    report["tables_with_parsed_rows"] = tables_with_parsed
     report["sample_captions"] = captions[:5]
 
     if not any(parsed_rows):
@@ -180,27 +219,55 @@ def _audit_one(
         )
         report["confidence"] = "high"
 
+    # Statement-like tables outside the window
+    tables_in_window = {id(t) for t in tables}
+    outside_captions: list[str] = []
+    for table in soup.find_all("table"):
+        if id(table) in tables_in_window:
+            continue
+        caption = get_table_caption(table)
+        if caption and STATEMENT_CAPTION_PATTERN.search(caption):
+            sample = " ".join(caption.split())[:80]
+            if sample not in outside_captions:
+                outside_captions.append(sample)
+    report["statement_like_tables_outside_window"] = outside_captions[:5]
+
     # Stage 3: what would production build right now vs what is served.
     built = build_table_chunks(html_path, tables, filing_data)
     report["chunks_buildable_now"] = len(built)
     embedded = report.get("embedded_financial_table_chunks") or 0
+
     if built and embedded == 0:
         causes.append("pipeline_stale")
         report["remediation"] = (
             "Rebuildable today; rerun add_table_chunks -> embed_chunks -> "
             "index_chunks for this generation."
         )
-    elif built == 0 and "row_filter_miss" not in causes:
+    elif not any(parsed_rows) and "row_filter_miss" not in causes:
         causes.append("row_filter_miss")
         report["remediation"] = (
             "All window tables failed year-header parsing; see row_filter_miss."
         )
-
-    if not causes:
+    elif not causes:
         causes.append("none")
         report["remediation"] = "No defect detected at any funnel stage."
+
     report["causes"] = causes
+    report["tables_with_parsed_rows"] = tables_with_parsed
+    report["chunks_buildable_now"] = len(built)
+    report["statement_like_tables_outside_window"] = outside_captions[:5]
+
     return report
+
+
+def _audit_digest(paths: list[Path]) -> str:
+    """SHA-256 over every read-only input file, sorted by relative path."""
+    hasher = hashlib.sha256()
+    for path in sorted(set(paths)):
+        if path.is_file():
+            hasher.update(str(path).encode("utf-8"))
+            hasher.update(hashlib.sha256(path.read_bytes()).digest())
+    return f"sha256:{hasher.hexdigest()}"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -232,22 +299,26 @@ def main(argv: list[str] | None = None) -> int:
         html_path = raw_dir / ticker / f"{accession_nodash}.html"
         embedded_files = list((processed_dir / ticker).glob("*_chunks_embedded.jsonl"))
         read_inputs.extend([sections_path, html_path, *embedded_files])
-        targets.append((ticker, html_path, sections_path, embedded_count))
+        targets.append((ticker, html_path, sections_path, 0))  # embedded_count will be set per entry
 
     digest_before = _audit_digest(read_inputs)
     audited: list[dict[str, Any]] = []
-    for ticker, html_path, sections_path, embedded_count in targets:
-        logger.info("Auditing %s (embedded financial_table=%s)", ticker, embedded_count)
-        entry = _audit_one(ticker, html_path, sections_path, processed_dir)
-        entry["embedded_financial_table_chunks"] = embedded_count
+    for ticker, html_path, sections_path, _ in targets:
+        logger.info("Auditing %s", ticker)
+        entry = _audit_one(ticker, html_path, sections_path, settings.data_processed_dir)
+        entry["embedded_financial_table_chunks"] = _embedded_table_count(
+            settings.data_processed_dir / ticker
+        )
         audited.append(entry)
+
     digest_after = _audit_digest(read_inputs)
-    immutable = digest_before == digest_after
+    read_inputs_immutable = digest_before == digest_after
+
     output = {
-        "schema_version": 1,
+        "schema_version": 2,
         "read_only": True,
-        "data_tree_immutable": immutable,
-        "data_tree_sha256": digest_before,
+        "read_inputs_immutable": read_inputs_immutable,
+        "read_inputs_sha256": _audit_digest(read_inputs),
         "tickers_audited": [entry["ticker"] for entry in audited],
         "results": audited,
     }
@@ -256,20 +327,20 @@ def main(argv: list[str] | None = None) -> int:
         json.dumps(output, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
-    print("\n=== Financial-table audit ===")
-    print(f"  data tree immutable : {immutable}")
+    print("\n=== Financial-table audit v2 ===")
+    print(f"  read_inputs_immutable : {read_inputs_immutable}")
     for entry in audited:
         print(
             f"  {entry['ticker']:<6} causes={entry['causes']} "
             f"buildable_now={entry.get('chunks_buildable_now')} "
-            f"window_tables={entry.get('window_tables')}"
+            f"window_tables={entry.get('window_table_count')}"
+            f" statement_like_outside={len(entry.get('statement_like_tables_outside_window', []))}"
         )
-    if not immutable:
-        logger.error("Data tree changed during audit!")
+    if not read_inputs_immutable:
+        logger.error("Read inputs changed during audit!")
         return 1
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

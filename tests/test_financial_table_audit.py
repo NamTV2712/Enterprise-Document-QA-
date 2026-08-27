@@ -62,7 +62,7 @@ def test_fs_missing_is_classified_without_tables(tmp_path: Path) -> None:
 
     assert report["causes"] == ["financial_statements_missing"]
     assert report["has_financial_statements"] is False
-    assert report["statement_caption_samples_anywhere"]
+    assert report["statement_like_tables_anywhere"]
 
 
 def test_anchor_without_window_tables_is_layout_or_exhibit(
@@ -89,7 +89,7 @@ def test_anchor_without_window_tables_is_layout_or_exhibit(
     assert report["start_anchor_found"] is True
     # Samples are truncated at 80 chars, hence the partial phrase.
     assert any("Consolidated Balance Sheet" in s for s in
-               report["statement_caption_samples_anywhere"])
+               report["statement_like_tables_outside_window"])
 
 
 def test_window_table_without_year_header_is_row_filter_miss(
@@ -109,7 +109,7 @@ def test_window_table_without_year_header_is_row_filter_miss(
     report = _audit_one("AVGG", html_path, sections_path, tmp_path / "processed")
 
     assert report["causes"] == ["row_filter_miss"]
-    assert report["window_tables"] == 1
+    assert report["window_table_count"] == 1
     assert report["tables_with_parsed_rows"] == 0
     assert report["chunks_buildable_now"] == 0
 

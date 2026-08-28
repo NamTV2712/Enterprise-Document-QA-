@@ -44,10 +44,9 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
         PEP; then AVGO/HD window extension plus year-header tolerance; then
         GS exhibit following. CVX/IBM/JPM/XOM stay deferred to the separate
         incorporation-by-reference extraction milestone.
-11. [x] Rebuild Phase 1 and run the official Phase 2 N=30 evaluation against
-        the PEP-recovery index. Artifact 40980956... is deterministic with
-        12/12 evidence_ok; Phase 2 completed 30/30 generation and 30/30
-        judging with no skipped or parse-invalid records.
+11. [x] Rebuild Phase 1 against the PEP-recovery index and complete its
+        historical official Phase 2 N=30 evaluation. Artifact 40980956... is
+        superseded; do not treat that run as the current-corpus benchmark.
 12. [x] Conditional TOC-anchor fallback: NVDA, ORCL, AVGO, GS, HD, and PEP
        are active in `add_table_chunks`; PEP root-anchor recovery yields 29
        parseable financial tables. Remaining missing-table tickers are CVX,
@@ -74,8 +73,9 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
          financial-table tickers, leaving only IBM. Phase 1 and the bounded
          three-case quota probe are complete on this binding; the probe passed
          FY2024 comparative acceptance but is non-official self-judge evidence.
-         Next: decide whether to spend quota on the full N=30 Phase 2 run. IBM
-         remains a separate companion-document extraction milestone.
+         Current next step: add priority-3 retrieval cases for CVX/JPM/XOM,
+         then decide whether to spend quota on a current-binding priority-2
+         Phase 2 run. IBM remains a separate companion-document milestone.
 
 ## Always-On Deployment
 

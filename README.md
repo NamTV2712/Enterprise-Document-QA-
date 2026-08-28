@@ -306,16 +306,17 @@ Retrieval latency optimization:
 Corpus scale:
 
 - The configured corpus targets `50` tickers, and all `50` have searchable embedded chunks in local Qdrant.
-- Local Qdrant indexes `9,947` chunks after the TOC-link table fallback pass.
+- Local Qdrant indexes `10,021` chunks from the trusted hard-group recovery
+  generation `nomic-e9b6763-fy2026-hard-group-table-recovery-20260828-attempt-01`.
 - The local collection has a trusted schema-v2 build manifest tied to the
-  immutable generation `nomic-e9b6763-fy2026-table-fallback-20260827-attempt-01`,
-  Nomic revision `e9b6763023c676ca8431644204f50c2b100d9aab`, canonical
-  corpus fingerprint `sha256:db1e48cee87a31114b97bb3055c3d89513f6a988e1750881feedff25766cadca`.
+  pinned Nomic revision `e9b6763023c676ca8431644204f50c2b100d9aab` and
+  corpus fingerprint `sha256:91828b033f530d32fba3c0dd415ffd8ee89222cf9a2e9108c5064ec838f233e0`.
   Local runtime and Docker Compose pin the same model revision through
   `EMBEDDING_MODEL_REVISION` so query embeddings cannot silently drift.
   This trust status applies only to local Qdrant; Cloud remains untrusted until
   full ID, payload, and vector-snapshot verification is completed.
-- `financial_table` chunks are available for `44` searchable tickers.
+- `financial_table` chunks are available for `49` searchable tickers; IBM is
+  the only configured ticker without a table chunk.
 - Latest extraction quality is `46` filings with all four target sections and `4` degraded but searchable filings (`CVX`, `IBM`, `JPM`, `XOM`); no configured ticker is currently unusable.
 
 | Scenario | Filter | Latency |
@@ -626,8 +627,9 @@ Secrets are loaded from `.env` and should never be committed.
 ## Roadmap
 
 1. Add production logging, quota monitoring, and error alerts before selecting a paid always-on backend.
-2. Improve annual-report/cross-reference extraction layouts to close the remaining section-completeness gaps.
-3. Revisit permanent hosting only when always-on public availability is required.
+2. Add deterministic priority-3 evaluation cases for the recovered hard-group table routes (`CVX`, `JPM`, `XOM`) without changing the official priority-2 set.
+3. Audit IBM's incorporated Annual Report to Stockholders as a separate, read-only companion-document milestone.
+4. Revisit permanent hosting only when always-on public availability is required.
 
 ## Why This Project Matters
 

@@ -231,8 +231,10 @@ The active local index uses hard-group generation
 `nomic-e9b6763-fy2026-hard-group-table-recovery-20260828-attempt-01` (corpus
 `sha256:91828b…`, `10,021` points). Its offline, byte-deterministic Phase 1
 artifact `sha256:acc61c63…` completes all 30 cases with 61 non-empty queries
-and `12/12` decomposed-plan evidence checks. No Phase 2 provider run has been
-made on this new binding, so the table below must not be interpreted as its
+and `12/12` decomposed-plan evidence checks. A three-case quota probe passed
+all generation, judging, and FY2024 comparative acceptance checks; it is
+non-official self-judge evidence. No full N=30 Phase 2 run has been made on
+this new binding, so the table below must not be interpreted as its
 current-corpus benchmark.
 
 | Metric | Score |

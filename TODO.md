@@ -71,9 +71,11 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
          de-duplication, and contamination gates. The resolver is enabled only
          for those three tickers; generation `nomic-e9b6763-fy2026-hard-group-table-recovery-20260828-attempt-01`
          is promoted and indexed at 10,021 points. Served coverage is 49
-         financial-table tickers, leaving only IBM. Next: rebuild the offline
-         Phase 1 retrieval artifact against this binding before any Phase 2
-         action. IBM remains a separate companion-document extraction milestone.
+         financial-table tickers, leaving only IBM. Phase 1 and the bounded
+         three-case quota probe are complete on this binding; the probe passed
+         FY2024 comparative acceptance but is non-official self-judge evidence.
+         Next: decide whether to spend quota on the full N=30 Phase 2 run. IBM
+         remains a separate companion-document extraction milestone.
 
 ## Always-On Deployment
 

@@ -61,6 +61,11 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
          exactly; five are primary statements, ten are supporting financial
          tables, and fourteen are financial notes. Keep the current fallback
          unchanged; it has the intended statement coverage.
+       - Hard-group route audit complete: CVX/XOM use same-document Financial
+         Table of Contents targets, JPM uses same-document page anchors, and
+         IBM requires a separate Annual Report to Stockholders. Fresh sections
+         are rejected as contaminated MD&A suffixes; implement no resolver
+         until a read-only interval counterfactual passes clean-boundary gates.
 
 ## Always-On Deployment
 

@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import tempfile
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
@@ -444,12 +445,12 @@ def build_embedding_generation(
     return generation_dir, manifest
 
 
-def load_validated_embedding_generation(
+def _load_verified_generation(
     generation_dir: Path,
     *,
     active_corpus_dir: Path,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Reload and verify a completed generation against active canonical corpus."""
+    """Verify generation files against the current unembedded chunk sources."""
     manifest_path = generation_dir / EMBEDDING_GENERATION_MANIFEST_NAME
     if not manifest_path.is_file():
         raise ValueError("Embedding generation completion manifest is absent")
@@ -477,6 +478,77 @@ def load_validated_embedding_generation(
     expected_fingerprint = compute_embedding_generation_fingerprint(loaded)
     if loaded["embedding_generation_fingerprint"] != expected_fingerprint:
         raise ValueError("Embedding generation fingerprint does not match manifest")
+    return chunks, loaded
+
+
+def _copy_file_atomic(source: Path, destination: Path) -> None:
+    """Copy one generated payload without mutating its immutable source file."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=destination.parent,
+            prefix=f".{destination.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary_file:
+            temporary_path = Path(temporary_file.name)
+            with source.open("rb") as source_file:
+                shutil.copyfileobj(source_file, temporary_file)
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
+        os.replace(temporary_path, destination)
+    finally:
+        if temporary_path is not None and temporary_path.exists():
+            temporary_path.unlink()
+
+
+def promote_embedding_generation(
+    generation_dir: Path,
+    *,
+    active_corpus_dir: Path,
+) -> dict[str, Any]:
+    """Atomically promote verified generated payloads to the active BM25 corpus.
+
+    Generation validation first binds every output to the current unembedded
+    source chunks. The immutable generation is copied, never moved, and the
+    canonical payload fingerprint is checked after all destination replacements.
+    """
+    _chunks, manifest = _load_verified_generation(
+        generation_dir,
+        active_corpus_dir=active_corpus_dir,
+    )
+    active_outputs, _ = _expected_output_paths(active_corpus_dir)
+    active_chunks = [record for _, _, records in active_outputs for record in records]
+    if compute_corpus_fingerprint(active_chunks) != manifest["corpus_fingerprint"]:
+        raise ValueError("Active source corpus does not match embedding generation")
+    for entry in manifest["files"]:
+        relative_path = Path(PurePosixPath(entry["relative_path"]))
+        source = generation_dir / relative_path
+        destination = active_corpus_dir / relative_path
+        if compute_file_sha256(source) != entry["file_sha256"]:
+            raise ValueError(f"Generation file hash mismatch: {entry['relative_path']}")
+        _copy_file_atomic(source, destination)
+
+    canonical_payload_fingerprint = compute_corpus_fingerprint(
+        _load_active_canonical_payloads(active_corpus_dir)
+    )
+    if canonical_payload_fingerprint != manifest["corpus_fingerprint"]:
+        raise ValueError("Promoted canonical BM25 payload does not match generation")
+    return manifest
+
+
+def load_validated_embedding_generation(
+    generation_dir: Path,
+    *,
+    active_corpus_dir: Path,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Reload and verify a completed generation against active canonical corpus."""
+    chunks, loaded = _load_verified_generation(
+        generation_dir,
+        active_corpus_dir=active_corpus_dir,
+    )
 
     active_outputs, _ = _expected_output_paths(active_corpus_dir)
     active_chunks = [record for _, _, records in active_outputs for record in records]

@@ -18,7 +18,7 @@ from scripts.corpus_coverage_matrix import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-# Baseline documented in PROJECT_STATE.md after the FY2026 PEP table
+# Baseline documented in PROJECT_STATE.md after the FY2026 hard-group table
 # recovery generation.
 EXPECTED_BASELINE = {
     "configured_tickers": 50,
@@ -26,15 +26,15 @@ EXPECTED_BASELINE = {
     "clean_tickers": 46,
     "degraded_tickers": 4,
     "missing_tickers": 0,
-    "tickers_with_financial_table": 46,
-    "total_chunks": 9978,
+    "tickers_with_financial_table": 49,
+    "total_chunks": 10021,
 }
 EXPECTED_CORPUS_FINGERPRINT = (
-    "sha256:dbfd75d501b5b07d3007ba191127e5f46cc0a9ddb0b3cb44a87867534c7e6fb0"
+    "sha256:91828b033f530d32fba3c0dd415ffd8ee89222cf9a2e9108c5064ec838f233e0"
 )
 EXPECTED_DEGRADED = {"CVX", "IBM", "JPM", "XOM"}
 EXPECTED_NO_TABLE = {
-    "CVX", "IBM", "JPM", "XOM",
+    "IBM",
 }
 
 

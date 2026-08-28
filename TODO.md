@@ -66,14 +66,14 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
          IBM requires a separate Annual Report to Stockholders. Fresh sections
          are rejected as contaminated MD&A suffixes; implement no resolver
          until a read-only interval counterfactual passes clean-boundary gates.
-       - Same-document resolver complete: CVX (33 tables), XOM (4), and JPM
+       - Same-document resolver and corpus rebuild complete: CVX (33 tables), XOM (4), and JPM
          (6) pass deterministic clean-boundary, fiscal-year, primary-statement,
          de-duplication, and contamination gates. The resolver is enabled only
-         for those three tickers and a read-only dry run reproduces those counts
-         with unique IDs. Next: explicitly authorize the data rebuild pipeline
-         (`add_table_chunks`, embedding generation, and index rebuild) before
-         changing served coverage. IBM remains a separate companion-document
-         extraction milestone.
+         for those three tickers; generation `nomic-e9b6763-fy2026-hard-group-table-recovery-20260828-attempt-01`
+         is promoted and indexed at 10,021 points. Served coverage is 49
+         financial-table tickers, leaving only IBM. Next: rebuild the offline
+         Phase 1 retrieval artifact against this binding before any Phase 2
+         action. IBM remains a separate companion-document extraction milestone.
 
 ## Always-On Deployment
 

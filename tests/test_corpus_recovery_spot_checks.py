@@ -58,6 +58,12 @@ BM25_QUERIES = {
     "PFE": ("results of operations gross margin revenue", "mdna"),
 }
 
+TABLE_RECOVERY_EXPECTATIONS = {
+    "CVX": (33, "Consolidated Statement of Income"),
+    "JPM": (6, "Consolidated statements of income"),
+    "XOM": (4, "CONSOLIDATED STATEMENT OF INCOME"),
+}
+
 
 def _load_ticker_chunks(ticker: str) -> list[dict]:
     paths = sorted((PROCESSED_DIR / ticker).glob("*_chunks_embedded.jsonl"))
@@ -152,3 +158,19 @@ def test_recovered_section_is_lexically_retrievable(
     assert any(len(h.get("text", "")) >= 500 for h in hits), (
         f"{ticker}: retrieved {expected_section} hits are all short stubs"
     )
+
+
+@pytest.mark.parametrize("ticker", sorted(TABLE_RECOVERY_EXPECTATIONS))
+def test_hard_group_table_recovery_is_present_and_grounded(ticker: str) -> None:
+    if not PROCESSED_DIR.is_dir():
+        pytest.skip("local corpus not available")
+    expected_count, required_marker = TABLE_RECOVERY_EXPECTATIONS[ticker]
+    chunks = [
+        chunk
+        for chunk in _load_ticker_chunks(ticker)
+        if chunk.get("section") == "financial_table"
+    ]
+
+    assert len(chunks) == expected_count
+    assert all(chunk.get("ticker") == ticker for chunk in chunks)
+    assert any(required_marker.casefold() in chunk.get("text", "").casefold() for chunk in chunks)

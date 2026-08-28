@@ -12,6 +12,7 @@ from src.retrieval.embedding_generation import (
     build_embedding_generation,
     compute_embedding_generation_fingerprint,
     load_validated_embedding_generation,
+    promote_embedding_generation,
     validate_generation_id,
 )
 
@@ -336,6 +337,62 @@ def test_loader_rejects_canonical_bm25_payload_drift() -> None:
                 generation_dir,
                 active_corpus_dir=source,
             )
+
+
+def test_promotion_restores_canonical_payload_from_verified_generation() -> None:
+    with _workspace() as root:
+        source = root / "source"
+        generations = root / "generations"
+        _write_source(source, "AAPL", [_record("A", "AAPL")])
+        generation_dir, manifest = build_embedding_generation(
+            source_dir=source,
+            generations_root=generations,
+            generation_id="generation-001",
+            embedder=_FakeEmbedder(),
+            metadata=_metadata(),
+        )
+        canonical_path = source / "AAPL" / "AAPL_chunks_embedded.jsonl"
+        stale = _record("A", "AAPL")
+        stale["text"] = "Stale canonical evidence"
+        stale["embedding"] = [0.0, 0.0]
+        canonical_path.write_text(json.dumps(stale) + "\n", encoding="utf-8")
+
+        promoted = promote_embedding_generation(
+            generation_dir,
+            active_corpus_dir=source,
+        )
+        chunks, loaded = load_validated_embedding_generation(
+            generation_dir,
+            active_corpus_dir=source,
+        )
+
+        assert promoted == manifest == loaded
+        assert chunks[0]["text"] == "Evidence A"
+        assert json.loads(canonical_path.read_text(encoding="utf-8"))["text"] == "Evidence A"
+
+
+def test_promotion_rejects_source_drift_before_overwriting_canonical_payload() -> None:
+    with _workspace() as root:
+        source = root / "source"
+        generations = root / "generations"
+        source_path = _write_source(source, "AAPL", [_record("A", "AAPL")])
+        generation_dir, _ = build_embedding_generation(
+            source_dir=source,
+            generations_root=generations,
+            generation_id="generation-001",
+            embedder=_FakeEmbedder(),
+            metadata=_metadata(),
+        )
+        canonical_path = source / "AAPL" / "AAPL_chunks_embedded.jsonl"
+        before = canonical_path.read_bytes()
+        drifted = _record("A", "AAPL")
+        drifted["text"] = "Changed source evidence"
+        source_path.write_text(json.dumps(drifted) + "\n", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="Active source corpus"):
+            promote_embedding_generation(generation_dir, active_corpus_dir=source)
+
+        assert canonical_path.read_bytes() == before
 
 
 def test_generation_fingerprint_excludes_completed_at_and_itself() -> None:

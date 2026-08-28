@@ -47,9 +47,10 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
 11. [ ] Rebuild the Phase 1 retrieval artifact against the PEP-recovery index
         before any future Phase 2 evaluation claim. The prior official Phase
         2 result is bound to the superseded db1e48... corpus.
-12. [x] Conditional TOC-anchor fallback: NVDA and ORCL passed the corrected
-       counterfactual gates and are active in `add_table_chunks`; PEP remains
-       deferred because its tables have no parseable year header.
+12. [x] Conditional TOC-anchor fallback: NVDA, ORCL, AVGO, GS, HD, and PEP
+       are active in `add_table_chunks`; PEP root-anchor recovery yields 29
+       parseable financial tables. Remaining missing-table tickers are CVX,
+       IBM, JPM, and XOM.
 
 ## Always-On Deployment
 

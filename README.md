@@ -101,11 +101,11 @@ Current searchable corpus:
   and `HON`; the FY2026 recovery pass additionally restored
   `financial_statements` for `NOW`, `NVDA`, `ORCL`, and `PEP` plus `mdna`
   for `PFE`.
-- Local Qdrant indexes `9,935` chunks from trusted generation
-  `nomic-e9b6763-fy2026-corpus-recovery-20260826-attempt-01`.
+- Local Qdrant indexes `9,978` chunks from trusted generation
+  `nomic-e9b6763-fy2026-pep-table-recovery-20260828-attempt-01`.
 - Extraction quality is `46` filings with all four target sections and
   `4` degraded but searchable filings (`CVX`, `IBM`, `JPM`, `XOM`).
-- `financial_table` chunks are available for `44` searchable tickers.
+- `financial_table` chunks are available for `46` searchable tickers.
 
 The `/supported-tickers` endpoint returns the live searchable ticker list from embedded chunks, not the full configured list.
 

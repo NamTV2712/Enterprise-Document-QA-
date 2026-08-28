@@ -18,20 +18,23 @@ from scripts.corpus_coverage_matrix import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-# Baseline documented in PROJECT_STATE.md after the FY2026 corpus
-# recovery (generation nomic-e9b6763-fy2026-corpus-recovery-20260826).
+# Baseline documented in PROJECT_STATE.md after the FY2026 PEP table
+# recovery generation.
 EXPECTED_BASELINE = {
     "configured_tickers": 50,
     "searchable_tickers": 50,
     "clean_tickers": 46,
     "degraded_tickers": 4,
     "missing_tickers": 0,
-    "tickers_with_financial_table": 44,
-    "total_chunks": 9947,
+    "tickers_with_financial_table": 46,
+    "total_chunks": 9978,
 }
+EXPECTED_CORPUS_FINGERPRINT = (
+    "sha256:dbfd75d501b5b07d3007ba191127e5f46cc0a9ddb0b3cb44a87867534c7e6fb0"
+)
 EXPECTED_DEGRADED = {"CVX", "IBM", "JPM", "XOM"}
 EXPECTED_NO_TABLE = {
-    "CVX", "HD", "IBM", "JPM", "PEP", "XOM",
+    "CVX", "IBM", "JPM", "XOM",
 }
 
 
@@ -180,6 +183,7 @@ def test_local_corpus_matches_documented_baseline() -> None:
     report = build_coverage_report(_real_corpus_dir())
 
     summary = report["summary"]
+    assert report["corpus_fingerprint"] == EXPECTED_CORPUS_FINGERPRINT
     for key, expected in EXPECTED_BASELINE.items():
         assert summary[key] == expected, (
             f"{key} drifted from documented baseline: "

@@ -20,9 +20,10 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        current support is intentionally limited to explicit financial metrics.
 6. [ ] Keep `/metrics` disabled unless the deployment protects it. Monitor
        429, 5xx, request count, and latency through aggregate telemetry.
-7. [x] Finalize the FY2026 corpus recovery: NOW/NVDA/ORCL financial_statements
-       and PFE mdna restored (46 clean / 4 degraded / 40 table / 9,935 chunks)
-       on trusted generation nomic-e9b6763-fy2026-corpus-recovery-20260826-
+7. [x] Finalize the FY2026 corpus recovery and table fallback: NOW/NVDA/ORCL
+       financial_statements and PFE mdna restored; NVDA/ORCL/AVGO/GS table
+       fallback appended (46 clean / 4 degraded / 44 table / 9,947 chunks) on
+       trusted generation nomic-e9b6763-fy2026-table-fallback-20260827-
        attempt-01; deterministic spot-checks and coverage baseline pinned.
 8. [x] Audit why NVDA, ORCL, and PEP recovered statements still yield zero
        financial_table chunks (statement tables live in layouts the current
@@ -33,18 +34,19 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        - AVGO/HD = `layout_or_exhibit` + `row_filter_miss`
        - GS = `layout_or_exhibit` with stub FS
        - CVX/IBM/JPM/XOM = `financial_statements_missing`
-9. [x] Rebuild the Phase 1 retrieval artifact against the new trusted index
-       before any future Phase 2 evaluation claim. Done offline with
-       determinism verification: artifact 6341419c... bound to corpus
-       e2499754..., 12/12 decomposed evidence_ok; both runners re-pinned.
+9. [x] Rebuild the Phase 1 retrieval artifact against the table-fallback index
+       before Phase 2. Done offline with determinism verification: artifact
+       d91def3d... bound to corpus db1e48..., 12/12 decomposed evidence_ok.
 10. [x] Financial-table remediation order from the read-only audit
         (data/diagnostics/financial_table_audit.json): first extend table
         discovery to reuse the recovery TOC-anchor path for NVDA -> ORCL ->
         PEP; then AVGO/HD window extension plus year-header tolerance; then
         GS exhibit following. CVX/IBM/JPM/XOM stay deferred to the separate
         incorporation-by-reference extraction milestone.
-11. [ ] Rebuild the Phase 1 retrieval artifact against the new trusted index
-        before any future Phase 2 evaluation claim.
+11. [x] Run the official Phase 2 N=30 evaluation on the rebuilt artifact with
+        gpt-oss-120b generation/judging and selective_packed_v1. 30/30
+        generations and judgments completed with no skipped records; metrics
+        are published in README and PROJECT_STATE.
 12. [x] Conditional TOC-anchor fallback: NVDA and ORCL passed the corrected
        counterfactual gates and are active in `add_table_chunks`; PEP remains
        deferred because its tables have no parseable year header.

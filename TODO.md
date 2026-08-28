@@ -76,6 +76,10 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
          Current next step: add priority-3 retrieval cases for CVX/JPM/XOM,
          then decide whether to spend quota on a current-binding priority-2
          Phase 2 run. IBM remains a separate companion-document milestone.
+13. [x] Add six priority-3 hard-group evaluation cases for CVX/JPM/XOM
+        (three fact lookups and three year-over-year multi-hop checks). These
+        cases do not alter the official priority-2 benchmark; run a separate
+        deterministic retrieval replay before any provider evaluation.
 
 ## Always-On Deployment
 

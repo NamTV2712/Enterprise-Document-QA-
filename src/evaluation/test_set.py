@@ -121,6 +121,79 @@ TEST_SET: list[TestCase] = [
         required_keywords=["112,476"],
         priority=3,
     ),
+    TestCase(
+        question="What were Chevron's total assets in fiscal years 2025 and 2024?",
+        category="fact_lookup",
+        ticker="CVX",
+        section="financial_table",
+        ground_truth=(
+            "Chevron's total assets were $324,012 million in 2025 and "
+            "$256,938 million in 2024."
+        ),
+        required_keywords=["324,012", "256,938"],
+        priority=3,
+    ),
+    TestCase(
+        question="What were JPMorgan Chase's total assets in fiscal years 2025 and 2024?",
+        category="fact_lookup",
+        ticker="JPM",
+        section="financial_table",
+        ground_truth=(
+            "JPMorgan Chase's total assets were $4,424,900 million in 2025 "
+            "and $4,002,814 million in 2024."
+        ),
+        required_keywords=["4,424,900", "4,002,814"],
+        priority=3,
+    ),
+    TestCase(
+        question="What were ExxonMobil's total assets in fiscal years 2025 and 2024?",
+        category="fact_lookup",
+        ticker="XOM",
+        section="financial_table",
+        ground_truth=(
+            "ExxonMobil's total assets were $448,980 million in 2025 and "
+            "$453,475 million in 2024."
+        ),
+        required_keywords=["448,980", "453,475"],
+        priority=3,
+    ),
+    TestCase(
+        question="How did Chevron's total assets change from 2024 to 2025?",
+        category="multi_hop",
+        ticker="CVX",
+        section="financial_table",
+        ground_truth=(
+            "Chevron's total assets increased from $256,938 million in 2024 "
+            "to $324,012 million in 2025, an increase of $67,074 million."
+        ),
+        required_keywords=["256,938", "324,012", "67,074"],
+        priority=3,
+    ),
+    TestCase(
+        question="How did JPMorgan Chase's total assets change from 2024 to 2025?",
+        category="multi_hop",
+        ticker="JPM",
+        section="financial_table",
+        ground_truth=(
+            "JPMorgan Chase's total assets increased from $4,002,814 million "
+            "in 2024 to $4,424,900 million in 2025, an increase of "
+            "$422,086 million."
+        ),
+        required_keywords=["4,002,814", "4,424,900", "422,086"],
+        priority=3,
+    ),
+    TestCase(
+        question="How did ExxonMobil's total assets change from 2024 to 2025?",
+        category="multi_hop",
+        ticker="XOM",
+        section="financial_table",
+        ground_truth=(
+            "ExxonMobil's total assets decreased from $453,475 million in 2024 "
+            "to $448,980 million in 2025, a decrease of $4,495 million."
+        ),
+        required_keywords=["453,475", "448,980", "4,495"],
+        priority=3,
+    ),
 
     # Summary: one company, one topic, synthesis over a focused section.
     TestCase(

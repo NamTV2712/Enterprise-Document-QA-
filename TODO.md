@@ -37,7 +37,7 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        - CVX/IBM/JPM/XOM = `financial_statements_missing`
 9. [x] Rebuild the Phase 1 retrieval artifact against the table-fallback index
        before Phase 2. Done offline with determinism verification: artifact
-       d91def3d... bound to corpus db1e48..., 12/12 decomposed evidence_ok.
+       40980956... bound to corpus dbfd75..., 12/12 decomposed evidence_ok.
 10. [x] Financial-table remediation order from the read-only audit
         (data/diagnostics/financial_table_audit.json): first extend table
         discovery to reuse the recovery TOC-anchor path for NVDA -> ORCL ->

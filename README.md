@@ -229,8 +229,10 @@ Corpus provenance for this published table: trusted generation
 `sha256:db1e48…`), Phase 1 artifact `sha256:d91def3d…`, with `9,947` points.
 The local index has since advanced to the PEP-recovery generation
 `nomic-e9b6763-fy2026-pep-table-recovery-20260828-attempt-01` (corpus
-`sha256:dbfd75…`, `9,978` points); rebuild Phase 1 before treating a future
-run as a new official benchmark.
+`sha256:dbfd75…`, `9,978` points). Phase 1 has now been rebuilt against this
+corpus as artifact `sha256:40980956…` with `12/12` decomposed-plan evidence
+checks passing; Phase 2 remains pending a quota-approved run on the new
+binding.
 
 | Metric | Score |
 |---|---:|

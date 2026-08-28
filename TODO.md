@@ -52,6 +52,11 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        are active in `add_table_chunks`; PEP root-anchor recovery yields 29
        parseable financial tables. Remaining missing-table tickers are CVX,
        IBM, JPM, and XOM.
+       - Counterfactual v2 is complete and deterministic: NVDA and ORCL pass
+         via non-overlapping statement-link intervals; PEP correctly fails
+         that route because its Item-8/Item-9 pair is a TOC boundary. Audit
+         the quality of PEP's separate 29-table root-anchor fallback before
+         altering production discovery again.
 
 ## Always-On Deployment
 

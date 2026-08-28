@@ -21,10 +21,11 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
 6. [ ] Keep `/metrics` disabled unless the deployment protects it. Monitor
        429, 5xx, request count, and latency through aggregate telemetry.
 7. [x] Finalize the FY2026 corpus recovery and table fallback: NOW/NVDA/ORCL
-       financial_statements and PFE mdna restored; NVDA/ORCL/AVGO/GS table
-       fallback appended (46 clean / 4 degraded / 44 table / 9,947 chunks) on
-       trusted generation nomic-e9b6763-fy2026-table-fallback-20260827-
-       attempt-01; deterministic spot-checks and coverage baseline pinned.
+       financial_statements and PFE mdna restored; NVDA/ORCL/AVGO/GS/PEP/HD
+       table fallback appended (46 clean / 4 degraded / 46 table / 9,978
+       chunks) on trusted generation nomic-e9b6763-fy2026-pep-table-recovery-
+       20260828-attempt-01; deterministic spot-checks and coverage baseline
+       pinned.
 8. [x] Audit why NVDA, ORCL, and PEP recovered statements still yield zero
        financial_table chunks (statement tables live in layouts the current
        table extractor misses); same audit covers AVGO, GS, and HD.
@@ -43,10 +44,9 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
         PEP; then AVGO/HD window extension plus year-header tolerance; then
         GS exhibit following. CVX/IBM/JPM/XOM stay deferred to the separate
         incorporation-by-reference extraction milestone.
-11. [x] Run the official Phase 2 N=30 evaluation on the rebuilt artifact with
-        gpt-oss-120b generation/judging and selective_packed_v1. 30/30
-        generations and judgments completed with no skipped records; metrics
-        are published in README and PROJECT_STATE.
+11. [ ] Rebuild the Phase 1 retrieval artifact against the PEP-recovery index
+        before any future Phase 2 evaluation claim. The prior official Phase
+        2 result is bound to the superseded db1e48... corpus.
 12. [x] Conditional TOC-anchor fallback: NVDA and ORCL passed the corrected
        counterfactual gates and are active in `add_table_chunks`; PEP remains
        deferred because its tables have no parseable year header.

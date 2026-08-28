@@ -217,17 +217,20 @@ LLM provider:
 
 ## Evaluation Results
 
-Official benchmark: the latest two-phase pipeline (offline Phase 1 frozen
+Published benchmark: the two-phase pipeline (offline Phase 1 frozen
 retrieval artifact, then frozen-evidence generation and judging) over all
 `30` priority <= 2 cases, using `openai/gpt-oss-120b` for BOTH generation
 and judging. All `30` generations and `30` judgments completed OK with no
 skipped records, no parse failures, and one shared binding. Contexts are
 rendered under `selective_packed_v1`, a route-aware packing strategy that
 kept every pre-registered merge gate (see below).
-Corpus provenance: trusted generation
+Corpus provenance for this published table: trusted generation
 `nomic-e9b6763-fy2026-table-fallback-20260827-attempt-01` (corpus
-`sha256:db1e48…`), Phase 1 artifact `sha256:d91def3d…`, with the local
-index at `9,947` points. The earlier corpus score table remains historical.
+`sha256:db1e48…`), Phase 1 artifact `sha256:d91def3d…`, with `9,947` points.
+The local index has since advanced to the PEP-recovery generation
+`nomic-e9b6763-fy2026-pep-table-recovery-20260828-attempt-01` (corpus
+`sha256:dbfd75…`, `9,978` points); rebuild Phase 1 before treating a future
+run as a new official benchmark.
 
 | Metric | Score |
 |---|---:|

@@ -226,14 +226,14 @@ and judging. All `30` generations and `30` judgments completed OK with no
 skipped records, no parse failures, and one shared binding. Contexts are
 rendered under `selective_packed_v1`, a route-aware packing strategy that
 kept every pre-registered merge gate (see below).
-Corpus provenance for this published table: trusted generation
-`nomic-e9b6763-fy2026-table-fallback-20260827-attempt-01` (corpus
-`sha256:db1e48…`), Phase 1 artifact `sha256:d91def3d…`, with `9,947` points.
-The local index and evaluation now use the PEP-recovery generation
-`nomic-e9b6763-fy2026-pep-table-recovery-20260828-attempt-01` (corpus
-`sha256:dbfd75…`, `9,978` points). Phase 1 artifact `sha256:40980956…` has
-`12/12` decomposed-plan evidence checks passing, and the official Phase 2 run
-completed `30/30` generations plus `30/30` judgments under the new binding.
+The published table is historical: it binds the prior 9,978-point corpus.
+The active local index uses hard-group generation
+`nomic-e9b6763-fy2026-hard-group-table-recovery-20260828-attempt-01` (corpus
+`sha256:91828b…`, `10,021` points). Its offline, byte-deterministic Phase 1
+artifact `sha256:acc61c63…` completes all 30 cases with 61 non-empty queries
+and `12/12` decomposed-plan evidence checks. No Phase 2 provider run has been
+made on this new binding, so the table below must not be interpreted as its
+current-corpus benchmark.
 
 | Metric | Score |
 |---|---:|

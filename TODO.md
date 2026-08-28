@@ -57,6 +57,10 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
          that route because its Item-8/Item-9 pair is a TOC boundary. Audit
          the quality of PEP's separate 29-table root-anchor fallback before
          altering production discovery again.
+       - Quality audit complete: all 29 canonical PEP table chunks reproduce
+         exactly; five are primary statements, ten are supporting financial
+         tables, and fourteen are financial notes. Keep the current fallback
+         unchanged; it has the intended statement coverage.
 
 ## Always-On Deployment
 

@@ -217,7 +217,7 @@ LLM provider:
 
 ## Evaluation Results
 
-Published benchmark: the two-phase pipeline (offline Phase 1 frozen
+Official benchmark: the two-phase pipeline (offline Phase 1 frozen
 retrieval artifact, then frozen-evidence generation and judging) over all
 `30` priority <= 2 cases, using `openai/gpt-oss-120b` for BOTH generation
 and judging. All `30` generations and `30` judgments completed OK with no
@@ -227,19 +227,18 @@ kept every pre-registered merge gate (see below).
 Corpus provenance for this published table: trusted generation
 `nomic-e9b6763-fy2026-table-fallback-20260827-attempt-01` (corpus
 `sha256:db1e48…`), Phase 1 artifact `sha256:d91def3d…`, with `9,947` points.
-The local index has since advanced to the PEP-recovery generation
+The local index and evaluation now use the PEP-recovery generation
 `nomic-e9b6763-fy2026-pep-table-recovery-20260828-attempt-01` (corpus
-`sha256:dbfd75…`, `9,978` points). Phase 1 has now been rebuilt against this
-corpus as artifact `sha256:40980956…` with `12/12` decomposed-plan evidence
-checks passing; Phase 2 remains pending a quota-approved run on the new
-binding.
+`sha256:dbfd75…`, `9,978` points). Phase 1 artifact `sha256:40980956…` has
+`12/12` decomposed-plan evidence checks passing, and the official Phase 2 run
+completed `30/30` generations plus `30/30` judgments under the new binding.
 
 | Metric | Score |
 |---|---:|
-| Faithfulness | `0.5853` |
-| Answer relevancy | `0.9133` |
-| Context precision | `0.4227` |
-| Overall judge average | `0.6404` |
+| Faithfulness | `0.5983` |
+| Answer relevancy | `0.9200` |
+| Context precision | `0.3983` |
+| Overall judge average | `0.6389` |
 | Citation correctness | `1.0000` |
 | Recall proxy | `1.0000` |
 | Fallback accuracy | `1.0000` |
@@ -249,11 +248,11 @@ Category table (faithfulness / relevancy / precision):
 | Category | N | Scores |
 |---|---:|---|
 | fact_lookup | 8 | `0.6875 / 1.0000 / 0.3850` |
-| summary | 6 | `0.4167 / 0.8750 / 0.6467` |
-| enumeration | 4 | `0.5225 / 0.8625 / 0.3500` |
-| comparative | 6 | `0.4450 / 0.7833 / 0.3867` |
+| summary | 6 | `0.4917 / 0.9000 / 0.6050` |
+| enumeration | 4 | `0.3925 / 0.8750 / 0.3050` |
+| comparative | 6 | `0.5383 / 0.7833 / 0.3367` |
 | multi_hop | 3 | `0.6667 / 1.0000 / 0.6667` |
-| out_of_corpus | 3 | `0.9333 / 1.0000 / 0.0000` |
+| out_of_corpus | 3 | `0.8000 / 1.0000 / 0.0000` |
 
 Context-packing A/B (same frozen Phase 1 artifact, paired per-case,
 pre-registered merge gates): packing only the `fact_lookup`, `multi_hop`,

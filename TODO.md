@@ -44,9 +44,10 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
         PEP; then AVGO/HD window extension plus year-header tolerance; then
         GS exhibit following. CVX/IBM/JPM/XOM stay deferred to the separate
         incorporation-by-reference extraction milestone.
-11. [ ] Rebuild the Phase 1 retrieval artifact against the PEP-recovery index
-        before any future Phase 2 evaluation claim. The prior official Phase
-        2 result is bound to the superseded db1e48... corpus.
+11. [x] Rebuild Phase 1 and run the official Phase 2 N=30 evaluation against
+        the PEP-recovery index. Artifact 40980956... is deterministic with
+        12/12 evidence_ok; Phase 2 completed 30/30 generation and 30/30
+        judging with no skipped or parse-invalid records.
 12. [x] Conditional TOC-anchor fallback: NVDA, ORCL, AVGO, GS, HD, and PEP
        are active in `add_table_chunks`; PEP root-anchor recovery yields 29
        parseable financial tables. Remaining missing-table tickers are CVX,

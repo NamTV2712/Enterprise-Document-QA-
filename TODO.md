@@ -66,11 +66,13 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
          IBM requires a separate Annual Report to Stockholders. Fresh sections
          are rejected as contaminated MD&A suffixes; implement no resolver
          until a read-only interval counterfactual passes clean-boundary gates.
-       - Interval counterfactual complete: CVX (33 tables), XOM (4), and JPM
+       - Same-document resolver complete: CVX (33 tables), XOM (4), and JPM
          (6) pass deterministic clean-boundary, fiscal-year, primary-statement,
-         de-duplication, and contamination gates. Next: implement and test a
-         generic same-document resolver for these three tickers only, starting
-         with fixtures and a dry run. IBM remains a separate companion-document
+         de-duplication, and contamination gates. The resolver is enabled only
+         for those three tickers and a read-only dry run reproduces those counts
+         with unique IDs. Next: explicitly authorize the data rebuild pipeline
+         (`add_table_chunks`, embedding generation, and index rebuild) before
+         changing served coverage. IBM remains a separate companion-document
          extraction milestone.
 
 ## Always-On Deployment

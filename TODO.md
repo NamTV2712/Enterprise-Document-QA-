@@ -142,9 +142,15 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        zero required-term regressions, 59 unhinted queries byte-stable, and
        both hinted AWS queries retaining fact evidence at rank 1. Fuzzy is
        ticker-scoped, last-resort, length-guarded, and threshold-guarded.
-26. [ ] Rebuild the schema-v2 Phase 1 artifact offline with shaper and lexical-
+26. [x] Rebuild the schema-v2 Phase 1 artifact offline with shaper and lexical-
        ladder fingerprints, verify byte determinism and decomposed evidence
        coverage, then pin the new artifact before any provider-backed Phase 2.
+       Artifact `sha256:3f02a791…` covers 30/30 cases and 61 non-empty
+       queries, has zero ticker leakage, and passes `12/12 evidence_ok`; all
+       Phase 2-derived runners now pin it. No provider call was made.
+27. [ ] Pre-register and run comparative packing v3 offline against the new
+       artifact, preserving 30/30 evidence coverage and source boundaries
+       before any small provider A/B is authorized.
 
 ## Always-On Deployment
 

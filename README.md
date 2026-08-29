@@ -232,12 +232,14 @@ rendered under `selective_packed_v1`, a route-aware packing strategy that
 kept every pre-registered merge gate (see below).
 The active local index uses the IBM companion-recovery generation
 `nomic-e9b6763-fy2026-ibm-companion-20260829` (corpus
-`sha256:1d5b99ed…`, `10,053` points). Its offline, byte-deterministic Phase 1
-artifact `sha256:8283b628…` completes all 30 priority <= 2 cases with 61
-non-empty queries and `12/12` decomposed-plan evidence checks. The separate
-priority-3 replay covers 22 recovery cases at keyword recall `1.0000`. The
-The current-corpus Phase 2 run completed officially with one binding and no
-skipped or failed records. The judge was rerun after correcting a context
+`sha256:1d5b99ed…`, `10,053` points). The published Phase 2 scores remain bound
+to the historical schema-v1 Phase 1 artifact `sha256:8283b628…`, which
+completed all 30 priority <= 2 cases with 61 non-empty queries. A later
+fact-specific audit correctly classifies its AWS comparative branch as the one
+retrieval miss (`11/12 evidence_ok`). The separate priority-3 replay covers 22
+recovery cases at keyword recall `1.0000`. The current-corpus Phase 2 run
+completed officially with one binding and no skipped or failed records. The
+judge was rerun after correcting a context
 boundary bug that could split SEC chunks at internal blank lines; the judge
 checkpoint now fingerprints this renderer. The three-case probe was run first
 as a quota preflight and remains non-official self-judge evidence.
@@ -263,7 +265,7 @@ Category table (faithfulness / relevancy / precision):
 | multi_hop | 3 | `1.0000 / 1.0000 / 0.8333` |
 | out_of_corpus | 3 | `0.8333 / 0.9667 / 0.0000` |
 
-Current-corpus binding: artifact `sha256:8283b628…`, Phase 2 binding
+Official historical binding: artifact `sha256:8283b628…`, Phase 2 binding
 `sha256:680e0370…`, with `30/30` generation and `30/30` judgment records.
 Deterministic checks remain citation correctness `1.0000` (`29` scored cases),
 recall proxy `1.0000` (`24` scored cases), and fallback accuracy `1.0000`.
@@ -283,9 +285,8 @@ query retrieved the correct chunk at rank 1 with both `107,556` and `128,725`.
 The Phase 1 executor now applies the same shaper and records both the original
 effective query and actual retrieval query. Artifact schema v2 fingerprints the
 shaper rules; Phase 2, the quota probe, and the answer sentinel refuse a Phase
-1 artifact without the matching provenance. The current `sha256:8283b628…`
-artifact therefore remains a historical benchmark binding and must be rebuilt
-before any new Phase 2 result is run or compared. The offline 61-subquery A/B
+1 artifact without the matching provenance. The `sha256:8283b628…` artifact
+therefore remains a historical benchmark binding. The offline 61-subquery A/B
 shaped only two AWS queries, introduced zero ticker leaks or required-term
 regressions, and serialized byte-identically across repeated runs.
 A field-aware lexical ladder now consumes only explicit shaper hints and merges
@@ -296,6 +297,15 @@ leaks, zero required-term regressions, and byte-identical reports across two
 runs. The 59 unhinted queries remained byte-stable, while both AWS queries kept
 the fact-bearing chunk at rank 1. Artifact provenance now binds both shaper and
 ladder fingerprints.
+
+The active offline Phase 1 artifact is now schema v2
+`sha256:3f02a791b808…` (file SHA-256 `d71d3651aa0f…`). It was rebuilt twice
+with byte-identical output over 30 cases and 61 non-empty queries. Ticker
+leakage is zero, the AWS comparative branch stores the shaped retrieval query
+and retrieves `mdna_0012` at rank 1 with both required values, and the
+decomposed evidence audit passes `12/12`. Phase 2 runners pin this artifact,
+but no provider-backed Phase 2 result exists on it yet; the published scores
+above remain bound to the historical artifact.
 
 Historical context-packing A/B (the pre-registration and confirmatory run used
 the prior frozen Phase 1 artifact, paired per-case,

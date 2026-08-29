@@ -20,8 +20,8 @@ fiscal years. The original query retrieved no chunk containing either
 `AMZN_000101872426000004_mdna_0012` at rank 1 with both values. The decomposed
 evidence audit now pins those two values for the AWS/cloud comparison and
 correctly reports `11 evidence_ok / 1 retrieval_miss` on the frozen artifact.
-This is a retrieval-plan finding, not a provider failure; the next step is a
-field-aware lexical candidate ladder and RRF counterfactual.
+This is a retrieval-plan finding, not a provider failure; it motivated the
+field-aware lexical candidate ladder and RRF counterfactual recorded below.
 
 The Phase 1 provenance milestone is now complete without changing generated
 `data/` artifacts. Phase 1 applies the identical query shaper used in direct
@@ -30,9 +30,9 @@ records the shaped retrieval query. Artifact schema v2 contains a deterministic
 query-shaper fingerprint, and all Phase 2-derived runners reject artifacts that
 lack or mismatch that fingerprint. A 61-subquery local A/B shaped exactly two
 AWS queries, found zero ticker leaks and zero required-term regressions, and
-produced byte-identical reports over repeated runs. The legacy Phase 1 artifact
-is intentionally no longer eligible for new Phase 2/provider work; rebuild it
-with the verified Phase 1 command before pinning a new benchmark binding.
+produced byte-identical reports over repeated runs. This made the legacy Phase
+1 artifact ineligible for new Phase 2/provider work; the required schema-v2
+rebuild and new benchmark pin are recorded below.
 
 The field-aware lexical-ladder milestone is implemented and admitted to RRF
 after its offline gate passed. The ladder consumes only explicit shaper hints,
@@ -49,6 +49,20 @@ The ladder fingerprint is
 `sha256:f64e361759928a14705bbd264c1854b378483f716b91a4379718f00d9d774ece`
 and is now required by every Phase 2-derived runner. No generated artifact or
 provider benchmark was changed in this milestone.
+
+Phase 1 has since been rebuilt offline against the admitted shaper and lexical
+ladder. Two executions serialized byte-identically as schema-v2 artifact
+`sha256:3f02a791b808310d3e9abd10dde7989fcce62e7474f60410ead844eddb14b86e`
+(file SHA-256
+`d71d3651aa0f6def66e0d9b9e26c2a1c41f1e8a69b75a4b3be900931127ddf6b`).
+It covers 30/30 cases and 61 non-empty queries with zero ticker leakage. The
+AWS comparative AMZN branch records retrieval query
+`Amazon AWS growth 2025 2024 AWS net sales`, ranks
+`AMZN_000101872426000004_mdna_0012` first, and contains both `107,556` and
+`128,725`; the decomposed audit is restored to `12/12 evidence_ok`. Phase 2,
+quota probe, and sentinel pins now target this artifact. The prior artifact was
+preserved locally as `phase1_priority2_8283b628_historical.json`. No Groq call
+or Phase 2 generation/judging was made.
 
 The six-case sentinel has now completed with `6/6` generation and judge calls
 successful. Against the frozen baseline, legacy line citations fell from `1`

@@ -276,6 +276,13 @@ answers for canonical citations, source-range validity, legacy line citations,
 and numeric claims absent from cited evidence. Its review flags are diagnostic
 and are intentionally not substituted for semantic judge scores.
 
+The current retrieval follow-up includes a shared deterministic query shaper
+for direct and decomposed paths. In an offline counterfactual, the original
+`Amazon AWS growth` query missed the AWS FY2024/FY2025 values, while the shaped
+query retrieved the correct chunk at rank 1 with both `107,556` and `128,725`.
+The next lexical-search experiment is gated and must preserve ticker isolation
+and recall before it can change the production candidate set.
+
 Historical context-packing A/B (the pre-registration and confirmatory run used
 the prior frozen Phase 1 artifact, paired per-case,
 pre-registered merge gates): packing only the `fact_lookup`, `multi_hop`,

@@ -52,6 +52,13 @@ EXPECTED_FACT_OVERRIDES: dict[str, tuple[str, ...]] = {
         "391,035",   # Apple FY2024 total net sales (fact_lookup GT)
         "637,959",   # Amazon FY2024 consolidated net sales (fact_lookup GT)
     ),
+    # The qualitative ground truth is intentionally broad, but a growth
+    # comparison is not evidence-complete unless the underlying AWS FY2024 /
+    # FY2025 values are present in the Amazon branch context.
+    "How does Amazon's AWS segment compare to Microsoft's cloud business in terms of growth?": (
+        "107,556",
+        "128,725",
+    ),
 }
 
 

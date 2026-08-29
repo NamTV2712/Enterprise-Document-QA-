@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 
 from configs.tickers import TICKERS
 from src.retrieval.retriever import RetrievedChunk
+from src.retrieval.query_shaper import shape_retrieval_query
 
 logger = logging.getLogger(__name__)
 
@@ -327,15 +328,16 @@ class QueryDecomposer:
         (Qdrant + cross-encoder inference)."""
         def retrieve_one(sq: SubQuery) -> SubQuery:
             try:
+                shaped = shape_retrieval_query(sq.query)
                 sq.retrieved_chunks = self.retriever.retrieve(
-                    query=sq.query,
+                    query=shaped.retrieval_query,
                     top_k=top_k,
                     ticker=sq.ticker,
                     section=sq.section,
                 )
                 logger.info(
                     "Sub-query '%s...' -> %d chunks",
-                    sq.query[:40], len(sq.retrieved_chunks)
+                    shaped.retrieval_query[:60], len(sq.retrieved_chunks)
                 )
             except Exception:
                 logger.exception(

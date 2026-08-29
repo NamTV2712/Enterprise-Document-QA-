@@ -12,6 +12,17 @@ and a fallback that does not claim irrelevant retrieved sections are relevant.
 The six flagged answers are reserved for a quota-gated sentinel rerun before any
 full benchmark rerun; diagnostic flags do not alter official judge scores.
 
+The first retrieval-side improvement is now validated offline. A shared
+deterministic query shaper is used by direct and decomposed paths; for
+`Amazon AWS growth`, it appends filing-native `AWS net sales` vocabulary and
+fiscal years. The original query retrieved no chunk containing either
+`107,556` or `128,725`, while the shaped query retrieved
+`AMZN_000101872426000004_mdna_0012` at rank 1 with both values. The decomposed
+evidence audit now pins those two values for the AWS/cloud comparison and
+correctly reports `11 evidence_ok / 1 retrieval_miss` on the frozen artifact.
+This is a retrieval-plan finding, not a provider failure; the next step is a
+field-aware lexical candidate ladder and RRF counterfactual.
+
 The six-case sentinel has now completed with `6/6` generation and judge calls
 successful. Against the frozen baseline, legacy line citations fell from `1`
 case to `0`, uncited non-fallback answers fell from `2` to `0`, and numeric

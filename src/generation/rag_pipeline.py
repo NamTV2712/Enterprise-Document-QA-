@@ -11,6 +11,7 @@ from src.generation.generator import Generator, RAGResponse
 from src.memory.conversation_memory import ConversationMemory, Turn
 from src.memory.query_rewriter import QueryRewriter
 from src.retrieval.hybrid_retriever import HybridRetriever
+from src.retrieval.query_shaper import shape_retrieval_query
 from src.retrieval.retriever import RetrievedChunk
 from src.retrieval.semantic_cache import CacheEntry, SemanticCache
 
@@ -126,7 +127,8 @@ class RAGPipeline:
             history_messages = self._history_messages(session_id)
 
         effective_query = self.rewriter.rewrite(question, history_messages)
-        query_embedding = self._embed_query_once(effective_query)
+        retrieval_query = shape_retrieval_query(effective_query).retrieval_query
+        query_embedding = self._embed_query_once(retrieval_query)
 
         if not session_id:
             cached = self.cache.get(query_embedding, ticker, section, top_k)
@@ -138,7 +140,7 @@ class RAGPipeline:
                 )
 
         chunks = self._retrieve_with_optional_embedding(
-            question=effective_query,
+            question=retrieval_query,
             query_embedding=query_embedding,
             top_k=top_k,
             ticker=ticker,
@@ -196,10 +198,11 @@ class RAGPipeline:
                 history_messages = self._history_messages(session_id)
 
             effective_query = self.rewriter.rewrite(question, history_messages)
+            retrieval_query = shape_retrieval_query(effective_query).retrieval_query
             if cancel_event is not None and cancel_event.is_set():
                 return
 
-            query_embedding = self._embed_query_once(effective_query)
+            query_embedding = self._embed_query_once(retrieval_query)
             if cancel_event is not None and cancel_event.is_set():
                 return
 
@@ -219,7 +222,7 @@ class RAGPipeline:
                     return
 
             chunks = self._retrieve_with_optional_embedding(
-                question=effective_query,
+                question=retrieval_query,
                 query_embedding=query_embedding,
                 top_k=top_k,
                 ticker=ticker,

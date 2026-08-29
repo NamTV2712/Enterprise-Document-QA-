@@ -123,6 +123,14 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
 22. [ ] Pre-register a comparative packing v3 gate: preserve 30/30 evidence
        coverage and source boundaries while reducing rendered context tokens;
        only then test a provider A/B on comparative sentinel cases.
+23. [x] Add the first shared deterministic query shaper and validate the AWS
+       counterfactual: the original `Amazon AWS growth` query misses both
+       required AWS values, while the shaped query retrieves them in rank 1.
+       The decomposed audit now correctly classifies the old frozen case as
+       `retrieval_miss` instead of `evidence_ok`.
+24. [ ] Extend the shaper into a field-aware lexical ladder (`exact_phrase`,
+       `full_terms`, `partial_terms`, then guarded `fuzzy`) and merge its
+       candidates into RRF only after offline ticker/recall gates pass.
 
 ## Always-On Deployment
 

@@ -57,6 +57,21 @@ def test_judge_binding_changes_with_completion_cap() -> None:
     assert with_default_cap != with_other_cap
 
 
+def test_judge_binding_changes_with_context_builder() -> None:
+    base = dict(
+        generation_binding="sha256:g",
+        generation_answer_sha256s="sha256:a",
+        judge_model="openai/gpt-oss-120b",
+        judge_prompt_template_sha256="sha256:t",
+    )
+
+    assert compute_judge_binding(
+        **base, judge_context_fingerprint="sha256:old"
+    ) != compute_judge_binding(
+        **base, judge_context_fingerprint="sha256:new"
+    )
+
+
 def test_citation_metric_accepts_cjk_brackets() -> None:
     ascii_answer = "Revenue was $100 [Source 1] and grew [Source 2]."
     cjk_answer = "Revenue was $100 【Source 1】 and grew 【Source 2】."

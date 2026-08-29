@@ -24,6 +24,12 @@ from src.evaluation.judge_checkpoint import (
     JudgeCheckpointStore,
     JudgeParseErrorStub,
 )
+from src.evaluation.phase2_runtime import (
+    JUDGE_CONTEXT_BUILDER_FINGERPRINT,
+    build_production_judge_prompt,
+    generation_pool_keys,
+    judging_pool_keys,
+)
 
 PIN = "sha256:" + "0" * 64
 
@@ -376,3 +382,40 @@ def test_compute_case_metrics_handles_missing_citations() -> None:
     assert metrics["recall_proxy"] == 1.0
     # No fallback phrase while fallback is not expected: correct behavior.
     assert metrics["fallback_correct"] is True
+
+
+def test_production_judge_prompt_preserves_source_boundaries_and_blank_lines() -> None:
+    evidence = (
+        "[Source 1] AAPL 10-K\n"
+        "First paragraph with 391,035.\n\n"
+        "Second paragraph with the same source.\n\n"
+        "[Source 2] AMZN 10-K\n"
+        "AWS net sales were 107,556.\n\n"
+        "The next paragraph remains source two."
+    )
+
+    prompt = build_production_judge_prompt(
+        "What were the sales?", "The answer [Source 1].", evidence, "truth"
+    )
+
+    assert prompt.count("[Chunk ") == 2
+    assert "[Chunk 1] AAPL 10-K" in prompt
+    assert "First paragraph with 391,035.\n\nSecond paragraph" in prompt
+    assert "[Chunk 2] AMZN 10-K" in prompt
+    assert "AWS net sales were 107,556.\n\nThe next paragraph" in prompt
+
+
+def test_phase2_pools_append_key3_after_existing_keys(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from configs.settings import settings
+
+    monkeypatch.setattr(settings, "groq_api_key", "primary-1")
+    monkeypatch.setattr(settings, "groq_api_key2", "primary-2")
+    monkeypatch.setattr(settings, "groq_api_key3", "primary-3")
+    monkeypatch.setattr(settings, "groq_api_key_fall_back", "fallback-1")
+    monkeypatch.setattr(settings, "groq_api_key_fall_back2", "fallback-2")
+
+    assert generation_pool_keys() == ["fallback-1", "fallback-2", "primary-3"]
+    assert judging_pool_keys() == ["primary-1", "primary-2", "primary-3"]
+    assert JUDGE_CONTEXT_BUILDER_FINGERPRINT.startswith("sha256:")

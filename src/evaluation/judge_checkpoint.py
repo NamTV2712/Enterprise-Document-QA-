@@ -27,7 +27,7 @@ from src.evaluation.evaluator import JUDGE_MAX_TOKENS
 
 logger = logging.getLogger(__name__)
 
-JUDGE_SCHEMA_VERSION = 1
+JUDGE_SCHEMA_VERSION = 2
 JUDGE_STATUS_OK = "OK"
 JUDGE_STATUS_PARSE_INVALID = "JUDGE_PARSE_INVALID"
 JUDGE_STATUS_SKIPPED_QUOTA = "JUDGE_SKIPPED_QUOTA"
@@ -39,6 +39,7 @@ def compute_judge_binding(
     judge_model: str,
     judge_prompt_template_sha256: str,
     judge_max_tokens: int = JUDGE_MAX_TOKENS,
+    judge_context_fingerprint: str = "legacy-context-builder",
 ) -> str:
     """Identity tying judge scores to exactly these generated answers.
 
@@ -53,6 +54,7 @@ def compute_judge_binding(
         "judge_model": judge_model,
         "judge_prompt_template_sha256": judge_prompt_template_sha256,
         "judge_max_tokens": judge_max_tokens,
+        "judge_context_fingerprint": judge_context_fingerprint,
     }
     return sha256_text(json.dumps(payload, sort_keys=True))
 
@@ -107,6 +109,7 @@ def run_judge_phase(
     sleep_fn: Callable[[float], None] = time.sleep,
     judge_prompt_builder: Callable[[str, str, str, str], str] | None = None,
     judge_max_tokens: int = JUDGE_MAX_TOKENS,
+    judge_context_fingerprint: str = "legacy-context-builder",
 ) -> list[dict[str, Any]]:
     """Judge frozen answers; ``judge_fn`` is the only provider touchpoint.
 
@@ -146,6 +149,7 @@ def run_judge_phase(
         judge_model=judge_model,
         judge_prompt_template_sha256=judge_prompt_template_sha256,
         judge_max_tokens=judge_max_tokens,
+        judge_context_fingerprint=judge_context_fingerprint,
     )
 
     done = checkpoint_store.load_compatible(binding)
@@ -210,6 +214,7 @@ def run_judge_phase(
             "model": judge_model,
             "judge_prompt_template_sha256": judge_prompt_template_sha256,
             "judge_max_tokens": judge_max_tokens,
+            "judge_context_fingerprint": judge_context_fingerprint,
         }
         if scores is not None:
             record.update({"status": JUDGE_STATUS_OK, "scores": scores})

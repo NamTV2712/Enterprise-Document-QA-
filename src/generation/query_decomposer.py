@@ -60,9 +60,10 @@ For CASE 1, return one sub-query per company:
   {"query": "...", "ticker": "MSFT", "section": "..."}
 ]}
 
-For CASE 2, return 3-5 sub-queries, SAME ticker, each targeting a distinct topic/category
-you infer from general knowledge of what such enumeration usually includes for that
-type of company:
+For CASE 2, return 3-5 sub-queries, SAME ticker, each targeting a distinct
+filing-native topic/category. Use only concepts named or strongly implied by
+the question; do not invent a category list from general knowledge. The final
+answer must include only categories actually supported by retrieved excerpts:
 {"needs_decomposition": true, "sub_queries": [
   {"query": "specific sub-topic 1", "ticker": "MSFT", "section": "business"},
   {"query": "specific sub-topic 2", "ticker": "MSFT", "section": "business"},
@@ -99,10 +100,18 @@ SEC 10-K filings to answer a comparative or multi-part question.
 
 Rules:
 1. Use ONLY information from the provided context sections.
-2. Clearly attribute information to the correct company using [Source N].
+2. Cite every factual claim with canonical [Source N] markers. Never use
+   line-number citations such as 【1†L1-L3】.
 3. When comparing companies, structure your answer to make the comparison clear.
 4. If information for one company is missing, explicitly state it.
-5. Do not speculate or use external knowledge."""
+5. Quote numbers exactly as shown in the context, including currency, sign,
+   period, and fiscal year. Do not calculate or invent a derived number unless
+   the underlying values are explicitly cited.
+6. Do not add categories or details merely because they are common for the
+   company; include only evidence-supported items.
+7. If the context is insufficient, say you cannot find sufficient information
+   without presenting retrieved sources as relevant.
+8. Do not speculate or use external knowledge."""
 
 
 @dataclass

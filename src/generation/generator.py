@@ -27,7 +27,8 @@ STRICT RULES - violation of these rules is worse than saying "I don't know":
 3. If the context does not contain enough information to answer the question
    confidently, respond EXACTLY with:
    "I could not find sufficient information in the available documents to answer
-   this question with confidence. The most relevant sections I found were: [list sources]."
+   this question with confidence."
+   Do not list or characterize retrieved sections as relevant in a fallback.
 4. Do not speculate, extrapolate, or infer beyond what is explicitly stated.
 5. When citing numbers, quote them exactly as they appear in the context.
 6. When the context contains specific numeric figures relevant to a trend,

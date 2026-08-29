@@ -105,10 +105,22 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        be reused. The corrected official rerun reaches Faithfulness `0.9793`,
        Answer Relevancy `0.9733`, Context Precision `0.6197`, and Overall
        `0.8574` on 30/30 cases.
-19. [ ] Run a fresh deterministic answer/citation review on the corrected
-       benchmark, focusing next on comparative context precision (`0.4533`)
-       and out-of-corpus abstention precision (`0.0000`). Any packing,
-       candidate-pool, or reranker change still requires a pre-registered gate.
+19. [x] Run the deterministic answer-integrity audit on the corrected
+       benchmark. It covers all 30 answers and reports 2 uncited non-fallback
+       answers, 1 legacy line-citation answer, and 4 numeric-review cases.
+       The report is generated offline by
+       `scripts.diagnostics.answer_integrity_audit` and is not folded into
+       official LLM-judge metrics.
+20. [x] Tighten generation and decomposed-synthesis contracts: canonical
+       `[Source N]` citations only, no irrelevant-source fallback claims,
+       exact numeric/period handling, and no general-knowledge category
+       invention during enumeration planning.
+21. [ ] Re-run a quota-gated sentinel set for the six audit-flagged answers;
+       require zero legacy citations, zero uncited in-corpus answers, and no
+       new unsupported numeric claims before any full N=30 rerun.
+22. [ ] Pre-register a comparative packing v3 gate: preserve 30/30 evidence
+       coverage and source boundaries while reducing rendered context tokens;
+       only then test a provider A/B on comparative sentinel cases.
 
 ## Always-On Deployment
 

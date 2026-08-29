@@ -33,8 +33,11 @@ DEFAULT_GENERATION_PROMPT_TEMPLATE = (
     "Context:\n{context_blocks}\n"
     "\n"
     "Question: {question}\n"
-    "Answer with inline [Source N] citations. If the excerpts do not "
-    "contain the answer, say you cannot find it in the filings."
+    "Use only canonical inline [Source N] citations; do not use line-number "
+    "citation formats such as 【1†L1-L3】. Cite every factual claim. Quote "
+    "numeric values exactly as shown, including the period and sign. If the "
+    "excerpts do not contain the answer, say you cannot find it in the filings "
+    "without describing retrieved sources as relevant."
 )
 
 CONTEXT_STRATEGY_FULL_EVIDENCE = "full_evidence_v1"

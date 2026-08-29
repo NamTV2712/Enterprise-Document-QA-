@@ -209,6 +209,10 @@ The generator uses a strict financial analyst prompt:
 - Do not use general knowledge.
 - Do not infer beyond the provided context.
 - Quote numbers exactly as they appear in the retrieved context.
+- Use only canonical `[Source N]` citations; line-number citation formats are
+  invalid. Keep the fiscal period and sign attached to every numeric claim.
+- Do not invent enumeration categories from general knowledge; include only
+  categories supported by the filing excerpts.
 - Return an explicit insufficient-context fallback when evidence is missing.
 
 LLM provider:
@@ -265,6 +269,12 @@ Deterministic checks remain citation correctness `1.0000` (`29` scored cases),
 recall proxy `1.0000` (`24` scored cases), and fallback accuracy `1.0000`.
 Token usage for the judge rerun was `65,435` judging prompt + `15,716`
 judging completion tokens; generation resumed from the existing checkpoint.
+
+An offline answer-integrity audit is available through
+`python -m scripts.diagnostics.answer_integrity_audit`. It checks all 30
+answers for canonical citations, source-range validity, legacy line citations,
+and numeric claims absent from cited evidence. Its review flags are diagnostic
+and are intentionally not substituted for semantic judge scores.
 
 Historical context-packing A/B (the pre-registration and confirmatory run used
 the prior frozen Phase 1 artifact, paired per-case,

@@ -62,6 +62,7 @@ TABLE_RECOVERY_EXPECTATIONS = {
     "CVX": (33, "Consolidated Statement of Income"),
     "JPM": (6, "Consolidated statements of income"),
     "XOM": (4, "CONSOLIDATED STATEMENT OF INCOME"),
+    "IBM": (32, "Consolidated Income Statement"),
 }
 
 

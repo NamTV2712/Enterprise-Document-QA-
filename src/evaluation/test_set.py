@@ -195,6 +195,49 @@ TEST_SET: list[TestCase] = [
         priority=3,
     ),
 
+    TestCase(
+        question="What was IBM's total revenue in fiscal year 2025?",
+        category="fact_lookup",
+        ticker="IBM",
+        section="financial_table",
+        ground_truth="IBM's total revenue was $67,535 million in fiscal year 2025.",
+        required_keywords=["67,535"],
+        priority=3,
+    ),
+    TestCase(
+        question="What was IBM's net income in fiscal year 2025?",
+        category="fact_lookup",
+        ticker="IBM",
+        section="financial_table",
+        ground_truth="IBM's net income was $10,593 million in fiscal year 2025.",
+        required_keywords=["10,593"],
+        priority=3,
+    ),
+    TestCase(
+        question="What were IBM's total assets in fiscal years 2025 and 2024?",
+        category="fact_lookup",
+        ticker="IBM",
+        section="financial_table",
+        ground_truth=(
+            "IBM's total assets were $151,880 million in 2025 and "
+            "$137,175 million in 2024."
+        ),
+        required_keywords=["151,880", "137,175"],
+        priority=3,
+    ),
+    TestCase(
+        question="How did IBM's total revenue change from 2024 to 2025?",
+        category="multi_hop",
+        ticker="IBM",
+        section="financial_table",
+        ground_truth=(
+            "IBM's total revenue increased from $62,753 million in 2024 "
+            "to $67,535 million in 2025, an increase of $4,782 million."
+        ),
+        required_keywords=["62,753", "67,535"],
+        priority=3,
+    ),
+
     # Summary: one company, one topic, synthesis over a focused section.
     TestCase(
         question="Summarize the key risk factors related to competition for Apple.",

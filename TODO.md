@@ -90,6 +90,12 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        corpus, immutable embedding generation, and trusted local index. The
        active generation is `nomic-e9b6763-fy2026-ibm-companion-20260829` at
        10,053 points; coverage is 50/50 tickers with financial-table chunks.
+17. [x] Rebind the deterministic Phase 1 artifact to the IBM companion corpus.
+       The current artifact is `sha256:8283b628…`, with 30/30 priority <= 2
+       cases, 61 non-empty queries, byte-identical determinism, and 12/12
+       decomposed-plan evidence checks. Add IBM priority-3 retrieval contracts
+       and verify the 22-case priority-3 replay at keyword recall `1.0000`.
+       Phase 2 remains intentionally pending on this new binding.
 
 ## Always-On Deployment
 

@@ -30,6 +30,7 @@ CANONICAL_LABELS: dict[str, list[str]] = {
         "commitments and contingencies - total stockholders' equity",
         "commitments and contingencies - total shareholders' equity",
     ],
+    "net income": ["net income"],
 }
 
 AUDITOR_SIGNATURE_KEY = "auditor signature"
@@ -118,14 +119,23 @@ def _caption_text(chunk: dict) -> str:
     return ""
 
 
-def _pick_best_table_match(candidates: list[StructuredMatch]) -> StructuredMatch | None:
+def _pick_best_table_match(
+    candidates: list[StructuredMatch], canonical_key: str
+) -> StructuredMatch | None:
     """Prefer consolidated company-level tables when duplicate total rows exist."""
     if not candidates:
         return None
 
+    preferred_markers = CONSOLIDATED_CAPTION_MARKERS
+    if canonical_key == "net income":
+        preferred_markers = (
+            "consolidated income statement",
+            "consolidated statements of income",
+            "consolidated statement of operations",
+        )
     for candidate in candidates:
         caption = _caption_text(candidate.chunk).lower()
-        if any(marker in caption for marker in CONSOLIDATED_CAPTION_MARKERS):
+        if any(marker in caption for marker in preferred_markers):
             return candidate
     return candidates[0]
 
@@ -177,4 +187,4 @@ def structured_lookup(
                         line=line,
                     )
                 )
-    return _pick_best_table_match(candidates)
+    return _pick_best_table_match(candidates, canonical_key)

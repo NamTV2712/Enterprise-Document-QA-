@@ -228,11 +228,12 @@ rendered under `selective_packed_v1`, a route-aware packing strategy that
 kept every pre-registered merge gate (see below).
 The published table is historical: it binds the prior 9,978-point corpus.
 The active local index uses the IBM companion-recovery generation
-`nomic-e9b6763-fy2026-hard-group-table-recovery-20260828-attempt-01` (corpus
+`nomic-e9b6763-fy2026-ibm-companion-20260829` (corpus
 `sha256:1d5b99ed…`, `10,053` points). Its offline, byte-deterministic Phase 1
-artifact `sha256:acc61c63…` completes all 30 cases with 61 non-empty queries
-and `12/12` decomposed-plan evidence checks. A three-case quota probe passed
-all generation, judging, and FY2024 comparative acceptance checks; it is
+artifact `sha256:8283b628…` completes all 30 priority <= 2 cases with 61
+non-empty queries and `12/12` decomposed-plan evidence checks. The separate
+priority-3 replay covers 22 recovery cases at keyword recall `1.0000`. The
+earlier three-case quota probe belongs to a superseded binding and is
 non-official self-judge evidence. No full N=30 Phase 2 run has been made on
 this new binding, so the table below must not be interpreted as its
 current-corpus benchmark.

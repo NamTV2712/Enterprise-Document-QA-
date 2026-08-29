@@ -15,6 +15,36 @@ def test_detect_structured_total_assets_query():
     assert detect_structured_query("Tell me about assets") is None
 
 
+def test_detect_structured_net_income_query():
+    assert detect_structured_query("What was IBM's net income in 2025?") == "net income"
+
+
+def test_structured_lookup_prefers_consolidated_income_statement_for_net_income():
+    chunks = [
+        {
+            "chunk_id": "cash_flow",
+            "ticker": "IBM",
+            "section": "financial_table",
+            "text": "### Consolidated Statement of Cash Flows\n"
+            "| Metric | 2025 | 2024 |\n|---|---|---|\n"
+            "| Cash flows from operating activities - Net income | 10,593 | 6,023 |",
+        },
+        {
+            "chunk_id": "income_statement",
+            "ticker": "IBM",
+            "section": "financial_table",
+            "text": "### Consolidated Income Statement\n"
+            "| Metric | 2025 | 2024 |\n|---|---|---|\n"
+            "| Net income | 10,593 | 6,023 |",
+        },
+    ]
+
+    match = structured_lookup("What was IBM's net income in 2025?", "IBM", chunks)
+
+    assert match is not None
+    assert match.chunk["chunk_id"] == "income_statement"
+
+
 def test_detect_structured_auditor_query():
     assert detect_structured_query("Who audited Microsoft's financial statements?") == "auditor signature"
     assert detect_structured_query("When was Apple's audit report signed?") == "auditor signature"

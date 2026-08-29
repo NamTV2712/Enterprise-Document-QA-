@@ -101,7 +101,11 @@ class Generator:
             else (
                 [api_key]
                 if api_key
-                else [settings.groq_api_key, settings.groq_api_key2]
+                else [
+                    settings.groq_api_key,
+                    settings.groq_api_key2,
+                    settings.groq_api_key3,
+                ]
             )
         )
         selected_keys = list(dict.fromkeys(key for key in configured_keys if key))

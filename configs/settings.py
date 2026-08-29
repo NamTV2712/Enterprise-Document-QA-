@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     # LLM API keys
     groq_api_key: str = ""
     groq_api_key2: str = ""
+    groq_api_key3: str = ""
     groq_api_key_fall_back: str = ""
     groq_api_key_fall_back2: str = ""
 

@@ -36,6 +36,7 @@ def main() -> int:
     generation_keys = [
         settings.groq_api_key_fall_back,
         settings.groq_api_key_fall_back2,
+        settings.groq_api_key3,
     ]
     if not any(generation_keys):
         generation_keys = [settings.groq_api_key, settings.groq_api_key2]

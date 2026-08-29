@@ -398,6 +398,7 @@ def main() -> None:
     generation_api_keys = [
         settings.groq_api_key_fall_back,
         settings.groq_api_key_fall_back2,
+        settings.groq_api_key3,
     ]
     if not any(generation_api_keys):
         generation_api_keys = [settings.groq_api_key, settings.groq_api_key2]

@@ -51,6 +51,7 @@ from src.evaluation.judge_checkpoint import (
 )
 from src.evaluation.phase2_runtime import (
     PHASE2_MAX_TOKENS,
+    JUDGE_CONTEXT_BUILDER_FINGERPRINT,
     UsageTracker,
     build_production_judge_prompt,
     generation_pool_keys,
@@ -349,6 +350,7 @@ def run_phase2(
                 sleep_fn=sleep_fn,
                 judge_prompt_builder=build_production_judge_prompt,
                 judge_max_tokens=PHASE2_MAX_TOKENS,
+                judge_context_fingerprint=JUDGE_CONTEXT_BUILDER_FINGERPRINT,
             )
             judge_record = judge_out[0]
             judge_records.append({

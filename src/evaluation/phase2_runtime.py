@@ -10,6 +10,7 @@ only from the frozen Phase 1 artifact evidence.
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import Any, Callable
 
@@ -18,9 +19,9 @@ from src.evaluation.evaluator import (
     JUDGE_PROMPT_TEMPLATE,
     JUDGE_SYSTEM_PROMPT,
     JudgeParseError,
-    _extract_relevant_window,
     _parse_judge_response,
 )
+from src.evaluation.generation_checkpoint import sha256_text
 from src.evaluation.judge_checkpoint import JudgeParseErrorStub
 from src.generation.generator import SYSTEM_PROMPT, Generator
 
@@ -32,6 +33,10 @@ logger = logging.getLogger(__name__)
 # The judge binding includes this cap by design: scores produced under
 # different budgets are never mixed.
 PHASE2_MAX_TOKENS = 2048
+JUDGE_CONTEXT_BUILDER_VERSION = 2
+JUDGE_CONTEXT_BUILDER_FINGERPRINT = sha256_text(
+    "judge-source-marker-parser-v2-preserve-internal-blank-lines"
+)
 
 
 class UsageTracker:
@@ -63,15 +68,29 @@ class UsageTracker:
 
 def generation_pool_keys() -> list[str]:
     """Evaluation-generation rotation: dedicated pair, then primary."""
-    keys = [settings.groq_api_key_fall_back, settings.groq_api_key_fall_back2]
-    if not any(keys):
-        keys = [settings.groq_api_key, settings.groq_api_key2]
-    return keys
+    configured = [
+        settings.groq_api_key_fall_back,
+        settings.groq_api_key_fall_back2,
+    ]
+    if not any(configured):
+        configured = [settings.groq_api_key, settings.groq_api_key2]
+    configured.append(settings.groq_api_key3)
+    return list(dict.fromkeys(key for key in configured if key))
 
 
 def judging_pool_keys() -> list[str]:
     """Serving/judging rotation: the primary key pair."""
-    return [settings.groq_api_key, settings.groq_api_key2]
+    return list(
+        dict.fromkeys(
+            key
+            for key in (
+                settings.groq_api_key,
+                settings.groq_api_key2,
+                settings.groq_api_key3,
+            )
+            if key
+        )
+    )
 
 
 def make_generation_call(
@@ -124,14 +143,28 @@ def build_production_judge_prompt(
     question: str, answer: str, evidence_context: str, ground_truth: str
 ) -> str:
     """Production judging instructions over the frozen evidence blocks."""
-    context_texts = [
-        block.split("\n", 1)[1]
-        for block in evidence_context.split("\n\n")
-        if "\n" in block
+    # Evidence chunks can contain arbitrary blank lines. Splitting on blank
+    # lines silently fractures one source into multiple fake chunks and can
+    # discard the exact figures the judge needs. Source markers are the only
+    # structural boundary in the frozen context format.
+    matches = list(
+        re.finditer(
+            r"(?ms)^\[Source (?P<number>\d+)\] (?P<citation>[^\n]*)\n"
+            r"(?P<text>.*?)(?=^\[Source \d+\] |\Z)",
+            evidence_context,
+        )
+    )
+    context_blocks = [
+        (
+            match.group("citation"),
+            match.group("text").rstrip(),
+        )
+        for match in matches
+        if match.group("text").strip()
     ]
     context_str = "\n\n".join(
-        f"[Chunk {i+1}]: {_extract_relevant_window(text, question)}"
-        for i, text in enumerate(context_texts)
+        f"[Chunk {i + 1}] {citation}\n{text}"
+        for i, (citation, text) in enumerate(context_blocks)
     )
     return JUDGE_PROMPT_TEMPLATE.format(
         question=question,

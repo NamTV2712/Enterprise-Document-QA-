@@ -628,7 +628,7 @@ Secrets are loaded from `.env` and should never be committed.
 
 1. Add production logging, quota monitoring, and error alerts before selecting a paid always-on backend.
 2. Add deterministic priority-3 evaluation cases for the recovered hard-group table routes (`CVX`, `JPM`, `XOM`) without changing the official priority-2 set.
-3. Audit IBM's incorporated Annual Report to Stockholders as a separate, read-only companion-document milestone.
+3. Audit IBM's incorporated Annual Report to Stockholders as a separate, read-only companion-document milestone. The current audit is NO-GO because the linked companion document is not present locally.
 4. Revisit permanent hosting only when always-on public availability is required.
 
 ## Why This Project Matters

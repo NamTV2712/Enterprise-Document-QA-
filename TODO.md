@@ -80,6 +80,11 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
         (three fact lookups and three year-over-year multi-hop checks). These
         cases do not alter the official priority-2 benchmark; run a separate
         deterministic retrieval replay before any provider evaluation.
+14. [x] Complete the read-only IBM companion-document audit. The filing
+       references pages 42-116 of the 2025 Annual Report to Stockholders and
+       links `ibm-20251231_d2.htm`, but the companion is absent locally;
+       status is `companion_missing` and production remains NO-GO. Report:
+       `data/diagnostics/ibm_companion_document_audit.json`.
 
 ## Always-On Deployment
 

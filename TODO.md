@@ -162,12 +162,14 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        AWS answer omitted `107,556` and `128,725`. The audit also fixed the
        runner so generation, deterministic metrics, and judging now consume
        the same renderer-bound context; old packing runs are historical only.
-29. [ ] Build comparative packing v4 as an offline counterfactual using branch
-       top 1 plus a query-intent/fact donor instead of blind top 2. Pre-register
-       contracts that retain AMZN's rank-4 security-incidents chunk, Microsoft's
-       rank-3 high-level Cloud growth chunk, both AWS values, and remove the
-       off-topic Apple international-risk rank-2 chunk. Preserve 30/30 evidence
-       and source boundaries with at least 45% comparative token reduction.
+29. [x] Build comparative packing v4 as an offline counterfactual using branch
+       top 1 plus a query-intent/fact donor instead of blind top 2. Two reports
+       are byte-identical and pass 30/30 evidence and source boundaries, 24/24
+       non-comparative byte stability, 6/6 branch contracts, and every pinned
+       A/B finding. AMZN cyber rank 4 and Microsoft Cloud rank 3 are retained,
+       both AWS values remain present, Apple international rank 2 is dropped,
+       and comparative tokens fall `20,939 -> 6,737` (`67.83% >= 45%`). V4
+       remains offline-only; no provider call was made.
 30. [ ] After v4 passes offline, tighten exact numeric-pair prompt adherence and
        run only the AWS sentinel. Require `107,556` and `128,725` in a grounded,
        cited non-fallback answer before another six-case provider A/B.

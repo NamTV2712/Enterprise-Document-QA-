@@ -6,6 +6,7 @@ import pytest
 
 from src.evaluation.context_packing import (
     CONTEXT_STRATEGY_COMPARATIVE_V3,
+    CONTEXT_STRATEGY_COMPARATIVE_V4,
     CONTEXT_STRATEGY_FULL_EVIDENCE,
     CONTEXT_STRATEGY_ROUTE_AWARE,
     PackedContext,
@@ -340,3 +341,127 @@ def test_fact_overrides_do_not_change_historical_route_aware_strategy() -> None:
     )
 
     assert packed.kept_ids == ["AWS_0", "MSFT_0"]
+
+
+def test_comparative_v4_adds_branch_scoped_fact_donor() -> None:
+    case = _case(
+        [
+            {
+                "query": "Amazon cybersecurity risk disclosures",
+                "ticker": "AMZN",
+                "chunks": [
+                    _chunk("AMZN_0", "consumer protection investigation", 3.0, "AMZN"),
+                    _chunk(
+                        "AMZN_1",
+                        "We Could Be Harmed by Data Loss or Other Security Incidents",
+                        1.0,
+                        "AMZN",
+                    ),
+                ],
+            }
+        ],
+        "comparative",
+    )
+    case["question"] = (
+        "Compare the cybersecurity risk disclosures of Apple, Microsoft, and Amazon."
+    )
+
+    packed = pack_case_context(
+        case,
+        strategy=CONTEXT_STRATEGY_COMPARATIVE_V4,
+    )
+
+    assert packed.kept_ids == ["AMZN_0", "AMZN_1"]
+
+
+def test_comparative_v4_adds_generic_query_intent_donor() -> None:
+    case = _case(
+        [
+            {
+                "query": "Example cybersecurity risk",
+                "ticker": "AAPL",
+                "chunks": [
+                    _chunk("A_0", "general legal discussion", 3.0, "AAPL"),
+                    _chunk(
+                        "A_1",
+                        "Cybersecurity threats create security incident risk.",
+                        1.0,
+                        "AAPL",
+                    ),
+                ],
+            }
+        ],
+        "comparative",
+    )
+
+    packed = pack_case_context(
+        case,
+        strategy=CONTEXT_STRATEGY_COMPARATIVE_V4,
+    )
+
+    assert packed.kept_ids == ["A_0", "A_1"]
+
+
+def test_comparative_v4_does_not_keep_blind_second_branch_chunk() -> None:
+    case = _case(
+        [
+            {
+                "query": "Apple international operations risk",
+                "ticker": "AAPL",
+                "chunks": [
+                    _chunk(
+                        "A_0",
+                        "International operations expose Apple to trade risk.",
+                        3.0,
+                        "AAPL",
+                    ),
+                    _chunk("A_1", "General product competition.", 2.0, "AAPL"),
+                ],
+            },
+            {
+                "query": "Amazon international operations risk",
+                "ticker": "AMZN",
+                "chunks": [
+                    _chunk(
+                        "M_0",
+                        "International operations expose Amazon to regulatory risk.",
+                        3.0,
+                        "AMZN",
+                    )
+                ],
+            },
+        ],
+        "comparative",
+    )
+
+    packed = pack_case_context(
+        case,
+        required_keywords=["international"],
+        strategy=CONTEXT_STRATEGY_COMPARATIVE_V4,
+    )
+
+    assert packed.kept_ids == ["A_0", "M_0"]
+
+
+def test_comparative_v4_leaves_noncomparative_context_unchanged() -> None:
+    case = _case(
+        [
+            {
+                "query": "summary",
+                "ticker": "AAPL",
+                "chunks": [
+                    _chunk("S_0", "one", 2.0),
+                    _chunk("S_1", "two", 1.0),
+                ],
+            }
+        ],
+        "summary",
+    )
+
+    packed = pack_case_context(
+        case,
+        strategy=CONTEXT_STRATEGY_COMPARATIVE_V4,
+    )
+
+    assert packed.kept_ids == ["S_0", "S_1"]
+    assert packed.dropped == []

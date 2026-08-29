@@ -15,6 +15,10 @@ M4. Enough additional chunks that every required keyword occurs in some
     kept text; if no chunk contains a keyword, nothing can restore it
     (retrieval-level miss) and packing stays honest about that.
 
+Comparative v4 replaces blind two-chunk branch breadth with one leading chunk
+plus only branch-scoped fact donors and query-intent donors that add missing
+evidence. Historical strategy behavior remains unchanged.
+
 Summary/enumeration cases additionally fill up to a small fixed target
 by descending score because their answers synthesize broad topic
 coverage rather than isolated facts. Out-of-corpus cases keep only M1;
@@ -27,9 +31,13 @@ never adds evidence that full evidence would not contain.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
-from src.evaluation.evidence_contracts import evidence_terms
+from src.evaluation.evidence_contracts import (
+    branch_evidence_terms,
+    evidence_terms,
+)
 
 CONTEXT_STRATEGY_FULL_EVIDENCE = "full_evidence_v1"
 CONTEXT_STRATEGY_ROUTE_AWARE = "route_aware_v2"
@@ -39,8 +47,49 @@ CONTEXT_STRATEGY_ROUTE_AWARE = "route_aware_v2"
 # packed-all regressed their faithfulness in the measured arms.
 CONTEXT_STRATEGY_SELECTIVE = "selective_packed_v1"
 CONTEXT_STRATEGY_COMPARATIVE_V3 = "comparative_packed_v3"
+CONTEXT_STRATEGY_COMPARATIVE_V4 = "comparative_intent_packed_v4"
 SELECTIVE_PACKED_CATEGORIES = {"fact_lookup", "multi_hop", "summary"}
 COMPARATIVE_BRANCH_TARGET = 2
+
+_INTENT_STOPWORDS = {
+    "amazon",
+    "apple",
+    "approach",
+    "business",
+    "company",
+    "compare",
+    "depends",
+    "disclosures",
+    "fiscal",
+    "from",
+    "higher",
+    "microsoft",
+    "more",
+    "segment",
+    "terms",
+    "their",
+    "total",
+    "which",
+    "with",
+    "year",
+}
+_INTENT_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "cloud": ("cloud", "azure", "aws"),
+    "cybersecurity": (
+        "cybersecurity",
+        "cyber",
+        "security incident",
+        "data loss",
+        "unauthorized access",
+    ),
+    "growth": ("growth", "increase", "increased", "grew", "year-over-year"),
+    "international": ("international", "foreign", "global"),
+    "operations": ("operations", "operational"),
+    "revenue": ("revenue", "sales", "net sales"),
+    "risk": ("risk", "risks", "threat"),
+    "services": ("services", "service"),
+    "subscription": ("subscription", "subscriptions"),
+}
 
 # Structured lookup promotes exact table rows/auditor signatures to
 # exactly 10.0 before hybrid scoring; anything at that ceiling is an
@@ -63,6 +112,79 @@ def _chunk_ticker(entry: dict) -> str:
     if ticker:
         return ticker
     return (entry.get("chunk_id") or "").split("_", 1)[0]
+
+
+def _branch_entries(query_entry: dict) -> list[dict]:
+    entries: list[dict] = []
+    seen: set[str] = set()
+    for entry in query_entry.get("chunks", []):
+        chunk_id = entry.get("chunk_id")
+        if chunk_id in seen:
+            continue
+        seen.add(chunk_id)
+        entries.append(entry)
+    return entries
+
+
+def _intent_groups(query_entry: dict) -> tuple[tuple[str, ...], ...]:
+    query = query_entry.get("query", {})
+    text = query.get("effective_query") or query.get("retrieval_query") or ""
+    tokens = re.findall(r"[a-z0-9]+", text.casefold())
+    groups: list[tuple[str, ...]] = []
+    seen: set[tuple[str, ...]] = set()
+    for token in tokens:
+        if len(token) < 4 or token in _INTENT_STOPWORDS:
+            continue
+        group = _INTENT_SYNONYMS.get(token, (token,))
+        if group in seen:
+            continue
+        seen.add(group)
+        groups.append(group)
+    return tuple(groups)
+
+
+def _matched_intent_groups(
+    entry: dict, groups: tuple[tuple[str, ...], ...]
+) -> frozenset[int]:
+    text = _compact(entry.get("text", ""))
+    return frozenset(
+        index
+        for index, alternatives in enumerate(groups)
+        if any(_compact(term) in text for term in alternatives)
+    )
+
+
+def _best_intent_donor(
+    branch: list[dict],
+    groups: tuple[tuple[str, ...], ...],
+    covered: frozenset[int],
+) -> dict | None:
+    missing = set(range(len(groups))) - set(covered)
+    if not missing:
+        return None
+    ranked: list[tuple[int, int, float, int, dict]] = []
+    for index, entry in enumerate(branch):
+        matched = _matched_intent_groups(entry, groups) & missing
+        if not matched:
+            continue
+        text = _compact(entry.get("text", ""))
+        occurrences = sum(
+            max(text.count(_compact(term)) for term in groups[group_index])
+            for group_index in matched
+        )
+        score = entry.get("score")
+        ranked.append(
+            (
+                len(matched),
+                occurrences,
+                float(score) if isinstance(score, (int, float)) else float("-inf"),
+                -index,
+                entry,
+            )
+        )
+    if not ranked:
+        return None
+    return max(ranked, key=lambda item: item[:-1])[-1]
 
 
 def collect_entries(case_payload: dict) -> list[dict]:
@@ -107,10 +229,11 @@ def pack_case_context(
         return result
 
     category = case_payload.get("category", "")
-    if (
-        strategy == CONTEXT_STRATEGY_COMPARATIVE_V3
-        and category != "comparative"
-    ):
+    comparative_only_strategies = {
+        CONTEXT_STRATEGY_COMPARATIVE_V3,
+        CONTEXT_STRATEGY_COMPARATIVE_V4,
+    }
+    if strategy in comparative_only_strategies and category != "comparative":
         result.kept = list(entries)
         return result
     expected_tickers = sorted({
@@ -145,6 +268,8 @@ def pack_case_context(
             ),
         )[1]
 
+    uncovered: list[str] = []
+
     # M1: primary context — the globally first chunk.
     _add(entries[0] if entries else None)
     # M2: structured-lookup promotions.
@@ -165,6 +290,50 @@ def pack_case_context(
                 _add(entry)
                 if len(branch_ids) >= COMPARATIVE_BRANCH_TARGET:
                     break
+    # V4 comparative salience: keep one leading chunk per branch, then add
+    # only a branch-scoped fact donor or a query-intent donor that contributes
+    # evidence the leading chunk does not contain.
+    if strategy == CONTEXT_STRATEGY_COMPARATIVE_V4:
+        question = case_payload.get("question", "")
+        for query_entry in case_payload.get("queries", []):
+            branch = _branch_entries(query_entry)
+            primary = branch[0] if branch else None
+            _add(primary)
+            query = query_entry.get("query", {})
+            ticker = query.get("ticker") if isinstance(query, dict) else None
+            for term in branch_evidence_terms(question, ticker):
+                needle = _compact(term)
+                if any(
+                    needle in _compact(entry.get("text", ""))
+                    for entry in branch
+                    if entry.get("chunk_id") in kept_chunk_ids
+                ):
+                    continue
+                donor = next(
+                    (
+                        entry
+                        for entry in branch
+                        if needle in _compact(entry.get("text", ""))
+                    ),
+                    None,
+                )
+                if donor is None:
+                    uncovered.append(f"{ticker or 'unknown'}:{term}")
+                else:
+                    _add(donor)
+            groups = _intent_groups(query_entry)
+            covered = (
+                frozenset().union(
+                    *(
+                        _matched_intent_groups(entry, groups)
+                        for entry in branch
+                        if entry.get("chunk_id") in kept_chunk_ids
+                    )
+                )
+                if groups
+                else frozenset()
+            )
+            _add(_best_intent_donor(branch, groups, covered))
     # M2b: a direct fact-lookup answer may cite at most one supporting
     # passage next to its exact structured hit; keep the strongest one.
     if category == "fact_lookup":
@@ -183,9 +352,8 @@ def pack_case_context(
         for ticker in expected_tickers:
             _add(_top_by(lambda e, t=ticker: _chunk_ticker(e) == t))
     # M4: required-keyword coverage.
-    uncovered: list[str] = []
     required_terms = tuple(required_keywords or ())
-    if strategy == CONTEXT_STRATEGY_COMPARATIVE_V3:
+    if strategy in comparative_only_strategies:
         required_terms = evidence_terms(
             case_payload.get("question", ""), required_terms
         )

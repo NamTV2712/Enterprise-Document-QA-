@@ -126,6 +126,29 @@ made until that deterministic gate passes. Exact numeric-pair prompt adherence
 then needs its own AWS sentinel because both full and v3 answers omitted the raw
 AWS values in this A/B.
 
+Comparative packing v4 is now implemented and admitted through its offline gate
+only. It keeps each branch's leading chunk, adds an explicit branch-fact donor
+when required, and otherwise adds one query-intent donor only when it covers
+intent absent from retained branch evidence. Historical v3 and route-aware
+behavior is unchanged. On the active schema-v2 artifact, two v4 reports were
+byte-identical and passed `30/30` evidence coverage, `30/30` source boundaries,
+`24/24` non-comparative byte stability, `6/6` comparative branch coverage, and
+`6/6` branch contracts. Comparative evidence fell from `20,939` to `6,737`
+tokens (`67.83%`, above the pre-registered `45%` gate).
+
+The A/B findings are now directly pinned: v4 retains AMZN's rank-4 data-loss /
+security-incidents chunk for cybersecurity, retains Amazon's AWS values and
+Microsoft's rank-3 high-level `23% / $168.9 billion` Cloud growth chunk, and
+drops Apple's off-topic international-risk rank-2 chunk. The six comparative
+cases retain `2/2/4/3/2/2` chunks respectively. The ignored report is
+`data/diagnostics/comparative_packing_v4.json`, with file SHA-256
+`562a3e0622a4dcb40471aef30c6474bac846977b122d66ccd389fcd3c27e03e2`
+and report fingerprint
+`sha256:485a1067e96f2c3849846ce6ea97aef8c49fe2dcfccba0c1d26a227e0a2fc602`.
+No provider call was made and v4 is not yet a Phase 2 CLI arm. The next milestone
+remains exact numeric-pair prompt adherence plus an AWS-only sentinel; no
+six-case provider rerun is justified before that passes.
+
 The current-corpus evaluation closure is complete. Phase 1 was rebuilt against the active IBM companion-recovery corpus with `--verify-determinism` after one-time Hugging Face metadata resolution via the explicit `--allow-network` escape hatch; the resulting artifact is byte-identical across both executions and has fingerprint `sha256:8283b628bb755b00bef86a26d7c608f9b385836c28dad588992b7d533ea51ee4`. It executes all `30/30` priority <= 2 cases with `61` non-empty queries and `12/12` decomposed-plan `evidence_ok` checks, bound to corpus `sha256:1d5b99ed…`, index manifest `sha256:5ac5362a…`, embedding `sha256:0c4ee351…`, reranker `sha256:16ff6fc9…`, retrieval config `sha256:6bf7801a…`, and test set `sha256:92dc7bc0…`. The two Phase 2 runners now pin this artifact and regression tests refuse the superseded hard-group artifact. The separate priority-3 replay covers `22` cases at keyword recall `1.0000`; IBM net-income retrieval required and now uses a caption-aware structured lookup preference for the consolidated income statement. The current-corpus Phase 2 run is official after a judge-context integrity fix: `30/30` generation OK, `30/30` judgment OK, no skips or parse failures; source markers now preserve complete SEC chunks across internal blank lines and the context-builder fingerprint prevents stale judge checkpoint reuse. Corrected scores are Faithfulness `0.9793`, Answer Relevancy `0.9733`, Context Precision `0.6197`, and Overall `0.8574`. Deterministic checks remain citation correctness `1.0000`, recall proxy `1.0000`, and fallback accuracy `1.0000`; the next improvement should target comparative context precision and out-of-corpus abstention precision.
 
 The IBM companion production milestone is complete. A generic resolver now discovers a uniquely linked relative Annual Report companion, resolves the incorporated Item-8 page range, and admits only deduplicated multi-year statement-like tables within that interval; missing or ambiguous companions remain a safe no-op. IBM's audited companion `ibm-20251231_d2.htm` is stored at `data/raw/IBM/` with SHA-256 `6bad6022e0585cce956917bae6e85b3dd881234b274771343fcd8c3382c85b48`. It produced 32 supplemental `financial_table` chunks, an immutable embedding generation `nomic-e9b6763-fy2026-ibm-companion-20260829`, corpus fingerprint `sha256:1d5b99ed962ab9dff88f268ea17da4efd5c7128900961a123bdfb5e49716c8f4`, and a green trusted local Qdrant index with 10,053 points. Coverage is now 50/50 searchable tickers with financial-table chunks; IBM remains degraded only because its text `financial_statements` section is still not reconstructed. The read-only audit passes on the installed companion, and no Phase 2 evaluation was run.

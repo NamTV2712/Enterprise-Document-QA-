@@ -243,9 +243,12 @@ paths used by the application. It combines:
 Context-rendering strategy is a binding evaluation input. The experimental
 `comparative_packed_v3` strategy changes only comparative cases: it keeps the
 first two unique chunks from each decomposition branch and then retains
-structured hits and required-fact donors. Non-comparative contexts remain
-byte-identical to the frozen artifact. The production evaluation default stays
-`selective_packed_v1` until a separately authorized provider A/B admits v3.
+structured hits and required-fact donors. Its provider A/B was rejected.
+The offline-only v4 counterfactual instead keeps branch top 1 and adds only a
+missing query-intent or explicit branch-fact donor. Non-comparative contexts
+remain byte-identical to the frozen artifact. The evaluation default stays
+`selective_packed_v1`; v4 is not a provider arm until its separate answer-level
+gate passes.
 
 Generation, deterministic metrics, and judging must consume the same rendered
 evidence context. The generation binding includes a renderer fingerprint in

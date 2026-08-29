@@ -336,6 +336,17 @@ they passed packed evidence to the judge but not to generation, so they must not
 be used as evidence that packed generation was validated. The Phase 2 default
 therefore remains `selective_packed_v1`, pending a new corrected benchmark.
 
+Comparative packing v4 is the provider-free follow-up to that NO-GO. It replaces
+blind top-2 retention with branch top-1 plus only a missing query-intent or
+explicit fact donor. On the same active artifact it passes `30/30` evidence and
+source-boundary checks, keeps all `24` non-comparative contexts byte-identical,
+and satisfies all six comparative branch contracts. It retains the previously
+missed AMZN security-incidents and Microsoft high-level Cloud-growth chunks,
+keeps both AWS values, and drops the off-topic Apple international-risk support
+chunk. Comparative evidence is `6,737` tokens versus `20,939` full evidence
+(`67.83%` reduction). V4 is offline-only and is not exposed as a Phase 2 arm;
+the next gate is an AWS-only exact-number generation sentinel.
+
 Historical context-packing A/B (the pre-registration and confirmatory run used
 the prior frozen Phase 1 artifact, paired per-case,
 pre-registered merge gates): packing only the `fact_lookup`, `multi_hop`,

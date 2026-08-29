@@ -126,3 +126,56 @@ def test_paired_report_rejects_aws_fallback(monkeypatch) -> None:
 
     assert report["gate_passed"] is False
     assert report["gates"]["aws_answer_integrity"] is False
+
+
+def test_v5_candidate_paths_and_context_renderer_are_available() -> None:
+    assert ab.CONTEXT_STRATEGY_COMPARATIVE_V5 in ab.CANDIDATE_PATHS
+    selected = ab.comparative_cases()
+    renderer = ab.context_renderer(
+        ab.CONTEXT_STRATEGY_COMPARATIVE_V5,
+        {case.question: case for case in selected},
+    )
+    payload = {
+        "question": selected[0].question,
+        "category": "comparative",
+        "queries": [
+            {
+                "query": {
+                    "effective_query": "Apple cloud revenue",
+                    "ticker": "AAPL",
+                },
+                "chunks": [
+                    {
+                        "chunk_id": "AAPL_0",
+                        "ticker": "AAPL",
+                        "section": "mdna",
+                        "filing_date": "2025-01-01",
+                        "score": 1.0,
+                        "text": "Apple cloud revenue evidence.",
+                        "citation": "AAPL filing",
+                    }
+                ],
+            },
+            {
+                "query": {
+                    "effective_query": "Microsoft cloud revenue",
+                    "ticker": "MSFT",
+                },
+                "chunks": [
+                    {
+                        "chunk_id": "MSFT_0",
+                        "ticker": "MSFT",
+                        "section": "mdna",
+                        "filing_date": "2025-01-01",
+                        "score": 1.0,
+                        "text": "Microsoft cloud revenue evidence.",
+                        "citation": "MSFT filing",
+                    }
+                ],
+            },
+        ],
+    }
+
+    rendered = renderer(payload)
+    assert "AAPL filing" in rendered
+    assert "MSFT filing" in rendered

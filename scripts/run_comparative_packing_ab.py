@@ -1,10 +1,13 @@
-"""Run the non-official paired provider A/B for comparative packing v3.
+"""Run the non-official paired provider A/B for comparative packing.
 
 Both arms consume the same frozen Phase 1 artifact and the same six priority
 <= 2 comparative cases. Checkpoints are strategy-bound and separate. The
 pre-registered gate requires complete provider coverage, deterministic-metric
 non-regression, a context-precision gain, bounded semantic-score movement, and
 an evidence-grounded non-fallback answer for the AWS/Microsoft sentinel.
+
+The default candidate remains v3 for historical replay. Pass
+``--candidate-strategy comparative_oracle_free_v5`` for the current v5 gate.
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ from scripts.run_evaluation_phase2 import (
 from src.evaluation.answer_contract import audit_answer
 from src.evaluation.context_packing import (
     CONTEXT_STRATEGY_COMPARATIVE_V3,
+    CONTEXT_STRATEGY_COMPARATIVE_V5,
     CONTEXT_STRATEGY_FULL_EVIDENCE,
     pack_case_context,
     render_packed_blocks,
@@ -68,6 +72,19 @@ CANDIDATE_GEN = OUTPUT_DIR / "comparative_ab_v3_gen.jsonl"
 CANDIDATE_JUDGE = OUTPUT_DIR / "comparative_ab_v3_judge.jsonl"
 SUMMARY = OUTPUT_DIR / "comparative_packing_v3_ab.json"
 
+CANDIDATE_PATHS = {
+    CONTEXT_STRATEGY_COMPARATIVE_V3: (
+        OUTPUT_DIR / "comparative_ab_v3_gen.jsonl",
+        OUTPUT_DIR / "comparative_ab_v3_judge.jsonl",
+        OUTPUT_DIR / "comparative_packing_v3_ab.json",
+    ),
+    CONTEXT_STRATEGY_COMPARATIVE_V5: (
+        OUTPUT_DIR / "comparative_ab_v5_gen.jsonl",
+        OUTPUT_DIR / "comparative_ab_v5_judge.jsonl",
+        OUTPUT_DIR / "comparative_packing_v5_ab.json",
+    ),
+}
+
 
 def comparative_cases() -> list[TestCase]:
     """Return the fixed priority <= 2 comparative slice."""
@@ -90,14 +107,14 @@ def context_renderer(
 ) -> Callable[[dict], str]:
     if strategy == CONTEXT_STRATEGY_FULL_EVIDENCE:
         return build_evidence_context
-    if strategy != CONTEXT_STRATEGY_COMPARATIVE_V3:
+    if strategy not in CANDIDATE_PATHS:
         raise ValueError(f"Unsupported A/B strategy: {strategy}")
 
     def render(case_payload: dict) -> str:
         packed = pack_case_context(
             case_payload,
             required_keywords=metadata[case_payload["question"]].required_keywords,
-            strategy=CONTEXT_STRATEGY_COMPARATIVE_V3,
+            strategy=strategy,
         )
         return render_packed_blocks(packed)
 
@@ -178,32 +195,34 @@ def _deterministic_non_regression(
 
 
 def _contexts_and_tokens(
-    artifact: dict[str, Any], selected: list[TestCase]
+    artifact: dict[str, Any],
+    selected: list[TestCase],
+    candidate_strategy: str = CONTEXT_STRATEGY_COMPARATIVE_V3,
 ) -> tuple[dict[str, dict[str, str]], dict[str, Any]]:
     cases = {case["question"]: case for case in artifact["cases"]}
     metadata = {case.question: case for case in selected}
     full_renderer = context_renderer(CONTEXT_STRATEGY_FULL_EVIDENCE, metadata)
-    v3_renderer = context_renderer(CONTEXT_STRATEGY_COMPARATIVE_V3, metadata)
+    candidate_renderer = context_renderer(candidate_strategy, metadata)
     encoder = tiktoken.get_encoding("cl100k_base")
     contexts: dict[str, dict[str, str]] = {}
     full_tokens = 0
-    v3_tokens = 0
+    candidate_tokens = 0
     for case in selected:
         payload = cases[case.question]
         full = full_renderer(payload)
-        v3 = v3_renderer(payload)
+        candidate = candidate_renderer(payload)
         contexts[case.question] = {
             CONTEXT_STRATEGY_FULL_EVIDENCE: full,
-            CONTEXT_STRATEGY_COMPARATIVE_V3: v3,
+            candidate_strategy: candidate,
         }
         full_tokens += len(encoder.encode(full))
-        v3_tokens += len(encoder.encode(v3))
+        candidate_tokens += len(encoder.encode(candidate))
     reduction = round(
-        100.0 * (full_tokens - v3_tokens) / max(full_tokens, 1), 2
+        100.0 * (full_tokens - candidate_tokens) / max(full_tokens, 1), 2
     )
     return contexts, {
         "baseline_tokens": full_tokens,
-        "candidate_tokens": v3_tokens,
+        "candidate_tokens": candidate_tokens,
         "reduction_pct": reduction,
     }
 
@@ -214,8 +233,15 @@ def build_paired_report(
     selected: list[TestCase],
     baseline: dict[str, Any],
     candidate: dict[str, Any],
+    candidate_strategy: str = CONTEXT_STRATEGY_COMPARATIVE_V3,
 ) -> dict[str, Any]:
-    contexts, context_tokens = _contexts_and_tokens(artifact, selected)
+    if candidate_strategy == CONTEXT_STRATEGY_COMPARATIVE_V3:
+        # Preserve the two-argument seam used by the historical test doubles.
+        contexts, context_tokens = _contexts_and_tokens(artifact, selected)
+    else:
+        contexts, context_tokens = _contexts_and_tokens(
+            artifact, selected, candidate_strategy
+        )
     baseline_cases = {case["question"]: case for case in baseline["cases"]}
     candidate_cases = {case["question"]: case for case in candidate["cases"]}
     paired_cases: list[dict[str, Any]] = []
@@ -229,14 +255,14 @@ def build_paired_report(
                 contexts[question][CONTEXT_STRATEGY_FULL_EVIDENCE]
             )
         ]
-        v3_sources = [
+        candidate_sources = [
             block["text"]
             for block in parse_evidence_context(
-                contexts[question][CONTEXT_STRATEGY_COMPARATIVE_V3]
+                contexts[question][candidate_strategy]
             )
         ]
         before_audit = audit_answer(before.get("answer") or "", full_sources)
-        after_audit = audit_answer(after.get("answer") or "", v3_sources)
+        after_audit = audit_answer(after.get("answer") or "", candidate_sources)
         score_deltas = {
             key: (
                 round(float(after["scores"][key]) - float(before["scores"][key]), 4)
@@ -320,6 +346,7 @@ def build_paired_report(
         "reason": "paired comparative subset; not an official benchmark",
         "artifact_fingerprint": EXPECTED_ARTIFACT_FINGERPRINT,
         "model": EVAL_MODEL,
+        "candidate_strategy": candidate_strategy,
         "pre_registered_gates": {
             "expected_cases_per_arm": EXPECTED_COMPARATIVE_CASES,
             "minimum_context_precision_delta": MIN_CONTEXT_PRECISION_DELTA,
@@ -348,16 +375,25 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--fresh", action="store_true")
+    parser.add_argument(
+        "--candidate-strategy",
+        choices=sorted(CANDIDATE_PATHS),
+        default=CONTEXT_STRATEGY_COMPARATIVE_V3,
+        help="Experimental candidate arm; v3 is retained as the historical default.",
+    )
     parser.add_argument("--max-gen-retries", type=int, default=0)
     parser.add_argument("--max-judge-retries", type=int, default=0)
     args = parser.parse_args(argv)
 
+    candidate_gen, candidate_judge, summary = CANDIDATE_PATHS[
+        args.candidate_strategy
+    ]
     paths = (
         BASELINE_GEN,
         BASELINE_JUDGE,
-        CANDIDATE_GEN,
-        CANDIDATE_JUDGE,
-        SUMMARY,
+        candidate_gen,
+        candidate_judge,
+        summary,
     )
     if args.fresh:
         for path in paths:
@@ -383,11 +419,12 @@ def main(argv: list[str] | None = None) -> int:
         partial = {
             "official": False,
             "reason": "baseline arm incomplete; rerun to resume",
+            "candidate_strategy": args.candidate_strategy,
             "baseline": baseline,
             "gate_passed": False,
         }
-        SUMMARY.parent.mkdir(parents=True, exist_ok=True)
-        SUMMARY.write_text(
+        summary.parent.mkdir(parents=True, exist_ok=True)
+        summary.write_text(
             json.dumps(partial, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         print(json.dumps(partial, ensure_ascii=False, indent=2))
@@ -395,10 +432,10 @@ def main(argv: list[str] | None = None) -> int:
 
     candidate = _run_arm(
         artifact=artifact,
-        strategy=CONTEXT_STRATEGY_COMPARATIVE_V3,
+        strategy=args.candidate_strategy,
         selected=selected,
-        generation_path=CANDIDATE_GEN,
-        judge_path=CANDIDATE_JUDGE,
+        generation_path=candidate_gen,
+        judge_path=candidate_judge,
         max_gen_retries=args.max_gen_retries,
         max_judge_retries=args.max_judge_retries,
     )
@@ -407,9 +444,10 @@ def main(argv: list[str] | None = None) -> int:
         selected=selected,
         baseline=baseline,
         candidate=candidate,
+        candidate_strategy=args.candidate_strategy,
     )
-    SUMMARY.parent.mkdir(parents=True, exist_ok=True)
-    SUMMARY.write_text(
+    summary.parent.mkdir(parents=True, exist_ok=True)
+    summary.write_text(
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     print(json.dumps(report, ensure_ascii=False, indent=2))

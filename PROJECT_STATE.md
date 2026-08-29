@@ -44,9 +44,23 @@ Amazon cybersecurity donor without oracle facts; the AWS value leader remains
 intact. The ignored diagnostic report is
 `data/diagnostics/comparative_packing_v5.json` with file SHA-256
 `63169abbd872a97e4912f714ac0399d27a17056e697822dc9060b30dd9accbd5`.
-No provider call was made in this milestone. The next separately authorized
-step is a fresh six-case v5 versus full-evidence provider A/B; v5 remains
-experimental for Phase 2 until that gate passes.
+The fresh pre-registered six-case provider A/B is now complete. Both the full-
+evidence baseline and v5 completed `6/6` generation and `6/6` judging with no
+skips or parse failures. V5 improved context precision from `0.4452` to
+`0.9033` (`+0.4581`), answer relevancy from `0.8667` to `0.9833`
+(`+0.1166`), and overall judge average from `0.7595` to `0.9483`
+(`+0.1888`); faithfulness moved from `0.9667` to `0.9583` (`-0.0084`),
+inside the pre-registered bound. Rendered evidence fell from `20,455` to
+`6,704` tokens (`67.23%`). Deterministic citation correctness, recall proxy,
+and fallback accuracy stayed at `1.0000`, and the AWS answer retained both
+`107,556` and `128,725` with canonical citations and no unsupported numeric
+claims. The non-official report is
+`data/eval_artifacts/comparative_packing_v5_ab.json` with file SHA-256
+`ac4a7dc6f83b2226405874f7f62730c70ba79707fe2486e44db507557743c29c`.
+This is a successful candidate gate, not an official N=30 benchmark; the
+published scores and `selective_packed_v1` Phase 2 default remain unchanged.
+The next improvement requires a separately authorized controlled full N=30
+replay/admission decision on the active schema-v2 artifact.
 
 The first retrieval-side improvement is now validated offline. A shared
 deterministic query shaper is used by direct and decomposed paths; for

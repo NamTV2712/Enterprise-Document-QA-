@@ -379,7 +379,29 @@ and `6/6` production/evaluation adapter parity. Comparative evidence falls
 from `20,455` to `6,704` tokens (`67.23%`). The ignored report is
 `data/diagnostics/comparative_packing_v5.json` (file SHA-256
 `63169abbd872a97e4912f714ac0399d27a17056e697822dc9060b30dd9accbd5`). No
-provider call or official-score change occurred.
+provider call or official-score change occurred at that offline stage.
+
+The pre-registered six-case provider A/B for v5 versus full evidence has now
+passed as a non-official candidate gate. Both arms completed `6/6` generation
+and `6/6` judging with no skips or parse failures. V5 improved context
+precision `0.4452 -> 0.9033` (`+0.4581`), answer relevancy `0.8667 -> 0.9833`
+(`+0.1166`), and overall judge average `0.7595 -> 0.9483` (`+0.1888`),
+while faithfulness remained within the bound at `0.9667 -> 0.9583`
+(`-0.0084`). It reduced rendered evidence from `20,455` to `6,704` tokens
+(`67.23%`). Deterministic citation correctness, recall proxy, and fallback
+accuracy remained `1.0000`; the AWS answer preserved `107,556` and `128,725`
+with canonical citations and no unsupported numeric claims. The ignored report
+is `data/eval_artifacts/comparative_packing_v5_ab.json` (file SHA-256
+`ac4a7dc6f83b2226405874f7f62730c70ba79707fe2486e44db507557743c29c`). This
+subset is not the official N=30 benchmark, so published scores and the
+`selective_packed_v1` Phase 2 default remain unchanged. Reproduce the run with:
+
+```powershell
+python -m scripts.run_comparative_packing_ab --candidate-strategy comparative_oracle_free_v5 --fresh
+```
+
+The next step is a separately authorized controlled full N=30 replay on the
+active schema-v2 artifact, followed by an admission decision if its gates hold.
 
 Historical context-packing A/B (the pre-registration and confirmatory run used
 the prior frozen Phase 1 artifact, paired per-case,

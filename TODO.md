@@ -184,11 +184,18 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        and the v5 gate passes 30/30 evidence/boundary checks, 24/24
        non-comparative byte stability, 6/6 branch contracts, and 67.23%
        comparative token reduction. No provider call was made.
-32. [ ] Run a fresh pre-registered six-case provider A/B for comparative v5
-       versus full evidence. Admit v5 only if both arms complete, context
-       precision improves, faithfulness/relevancy stay within bounds,
-       deterministic metrics do not regress, and all AWS numeric-pair
-       integrity gates pass.
+32. [x] Run a fresh pre-registered six-case provider A/B for comparative v5
+       versus full evidence. Both arms completed `6/6` generation and `6/6`
+       judging with no skips or parse failures. V5 improved context precision
+       `0.4452 -> 0.9033`, answer relevancy `0.8667 -> 0.9833`, and overall
+       `0.7595 -> 0.9483`, reduced rendered evidence by `67.23%`, stayed within
+       the faithfulness bound (`0.9667 -> 0.9583`), preserved deterministic
+       metrics, and passed all AWS numeric-pair integrity gates. The result is
+       a successful non-official candidate gate; the default remains unchanged.
+33. [ ] Run a separately authorized controlled full N=30 v5 replay against the
+       active schema-v2 artifact, then decide admission only if provider
+       completion, context precision, faithfulness/relevancy, overall score,
+       deterministic non-regression, and AWS numeric-pair integrity all pass.
 
 ## Always-On Deployment
 

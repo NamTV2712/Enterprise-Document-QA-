@@ -85,6 +85,10 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        links `ibm-20251231_d2.htm`, but the companion is absent locally;
        status is `companion_missing` and production remains NO-GO. Report:
        `data/diagnostics/ibm_companion_document_audit.json`.
+15. [x] Harden the IBM audit to schema v2 with explicit page-interval
+       resolution, trial chunk IDs, companion hashing, tri-state gates, and
+       an internal byte-determinism check. A complete synthetic companion
+       passes all gates; the real corpus remains unchanged and NO-GO.
 
 ## Always-On Deployment
 

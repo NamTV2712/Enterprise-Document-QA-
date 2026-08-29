@@ -199,11 +199,16 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        boundary checks, 24/24 non-comparative byte identity, 6/6 comparative
        v5 identity/parity checks, and renders 36,152 tokens (27.56% below
        selective v1). The report is byte-stable and provider-free.
-34. [ ] Resolve the remaining comparative answer-integrity preflight before
-       N=30: unify direct/decomposed/Phase 2 numeric contracts so answers do
-       not introduce derived amounts or percentages, then run the focused
-       Apple/Microsoft and AWS sentinels. Require no unsupported numeric claims,
-       valid citations, no fallback, and exact AWS value-period pairs.
+34. [x] Resolve the comparative answer-integrity preflight before N=30:
+       unified direct/decomposed/Phase 2 numeric contracts now require exact
+       period/value pairs before trend summaries and reject calculated,
+       rounded, approximate, range-based, and numeric-shorthand claims. The
+       fresh Apple/Microsoft plus AWS sentinel under `selective_packed_v2`
+       completed 2/2 generation and 2/2 judging and passed all registered
+       context, citation, fallback, semantic, and numeric gates. AWS preserved
+       `107,556`/`128,725` for `2024`/`2025`, and no unsupported numeric claims
+       remained. Report: `data/eval_artifacts/comparative_numeric_v2_summary.json`
+       (SHA-256 `b6701de1fe5682aa282a26cd49aaa2956a60c8b1aa6a04527f913f1679340b73`).
 35. [ ] Run a fresh controlled full N=30 replay with
        `selective_packed_v2` against the active schema-v2 artifact. Do not use
        raw `comparative_oracle_free_v5`, which restores full evidence for the

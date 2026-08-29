@@ -256,6 +256,15 @@ composite applies the already admitted selective v1 policy to
 enumeration/out-of-corpus. The evaluation default remains
 `selective_packed_v1` until a fresh full N=30 v2 replay passes admission.
 
+The direct generator, decomposed synthesis prompt, and Phase 2 generation
+template share the same numeric-pair contract. When evidence contains
+period/value pairs, answers must list the exact pairs before summarizing a
+trend; they may not calculate differences or percentages, round or abbreviate
+values, introduce ranges or numeric shorthand, or emit numbers absent from
+the cited evidence. The focused two-case provider preflight for
+`selective_packed_v2` passed this contract, but it is non-official and does not
+admit the strategy for the full benchmark.
+
 Generation, deterministic metrics, and judging must consume the same rendered
 evidence context. The generation binding includes a renderer fingerprint in
 addition to the named strategy; changing context-renderer semantics invalidates

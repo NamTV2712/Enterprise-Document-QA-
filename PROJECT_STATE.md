@@ -70,12 +70,21 @@ which is a `27.56%` reduction from selective v1 and `41.94%` from full evidence.
 Two runs were byte-identical, and the artifact input hash was unchanged. The
 ignored report is `data/diagnostics/selective_packing_v2.json` with file
 SHA-256 `78d9cd6b2761935884576af16b3e3f9305c573302f0a38b3cab8498fe4c2f703`.
-No provider call or Phase 1 rebuild was made. Before a full N=30 replay, the
-remaining comparative answer-integrity finding must be handled: one v5
-Apple/Microsoft answer contains a derived `$12,989` figure flagged by the
-deterministic audit even though the AWS-specific gate passed. The next provider
-step is therefore a small numeric-contract preflight, followed by a fresh full
-N=30 `selective_packed_v2` replay if it passes.
+No provider call or Phase 1 rebuild was made. The next numeric-contract
+milestone is now complete: direct generation, decomposed synthesis, and Phase
+2 share a stricter contract that requires exact period/value pairs before any
+trend summary and forbids calculated, rounded, approximate, range-based, or
+numeric-shorthand claims. A fresh provider sentinel over Apple/Microsoft and
+AWS/Microsoft under `selective_packed_v2` completed `2/2` generation and `2/2`
+judging with no skips or parse failures. It passed context, citation,
+deterministic, semantic, and numeric-integrity gates; in particular, AWS
+preserved `107,556`/`128,725` with `2024`/`2025`, and the Apple/Microsoft answer
+introduced neither the prior `$12,989` nor `13.5%` derived claims. The
+non-official report is
+`data/eval_artifacts/comparative_numeric_v2_summary.json` with file SHA-256
+`b6701de1fe5682aa282a26cd49aaa2956a60c8b1aa6a04527f913f1679340b73`.
+The focused run is a preflight, not an official benchmark; the next gated step
+is a fresh full N=30 `selective_packed_v2` replay.
 
 The first retrieval-side improvement is now validated offline. A shared
 deterministic query shaper is used by direct and decomposed paths; for

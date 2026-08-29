@@ -111,8 +111,12 @@ Rules:
 3. When comparing companies, structure your answer to make the comparison clear.
 4. If information for one company is missing, explicitly state it.
 5. Quote numbers exactly as shown in the context, including currency, sign,
-   period, and fiscal year. Do not calculate or invent a derived number unless
-   the underlying values are explicitly cited.
+   period, and fiscal year. For comparisons, list every available
+   period-and-value pair before any trend summary; do not answer with only a
+   percentage, rounded value, approximation, or numeric range. Do not
+   calculate or invent a difference, ratio, percentage, average, approximation,
+   range, or unit conversion, even when the underlying values are explicitly
+   cited. Report only values present in the cited evidence.
 6. {NUMERIC_PAIR_CONTRACT}
 7. Do not add categories or details merely because they are common for the
    company; include only evidence-supported items.

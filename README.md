@@ -411,10 +411,26 @@ parity. It renders `36,152` tokens versus `49,903` for selective v1 (`27.56%`
 reduction) and `62,262` for full evidence (`41.94%` reduction). The ignored
 report is `data/diagnostics/selective_packing_v2.json` (file SHA-256
 `78d9cd6b2761935884576af16b3e3f9305c573302f0a38b3cab8498fe4c2f703`). No
-provider call or Phase 1 rebuild was made. Before N=30, a remaining v5
-Apple/Microsoft answer-integrity flag for a derived `$12,989` figure must be
-resolved by the shared numeric contract. The next provider run should use a
-fresh `selective_packed_v2` binding only after that small preflight passes.
+provider call or Phase 1 rebuild was made. The numeric-contract preflight is
+now complete: direct generation, decomposed synthesis, and Phase 2 share a
+stricter contract requiring exact period/value pairs before trend summaries
+and forbidding calculated, rounded, approximate, range-based, or numeric-
+shorthand claims. A fresh Apple/Microsoft plus AWS/Microsoft sentinel under
+`selective_packed_v2` completed `2/2` generation and `2/2` judging and passed
+all context, citation, deterministic, semantic, and numeric-integrity gates.
+AWS preserved `107,556`/`128,725` with `2024`/`2025`; the Apple/Microsoft answer
+did not reproduce the prior `$12,989` or `13.5%` derived claims. The
+non-official report is
+`data/eval_artifacts/comparative_numeric_v2_summary.json` (file SHA-256
+`b6701de1fe5682aa282a26cd49aaa2956a60c8b1aa6a04527f913f1679340b73`). Reproduce
+it with:
+
+```powershell
+python -m scripts.run_comparative_numeric_sentinel --fresh
+```
+
+This focused preflight does not change official scores; the next gated step is
+a fresh full N=30 `selective_packed_v2` replay.
 
 Historical context-packing A/B (the pre-registration and confirmatory run used
 the prior frozen Phase 1 artifact, paired per-case,

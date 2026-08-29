@@ -115,9 +115,11 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        `[Source N]` citations only, no irrelevant-source fallback claims,
        exact numeric/period handling, and no general-knowledge category
        invention during enumeration planning.
-21. [ ] Re-run a quota-gated sentinel set for the six audit-flagged answers;
-       require zero legacy citations, zero uncited in-corpus answers, and no
-       new unsupported numeric claims before any full N=30 rerun.
+21. [x] Re-run a quota-gated sentinel set for the six audit-flagged answers.
+       All 6/6 generation and judge calls completed; legacy citations fell to
+       zero, uncited non-fallback answers fell to zero, and numeric flags did
+       not increase. The run is non-official and stored in the ignored
+       `data/eval_artifacts/answer_sentinel_summary.json`.
 22. [ ] Pre-register a comparative packing v3 gate: preserve 30/30 evidence
        coverage and source boundaries while reducing rendered context tokens;
        only then test a provider A/B on comparative sentinel cases.

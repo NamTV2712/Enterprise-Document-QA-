@@ -7,13 +7,13 @@ query when the original wording describes a derived financial concept.
 
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass
 import hashlib
 import json
+import re
+from dataclasses import dataclass
 
 
-QUERY_SHAPER_VERSION = 1
+QUERY_SHAPER_VERSION = 2
 
 
 TREND_TERMS = (
@@ -37,6 +37,8 @@ def _fingerprint() -> str:
                 "requires": ["aws", "trend_term"],
                 "exact_phrases": ["AWS net sales"],
                 "full_terms": ["AWS", "net", "sales"],
+                "partial_terms": ["AWS", "net", "sales"],
+                "fuzzy_terms": ["sales"],
                 "additions": ["AWS", "net sales"],
                 "implicit_years": ["2025", "2024"],
             }
@@ -55,6 +57,8 @@ class ShapedQuery:
     retrieval_query: str
     exact_phrases: tuple[str, ...] = ()
     full_terms: tuple[str, ...] = ()
+    partial_terms: tuple[str, ...] = ()
+    fuzzy_terms: tuple[str, ...] = ()
 
 
 def _has_trend_intent(query: str) -> bool:
@@ -68,6 +72,8 @@ def shape_retrieval_query(query: str) -> ShapedQuery:
     additions: list[str] = []
     exact_phrases: list[str] = []
     full_terms: list[str] = []
+    partial_terms: list[str] = []
+    fuzzy_terms: list[str] = []
 
     # Amazon filings label the underlying revenue row ``AWS - Net sales``;
     # semantic wording such as ``AWS growth`` otherwise lands on operating
@@ -75,6 +81,8 @@ def shape_retrieval_query(query: str) -> ShapedQuery:
     if "aws" in normalized and _has_trend_intent(query):
         exact_phrases.append("AWS net sales")
         full_terms.extend(("AWS", "net", "sales"))
+        partial_terms.extend(("AWS", "net", "sales"))
+        fuzzy_terms.append("sales")
         if not re.search(r"\b20\d{2}\b", query):
             additions.extend(("2025", "2024"))
         additions.extend(("AWS", "net sales"))
@@ -85,6 +93,8 @@ def shape_retrieval_query(query: str) -> ShapedQuery:
             retrieval_query=query,
             exact_phrases=tuple(exact_phrases),
             full_terms=tuple(full_terms),
+            partial_terms=tuple(partial_terms),
+            fuzzy_terms=tuple(fuzzy_terms),
         )
 
     return ShapedQuery(
@@ -92,4 +102,6 @@ def shape_retrieval_query(query: str) -> ShapedQuery:
         retrieval_query=f"{query} {' '.join(additions)}",
         exact_phrases=tuple(exact_phrases),
         full_terms=tuple(full_terms),
+        partial_terms=tuple(partial_terms),
+        fuzzy_terms=tuple(fuzzy_terms),
     )

@@ -39,6 +39,7 @@ from src.evaluation.phase2_runtime import (
 )
 from src.evaluation.test_set import TEST_SET
 from src.generation.generator import Generator
+from src.retrieval.lexical_ladder import LEXICAL_LADDER_FINGERPRINT
 from src.retrieval.query_shaper import QUERY_SHAPER_FINGERPRINT
 
 
@@ -66,6 +67,8 @@ def _load() -> tuple[dict, GenerationUpstream]:
         raise RuntimeError("Phase 1 artifact fingerprint drift")
     if artifact["fingerprints"].get("query_shaper") != QUERY_SHAPER_FINGERPRINT:
         raise RuntimeError("Phase 1 artifact lacks current query-shaper provenance")
+    if artifact["fingerprints"].get("lexical_ladder") != LEXICAL_LADDER_FINGERPRINT:
+        raise RuntimeError("Phase 1 artifact lacks current lexical-ladder provenance")
     upstream = GenerationUpstream(
         artifact_path=ARTIFACT,
         artifact_sha256=f"sha256:{hashlib.sha256(raw).hexdigest()}",

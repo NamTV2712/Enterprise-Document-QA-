@@ -54,6 +54,7 @@ def main() -> int:
                     ticker="AMZN",
                     section=None,
                     candidate_pool=args.candidate_pool,
+                    use_lexical_ladder=False,
                 )
                 comparisons.append({
                     "label": label,

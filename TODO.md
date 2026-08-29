@@ -135,9 +135,16 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        two queries with zero ticker leaks, zero required-term regressions, and
        byte-identical repeated output. Rebuild Phase 1 before any new Phase 2
        provider run; the existing artifact remains historical only.
-25. [ ] Extend the shaper into a field-aware lexical ladder (`exact_phrase`,
+25. [x] Extend the shaper into a field-aware lexical ladder (`exact_phrase`,
        `full_terms`, `partial_terms`, then guarded `fuzzy`) and merge its
-       candidates into RRF only after offline ticker/recall gates pass.
+       candidates into RRF only after offline ticker/recall gates pass. The
+       61-subquery A/B passed twice with identical bytes, zero ticker leaks,
+       zero required-term regressions, 59 unhinted queries byte-stable, and
+       both hinted AWS queries retaining fact evidence at rank 1. Fuzzy is
+       ticker-scoped, last-resort, length-guarded, and threshold-guarded.
+26. [ ] Rebuild the schema-v2 Phase 1 artifact offline with shaper and lexical-
+       ladder fingerprints, verify byte determinism and decomposed evidence
+       coverage, then pin the new artifact before any provider-backed Phase 2.
 
 ## Always-On Deployment
 

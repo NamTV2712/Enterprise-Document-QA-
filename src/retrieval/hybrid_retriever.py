@@ -18,6 +18,8 @@ from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder
 
 from src.retrieval.embedder import AUTO_DEVICE, Embedder, resolve_torch_device
+from src.retrieval.lexical_ladder import lexical_ladder_candidates
+from src.retrieval.query_shaper import shape_retrieval_query
 from src.retrieval.retriever import RetrievedChunk
 from src.retrieval.structured_lookup import StructuredMatch, structured_lookup
 from src.retrieval.vector_store import VectorStore
@@ -133,6 +135,7 @@ class HybridRetriever:
         ticker: str | None = None,
         section: str | None = None,
         candidate_pool: int = 10,
+        use_lexical_ladder: bool = True,
     ) -> list[RetrievedChunk]:
         """Backward-compatible wrapper that embeds the query before retrieval."""
         if not query.strip():
@@ -146,6 +149,7 @@ class HybridRetriever:
             ticker=ticker,
             section=section,
             candidate_pool=candidate_pool,
+            use_lexical_ladder=use_lexical_ladder,
         )
 
         return self._format_results(query, reranked)
@@ -158,6 +162,7 @@ class HybridRetriever:
         ticker: str | None = None,
         section: str | None = None,
         candidate_pool: int = 10,
+        use_lexical_ladder: bool = True,
     ) -> list[RetrievedChunk]:
         """Retrieve using a pre-computed query embedding.
 
@@ -174,6 +179,7 @@ class HybridRetriever:
             ticker=ticker,
             section=section,
             candidate_pool=candidate_pool,
+            use_lexical_ladder=use_lexical_ladder,
         )
 
         return self._format_results(query, reranked)
@@ -186,6 +192,7 @@ class HybridRetriever:
         ticker: str | None = None,
         section: str | None = None,
         candidate_pool: int = 10,
+        use_lexical_ladder: bool = True,
     ) -> list[tuple[dict, float]]:
         """Run retrieval with model lock scoped only to cross-encoder inference."""
         structured_match = None
@@ -225,6 +232,23 @@ class HybridRetriever:
         )
         semantic_ids = [r["chunk_id"] for r in semantic_results]
 
+        lexical_ids: list[str] = []
+        if use_lexical_ladder:
+            hints = shape_retrieval_query(query)
+            lexical_ids = [
+                match.chunk["chunk_id"]
+                for match in lexical_ladder_candidates(
+                    filtered_chunks,
+                    ticker=ticker,
+                    section=section,
+                    exact_phrases=hints.exact_phrases,
+                    full_terms=hints.full_terms,
+                    partial_terms=hints.partial_terms,
+                    fuzzy_terms=hints.fuzzy_terms,
+                    max_candidates=candidate_pool,
+                )
+            ]
+
         # --- Stage 3: RRF merge ---
         bm25_ids = [c["chunk_id"] for c in bm25_candidates]
         rrf_scores: dict[str, float] = {}
@@ -232,6 +256,8 @@ class HybridRetriever:
         for rank, chunk_id in enumerate(bm25_ids):
             rrf_scores[chunk_id] = rrf_scores.get(chunk_id, 0) + 1 / (RRF_K + rank + 1)
         for rank, chunk_id in enumerate(semantic_ids):
+            rrf_scores[chunk_id] = rrf_scores.get(chunk_id, 0) + 1 / (RRF_K + rank + 1)
+        for rank, chunk_id in enumerate(lexical_ids):
             rrf_scores[chunk_id] = rrf_scores.get(chunk_id, 0) + 1 / (RRF_K + rank + 1)
 
         # Keep candidate scores rank-based because BM25 and cosine scores use different scales.

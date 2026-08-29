@@ -123,7 +123,7 @@ def _print_stats(artifact: dict) -> None:
     for name in (
         "artifact", "plan", "test_set", "corpus",
         "index_manifest", "embedding", "reranker", "query_shaper",
-        "retrieval_config",
+        "lexical_ladder", "retrieval_config",
     ):
         print(f"  {name:<16}: {fingerprints[name]}")
 

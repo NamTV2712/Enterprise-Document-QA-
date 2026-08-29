@@ -69,6 +69,7 @@ from src.evaluation.context_packing import (
 )
 from src.evaluation.test_set import TEST_SET, TestCase
 from src.generation.generator import Generator
+from src.retrieval.lexical_ladder import LEXICAL_LADDER_FINGERPRINT
 from src.retrieval.query_shaper import QUERY_SHAPER_FINGERPRINT
 
 logging.basicConfig(
@@ -105,6 +106,7 @@ def assert_phase2_retrieval_hermeticity() -> None:
     allowed_modules = {
         "src.retrieval",
         "src.retrieval.query_shaper",
+        "src.retrieval.lexical_ladder",
         "src.retrieval.retriever",
         "src.retrieval.embedder",
         "src.retrieval.vector_store",
@@ -136,6 +138,11 @@ def load_bound_artifact(
             "Query-shaper provenance drift: Phase 1 artifact is missing the "
             "current deterministic shaper fingerprint. Rebuild Phase 1 before "
             "running Phase 2."
+        )
+    if artifact["fingerprints"].get("lexical_ladder") != LEXICAL_LADDER_FINGERPRINT:
+        raise RuntimeError(
+            "Lexical-ladder provenance drift: rebuild Phase 1 before running "
+            "Phase 2."
         )
     embedded = artifact["fingerprints"]["artifact"]
     if embedded != expected_fingerprint:

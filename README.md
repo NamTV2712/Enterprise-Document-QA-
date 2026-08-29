@@ -288,8 +288,14 @@ artifact therefore remains a historical benchmark binding and must be rebuilt
 before any new Phase 2 result is run or compared. The offline 61-subquery A/B
 shaped only two AWS queries, introduced zero ticker leaks or required-term
 regressions, and serialized byte-identically across repeated runs.
-The next lexical-search experiment is gated and must preserve ticker isolation
-and recall before it can change the production candidate set.
+A field-aware lexical ladder now consumes only explicit shaper hints and merges
+the first non-empty `exact_phrase -> full_terms -> partial_terms -> fuzzy` tier
+into RRF. Filters are applied before matching; fuzzy requires a ticker and runs
+only after all exact tiers miss. Its full 61-subquery A/B produced zero ticker
+leaks, zero required-term regressions, and byte-identical reports across two
+runs. The 59 unhinted queries remained byte-stable, while both AWS queries kept
+the fact-bearing chunk at rank 1. Artifact provenance now binds both shaper and
+ladder fingerprints.
 
 Historical context-packing A/B (the pre-registration and confirmatory run used
 the prior frozen Phase 1 artifact, paired per-case,

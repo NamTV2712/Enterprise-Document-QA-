@@ -46,8 +46,9 @@ from src.evaluation.retrieval_plan import (
 )
 from src.evaluation.test_set import TEST_SET
 from src.evaluation.test_set import TestCase as EvalTestCase
-from src.retrieval.retriever import RetrievedChunk
+from src.retrieval.lexical_ladder import LEXICAL_LADDER_FINGERPRINT
 from src.retrieval.query_shaper import QUERY_SHAPER_FINGERPRINT
+from src.retrieval.retriever import RetrievedChunk
 
 
 def _chunk(chunk_id: str, score: float = 0.5) -> RetrievedChunk:
@@ -249,6 +250,7 @@ def test_artifact_contains_no_timestamp_keys() -> None:
     assert artifact["fingerprints"]["artifact"].startswith("sha256:")
     assert artifact["schema_version"] == 2
     assert artifact["fingerprints"]["query_shaper"] == QUERY_SHAPER_FINGERPRINT
+    assert artifact["fingerprints"]["lexical_ladder"] == LEXICAL_LADDER_FINGERPRINT
 
 
 # ---------------------------------------------------------------------------

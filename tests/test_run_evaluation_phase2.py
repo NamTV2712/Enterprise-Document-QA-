@@ -30,6 +30,7 @@ from src.evaluation.phase2_runtime import (
     generation_pool_keys,
     judging_pool_keys,
 )
+from src.retrieval.lexical_ladder import LEXICAL_LADDER_FINGERPRINT
 from src.retrieval.query_shaper import QUERY_SHAPER_FINGERPRINT
 
 PIN = "sha256:" + "0" * 64
@@ -62,7 +63,11 @@ def _scores(faithfulness: float = 1.0) -> dict:
 def _artifact_payload() -> dict:
     return {
         "schema_version": 2,
-        "fingerprints": {"artifact": PIN, "query_shaper": QUERY_SHAPER_FINGERPRINT},
+        "fingerprints": {
+            "artifact": PIN,
+            "query_shaper": QUERY_SHAPER_FINGERPRINT,
+            "lexical_ladder": LEXICAL_LADDER_FINGERPRINT,
+        },
         "cases": [
             {
                 "question": APPLE_Q,
@@ -312,6 +317,18 @@ def test_load_bound_artifact_refuses_missing_query_shaper_provenance(
     path.write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(RuntimeError, match="Query-shaper provenance drift"):
+        load_bound_artifact(path, PIN)
+
+
+def test_load_bound_artifact_refuses_missing_lexical_ladder_provenance(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "artifact.json"
+    payload = _artifact_payload()
+    del payload["fingerprints"]["lexical_ladder"]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="Lexical-ladder provenance drift"):
         load_bound_artifact(path, PIN)
 
 

@@ -159,10 +159,13 @@ The retriever combines complementary signals:
 
 1. BM25 retrieves exact terms, company names, numbers, and table labels.
 2. Qdrant retrieves semantically similar chunks from local embeddings.
-3. Reciprocal Rank Fusion merges lexical and semantic rankings.
-4. A cross-encoder re-ranks the fused candidate pool.
-5. Filters enforce ticker and section constraints.
-6. Structured lookup promotes high-confidence financial rows and auditor
+3. Query-shaper hints can add a scoped lexical candidate ladder in strict
+   `exact_phrase -> full_terms -> partial_terms -> fuzzy` order. Fuzzy matching
+   requires a ticker and runs only when every preceding tier misses.
+4. Reciprocal Rank Fusion merges BM25, semantic, and any ladder ranking.
+5. A cross-encoder re-ranks the fused candidate pool.
+6. Filters enforce ticker and section constraints.
+7. Structured lookup promotes high-confidence financial rows and auditor
    signature evidence for supported query patterns.
 
 Embedding and cross-encoder inference share a model lock. This prevents a

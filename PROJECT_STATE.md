@@ -34,6 +34,22 @@ produced byte-identical reports over repeated runs. The legacy Phase 1 artifact
 is intentionally no longer eligible for new Phase 2/provider work; rebuild it
 with the verified Phase 1 command before pinning a new benchmark binding.
 
+The field-aware lexical-ladder milestone is implemented and admitted to RRF
+after its offline gate passed. The ladder consumes only explicit shaper hints,
+applies ticker/section scope before matching, and uses the first non-empty tier
+in `exact_phrase -> full_terms -> partial_terms -> fuzzy` order. Fuzzy matching
+requires a known ticker, terms of at least five characters, similarity at least
+`0.88`, and a complete miss from all exact tiers. On the 61 frozen subqueries,
+only the two AWS queries had hints; they produced eight scoped lexical
+candidates, zero ticker leaks, zero required-term regressions, and retained the
+fact-bearing chunk at rank 1. All 59 unhinted queries were byte-stable. Two
+independent reports had identical SHA-256
+`3ee80134a3b589aa3361f708a3664d129bd419f4cf370e3c4ff633d6cbeda26d`.
+The ladder fingerprint is
+`sha256:f64e361759928a14705bbd264c1854b378483f716b91a4379718f00d9d774ece`
+and is now required by every Phase 2-derived runner. No generated artifact or
+provider benchmark was changed in this milestone.
+
 The six-case sentinel has now completed with `6/6` generation and judge calls
 successful. Against the frozen baseline, legacy line citations fell from `1`
 case to `0`, uncited non-fallback answers fell from `2` to `0`, and numeric

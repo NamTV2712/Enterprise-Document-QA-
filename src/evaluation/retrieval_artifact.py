@@ -25,6 +25,7 @@ from src.evaluation.retrieval_plan import (
 )
 from src.evaluation.test_set import TestCase
 from src.retrieval.index_manifest import compute_corpus_fingerprint
+from src.retrieval.lexical_ladder import LEXICAL_LADDER_FINGERPRINT
 from src.retrieval.query_shaper import QUERY_SHAPER_FINGERPRINT, shape_retrieval_query
 
 ARTIFACT_SCHEMA_VERSION = 2
@@ -202,6 +203,7 @@ def build_retrieval_artifact(
         "embedding": _embedding_fingerprint(),
         "reranker": _reranker_fingerprint(),
         "query_shaper": QUERY_SHAPER_FINGERPRINT,
+        "lexical_ladder": LEXICAL_LADDER_FINGERPRINT,
         "retrieval_config": _sha256_text(
             json.dumps(
                 {"top_k": top_k, "route_policy": "frozen_official_v2"},

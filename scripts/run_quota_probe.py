@@ -58,6 +58,7 @@ from src.evaluation.phase2_runtime import (
     make_judge_call,
 )
 from src.generation.generator import Generator
+from src.retrieval.lexical_ladder import LEXICAL_LADDER_FINGERPRINT
 from src.retrieval.query_shaper import QUERY_SHAPER_FINGERPRINT
 
 logging.basicConfig(
@@ -142,6 +143,11 @@ def _load_artifact_and_binding() -> tuple[dict, GenerationUpstream]:
     if artifact["fingerprints"].get("query_shaper") != QUERY_SHAPER_FINGERPRINT:
         raise RuntimeError(
             "Query-shaper provenance drift: rebuild Phase 1 before running "
+            "the probe."
+        )
+    if artifact["fingerprints"].get("lexical_ladder") != LEXICAL_LADDER_FINGERPRINT:
+        raise RuntimeError(
+            "Lexical-ladder provenance drift: rebuild Phase 1 before running "
             "the probe."
         )
     embedded = artifact["fingerprints"]["artifact"]

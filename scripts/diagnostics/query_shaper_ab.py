@@ -87,6 +87,7 @@ def run(artifact_path: Path, top_k: int, candidate_pool: int) -> dict[str, Any]:
                     original_results = retriever.retrieve(
                         original_query, top_k=top_k, ticker=plan["ticker"],
                         section=plan["section"], candidate_pool=candidate_pool,
+                        use_lexical_ladder=False,
                     )
                     if shaped.retrieval_query == original_query:
                         shaped_results = original_results
@@ -95,6 +96,7 @@ def run(artifact_path: Path, top_k: int, candidate_pool: int) -> dict[str, Any]:
                         shaped_results = retriever.retrieve(
                             shaped.retrieval_query, top_k=top_k, ticker=plan["ticker"],
                             section=plan["section"], candidate_pool=candidate_pool,
+                            use_lexical_ladder=False,
                         )
                         shaped_reexecuted = True
                     original_summary = _summarize_results(

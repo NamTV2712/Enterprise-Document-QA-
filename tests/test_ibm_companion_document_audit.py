@@ -23,7 +23,7 @@ def _fixture(tmp_path: Path, links: str = '<a href="ibm-2025_d2.htm">Annual Repo
         encoding="utf-8",
     )
     sections = processed / f"{accession}_sections.json"
-    sections.write_text(json.dumps({"ticker": "IBM", "accession_number": "0000000000-26-000001", "sections": {}}), encoding="utf-8")
+    sections.write_text(json.dumps({"ticker": "IBM", "accession_number": "0000000000-26-000001", "filing_date": "2026-02-01", "report_date": "2025-12-31", "sections": {}}), encoding="utf-8")
     chunks = processed / f"{accession}_chunks.jsonl"
     chunks.write_text('{"chunk_id":"IBM_business_0000"}\n', encoding="utf-8")
     if companion is not None:
@@ -37,7 +37,7 @@ def test_selects_relative_companion_candidate_and_records_missing(tmp_path):
     assert report["status"] == "companion_missing"
     assert report["incorporation_evidence"]["page_range"] == {"start": 42, "end": 116}
     assert report["companion_candidates"][0]["provenance"] == "relative_filing_link"
-    assert report["gates"]["unique_companion"] is False
+    assert report["gates"]["unique_companion"] == "fail"
     assert report["overall_pass"] is False
 
 
@@ -61,12 +61,48 @@ def test_ambiguous_candidates_are_not_selected(tmp_path):
 def test_statement_evidence_detects_duplicate_missing_year_and_contamination(tmp_path):
     path = tmp_path / "companion.htm"
     table = "<table><tr><th>2025</th><th>2024</th></tr><tr><td>Total assets</td><td>2</td><td>1</td></tr></table>"
-    path.write_text(table + table + "<p>Item 9. Changes</p>", encoding="utf-8")
+    path.write_text('<div data-page="42"></div>' + table + table + "<p>Item 9. Changes</p>" + '<div data-page="116"></div>', encoding="utf-8")
     evidence = _statement_evidence(path, {"start": 42, "end": 116})
     assert evidence["table_count"] == 2
     assert evidence["unique_fingerprints"] == 1
     assert evidence["fiscal_years"] == ["2024", "2025"]
     assert "item 9" in evidence["contamination_markers"]
+
+
+def test_complete_companion_fixture_passes_content_gates(tmp_path):
+    table = lambda label: f"<table><tr><th>2025</th><th>2024</th><th>2023</th></tr><tr><td>{label}</td><td>3</td><td>2</td><td>1</td></tr></table>"
+    companion = '<div data-page="42"></div>' + table("Net income") + table("Total assets") + table("Net cash provided by operating activities") + '<div data-page="116"></div>'
+    html, sections, chunks, *_ = _fixture(tmp_path, companion=companion)
+    report = audit_companion(html, sections, chunks)
+    assert report["status"] == "candidate_requires_validation"
+    assert report["statement_evidence"]["page_range_resolved"] is True
+    assert all(value == "pass" for name, value in report["gates"].items() if name not in {"reports_byte_identical", "input_hashes_unchanged"})
+    assert report["overall_pass"] is False
+
+
+def test_complete_companion_cli_passes_all_gates(tmp_path, monkeypatch):
+    table = lambda label: f"<table><tr><th>2025</th><th>2024</th><th>2023</th></tr><tr><td>{label}</td><td>3</td><td>2</td><td>1</td></tr></table>"
+    companion = '<div data-page="42"></div>' + table("Net income") + table("Total assets") + table("Net cash provided by operating activities") + '<div data-page="116"></div>'
+    html, sections, chunks, raw, processed = _fixture(tmp_path, companion=companion)
+
+    class DataSettings:
+        data_raw_dir = raw
+        data_processed_dir = processed
+
+    monkeypatch.setattr("scripts.diagnostics.ibm_companion_document_audit.settings", DataSettings())
+    output = tmp_path / "complete.json"
+    assert main(["--output", str(output)]) == 0
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert report["result"]["overall_pass"] is True
+    assert all(value == "pass" for value in report["result"]["gates"].values())
+
+
+def test_broken_page_markers_leave_interval_unresolved(tmp_path):
+    path = tmp_path / "companion.htm"
+    path.write_text('<div data-page="41"></div><table><tr><th>2025</th><th>2024</th></tr><tr><td>Total assets</td><td>2</td><td>1</td></tr></table>', encoding="utf-8")
+    evidence = _statement_evidence(path, {"start": 42, "end": 116})
+    assert evidence["page_range_resolved"] is False
+    assert evidence["table_count"] == 0
 
 
 def test_broken_reference_has_no_false_companion(tmp_path):

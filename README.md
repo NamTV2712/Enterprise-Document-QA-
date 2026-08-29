@@ -226,24 +226,22 @@ and judging. All `30` generations and `30` judgments completed OK with no
 skipped records, no parse failures, and one shared binding. Contexts are
 rendered under `selective_packed_v1`, a route-aware packing strategy that
 kept every pre-registered merge gate (see below).
-The published table is historical: it binds the prior 9,978-point corpus.
 The active local index uses the IBM companion-recovery generation
 `nomic-e9b6763-fy2026-ibm-companion-20260829` (corpus
 `sha256:1d5b99ed…`, `10,053` points). Its offline, byte-deterministic Phase 1
 artifact `sha256:8283b628…` completes all 30 priority <= 2 cases with 61
 non-empty queries and `12/12` decomposed-plan evidence checks. The separate
 priority-3 replay covers 22 recovery cases at keyword recall `1.0000`. The
-earlier three-case quota probe belongs to a superseded binding and is
-non-official self-judge evidence. No full N=30 Phase 2 run has been made on
-this new binding, so the table below must not be interpreted as its
-current-corpus benchmark.
+The current-corpus Phase 2 run completed officially with one binding and no
+skipped or failed records. The three-case probe was run first as a quota
+preflight and remains non-official self-judge evidence.
 
 | Metric | Score |
 |---|---:|
-| Faithfulness | `0.5983` |
-| Answer relevancy | `0.9200` |
-| Context precision | `0.3983` |
-| Overall judge average | `0.6389` |
+| Faithfulness | `0.5382` |
+| Answer relevancy | `0.9233` |
+| Context precision | `0.3810` |
+| Overall judge average | `0.6142` |
 | Citation correctness | `1.0000` |
 | Recall proxy | `1.0000` |
 | Fallback accuracy | `1.0000` |
@@ -253,13 +251,21 @@ Category table (faithfulness / relevancy / precision):
 | Category | N | Scores |
 |---|---:|---|
 | fact_lookup | 8 | `0.6875 / 1.0000 / 0.3850` |
-| summary | 6 | `0.4917 / 0.9000 / 0.6050` |
-| enumeration | 4 | `0.3925 / 0.8750 / 0.3050` |
-| comparative | 6 | `0.5383 / 0.7833 / 0.3367` |
+| summary | 6 | `0.4208 / 0.9000 / 0.5633` |
+| enumeration | 4 | `0.4350 / 0.8250 / 0.3050` |
+| comparative | 6 | `0.2967 / 0.8500 / 0.2917` |
 | multi_hop | 3 | `0.6667 / 1.0000 / 0.6667` |
-| out_of_corpus | 3 | `0.8000 / 1.0000 / 0.0000` |
+| out_of_corpus | 3 | `0.8667 / 0.9667 / 0.0000` |
 
-Context-packing A/B (same frozen Phase 1 artifact, paired per-case,
+Current-corpus binding: artifact `sha256:8283b628…`, Phase 2 binding
+`sha256:680e0370…`, with `30/30` generation and `30/30` judgment records.
+Deterministic checks remain citation correctness `1.0000` (`29` scored cases),
+recall proxy `1.0000` (`24` scored cases), and fallback accuracy `1.0000`.
+Token usage was `74,448` generation prompt + `12,304` generation completion
+tokens and `28,856` judging prompt + `16,072` judging completion tokens.
+
+Historical context-packing A/B (the pre-registration and confirmatory run used
+the prior frozen Phase 1 artifact, paired per-case,
 pre-registered merge gates): packing only the `fact_lookup`, `multi_hop`,
 and `summary` categories moved context precision from `0.2872` to
 `0.3983` (`+0.1111 >= +0.08`), kept recall proxy at `1.0000`, stayed
@@ -626,9 +632,11 @@ Secrets are loaded from `.env` and should never be committed.
 
 ## Roadmap
 
-1. Add production logging, quota monitoring, and error alerts before selecting a paid always-on backend.
-2. Add deterministic priority-3 evaluation cases for the recovered hard-group table routes (`CVX`, `JPM`, `XOM`) without changing the official priority-2 set.
-3. IBM's incorporated Annual Report companion is now downloaded, page-bounded, and indexed through the generic companion resolver; rerun the read-only audit after any future filing refresh.
+1. Improve comparative and enumeration grounding using deterministic evidence-shape
+   diagnostics and per-case answer/citation review; require a pre-registered gate
+   before changing retrieval, reranking, or context packing.
+2. Add production logging, quota monitoring, and error alerts before selecting a paid always-on backend.
+3. Expand deterministic evaluation coverage across the clean extended corpus without changing the official benchmark contract.
 4. Revisit permanent hosting only when always-on public availability is required.
 
 ## Why This Project Matters

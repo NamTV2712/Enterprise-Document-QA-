@@ -25,6 +25,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from src.evaluation.evidence_contracts import EXPECTED_FACT_OVERRIDES
 from src.evaluation.test_set import TEST_SET
 from src.retrieval.query_normalizer import COMPANY_ALIASES
 
@@ -42,25 +43,6 @@ _FALLBACK_PHRASES = (
     "i don't have",
     "do not have enough",
 )
-
-# Ground-truth figures are pinned here in addition to whatever the ground
-# truth text itself yields, so thin or reworded evidence can never hide
-# behind a qualitative comparison. The pinned totals match the FY2024
-# contract fixed inside the question itself.
-EXPECTED_FACT_OVERRIDES: dict[str, tuple[str, ...]] = {
-    "Which company, Apple or Amazon, had higher total revenue in fiscal year 2024?": (
-        "391,035",   # Apple FY2024 total net sales (fact_lookup GT)
-        "637,959",   # Amazon FY2024 consolidated net sales (fact_lookup GT)
-    ),
-    # The qualitative ground truth is intentionally broad, but a growth
-    # comparison is not evidence-complete unless the underlying AWS FY2024 /
-    # FY2025 values are present in the Amazon branch context.
-    "How does Amazon's AWS segment compare to Microsoft's cloud business in terms of growth?": (
-        "107,556",
-        "128,725",
-    ),
-}
-
 
 def _compact(text: str) -> str:
     return re.sub(r"\s+", "", text).lower()

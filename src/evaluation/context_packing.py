@@ -29,6 +29,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from src.evaluation.evidence_contracts import evidence_terms
+
 CONTEXT_STRATEGY_FULL_EVIDENCE = "full_evidence_v1"
 CONTEXT_STRATEGY_ROUTE_AWARE = "route_aware_v2"
 # Packs only the categories whose A/B paired evidence showed faithfulness-
@@ -36,7 +38,9 @@ CONTEXT_STRATEGY_ROUTE_AWARE = "route_aware_v2"
 # Enumeration/comparative-topical/out-of-corpus stay full-evidence because
 # packed-all regressed their faithfulness in the measured arms.
 CONTEXT_STRATEGY_SELECTIVE = "selective_packed_v1"
+CONTEXT_STRATEGY_COMPARATIVE_V3 = "comparative_packed_v3"
 SELECTIVE_PACKED_CATEGORIES = {"fact_lookup", "multi_hop", "summary"}
+COMPARATIVE_BRANCH_TARGET = 2
 
 # Structured lookup promotes exact table rows/auditor signatures to
 # exactly 10.0 before hybrid scoring; anything at that ceiling is an
@@ -103,6 +107,12 @@ def pack_case_context(
         return result
 
     category = case_payload.get("category", "")
+    if (
+        strategy == CONTEXT_STRATEGY_COMPARATIVE_V3
+        and category != "comparative"
+    ):
+        result.kept = list(entries)
+        return result
     expected_tickers = sorted({
         query["query"].get("ticker")
         for query in case_payload.get("queries", [])
@@ -111,11 +121,16 @@ def pack_case_context(
     })
 
     kept: list[dict] = []
+    kept_chunk_ids: set[str] = set()
 
     def _add(entry: dict | None) -> bool:
-        if entry is None or any(entry is k for k in kept):
+        if entry is None:
+            return False
+        chunk_id = entry.get("chunk_id")
+        if chunk_id in kept_chunk_ids:
             return False
         kept.append(entry)
+        kept_chunk_ids.add(chunk_id)
         return True
 
     def _top_by(predicate) -> dict | None:
@@ -137,6 +152,19 @@ def pack_case_context(
         score = entry.get("score")
         if isinstance(score, (int, float)) and score >= STRUCTURED_PROMOTION_SCORE:
             _add(entry)
+    # V3 comparative breadth: preserve the leading evidence from every
+    # decomposed branch instead of collapsing each company to one chunk.
+    if strategy == CONTEXT_STRATEGY_COMPARATIVE_V3:
+        for query_entry in case_payload.get("queries", []):
+            branch_ids: set[str] = set()
+            for entry in query_entry.get("chunks", []):
+                chunk_id = entry.get("chunk_id")
+                if chunk_id in branch_ids:
+                    continue
+                branch_ids.add(chunk_id)
+                _add(entry)
+                if len(branch_ids) >= COMPARATIVE_BRANCH_TARGET:
+                    break
     # M2b: a direct fact-lookup answer may cite at most one supporting
     # passage next to its exact structured hit; keep the strongest one.
     if category == "fact_lookup":
@@ -156,7 +184,12 @@ def pack_case_context(
             _add(_top_by(lambda e, t=ticker: _chunk_ticker(e) == t))
     # M4: required-keyword coverage.
     uncovered: list[str] = []
-    for keyword in required_keywords or []:
+    required_terms = tuple(required_keywords or ())
+    if strategy == CONTEXT_STRATEGY_COMPARATIVE_V3:
+        required_terms = evidence_terms(
+            case_payload.get("question", ""), required_terms
+        )
+    for keyword in required_terms:
         needle = _compact(keyword)
         if not needle:
             continue
@@ -185,10 +218,13 @@ def pack_case_context(
             _add(entry)
 
     # Restore source order for stable [Source N] numbering.
-    kept_ids = {id(entry) for entry in kept}
-    ordered = [entry for entry in entries if id(entry) in kept_ids]
+    ordered = [
+        entry for entry in entries if entry.get("chunk_id") in kept_chunk_ids
+    ]
     result.kept = ordered
-    result.dropped = [entry for entry in entries if id(entry) not in kept_ids]
+    result.dropped = [
+        entry for entry in entries if entry.get("chunk_id") not in kept_chunk_ids
+    ]
     return result
 
 

@@ -307,6 +307,18 @@ decomposed evidence audit passes `12/12`. Phase 2 runners pin this artifact,
 but no provider-backed Phase 2 result exists on it yet; the published scores
 above remain bound to the historical artifact.
 
+Comparative context packing v3 has passed a provider-free offline gate on this
+active artifact. It keeps the first two unique chunks from every decomposition
+branch and retains structured hits plus required-fact donors. The gate passed
+`30/30` evidence coverage, `30/30` exact source boundaries, `24/24`
+non-comparative byte stability, and `6/6` comparative branch coverage, while
+reducing comparative rendered evidence from `20,939` to `10,211` tokens
+(`51.23%`; pre-registered minimum `25%`). Two runs produced byte-identical
+reports. The strategy is available only as the explicit experimental
+`comparative_packed_v3` Phase 2 option; `selective_packed_v1` remains the
+default until a separately authorized comparative-only provider A/B passes.
+No published score changed in this offline milestone.
+
 Historical context-packing A/B (the pre-registration and confirmatory run used
 the prior frozen Phase 1 artifact, paired per-case,
 pre-registered merge gates): packing only the `fact_lookup`, `multi_hop`,

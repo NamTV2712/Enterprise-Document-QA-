@@ -240,6 +240,13 @@ paths used by the application. It combines:
 - Per-case checkpointing for quota-safe resume.
 - Priority and category filters for controlled benchmark slices.
 
+Context-rendering strategy is a binding evaluation input. The experimental
+`comparative_packed_v3` strategy changes only comparative cases: it keeps the
+first two unique chunks from each decomposition branch and then retains
+structured hits and required-fact donors. Non-comparative contexts remain
+byte-identical to the frozen artifact. The production evaluation default stays
+`selective_packed_v1` until a separately authorized provider A/B admits v3.
+
 Checkpoint records are filtered to the selected test questions before aggregation.
 Fresh runs can explicitly remove the active checkpoint. A run with skipped cases
 exits unsuccessfully and must not replace official reported metrics.

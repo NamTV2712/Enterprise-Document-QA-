@@ -60,6 +60,7 @@ from src.evaluation.phase2_runtime import (
     make_judge_call,
 )
 from src.evaluation.context_packing import (
+    CONTEXT_STRATEGY_COMPARATIVE_V3,
     CONTEXT_STRATEGY_FULL_EVIDENCE,
     CONTEXT_STRATEGY_ROUTE_AWARE,
     CONTEXT_STRATEGY_SELECTIVE,
@@ -518,13 +519,16 @@ def main(argv: list[str] | None = None) -> int:
             CONTEXT_STRATEGY_FULL_EVIDENCE,
             CONTEXT_STRATEGY_ROUTE_AWARE,
             CONTEXT_STRATEGY_SELECTIVE,
+            CONTEXT_STRATEGY_COMPARATIVE_V3,
         ],
         default=CONTEXT_STRATEGY_SELECTIVE,
         help=(
             "selective_packed_v1 is the merged default: it packs only the "
             "fact_lookup/multi_hop/summary categories whose paired A/B "
             "evidence passed all pre-registered gates. full_evidence_v1 "
-            "renders every frozen chunk and remains available for replay."
+            "renders every frozen chunk and remains available for replay. "
+            "comparative_packed_v3 is an offline-gated experimental arm; "
+            "it is not the default."
         ),
     )
     args = parser.parse_args(argv)
@@ -533,6 +537,7 @@ def main(argv: list[str] | None = None) -> int:
     suffix = {
         CONTEXT_STRATEGY_ROUTE_AWARE: "_packed",
         CONTEXT_STRATEGY_SELECTIVE: "_packed_selective",
+        CONTEXT_STRATEGY_COMPARATIVE_V3: "_packed_comparative_v3",
     }.get(args.context_strategy, "")
     if args.gen_checkpoint is None:
         args.gen_checkpoint = Path(

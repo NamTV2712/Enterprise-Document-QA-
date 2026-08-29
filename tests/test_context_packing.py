@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from src.evaluation.context_packing import (
+    CONTEXT_STRATEGY_COMPARATIVE_V3,
     CONTEXT_STRATEGY_FULL_EVIDENCE,
     CONTEXT_STRATEGY_ROUTE_AWARE,
     PackedContext,
@@ -216,3 +217,126 @@ def test_never_adds_evidence_beyond_full_set(strategy: str) -> None:
 
     full_ids = {e["chunk_id"] for e in collect_entries(case)}
     assert set(packed.kept_ids).issubset(full_ids)
+
+
+def test_comparative_v3_keeps_two_leading_chunks_per_branch() -> None:
+    case = _case(
+        [
+            {
+                "query": "apple",
+                "ticker": "AAPL",
+                "chunks": [
+                    _chunk("A_0", "apple primary", 3.0, "AAPL"),
+                    _chunk("A_1", "apple support", 2.0, "AAPL"),
+                    _chunk("A_2", "apple noise", 1.0, "AAPL"),
+                ],
+            },
+            {
+                "query": "microsoft",
+                "ticker": "MSFT",
+                "chunks": [
+                    _chunk("M_0", "microsoft primary", 3.0, "MSFT"),
+                    _chunk("M_1", "microsoft support", 2.0, "MSFT"),
+                    _chunk("M_2", "microsoft noise", 1.0, "MSFT"),
+                ],
+            },
+        ],
+        "comparative",
+    )
+
+    packed = pack_case_context(
+        case,
+        strategy=CONTEXT_STRATEGY_COMPARATIVE_V3,
+    )
+
+    assert packed.kept_ids == ["A_0", "A_1", "M_0", "M_1"]
+
+
+def test_comparative_v3_adds_fact_override_donor_below_branch_target() -> None:
+    case = _case(
+        [
+            {
+                "query": "aws",
+                "ticker": "AMZN",
+                "chunks": [
+                    _chunk("AWS_0", "AWS narrative", 3.0, "AMZN"),
+                    _chunk("AWS_1", "AWS cost discussion", 2.0, "AMZN"),
+                    _chunk("AWS_2", "AWS values 107,556 128,725", 1.0, "AMZN"),
+                ],
+            },
+            {
+                "query": "cloud",
+                "ticker": "MSFT",
+                "chunks": [_chunk("MSFT_0", "Cloud growth", 3.0, "MSFT")],
+            },
+        ],
+        "comparative",
+    )
+    case["question"] = (
+        "How does Amazon's AWS segment compare to Microsoft's cloud business "
+        "in terms of growth?"
+    )
+
+    packed = pack_case_context(
+        case,
+        strategy=CONTEXT_STRATEGY_COMPARATIVE_V3,
+    )
+
+    assert "AWS_2" in packed.kept_ids
+    assert packed.uncovered_keywords == []
+
+
+def test_comparative_v3_leaves_noncomparative_context_unchanged() -> None:
+    case = _case(
+        [
+            {
+                "query": "summary",
+                "ticker": "AAPL",
+                "chunks": [
+                    _chunk("S_0", "one", 2.0),
+                    _chunk("S_1", "two", 1.0),
+                ],
+            }
+        ],
+        "summary",
+    )
+
+    packed = pack_case_context(
+        case,
+        strategy=CONTEXT_STRATEGY_COMPARATIVE_V3,
+    )
+
+    assert packed.kept_ids == ["S_0", "S_1"]
+    assert packed.dropped == []
+
+
+def test_fact_overrides_do_not_change_historical_route_aware_strategy() -> None:
+    case = _case(
+        [
+            {
+                "query": "aws",
+                "ticker": "AMZN",
+                "chunks": [
+                    _chunk("AWS_0", "AWS narrative", 3.0, "AMZN"),
+                    _chunk("AWS_1", "AWS values 107,556 128,725", 1.0, "AMZN"),
+                ],
+            },
+            {
+                "query": "cloud",
+                "ticker": "MSFT",
+                "chunks": [_chunk("MSFT_0", "Cloud growth", 3.0, "MSFT")],
+            },
+        ],
+        "comparative",
+    )
+    case["question"] = (
+        "How does Amazon's AWS segment compare to Microsoft's cloud business "
+        "in terms of growth?"
+    )
+
+    packed = pack_case_context(
+        case,
+        strategy=CONTEXT_STRATEGY_ROUTE_AWARE,
+    )
+
+    assert packed.kept_ids == ["AWS_0", "MSFT_0"]

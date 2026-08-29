@@ -120,9 +120,11 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        zero, uncited non-fallback answers fell to zero, and numeric flags did
        not increase. The run is non-official and stored in the ignored
        `data/eval_artifacts/answer_sentinel_summary.json`.
-22. [ ] Pre-register a comparative packing v3 gate: preserve 30/30 evidence
-       coverage and source boundaries while reducing rendered context tokens;
-       only then test a provider A/B on comparative sentinel cases.
+22. [x] Pre-register and pass the comparative packing v3 offline gate. The
+       strategy preserves 30/30 evidence coverage and source boundaries,
+       keeps all 24 non-comparative contexts byte-identical, preserves branch
+       coverage for all 6 comparative cases, and reduces comparative rendered
+       tokens from 20,939 to 10,211 (51.23%). No provider call was made.
 23. [x] Add the first shared deterministic query shaper and validate the AWS
        counterfactual: the original `Amazon AWS growth` query misses both
        required AWS values, while the shaped query retrieves them in rank 1.
@@ -148,9 +150,14 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        Artifact `sha256:3f02a791…` covers 30/30 cases and 61 non-empty
        queries, has zero ticker leakage, and passes `12/12 evidence_ok`; all
        Phase 2-derived runners now pin it. No provider call was made.
-27. [ ] Pre-register and run comparative packing v3 offline against the new
-       artifact, preserving 30/30 evidence coverage and source boundaries
-       before any small provider A/B is authorized.
+27. [x] Run comparative packing v3 offline against the schema-v2 artifact.
+       Two reports serialized byte-identically; the gate passed 30/30 evidence
+       coverage, 30/30 source boundaries, 24/24 non-comparative byte stability,
+       6/6 comparative branch coverage, and 51.23% comparative token reduction.
+       The strategy is exposed as experimental and is not the Phase 2 default.
+28. [ ] Run a small provider A/B on only the comparative sentinel cases after
+       explicit quota authorization. Keep `selective_packed_v1` as the default
+       and do not publish new benchmark scores unless the provider gate passes.
 
 ## Always-On Deployment
 

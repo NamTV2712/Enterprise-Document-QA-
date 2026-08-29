@@ -384,6 +384,42 @@ def test_resume_refuses_mismatched_upstream(upstream) -> None:
     assert records[0]["answer"] == "second"
 
 
+def test_resume_refuses_mismatched_context_builder(upstream) -> None:
+    gen_upstream, store_path = upstream
+    store = GenerationCheckpointStore(store_path)
+    question = _case().question
+    payload = {question: {"queries": []}}
+
+    run_generation_phase(
+        [question],
+        payload,
+        gen_upstream,
+        lambda _prompt: "first",
+        store,
+        sleep_fn=lambda _seconds: None,
+    )
+    changed_renderer = GenerationUpstream(
+        artifact_path=gen_upstream.artifact_path,
+        artifact_sha256=gen_upstream.artifact_sha256,
+        artifact_schema_version=gen_upstream.artifact_schema_version,
+        model=gen_upstream.model,
+        context_builder_fingerprint="sha256:changed-renderer",
+    )
+    calls: list[str] = []
+
+    records = run_generation_phase(
+        [question],
+        payload,
+        changed_renderer,
+        lambda prompt: calls.append(prompt) or "second",
+        store,
+        sleep_fn=lambda _seconds: None,
+    )
+
+    assert len(calls) == 1
+    assert records[0]["answer"] == "second"
+
+
 def test_quota_skip_is_excluded_from_official_aggregate(upstream) -> None:
     gen_upstream, store_path = upstream
     store = GenerationCheckpointStore(store_path)

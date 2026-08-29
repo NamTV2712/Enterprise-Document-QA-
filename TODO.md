@@ -155,9 +155,22 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        coverage, 30/30 source boundaries, 24/24 non-comparative byte stability,
        6/6 comparative branch coverage, and 51.23% comparative token reduction.
        The strategy is exposed as experimental and is not the Phase 2 default.
-28. [ ] Run a small provider A/B on only the comparative sentinel cases after
-       explicit quota authorization. Keep `selective_packed_v1` as the default
-       and do not publish new benchmark scores unless the provider gate passes.
+28. [x] Run the pre-registered provider A/B on the six comparative cases. Both
+       arms completed 6/6 generation and 6/6 judging. V3 improved context
+       precision by `+0.2233`, reduced tokens `51.23%`, and kept deterministic
+       metrics perfect, but is NO-GO: answer relevancy moved `-0.0766` and the
+       AWS answer omitted `107,556` and `128,725`. The audit also fixed the
+       runner so generation, deterministic metrics, and judging now consume
+       the same renderer-bound context; old packing runs are historical only.
+29. [ ] Build comparative packing v4 as an offline counterfactual using branch
+       top 1 plus a query-intent/fact donor instead of blind top 2. Pre-register
+       contracts that retain AMZN's rank-4 security-incidents chunk, Microsoft's
+       rank-3 high-level Cloud growth chunk, both AWS values, and remove the
+       off-topic Apple international-risk rank-2 chunk. Preserve 30/30 evidence
+       and source boundaries with at least 45% comparative token reduction.
+30. [ ] After v4 passes offline, tighten exact numeric-pair prompt adherence and
+       run only the AWS sentinel. Require `107,556` and `128,725` in a grounded,
+       cited non-fallback answer before another six-case provider A/B.
 
 ## Always-On Deployment
 

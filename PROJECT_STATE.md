@@ -90,6 +90,42 @@ default remains `selective_packed_v1`. No Groq call, generation, judging, or
 official-score change occurred; a small comparative-only provider A/B is the
 next separately authorized milestone.
 
+The comparative provider A/B has now completed and is a pre-registered NO-GO.
+Before spending quota, the runner audit found and fixed an evaluation-integrity
+defect: packed evidence was previously passed to the judge but generation still
+received full evidence. Generation and judging now share the same rendered
+context, deterministic citation/recall checks measure that rendered subset, and
+generation binding schema v2 fingerprints the renderer so old mismatched
+checkpoints cannot resume. This means earlier context-packing runs remain
+historical but do not validate packed generation behavior.
+
+The corrected non-official A/B completed `6/6` generation and `6/6` judging in
+both arms on artifact `sha256:3f02a791…`, with no skips or parse failures. V3
+reduced evidence tokens `20,939 -> 10,211` (`51.23%`), moved context precision
+`0.5550 -> 0.7783` (`+0.2233`), kept faithfulness within gate
+(`1.0000 -> 0.9933`, `-0.0067`), and increased overall judge average
+`0.8461 -> 0.8928` (`+0.0467`). It nevertheless failed the pre-registered
+answer-relevancy gate (`0.9833 -> 0.9067`, `-0.0766 < -0.05`) and the AWS
+answer-integrity gate: the answer was no longer a fallback but omitted both
+required underlying AWS values `107,556` and `128,725`. Deterministic citation,
+recall, and fallback metrics remained `1.0000`. The ignored paired report is
+`data/eval_artifacts/comparative_packing_v3_ab.json` with file SHA-256
+`15116c948265554f11de25ae9d1602583096174b3a312b76eb49488b171a9d42`.
+
+The paired diagnosis rejects a simple top-k change. In the cybersecurity case,
+AMZN ranks 1-2 lacked cybersecurity evidence while the direct data-loss and
+security-incidents chunk was rank 4, causing the `-0.40` relevancy outlier. In
+the AWS case, v3 retained the AWS value table but dropped Microsoft's high-level
+`Microsoft Cloud revenue increased 23% to $168.9 billion` chunk at branch rank
+3, and generation selected narrower product rates. In the international-risk
+case, blindly retaining Apple rank 2 added an off-topic business-risk chunk and
+context precision fell `-0.33`. The next milestone is therefore an offline v4
+counterfactual that keeps branch top 1 plus the best query-intent/fact donor,
+with explicit per-branch evidence contracts; no further provider run should be
+made until that deterministic gate passes. Exact numeric-pair prompt adherence
+then needs its own AWS sentinel because both full and v3 answers omitted the raw
+AWS values in this A/B.
+
 The current-corpus evaluation closure is complete. Phase 1 was rebuilt against the active IBM companion-recovery corpus with `--verify-determinism` after one-time Hugging Face metadata resolution via the explicit `--allow-network` escape hatch; the resulting artifact is byte-identical across both executions and has fingerprint `sha256:8283b628bb755b00bef86a26d7c608f9b385836c28dad588992b7d533ea51ee4`. It executes all `30/30` priority <= 2 cases with `61` non-empty queries and `12/12` decomposed-plan `evidence_ok` checks, bound to corpus `sha256:1d5b99ed…`, index manifest `sha256:5ac5362a…`, embedding `sha256:0c4ee351…`, reranker `sha256:16ff6fc9…`, retrieval config `sha256:6bf7801a…`, and test set `sha256:92dc7bc0…`. The two Phase 2 runners now pin this artifact and regression tests refuse the superseded hard-group artifact. The separate priority-3 replay covers `22` cases at keyword recall `1.0000`; IBM net-income retrieval required and now uses a caption-aware structured lookup preference for the consolidated income statement. The current-corpus Phase 2 run is official after a judge-context integrity fix: `30/30` generation OK, `30/30` judgment OK, no skips or parse failures; source markers now preserve complete SEC chunks across internal blank lines and the context-builder fingerprint prevents stale judge checkpoint reuse. Corrected scores are Faithfulness `0.9793`, Answer Relevancy `0.9733`, Context Precision `0.6197`, and Overall `0.8574`. Deterministic checks remain citation correctness `1.0000`, recall proxy `1.0000`, and fallback accuracy `1.0000`; the next improvement should target comparative context precision and out-of-corpus abstention precision.
 
 The IBM companion production milestone is complete. A generic resolver now discovers a uniquely linked relative Annual Report companion, resolves the incorporated Item-8 page range, and admits only deduplicated multi-year statement-like tables within that interval; missing or ambiguous companions remain a safe no-op. IBM's audited companion `ibm-20251231_d2.htm` is stored at `data/raw/IBM/` with SHA-256 `6bad6022e0585cce956917bae6e85b3dd881234b274771343fcd8c3382c85b48`. It produced 32 supplemental `financial_table` chunks, an immutable embedding generation `nomic-e9b6763-fy2026-ibm-companion-20260829`, corpus fingerprint `sha256:1d5b99ed962ab9dff88f268ea17da4efd5c7128900961a123bdfb5e49716c8f4`, and a green trusted local Qdrant index with 10,053 points. Coverage is now 50/50 searchable tickers with financial-table chunks; IBM remains degraded only because its text `financial_statements` section is still not reconstructed. The read-only audit passes on the installed companion, and no Phase 2 evaluation was run.

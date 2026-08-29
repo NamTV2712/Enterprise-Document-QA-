@@ -247,6 +247,12 @@ structured hits and required-fact donors. Non-comparative contexts remain
 byte-identical to the frozen artifact. The production evaluation default stays
 `selective_packed_v1` until a separately authorized provider A/B admits v3.
 
+Generation, deterministic metrics, and judging must consume the same rendered
+evidence context. The generation binding includes a renderer fingerprint in
+addition to the named strategy; changing context-renderer semantics invalidates
+old checkpoints. This prevents a packed judge context from being attached to an
+answer generated from full evidence.
+
 Checkpoint records are filtered to the selected test questions before aggregation.
 Fresh runs can explicitly remove the active checkpoint. A run with skipped cases
 exits unsuccessfully and must not replace official reported metrics.

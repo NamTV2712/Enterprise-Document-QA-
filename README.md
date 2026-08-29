@@ -223,13 +223,15 @@ LLM provider:
 
 ## Evaluation Results
 
-Official benchmark: the two-phase pipeline (offline Phase 1 frozen
-retrieval artifact, then frozen-evidence generation and judging) over all
-`30` priority <= 2 cases, using `openai/gpt-oss-120b` for BOTH generation
-and judging. All `30` generations and `30` judgments completed OK with no
-skipped records, no parse failures, and one shared binding. Contexts are
-rendered under `selective_packed_v1`, a route-aware packing strategy that
-kept every pre-registered merge gate (see below).
+Historical completed benchmark: the two-phase pipeline (offline Phase 1
+frozen retrieval artifact, then frozen-evidence generation and judging) over
+all `30` priority <= 2 cases, using `openai/gpt-oss-120b` for both generation
+and judging. All `30` generations and `30` judgments completed with no skips
+or parse failures under the schema-v1 binding. A later renderer audit found
+that this run's `selective_packed_v1` label applied packed context to judging
+but generation still received full evidence. The table below remains a
+reproducibility record, but it is not a current validation of packed generation
+and must not be compared directly with corrected schema-v2 runs.
 The active local index uses the IBM companion-recovery generation
 `nomic-e9b6763-fy2026-ibm-companion-20260829` (corpus
 `sha256:1d5b99ed…`, `10,053` points). The published Phase 2 scores remain bound
@@ -304,8 +306,9 @@ with byte-identical output over 30 cases and 61 non-empty queries. Ticker
 leakage is zero, the AWS comparative branch stores the shaped retrieval query
 and retrieves `mdna_0012` at rank 1 with both required values, and the
 decomposed evidence audit passes `12/12`. Phase 2 runners pin this artifact,
-but no provider-backed Phase 2 result exists on it yet; the published scores
-above remain bound to the historical artifact.
+but no provider-backed full N=30 Phase 2 result exists on it yet; the published
+scores above remain bound to the historical artifact. The comparative-only A/B
+below is deliberately non-official.
 
 Comparative context packing v3 has passed a provider-free offline gate on this
 active artifact. It keeps the first two unique chunks from every decomposition
@@ -318,6 +321,20 @@ reports. The strategy is available only as the explicit experimental
 `comparative_packed_v3` Phase 2 option; `selective_packed_v1` remains the
 default until a separately authorized comparative-only provider A/B passes.
 No published score changed in this offline milestone.
+
+That comparative-only provider A/B has now completed as a non-official NO-GO.
+An integrity audit first corrected the runner so generation, deterministic
+metrics, and judging all consume the same rendered context; generation
+checkpoints now fingerprint that renderer. Both arms then completed `6/6`
+generation and `6/6` judging with no skips. V3 cut evidence tokens by `51.23%`
+and improved context precision `0.5550 -> 0.7783` (`+0.2233`), while
+faithfulness stayed within the pre-registered bound and overall judge average
+rose `0.8461 -> 0.8928`. It was not admitted because answer relevancy fell
+`0.9833 -> 0.9067` (`-0.0766`) and the AWS answer omitted the required
+`107,556` and `128,725` values. The earlier packing results remain historical:
+they passed packed evidence to the judge but not to generation, so they must not
+be used as evidence that packed generation was validated. The Phase 2 default
+therefore remains `selective_packed_v1`, pending a new corrected benchmark.
 
 Historical context-packing A/B (the pre-registration and confirmatory run used
 the prior frozen Phase 1 artifact, paired per-case,

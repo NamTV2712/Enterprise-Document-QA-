@@ -18,24 +18,21 @@ from scripts.corpus_coverage_matrix import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-# Baseline documented in PROJECT_STATE.md after the FY2026 hard-group table
-# recovery generation.
+# Baseline documented in PROJECT_STATE.md after the IBM companion recovery.
 EXPECTED_BASELINE = {
     "configured_tickers": 50,
     "searchable_tickers": 50,
     "clean_tickers": 46,
     "degraded_tickers": 4,
     "missing_tickers": 0,
-    "tickers_with_financial_table": 49,
-    "total_chunks": 10021,
+    "tickers_with_financial_table": 50,
+    "total_chunks": 10053,
 }
 EXPECTED_CORPUS_FINGERPRINT = (
-    "sha256:91828b033f530d32fba3c0dd415ffd8ee89222cf9a2e9108c5064ec838f233e0"
+    "sha256:1d5b99ed962ab9dff88f268ea17da4efd5c7128900961a123bdfb5e49716c8f4"
 )
 EXPECTED_DEGRADED = {"CVX", "IBM", "JPM", "XOM"}
-EXPECTED_NO_TABLE = {
-    "IBM",
-}
+EXPECTED_NO_TABLE = set()
 
 
 def _make_corpus(tmp_path: Path, spec: dict[str, list[tuple[str, int]]]) -> Path:

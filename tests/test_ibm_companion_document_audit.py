@@ -137,7 +137,7 @@ def test_cli_is_deterministic_and_does_not_mutate_inputs(tmp_path, monkeypatch):
     assert {path: path.read_bytes() for path in before} == before
 
 
-def test_real_ibm_audit_is_missing_companion_without_changing_corpus():
+def test_real_ibm_audit_accepts_installed_companion():
     root = Path(__file__).resolve().parents[1] / "data"
     html = root / "raw" / "IBM" / "000005114326000010.html"
     sections = root / "processed" / "IBM" / "000005114326000010_sections.json"
@@ -145,5 +145,8 @@ def test_real_ibm_audit_is_missing_companion_without_changing_corpus():
     if not html.is_file():
         return
     report = audit_companion(html, sections, chunks)
-    assert report["status"] == "companion_missing"
+    assert report["status"] == "candidate_requires_validation"
+    assert report["gates"]["unique_companion"] == "pass"
+    assert report["gates"]["statement_range_resolved"] == "pass"
+    assert report["statement_evidence"]["table_count"] == 6
     assert report["incorporation_evidence"]["page_range"] == {"start": 42, "end": 116}

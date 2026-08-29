@@ -17,6 +17,7 @@ from pathlib import Path
 
 from configs.settings import settings
 from src.ingestion.chunker import build_table_chunks
+from src.ingestion.companion_documents import discover_companion_candidates
 from src.ingestion.table_discovery import (
     SAME_DOCUMENT_INTERVAL_TICKERS,
     discover_financial_tables,
@@ -40,11 +41,20 @@ def _load_existing_chunk_ids(chunks_path: Path) -> set[str]:
     return chunk_ids
 
 
-def _can_attempt_table_discovery(ticker: str, filing_data: dict) -> bool:
-    """Preserve the missing-section skip except for verified interval routes."""
-    return (
-        "financial_statements" in filing_data.get("sections", {})
-        or ticker in SAME_DOCUMENT_INTERVAL_TICKERS
+def _can_attempt_table_discovery(
+    ticker: str, filing_data: dict, html_path: Path | None = None
+) -> bool:
+    """Allow missing-section discovery only for a local companion candidate."""
+    if "financial_statements" in filing_data.get("sections", {}):
+        return True
+    if ticker in SAME_DOCUMENT_INTERVAL_TICKERS:
+        return True
+    return bool(
+        html_path
+        and any(
+            candidate["exists"]
+            for candidate in discover_companion_candidates(html_path)
+        )
     )
 
 
@@ -67,7 +77,7 @@ def main() -> None:
             continue
 
         filing_data = json.loads(sections_path.read_text(encoding="utf-8"))
-        if not _can_attempt_table_discovery(ticker, filing_data):
+        if not _can_attempt_table_discovery(ticker, filing_data, html_path):
             logger.warning("Skipping %s table chunks because financial_statements is missing", ticker)
             continue
 

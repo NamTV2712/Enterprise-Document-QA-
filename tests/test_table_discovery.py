@@ -130,6 +130,49 @@ def test_chunk_append_preserves_missing_section_skip_outside_verified_routes():
     ) is True
 
 
+def test_companion_annual_report_recovers_bounded_statement_tables(tmp_path):
+    primary = tmp_path / "primary.html"
+    primary.write_text(
+        '<p>Item 8. Financial Statements are on pages 42 through 44.</p>'
+        '<a href="annual.html">Annual Report to Stockholders</a>',
+        encoding="utf-8",
+    )
+    companion = tmp_path / "annual.html"
+    companion.write_text(
+        '<a href="#page42">42</a><div id="page42"></div>'
+        '<table><tr><th>2025</th><th>2024</th></tr>'
+        '<tr><td>Total assets</td><td>10</td><td>9</td></tr></table>'
+        '<a href="#page44">44</a><div id="page44"></div>'
+        '<table><tr><th>2025</th><th>2024</th></tr>'
+        '<tr><td>Outside range</td><td>1</td><td>2</td></tr></table>',
+        encoding="utf-8",
+    )
+    sections = tmp_path / "sections.json"
+    sections.write_text(json.dumps({"ticker": "IBM", "sections": {}}), encoding="utf-8")
+
+    tables, mode = discover_financial_tables(primary, sections)
+
+    assert mode == "companion_annual_report"
+    assert len(tables) == 1
+    assert "Total assets" in tables[0].get_text(" ", strip=True)
+
+
+def test_companion_route_requires_one_existing_candidate(tmp_path):
+    primary = tmp_path / "primary.html"
+    primary.write_text(
+        '<p>Item 8 pages 42 through 44.</p>'
+        '<a href="missing.html">Annual Report to Stockholders</a>',
+        encoding="utf-8",
+    )
+    sections = tmp_path / "sections.json"
+    sections.write_text(json.dumps({"ticker": "IBM", "sections": {}}), encoding="utf-8")
+
+    tables, mode = discover_financial_tables(primary, sections)
+
+    assert tables == []
+    assert mode == "item8_interval_empty"
+
+
 def _real_corpus_root() -> Path | None:
     root = Path(__file__).resolve().parents[1] / "data"
     return root if all((root / "raw" / ticker).is_dir() for ticker in ("CVX", "XOM", "JPM")) else None

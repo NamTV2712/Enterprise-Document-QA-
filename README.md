@@ -101,13 +101,13 @@ Current searchable corpus:
   and `HON`; the FY2026 recovery pass additionally restored
   `financial_statements` for `NOW`, `NVDA`, `ORCL`, and `PEP` plus `mdna`
   for `PFE`.
-- Local Qdrant indexes `10,021` chunks from trusted generation
-  `nomic-e9b6763-fy2026-hard-group-table-recovery-20260828-attempt-01`.
+- Local Qdrant indexes `10,053` chunks from trusted generation
+  `nomic-e9b6763-fy2026-ibm-companion-20260829`.
 - Extraction quality is `46` filings with all four target sections and
   `4` degraded but searchable filings (`CVX`, `IBM`, `JPM`, `XOM`).
-- `financial_table` chunks are available for `49` searchable tickers; CVX,
-  JPM, and XOM use verified same-document statement intervals, while IBM
-  remains a separate companion-document recovery case.
+- `financial_table` chunks are available for all `50` searchable tickers; CVX,
+  JPM, and XOM use verified same-document statement intervals, while IBM uses
+  its uniquely linked, page-bounded Annual Report companion.
 
 The `/supported-tickers` endpoint returns the live searchable ticker list from embedded chunks, not the full configured list.
 
@@ -227,9 +227,9 @@ skipped records, no parse failures, and one shared binding. Contexts are
 rendered under `selective_packed_v1`, a route-aware packing strategy that
 kept every pre-registered merge gate (see below).
 The published table is historical: it binds the prior 9,978-point corpus.
-The active local index uses hard-group generation
+The active local index uses the IBM companion-recovery generation
 `nomic-e9b6763-fy2026-hard-group-table-recovery-20260828-attempt-01` (corpus
-`sha256:91828b…`, `10,021` points). Its offline, byte-deterministic Phase 1
+`sha256:1d5b99ed…`, `10,053` points). Its offline, byte-deterministic Phase 1
 artifact `sha256:acc61c63…` completes all 30 cases with 61 non-empty queries
 and `12/12` decomposed-plan evidence checks. A three-case quota probe passed
 all generation, judging, and FY2024 comparative acceptance checks; it is
@@ -306,17 +306,16 @@ Retrieval latency optimization:
 Corpus scale:
 
 - The configured corpus targets `50` tickers, and all `50` have searchable embedded chunks in local Qdrant.
-- Local Qdrant indexes `10,021` chunks from the trusted hard-group recovery
-  generation `nomic-e9b6763-fy2026-hard-group-table-recovery-20260828-attempt-01`.
+- Local Qdrant indexes `10,053` chunks from the trusted IBM companion recovery
+  generation `nomic-e9b6763-fy2026-ibm-companion-20260829`.
 - The local collection has a trusted schema-v2 build manifest tied to the
   pinned Nomic revision `e9b6763023c676ca8431644204f50c2b100d9aab` and
-  corpus fingerprint `sha256:91828b033f530d32fba3c0dd415ffd8ee89222cf9a2e9108c5064ec838f233e0`.
+  corpus fingerprint `sha256:1d5b99ed962ab9dff88f268ea17da4efd5c7128900961a123bdfb5e49716c8f4`.
   Local runtime and Docker Compose pin the same model revision through
   `EMBEDDING_MODEL_REVISION` so query embeddings cannot silently drift.
   This trust status applies only to local Qdrant; Cloud remains untrusted until
   full ID, payload, and vector-snapshot verification is completed.
-- `financial_table` chunks are available for `49` searchable tickers; IBM is
-  the only configured ticker without a table chunk.
+- `financial_table` chunks are available for all `50` searchable tickers.
 - Latest extraction quality is `46` filings with all four target sections and `4` degraded but searchable filings (`CVX`, `IBM`, `JPM`, `XOM`); no configured ticker is currently unusable.
 
 | Scenario | Filter | Latency |
@@ -628,7 +627,7 @@ Secrets are loaded from `.env` and should never be committed.
 
 1. Add production logging, quota monitoring, and error alerts before selecting a paid always-on backend.
 2. Add deterministic priority-3 evaluation cases for the recovered hard-group table routes (`CVX`, `JPM`, `XOM`) without changing the official priority-2 set.
-3. Audit IBM's incorporated Annual Report to Stockholders as a separate, read-only companion-document milestone. The current audit is NO-GO because the linked companion document is not present locally.
+3. IBM's incorporated Annual Report companion is now downloaded, page-bounded, and indexed through the generic companion resolver; rerun the read-only audit after any future filing refresh.
 4. Revisit permanent hosting only when always-on public availability is required.
 
 ## Why This Project Matters

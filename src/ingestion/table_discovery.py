@@ -11,6 +11,10 @@ from bs4 import BeautifulSoup, Tag
 
 from scripts.diagnostics.diagnose_all_financial_tables import find_tables_in_financial_section
 from src.ingestion.table_extractor import extract_table_rows
+from src.ingestion.companion_documents import (
+    discover_companion_candidates,
+    discover_companion_tables,
+)
 
 _STATEMENT_LINK = re.compile(r"consolidated|balance sheets?|statements? of|cash flows?", re.I)
 _ROOT_FINANCIAL_ANCHOR = re.compile(r"^financial statements(?: and supplementary data)?$", re.I)
@@ -204,6 +208,17 @@ def discover_financial_tables(html_path: Path, sections_path: Path) -> tuple[lis
         primary = find_tables_in_financial_section(html_path, sections_path)
         if any(extract_table_rows(table) for table in primary):
             return primary, "item8_interval"
+
+    companion_candidates = [
+        candidate for candidate in discover_companion_candidates(html_path)
+        if candidate["exists"] and candidate["local_path"]
+    ]
+    if len(companion_candidates) == 1:
+        companion = discover_companion_tables(
+            html_path, Path(companion_candidates[0]["local_path"])
+        )
+        if companion:
+            return companion, "companion_annual_report"
 
     ticker = str(filing.get("ticker", "")).upper()
     if ticker in SAME_DOCUMENT_INTERVAL_TICKERS:

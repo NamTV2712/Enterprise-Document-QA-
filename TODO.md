@@ -69,13 +69,8 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
          (6) pass deterministic clean-boundary, fiscal-year, primary-statement,
          de-duplication, and contamination gates. The resolver is enabled only
          for those three tickers; generation `nomic-e9b6763-fy2026-hard-group-table-recovery-20260828-attempt-01`
-         is promoted and indexed at 10,021 points. Served coverage is 49
-         financial-table tickers, leaving only IBM. Phase 1 and the bounded
-         three-case quota probe are complete on this binding; the probe passed
-         FY2024 comparative acceptance but is non-official self-judge evidence.
-         Current next step: add priority-3 retrieval cases for CVX/JPM/XOM,
-         then decide whether to spend quota on a current-binding priority-2
-         Phase 2 run. IBM remains a separate companion-document milestone.
+         is promoted and indexed at 10,021 points. This historical note is
+         superseded by the IBM companion-recovery generation below.
 13. [x] Add six priority-3 hard-group evaluation cases for CVX/JPM/XOM
         (three fact lookups and three year-over-year multi-hop checks). These
         cases do not alter the official priority-2 benchmark; run a separate
@@ -84,15 +79,17 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        references pages 42-116 of the 2025 Annual Report to Stockholders and
        links `ibm-20251231_d2.htm`. The temporary companion passed the
        deterministic read-only audit with six unique statement tables and
-       complete income/balance-sheet/cash-flow evidence; production remains
-       unchanged. Report: `data/diagnostics/ibm_companion_document_audit.json`.
+       complete income/balance-sheet/cash-flow evidence. Production now uses
+       the page-bounded companion route and serves 32 supplemental chunks.
+       Report: `data/diagnostics/ibm_companion_document_audit.json`.
 15. [x] Harden the IBM audit to schema v2 with explicit page-interval
        resolution, trial chunk IDs, companion hashing, tri-state gates, and
        an internal byte-determinism check. A complete synthetic companion
        passes all gates; the real corpus remains unchanged and NO-GO.
-16. [ ] Implement the separately authorized production companion resolver
-       only after preserving the audited companion provenance and rerunning
-       all corpus, embedding-generation, index, and retrieval gates.
+16. [x] Implement the generic production companion resolver and rebuild the
+       corpus, immutable embedding generation, and trusted local index. The
+       active generation is `nomic-e9b6763-fy2026-ibm-companion-20260829` at
+       10,053 points; coverage is 50/50 tickers with financial-table chunks.
 
 ## Always-On Deployment
 

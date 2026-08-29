@@ -11,6 +11,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
 from configs.tickers import TICKERS
+from src.generation.comparative_context import (
+    ComparativeBranch,
+    select_comparative_chunks,
+)
+from src.generation.prompt_contracts import NUMERIC_PAIR_CONTRACT
 from src.retrieval.retriever import RetrievedChunk
 from src.retrieval.query_shaper import shape_retrieval_query
 
@@ -96,7 +101,7 @@ A: {"needs_decomposition": true, "sub_queries": [
 
 Return ONLY valid JSON, no explanation."""
 
-SYNTHESIS_SYSTEM_PROMPT = """You are a financial analyst synthesizing information from multiple 
+SYNTHESIS_SYSTEM_PROMPT = f"""You are a financial analyst synthesizing information from multiple
 SEC 10-K filings to answer a comparative or multi-part question.
 
 Rules:
@@ -108,11 +113,12 @@ Rules:
 5. Quote numbers exactly as shown in the context, including currency, sign,
    period, and fiscal year. Do not calculate or invent a derived number unless
    the underlying values are explicitly cited.
-6. Do not add categories or details merely because they are common for the
+6. {NUMERIC_PAIR_CONTRACT}
+7. Do not add categories or details merely because they are common for the
    company; include only evidence-supported items.
-7. If the context is insufficient, say you cannot find sufficient information
+8. If the context is insufficient, say you cannot find sufficient information
    without presenting retrieved sources as relevant.
-8. Do not speculate or use external knowledge."""
+9. Do not speculate or use external knowledge."""
 
 
 @dataclass
@@ -236,15 +242,63 @@ class QueryDecomposer:
                 was_decomposed=True,
             )
 
-        answer = self._synthesize(question, all_chunks)
+        synthesis_chunks = self._select_comparative_context(
+            sub_queries, all_chunks
+        )
+        answer = self._synthesize(question, synthesis_chunks)
 
         return DecomposedResponse(
             answer=answer,
             sub_queries=sub_queries,
-            all_chunks=all_chunks,
+            all_chunks=synthesis_chunks,
             model_used=self.generator.model,
             was_decomposed=True,
         )
+
+    def _select_comparative_context(
+        self,
+        sub_queries: list[SubQuery],
+        all_chunks: list[RetrievedChunk],
+    ) -> list[RetrievedChunk]:
+        """Pack multi-company evidence with a safe full-context fallback."""
+        expected_tickers = {
+            sub_query.ticker
+            for sub_query in sub_queries
+            if sub_query.ticker is not None
+        }
+        if len(expected_tickers) < 2:
+            return all_chunks
+
+        selected = select_comparative_chunks([
+            ComparativeBranch(
+                query=sub_query.query,
+                ticker=sub_query.ticker,
+                chunks=sub_query.retrieved_chunks,
+            )
+            for sub_query in sub_queries
+        ])
+        selected_tickers = {
+            chunk.ticker for chunk in selected if chunk.ticker is not None
+        }
+        if (
+            len(selected) < MIN_CHUNKS_FOR_SYNTHESIS
+            or not expected_tickers.issubset(selected_tickers)
+        ):
+            logger.warning(
+                "Comparative context selector would lose evidence: expected=%s "
+                "selected=%s; retaining full context (%d chunks)",
+                sorted(expected_tickers),
+                sorted(selected_tickers),
+                len(all_chunks),
+            )
+            return all_chunks
+
+        logger.info(
+            "Comparative context selector reduced synthesis context from %d to %d chunks",
+            len(all_chunks),
+            len(selected),
+        )
+        return selected
 
     def _plan(self, question: str) -> dict:
         """Use LLM to decide whether decomposition is needed and create sub-queries."""

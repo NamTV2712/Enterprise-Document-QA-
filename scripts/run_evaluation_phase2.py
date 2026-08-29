@@ -63,6 +63,7 @@ from src.evaluation.phase2_runtime import (
 )
 from src.evaluation.context_packing import (
     CONTEXT_STRATEGY_COMPARATIVE_V3,
+    CONTEXT_STRATEGY_COMPARATIVE_V5,
     CONTEXT_STRATEGY_FULL_EVIDENCE,
     CONTEXT_STRATEGY_ROUTE_AWARE,
     CONTEXT_STRATEGY_SELECTIVE,
@@ -86,7 +87,7 @@ ARTIFACT_PATH = Path("data/eval_artifacts/phase1_priority2.json")
 # Must match scripts.run_quota_probe.EXPECTED_ARTIFACT_FINGERPRINT; both
 # runners refuse to bind to any other frozen evidence.
 EXPECTED_ARTIFACT_FINGERPRINT = (
-    "sha256:3f02a791b808310d3e9abd10dde7989fcce62e7474f60410ead844eddb14b86e"
+    "sha256:9869912195606125b0a7efe56f091662fd50d48e08c92141415c1a174ffd0c98"
 )
 GEN_CHECKPOINT_PATH = Path("data/eval_artifacts/phase2_gen.jsonl")
 JUDGE_CHECKPOINT_PATH = Path("data/eval_artifacts/phase2_judge.jsonl")
@@ -530,6 +531,7 @@ def main(argv: list[str] | None = None) -> int:
             CONTEXT_STRATEGY_ROUTE_AWARE,
             CONTEXT_STRATEGY_SELECTIVE,
             CONTEXT_STRATEGY_COMPARATIVE_V3,
+            CONTEXT_STRATEGY_COMPARATIVE_V5,
         ],
         default=CONTEXT_STRATEGY_SELECTIVE,
         help=(
@@ -538,7 +540,8 @@ def main(argv: list[str] | None = None) -> int:
             "evidence passed all pre-registered gates. full_evidence_v1 "
             "renders every frozen chunk and remains available for replay. "
             "comparative_packed_v3 is an offline-gated experimental arm; "
-            "it is not the default."
+            "comparative_oracle_free_v5 is the newer offline-gated experimental "
+            "arm; neither is the default."
         ),
     )
     args = parser.parse_args(argv)
@@ -548,6 +551,7 @@ def main(argv: list[str] | None = None) -> int:
         CONTEXT_STRATEGY_ROUTE_AWARE: "_packed",
         CONTEXT_STRATEGY_SELECTIVE: "_packed_selective",
         CONTEXT_STRATEGY_COMPARATIVE_V3: "_packed_comparative_v3",
+        CONTEXT_STRATEGY_COMPARATIVE_V5: "_packed_comparative_v5",
     }.get(args.context_strategy, "")
     if args.gen_checkpoint is None:
         args.gen_checkpoint = Path(

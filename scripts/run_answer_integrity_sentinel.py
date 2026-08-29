@@ -63,7 +63,7 @@ QUESTIONS = [
 def _load() -> tuple[dict, GenerationUpstream]:
     raw = ARTIFACT.read_bytes()
     artifact = json.loads(raw.decode("utf-8"))
-    expected = "sha256:3f02a791b808310d3e9abd10dde7989fcce62e7474f60410ead844eddb14b86e"
+    expected = "sha256:9869912195606125b0a7efe56f091662fd50d48e08c92141415c1a174ffd0c98"
     if artifact["fingerprints"]["artifact"] != expected:
         raise RuntimeError("Phase 1 artifact fingerprint drift")
     if artifact["fingerprints"].get("query_shaper") != QUERY_SHAPER_FINGERPRINT:

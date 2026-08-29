@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass
 
 
-QUERY_SHAPER_VERSION = 2
+QUERY_SHAPER_VERSION = 3
 
 
 TREND_TERMS = (
@@ -41,7 +41,16 @@ def _fingerprint() -> str:
                 "fuzzy_terms": ["sales"],
                 "additions": ["AWS", "net sales"],
                 "implicit_years": ["2025", "2024"],
-            }
+            },
+            "microsoft_cloud_trend": {
+                "requires": ["microsoft", "cloud_or_azure", "trend_term"],
+                "exact_phrases": ["Microsoft Cloud revenue"],
+                "full_terms": ["Microsoft", "Cloud", "revenue"],
+                "partial_terms": ["Microsoft", "Cloud", "revenue"],
+                "fuzzy_terms": ["revenue"],
+                "additions": ["Microsoft Cloud revenue"],
+                "implicit_years": ["2025", "2024"],
+            },
         },
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
@@ -86,6 +95,24 @@ def shape_retrieval_query(query: str) -> ShapedQuery:
         if not re.search(r"\b20\d{2}\b", query):
             additions.extend(("2025", "2024"))
         additions.extend(("AWS", "net sales"))
+
+    # Microsoft's high-level cloud-growth statement uses the filing-native
+    # phrase ``Microsoft Cloud revenue``. Without this hint, broad cloud
+    # queries can rank product-level metric tables above the aggregate growth
+    # disclosure needed for a company comparison.
+    if (
+        "microsoft" in normalized
+        and ("cloud" in normalized or "azure" in normalized)
+        and _has_trend_intent(query)
+    ):
+        exact_phrases.append("Microsoft Cloud revenue")
+        full_terms.extend(("Microsoft", "Cloud", "revenue"))
+        partial_terms.extend(("Microsoft", "Cloud", "revenue"))
+        fuzzy_terms.append("revenue")
+        if not re.search(r"\b20\d{2}\b", query):
+            additions.extend(("2025", "2024"))
+        if "microsoft cloud revenue" not in normalized:
+            additions.append("Microsoft Cloud revenue")
 
     if not additions:
         return ShapedQuery(

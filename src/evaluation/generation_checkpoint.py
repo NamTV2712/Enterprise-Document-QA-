@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from src.generation.prompt_contracts import NUMERIC_PAIR_CONTRACT
+
 logger = logging.getLogger(__name__)
 
 GENERATION_SCHEMA_VERSION = 3
@@ -36,11 +38,8 @@ DEFAULT_GENERATION_PROMPT_TEMPLATE = (
     "Question: {question}\n"
     "Use only canonical inline [Source N] citations; do not use line-number "
     "citation formats such as 【1†L1-L3】. Cite every factual claim. Quote "
-    "numeric values exactly as shown, including the period and sign. For a "
-    "trend, growth, or comparison, inspect all excerpts and quote every "
-    "relevant underlying period-and-value pair before summarizing the trend; "
-    "do not round, abbreviate, recalculate, or replace those values with only "
-    "a percentage. If the "
+    "numeric values exactly as shown, including the period and sign. "
+    f"{NUMERIC_PAIR_CONTRACT} If the "
     "excerpts do not contain the answer, say you cannot find it in the filings "
     "without describing retrieved sources as relevant."
 )

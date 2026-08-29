@@ -12,20 +12,41 @@ and a fallback that does not claim irrelevant retrieved sections are relevant.
 The original six flagged answers were later checked in a separate quota-gated
 sentinel; diagnostic flags do not alter official judge scores.
 
-The current milestone is complete: exact numeric-pair adherence is now locked
-in both production and Phase 2 generation prompts, and generation checkpoint
-schema v3 fingerprints the active system prompt as well as the user template
-and evidence renderer. The AWS-only comparative v4 sentinel completed `1/1`
-generation and `1/1` judging in one provider call each. It produced a grounded,
-cited, non-fallback answer containing AWS `107,556` for 2024 and `128,725` for
-2025, Microsoft Cloud `23%` and `$168.9 billion`, Faithfulness `1.00`, Answer
-Relevancy `1.00`, Context Precision `0.67`, and deterministic citation/recall/
-fallback checks all `1.00`. Every pre-registered gate passed. The run remains
-non-official; its ignored report is
-`data/eval_artifacts/aws_numeric_v4_summary.json` with file SHA-256
-`792e9b94511319ada7ef98902398c9a0860dde39e6edf2ec41ce9585a9f3932f`.
-The next separately authorized milestone is the six-case v4 versus full-evidence
-provider A/B; v4 is not production-default until that gate passes.
+The current milestone is complete: comparative context packing v5 is now
+oracle-free and shared between production decomposed synthesis and the offline
+Phase 2 adapter. Direct generation, decomposed synthesis, and Phase 2 now use
+the same numeric-pair contract: inspect all provided sources and quote every
+period/value pair instead of answering with only a percentage. The Microsoft
+Cloud trend shaper is now version 3, adding filing-native `Microsoft Cloud
+revenue` vocabulary and implicit FY2025/FY2024 hints only for Microsoft
+cloud/Azure trend queries. The generic selector has no dependency on evaluation
+labels or expected answer values; it keeps each branch leader, structured hits,
+and only a deterministic exact-phrase or missing-intent donor, with a safe
+full-context fallback if a company branch would be lost.
+
+The Phase 1 artifact was rebuilt offline and deterministically after the shaper
+change. The active schema-v2 artifact is
+`sha256:9869912195606125b0a7efe56f091662fd50d48e08c92141415c1a174ffd0c98`
+(file SHA-256
+`15ff6eb08aaa9ca2dc8d0c8ab078bd2a3be323dccf844328c05a737f2d757914`). It
+covers 30/30 priority <= 2 cases, 61 non-empty queries, and the decomposed
+audit is `12/12 evidence_ok`. The local query-shaper A/B passed with 61
+subqueries, 4 shaped queries, zero ticker leakage, zero required-term
+regressions, byte-stable unchanged queries, and no regression on changed
+queries.
+
+The v5 offline gate passed `30/30` evidence coverage, `30/30` source
+boundaries, `24/24` non-comparative byte stability, `6/6` branch coverage,
+`6/6` branch contracts, `6/6` known findings, and `6/6` production/evaluation
+adapter parity. Comparative evidence fell from `20,455` to `6,704` tokens
+(`67.23%`). It retains the Microsoft high-level Cloud-growth donor and the
+Amazon cybersecurity donor without oracle facts; the AWS value leader remains
+intact. The ignored diagnostic report is
+`data/diagnostics/comparative_packing_v5.json` with file SHA-256
+`63169abbd872a97e4912f714ac0399d27a17056e697822dc9060b30dd9accbd5`.
+No provider call was made in this milestone. The next separately authorized
+step is a fresh six-case v5 versus full-evidence provider A/B; v5 remains
+experimental for Phase 2 until that gate passes.
 
 The first retrieval-side improvement is now validated offline. A shared
 deterministic query shaper is used by direct and decomposed paths; for

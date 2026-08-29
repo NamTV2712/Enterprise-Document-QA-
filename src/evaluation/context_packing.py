@@ -17,7 +17,9 @@ M4. Enough additional chunks that every required keyword occurs in some
 
 Comparative v4 replaces blind two-chunk branch breadth with one leading chunk
 plus only branch-scoped fact donors and query-intent donors that add missing
-evidence. Historical strategy behavior remains unchanged.
+evidence. Comparative v5 moves that decision into the generic selector shared
+with production, removing evaluation-only fact labels from the selection path.
+Historical strategy behavior remains unchanged.
 
 Summary/enumeration cases additionally fill up to a small fixed target
 by descending score because their answers synthesize broad topic
@@ -34,6 +36,10 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from src.generation.comparative_context import (
+    ComparativeBranch,
+    select_comparative_chunks,
+)
 from src.evaluation.evidence_contracts import (
     branch_evidence_terms,
     evidence_terms,
@@ -48,6 +54,7 @@ CONTEXT_STRATEGY_ROUTE_AWARE = "route_aware_v2"
 CONTEXT_STRATEGY_SELECTIVE = "selective_packed_v1"
 CONTEXT_STRATEGY_COMPARATIVE_V3 = "comparative_packed_v3"
 CONTEXT_STRATEGY_COMPARATIVE_V4 = "comparative_intent_packed_v4"
+CONTEXT_STRATEGY_COMPARATIVE_V5 = "comparative_oracle_free_v5"
 SELECTIVE_PACKED_CATEGORIES = {"fact_lookup", "multi_hop", "summary"}
 COMPARATIVE_BRANCH_TARGET = 2
 
@@ -232,9 +239,35 @@ def pack_case_context(
     comparative_only_strategies = {
         CONTEXT_STRATEGY_COMPARATIVE_V3,
         CONTEXT_STRATEGY_COMPARATIVE_V4,
+        CONTEXT_STRATEGY_COMPARATIVE_V5,
     }
     if strategy in comparative_only_strategies and category != "comparative":
         result.kept = list(entries)
+        return result
+
+    if strategy == CONTEXT_STRATEGY_COMPARATIVE_V5:
+        branches = [
+            ComparativeBranch(
+                query=(
+                    query_entry.get("query", {}).get("effective_query")
+                    or query_entry.get("query", {}).get("retrieval_query")
+                    or ""
+                ),
+                ticker=query_entry.get("query", {}).get("ticker"),
+                chunks=query_entry.get("chunks", []),
+            )
+            for query_entry in case_payload.get("queries", [])
+        ]
+        kept_ids = {
+            entry.get("chunk_id")
+            for entry in select_comparative_chunks(branches)
+        }
+        result.kept = [
+            entry for entry in entries if entry.get("chunk_id") in kept_ids
+        ]
+        result.dropped = [
+            entry for entry in entries if entry.get("chunk_id") not in kept_ids
+        ]
         return result
     expected_tickers = sorted({
         query["query"].get("ticker")

@@ -343,3 +343,115 @@ def test_comparative_query_with_per_company_evidence_still_synthesizes(
     assert result.answer == "grounded comparison"
     assert result.was_decomposed is True
     assert {chunk.ticker for chunk in result.all_chunks} == {"AAPL", "MSFT"}
+
+
+def test_comparative_synthesis_uses_oracle_free_context_selector(
+    monkeypatch,
+) -> None:
+    decomposer = _make_runnable_decomposer()
+    planned_sub_queries = [
+        {"query": "Apple cloud revenue", "ticker": "AAPL", "section": "mdna"},
+        {"query": "Microsoft cloud revenue", "ticker": "MSFT", "section": "mdna"},
+    ]
+    executed_sub_queries = [
+        SubQuery(
+            **planned_sub_queries[0],
+            retrieved_chunks=[
+                _make_ticker_chunk("AAPL_0", "AAPL"),
+                _make_ticker_chunk("AAPL_1", "AAPL"),
+            ],
+        ),
+        SubQuery(
+            **planned_sub_queries[1],
+            retrieved_chunks=[
+                _make_ticker_chunk("MSFT_0", "MSFT"),
+                _make_ticker_chunk("MSFT_1", "MSFT"),
+            ],
+        ),
+    ]
+    monkeypatch.setattr(
+        decomposer,
+        "_plan",
+        lambda question: {
+            "needs_decomposition": True,
+            "sub_queries": planned_sub_queries,
+        },
+    )
+    monkeypatch.setattr(
+        decomposer,
+        "_execute_parallel",
+        lambda sub_queries, top_k: executed_sub_queries,
+    )
+    synthesize = MagicMock(return_value="grounded comparison")
+    monkeypatch.setattr(decomposer, "_synthesize", synthesize)
+
+    result = decomposer.run(
+        "Compare Apple and Microsoft's cloud revenue",
+        top_k=3,
+    )
+
+    synthesize.assert_called_once_with(
+        "Compare Apple and Microsoft's cloud revenue",
+        [executed_sub_queries[0].retrieved_chunks[0],
+         executed_sub_queries[1].retrieved_chunks[0]],
+    )
+    assert result.all_chunks == [
+        executed_sub_queries[0].retrieved_chunks[0],
+        executed_sub_queries[1].retrieved_chunks[0],
+    ]
+
+
+def test_comparative_selector_falls_back_if_it_drops_a_company_branch(
+    monkeypatch,
+) -> None:
+    decomposer = _make_runnable_decomposer()
+    planned_sub_queries = [
+        {"query": "Apple cloud revenue", "ticker": "AAPL", "section": "mdna"},
+        {"query": "Microsoft cloud revenue", "ticker": "MSFT", "section": "mdna"},
+    ]
+    executed_sub_queries = [
+        SubQuery(
+            **planned_sub_queries[0],
+            retrieved_chunks=[_make_ticker_chunk("AAPL_0", "AAPL")],
+        ),
+        SubQuery(
+            **planned_sub_queries[1],
+            retrieved_chunks=[_make_ticker_chunk("MSFT_0", "MSFT")],
+        ),
+    ]
+    monkeypatch.setattr(
+        decomposer,
+        "_plan",
+        lambda question: {
+            "needs_decomposition": True,
+            "sub_queries": planned_sub_queries,
+        },
+    )
+    monkeypatch.setattr(
+        decomposer,
+        "_execute_parallel",
+        lambda sub_queries, top_k: executed_sub_queries,
+    )
+    monkeypatch.setattr(
+        "src.generation.query_decomposer.select_comparative_chunks",
+        lambda branches: [executed_sub_queries[0].retrieved_chunks[0]],
+    )
+    synthesize = MagicMock(return_value="grounded comparison")
+    monkeypatch.setattr(decomposer, "_synthesize", synthesize)
+
+    result = decomposer.run(
+        "Compare Apple and Microsoft's cloud revenue",
+        top_k=3,
+    )
+
+    synthesize.assert_called_once_with(
+        "Compare Apple and Microsoft's cloud revenue",
+        [
+            executed_sub_queries[0].retrieved_chunks[0],
+            executed_sub_queries[1].retrieved_chunks[0],
+        ],
+    )
+    assert result.all_chunks == [
+        executed_sub_queries[0].retrieved_chunks[0],
+        executed_sub_queries[1].retrieved_chunks[0],
+    ]

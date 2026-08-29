@@ -375,7 +375,7 @@ def test_load_bound_artifact_refuses_missing_lexical_ladder_provenance(
 
 # The FY2026-corpus Phase 1 rebuild; both runners must bind to exactly this.
 CURRENT_ARTIFACT_FINGERPRINT = (
-    "sha256:3f02a791b808310d3e9abd10dde7989fcce62e7474f60410ead844eddb14b86e"
+    "sha256:9869912195606125b0a7efe56f091662fd50d48e08c92141415c1a174ffd0c98"
 )
 SUPERSEDED_FINGERPRINTS = {
     # Pre-shaper schema-v1 artifact on the IBM companion corpus.
@@ -388,6 +388,8 @@ SUPERSEDED_FINGERPRINTS = {
     "sha256:8848d68b4236afbb1df5cef1be6cf9980d104bd1291703506a98d7cccd67f2ad",
     # Phase 1 artifact bound to the hard-group corpus before IBM companion recovery.
     "sha256:acc61c6382d4f3e9c46470f602a108bb76037288b3a8d28f396638d14bcbc422",
+    # Phase 1 artifact before the Microsoft Cloud query-shaper rule.
+    "sha256:3f02a791b808310d3e9abd10dde7989fcce62e7474f60410ead844eddb14b86e",
 }
 
 

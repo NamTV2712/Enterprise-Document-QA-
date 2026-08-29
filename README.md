@@ -209,6 +209,9 @@ The generator uses a strict financial analyst prompt:
 - Do not use general knowledge.
 - Do not infer beyond the provided context.
 - Quote numbers exactly as they appear in the retrieved context.
+- For trends and comparisons, inspect all provided sources and quote every
+  relevant period/value pair; do not answer with only a percentage when exact
+  underlying values are available.
 - Use only canonical `[Source N]` citations; line-number citation formats are
   invalid. Keep the fiscal period and sign attached to every numeric claim.
 - Do not invent enumeration categories from general knowledge; include only
@@ -301,7 +304,7 @@ the fact-bearing chunk at rank 1. Artifact provenance now binds both shaper and
 ladder fingerprints.
 
 The active offline Phase 1 artifact is now schema v2
-`sha256:3f02a791b808…` (file SHA-256 `d71d3651aa0f…`). It was rebuilt twice
+`sha256:986991219560…` (file SHA-256 `15ff6eb08aaa…`). It was rebuilt twice
 with byte-identical output over 30 cases and 61 non-empty queries. Ticker
 leakage is zero, the AWS comparative branch stores the shaped retrieval query
 and retrieves `mdna_0012` at rank 1 with both required values, and the
@@ -359,8 +362,24 @@ It can be reproduced after a quota reset with
 `python -m scripts.run_aws_numeric_sentinel --fresh`.
 Generation checkpoint schema v3 now fingerprints the active system prompt in
 addition to the user template and context renderer, so prompt changes cannot
-reuse stale answers. The next step is the pre-registered six-case v4 versus
-full-evidence provider A/B; v4 remains experimental until that gate passes.
+reuse stale answers. The next step is a new pre-registered six-case v5 versus
+full-evidence provider A/B; v5 remains experimental for Phase 2 until that
+gate passes.
+
+Comparative context packing v5 is the current provider-free improvement. It
+uses an oracle-free selector shared with production `/query/decomposed`: each
+company branch keeps its leader, structured hits, and only a filing-phrase or
+missing-intent donor. If selection would drop a company branch or leave fewer
+than two chunks, production safely keeps the full context. The Microsoft Cloud
+trend query shaper supplies the filing-native phrase needed to retain the
+aggregate `Microsoft Cloud revenue increased 23% to $168.9 billion` evidence.
+The v5 gate passes `30/30` evidence coverage and source boundaries, `24/24`
+non-comparative byte stability, `6/6` branch coverage/contracts/known findings,
+and `6/6` production/evaluation adapter parity. Comparative evidence falls
+from `20,455` to `6,704` tokens (`67.23%`). The ignored report is
+`data/diagnostics/comparative_packing_v5.json` (file SHA-256
+`63169abbd872a97e4912f714ac0399d27a17056e697822dc9060b30dd9accbd5`). No
+provider call or official-score change occurred.
 
 Historical context-packing A/B (the pre-registration and confirmatory run used
 the prior frozen Phase 1 artifact, paired per-case,

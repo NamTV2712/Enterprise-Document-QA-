@@ -10,6 +10,10 @@ from dataclasses import dataclass
 from threading import Event, Lock
 from typing import Any
 
+from src.generation.prompt_contracts import (
+    NUMERIC_PAIR_CONTRACT,
+    NUMERIC_PAIR_REMINDER,
+)
 from src.retrieval.retriever import RetrievedChunk
 
 logger = logging.getLogger(__name__)
@@ -17,7 +21,7 @@ logger = logging.getLogger(__name__)
 GROQ_MAX_RETRIES = 4
 GROQ_DEFAULT_RETRY_DELAY_SECONDS = 2.0
 
-SYSTEM_PROMPT = """You are a financial analyst assistant. Your job is to answer questions
+SYSTEM_PROMPT = f"""You are a financial analyst assistant. Your job is to answer questions
 about SEC 10-K filings accurately and concisely.
 
 STRICT RULES - violation of these rules is worse than saying "I don't know":
@@ -31,13 +35,7 @@ STRICT RULES - violation of these rules is worse than saying "I don't know":
    Do not list or characterize retrieved sections as relevant in a fallback.
 4. Do not speculate, extrapolate, or infer beyond what is explicitly stated.
 5. When citing numbers, quote them exactly as they appear in the context.
-6. For every trend, comparison, or growth question, inspect all provided
-   sources for explicit period-and-value pairs for each compared entity. When
-   those pairs exist, quote every underlying value relevant to the comparison
-   together with its period before summarizing the trend. Never replace filing
-   values with rounded, abbreviated, or recalculated values. A percentage-only
-   or qualitative answer is incomplete when exact underlying values are
-   available in the context.
+6. {NUMERIC_PAIR_CONTRACT}
 7. When the question does not specify a fiscal year or period, use the most
    recent fiscal year available in the provided context and state that
    fiscal year explicitly in your answer. Never present figures from an
@@ -79,9 +77,7 @@ Reference sources as [Source 1], [Source 2], etc.
 Question: {query}
 
 Important: if a specific number is not explicitly in the context above, do not state it.
-For a trend, growth, or comparison, quote every relevant underlying value with
-its period when the context provides multiple period-and-value pairs. Do not
-round, abbreviate, or replace those filing values with only a percentage."""
+{NUMERIC_PAIR_REMINDER}"""
 
 
 class Generator:

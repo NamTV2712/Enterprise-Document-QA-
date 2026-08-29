@@ -175,10 +175,20 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        `1/1` judging with both `107,556` and `128,725` plus their periods in a
        grounded, cited non-fallback answer; all pre-registered gates passed.
        The result is non-official and stored under ignored `data/`.
-31. [ ] Run the pre-registered six-case provider A/B for comparative v4 versus
-       full evidence. Admit v4 only if both arms complete, context precision
-       improves, faithfulness/relevancy stay within bounds, deterministic
-       metrics do not regress, and all AWS numeric-pair integrity gates pass.
+31. [x] Implement comparative packing v5 as the oracle-free follow-up. Share
+       the selector between production `/query/decomposed` and the Phase 2
+       offline adapter, add the Microsoft Cloud filing-native trend hint, and
+       lock the period/value prompt contract across direct, synthesis, and
+       Phase 2 generation. Rebuild the active artifact to
+       `sha256:986991219560…`; the local shaper A/B passes 61/61 subqueries,
+       and the v5 gate passes 30/30 evidence/boundary checks, 24/24
+       non-comparative byte stability, 6/6 branch contracts, and 67.23%
+       comparative token reduction. No provider call was made.
+32. [ ] Run a fresh pre-registered six-case provider A/B for comparative v5
+       versus full evidence. Admit v5 only if both arms complete, context
+       precision improves, faithfulness/relevancy stay within bounds,
+       deterministic metrics do not regress, and all AWS numeric-pair
+       integrity gates pass.
 
 ## Always-On Deployment
 

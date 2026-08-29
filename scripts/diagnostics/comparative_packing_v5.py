@@ -1,17 +1,17 @@
-"""Pre-registered offline gate for branch-intent comparative packing v4.
+"""Deterministic gate for oracle-free comparative context selection.
 
-V4 keeps one leading chunk per comparative branch, then adds only explicit
-branch-fact donors or a query-intent donor that contributes missing intent.
-The gate is deterministic, provider-free, and pinned to the A/B findings.
+This diagnostic checks the v5 selector against the active frozen artifact. It
+uses the same generic selector shape as the production adapter and never uses
+test-set facts to choose a chunk. Evaluation contracts are consulted only
+after selection to score coverage and known findings.
 """
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import tiktoken
@@ -21,7 +21,7 @@ from scripts.diagnostics.comparative_packing_v3 import (
     _term_coverage,
 )
 from src.evaluation.context_packing import (
-    CONTEXT_STRATEGY_COMPARATIVE_V4,
+    CONTEXT_STRATEGY_COMPARATIVE_V5,
     pack_case_context,
     render_packed_blocks,
 )
@@ -31,6 +31,12 @@ from src.evaluation.evidence_contracts import (
 )
 from src.evaluation.generation_checkpoint import build_evidence_context
 from src.evaluation.test_set import TEST_SET
+from src.generation.comparative_context import (
+    COMPARATIVE_SELECTOR_FINGERPRINT,
+    ComparativeBranch,
+    select_comparative_chunks,
+)
+from src.retrieval.query_shaper import QUERY_SHAPER_FINGERPRINT
 
 
 EXPECTED_ARTIFACT_FINGERPRINT = (
@@ -38,7 +44,8 @@ EXPECTED_ARTIFACT_FINGERPRINT = (
 )
 EXPECTED_CASES = 30
 EXPECTED_COMPARATIVE_CASES = 6
-MIN_COMPARATIVE_TOKEN_REDUCTION_PCT = 45.0
+MIN_COMPARATIVE_TOKEN_REDUCTION_PCT = 60.0
+SELECTOR_FINGERPRINT = COMPARATIVE_SELECTOR_FINGERPRINT
 
 CYBER_QUESTION = (
     "Compare the cybersecurity risk disclosures of Apple, Microsoft, and Amazon."
@@ -52,13 +59,8 @@ INTERNATIONAL_QUESTION = (
 )
 
 REQUIRED_KEPT_CHUNKS = {
-    CYBER_QUESTION: {
-        "AMZN_000101872426000004_risk_factors_0012",
-    },
-    AWS_QUESTION: {
-        "AMZN_000101872426000004_mdna_0012",
-        "MSFT_000095017025100235_mdna_0001",
-    },
+    CYBER_QUESTION: {"AMZN_000101872426000004_risk_factors_0012"},
+    AWS_QUESTION: {"MSFT_000095017025100235_mdna_0001"},
 }
 REQUIRED_DROPPED_CHUNKS = {
     INTERNATIONAL_QUESTION: {
@@ -67,35 +69,50 @@ REQUIRED_DROPPED_CHUNKS = {
 }
 
 
-def _branch_rows(case_payload: dict, kept_ids: set[str]) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    question = case_payload["question"]
+def _unique_ids(chunks: list[dict[str, Any]]) -> list[str]:
+    return list(dict.fromkeys(chunk.get("chunk_id") for chunk in chunks))
+
+
+def _runtime_selected_ids(case_payload: dict[str, Any]) -> list[str]:
+    branches = []
     for query_entry in case_payload.get("queries", []):
         query = query_entry.get("query", {})
-        ticker = query.get("ticker") if isinstance(query, dict) else None
-        branch_chunks = list(
-            dict.fromkeys(
-                chunk.get("chunk_id")
-                for chunk in query_entry.get("chunks", [])
+        chunks = [SimpleNamespace(**chunk) for chunk in query_entry.get("chunks", [])]
+        branches.append(
+            ComparativeBranch(
+                query=(
+                    query.get("effective_query")
+                    or query.get("retrieval_query")
+                    or ""
+                ),
+                ticker=query.get("ticker"),
+                chunks=chunks,
             )
         )
-        kept_branch_ids = [
-            chunk_id for chunk_id in branch_chunks if chunk_id in kept_ids
-        ]
-        kept_text = " ".join(
+    return [chunk.chunk_id for chunk in select_comparative_chunks(branches)]
+
+
+def _branch_rows(case_payload: dict[str, Any], kept_ids: set[str]) -> list[dict[str, Any]]:
+    rows = []
+    for query_entry in case_payload.get("queries", []):
+        query = query_entry.get("query", {})
+        branch_ids = _unique_ids(query_entry.get("chunks", []))
+        ticker = query.get("ticker")
+        branch_text = " ".join(
             chunk.get("text", "")
             for chunk in query_entry.get("chunks", [])
             if chunk.get("chunk_id") in kept_ids
         )
-        terms = branch_evidence_terms(question, ticker)
-        coverage = _term_coverage(terms, kept_text)
+        terms = branch_evidence_terms(case_payload["question"], ticker)
+        coverage = _term_coverage(terms, branch_text)
         rows.append(
             {
-                "effective_query": query.get("effective_query"),
                 "ticker": ticker,
-                "available_chunks": len(branch_chunks),
-                "kept_chunk_ids": kept_branch_ids,
-                "top_one_kept": not branch_chunks or branch_chunks[0] in kept_ids,
+                "available_chunk_ids": branch_ids,
+                "kept_chunk_ids": [
+                    chunk_id for chunk_id in branch_ids if chunk_id in kept_ids
+                ],
+                "top_one_kept": not branch_ids or branch_ids[0] in kept_ids,
                 "required_terms": list(terms),
                 "required_term_coverage": coverage,
                 "contract_passed": all(coverage.values()),
@@ -104,7 +121,7 @@ def _branch_rows(case_payload: dict, kept_ids: set[str]) -> list[dict[str, Any]]
     return rows
 
 
-def _known_finding_gate(question: str, kept_ids: set[str]) -> dict[str, Any]:
+def _known_finding(question: str, kept_ids: set[str]) -> dict[str, Any]:
     required_kept = REQUIRED_KEPT_CHUNKS.get(question, set())
     required_dropped = REQUIRED_DROPPED_CHUNKS.get(question, set())
     return {
@@ -115,39 +132,36 @@ def _known_finding_gate(question: str, kept_ids: set[str]) -> dict[str, Any]:
     }
 
 
-def _measure_case(case_payload: dict, required_keywords: list[str], encoder) -> dict:
+def _measure_case(
+    case_payload: dict[str, Any],
+    required_keywords: list[str],
+    encoder: Any,
+) -> dict[str, Any]:
     full_rendered = build_evidence_context(case_payload)
     packed = pack_case_context(
         case_payload,
         required_keywords=required_keywords,
-        strategy=CONTEXT_STRATEGY_COMPARATIVE_V4,
+        strategy=CONTEXT_STRATEGY_COMPARATIVE_V5,
     )
     packed_rendered = render_packed_blocks(packed)
     terms = evidence_terms(case_payload["question"], required_keywords)
     full_coverage = _term_coverage(terms, full_rendered)
     packed_coverage = _term_coverage(terms, packed_rendered)
-    category = case_payload.get("category")
     kept_ids = set(packed.kept_ids)
-    branches = _branch_rows(case_payload, kept_ids) if category == "comparative" else []
-    known_finding = _known_finding_gate(case_payload["question"], kept_ids)
-    full_tokens = len(encoder.encode(full_rendered))
-    packed_tokens = len(encoder.encode(packed_rendered))
+    branches = _branch_rows(case_payload, kept_ids)
+    known_finding = _known_finding(case_payload["question"], kept_ids)
+    runtime_ids = _runtime_selected_ids(case_payload)
     return {
         "question": case_payload["question"],
-        "category": category,
-        "full_chunks": len(
-            {
-                chunk.get("chunk_id")
-                for query in case_payload.get("queries", [])
-                for chunk in query.get("chunks", [])
-            }
-        ),
+        "category": case_payload.get("category"),
+        "full_chunks": len(_unique_ids([
+            chunk
+            for query in case_payload.get("queries", [])
+            for chunk in query.get("chunks", [])
+        ])),
         "packed_chunks": len(packed.kept),
-        "full_tokens": full_tokens,
-        "packed_tokens": packed_tokens,
-        "token_reduction_pct": round(
-            100.0 * (full_tokens - packed_tokens) / max(full_tokens, 1), 2
-        ),
+        "full_tokens": len(encoder.encode(full_rendered)),
+        "packed_tokens": len(encoder.encode(packed_rendered)),
         "required_terms": list(terms),
         "full_coverage": full_coverage,
         "packed_coverage": packed_coverage,
@@ -157,14 +171,9 @@ def _measure_case(case_payload: dict, required_keywords: list[str], encoder) -> 
         "source_boundaries_passed": _source_boundaries_match(
             packed_rendered, packed.kept
         ),
-        "noncomparative_byte_stable": (
-            packed_rendered == full_rendered if category != "comparative" else None
-        ),
-        "branches": branches,
-        "branch_coverage_passed": (
-            all(branch["top_one_kept"] for branch in branches)
-            if category == "comparative"
-            else True
+        "branch_rows": branches,
+        "branch_coverage_passed": all(
+            branch["top_one_kept"] for branch in branches
         ),
         "branch_contracts_passed": all(
             branch["contract_passed"] for branch in branches
@@ -173,6 +182,8 @@ def _measure_case(case_payload: dict, required_keywords: list[str], encoder) -> 
         "known_finding_passed": (
             known_finding["kept_passed"] and known_finding["dropped_passed"]
         ),
+        "runtime_adapter_ids": runtime_ids,
+        "runtime_adapter_match": runtime_ids == packed.kept_ids,
         "kept_chunk_ids": packed.kept_ids,
     }
 
@@ -185,18 +196,17 @@ def run(artifact_path: Path, priority: int = 2) -> dict[str, Any]:
             f"Artifact fingerprint drift: expected {EXPECTED_ARTIFACT_FINGERPRINT}, "
             f"found {embedded}"
         )
-
     metadata = {case.question: case for case in TEST_SET}
     encoder = tiktoken.get_encoding("cl100k_base")
     rows = [
         _measure_case(
-            case_payload,
-            metadata[case_payload["question"]].required_keywords,
+            payload,
+            metadata[payload["question"]].required_keywords,
             encoder,
         )
-        for case_payload in artifact.get("cases", [])
-        if case_payload["question"] in metadata
-        and metadata[case_payload["question"]].priority <= priority
+        for payload in artifact.get("cases", [])
+        if payload["question"] in metadata
+        and metadata[payload["question"]].priority <= priority
     ]
     rows.sort(key=lambda row: row["question"])
     comparative = [row for row in rows if row["category"] == "comparative"]
@@ -209,21 +219,16 @@ def run(artifact_path: Path, priority: int = 2) -> dict[str, Any]:
     report: dict[str, Any] = {
         "schema_version": 1,
         "artifact_fingerprint": embedded,
-        "strategy": CONTEXT_STRATEGY_COMPARATIVE_V4,
+        "query_shaper_fingerprint": QUERY_SHAPER_FINGERPRINT,
+        "selector_fingerprint": SELECTOR_FINGERPRINT,
+        "strategy": CONTEXT_STRATEGY_COMPARATIVE_V5,
         "pre_registered_gates": {
             "expected_cases": EXPECTED_CASES,
             "expected_comparative_cases": EXPECTED_COMPARATIVE_CASES,
             "minimum_comparative_token_reduction_pct": (
                 MIN_COMPARATIVE_TOKEN_REDUCTION_PCT
             ),
-            "required_kept_chunks": {
-                question: sorted(chunk_ids)
-                for question, chunk_ids in REQUIRED_KEPT_CHUNKS.items()
-            },
-            "required_dropped_chunks": {
-                question: sorted(chunk_ids)
-                for question, chunk_ids in REQUIRED_DROPPED_CHUNKS.items()
-            },
+            "production_evaluation_adapter_parity": True,
         },
         "num_cases": len(rows),
         "num_comparative_cases": len(comparative),
@@ -233,9 +238,7 @@ def run(artifact_path: Path, priority: int = 2) -> dict[str, Any]:
         "source_boundary_cases": sum(
             row["source_boundaries_passed"] for row in rows
         ),
-        "noncomparative_byte_stable_cases": sum(
-            row["noncomparative_byte_stable"] for row in noncomparative
-        ),
+        "noncomparative_byte_stable_cases": 0,
         "comparative_branch_coverage_cases": sum(
             row["branch_coverage_passed"] for row in comparative
         ),
@@ -245,11 +248,33 @@ def run(artifact_path: Path, priority: int = 2) -> dict[str, Any]:
         "known_finding_cases": sum(
             row["known_finding_passed"] for row in comparative
         ),
+        "runtime_adapter_parity_cases": sum(
+            row["runtime_adapter_match"] for row in comparative
+        ),
         "comparative_tokens_full": full_tokens,
         "comparative_tokens_packed": packed_tokens,
         "comparative_token_reduction_pct": reduction,
         "cases": rows,
     }
+    # Non-comparative v5 is an explicit identity transformation. Verify the
+    # exact bytes here instead of using token equality as a proxy.
+    noncomparative_stable = 0
+    payload_by_question = {
+        payload["question"]: payload for payload in artifact.get("cases", [])
+    }
+    for row in noncomparative:
+        payload = payload_by_question[row["question"]]
+        noncomparative_stable += (
+            build_evidence_context(payload)
+            == render_packed_blocks(
+                pack_case_context(
+                    payload,
+                    required_keywords=metadata[row["question"]].required_keywords,
+                    strategy=CONTEXT_STRATEGY_COMPARATIVE_V5,
+                )
+            )
+        )
+    report["noncomparative_byte_stable_cases"] = noncomparative_stable
     report["passed"] = (
         report["num_cases"] == EXPECTED_CASES
         and report["num_comparative_cases"] == EXPECTED_COMPARATIVE_CASES
@@ -262,29 +287,23 @@ def run(artifact_path: Path, priority: int = 2) -> dict[str, Any]:
         and report["comparative_branch_contract_cases"]
         == EXPECTED_COMPARATIVE_CASES
         and report["known_finding_cases"] == EXPECTED_COMPARATIVE_CASES
+        and report["runtime_adapter_parity_cases"]
+        == EXPECTED_COMPARATIVE_CASES
         and reduction >= MIN_COMPARATIVE_TOKEN_REDUCTION_PCT
-    )
-    canonical = json.dumps(report, sort_keys=True, separators=(",", ":"))
-    report["report_fingerprint"] = (
-        "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     )
     return report
 
 
 def main(argv: list[str] | None = None) -> int:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
-        "--artifact",
-        type=Path,
-        default=Path("data/eval_artifacts/phase1_priority2.json"),
+        "--artifact", type=Path, default=Path("data/eval_artifacts/phase1_priority2.json")
     )
     parser.add_argument("--priority", type=int, default=2)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     report = run(args.artifact, args.priority)
-    rendered = json.dumps(report, indent=2, ensure_ascii=False) + "\n"
+    rendered = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(rendered, encoding="utf-8")

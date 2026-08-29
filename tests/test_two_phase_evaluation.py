@@ -326,6 +326,27 @@ def test_generation_phase_never_touches_retriever_and_uses_frozen_evidence(
     _failing_retriever_sentinel()  # existence documents the contract; no call made
 
 
+def test_generation_phase_uses_injected_evidence_context(upstream) -> None:
+    gen_upstream, store_path = upstream
+    store = GenerationCheckpointStore(store_path)
+    question = _case().question
+    prompts_seen: list[str] = []
+
+    records = run_generation_phase(
+        selected_questions=[question],
+        artifact_cases={question: {"queries": []}},
+        upstream=gen_upstream,
+        generate_fn=lambda prompt: prompts_seen.append(prompt) or "answer",
+        checkpoint_store=store,
+        sleep_fn=lambda _seconds: None,
+        evidence_context_fn=lambda _case_payload: "PACKED-CONTEXT-ONLY",
+    )
+
+    assert records[0]["status"] == GEN_STATUS_OK
+    assert "PACKED-CONTEXT-ONLY" in prompts_seen[0]
+    assert "context_builder_fingerprint" in records[0]
+
+
 def test_resume_refuses_mismatched_upstream(upstream) -> None:
     gen_upstream, store_path = upstream
     store = GenerationCheckpointStore(store_path)

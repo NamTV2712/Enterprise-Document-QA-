@@ -10,7 +10,6 @@ only from the frozen Phase 1 artifact evidence.
 from __future__ import annotations
 
 import logging
-import re
 import time
 from typing import Any, Callable
 
@@ -21,7 +20,10 @@ from src.evaluation.evaluator import (
     JudgeParseError,
     _parse_judge_response,
 )
-from src.evaluation.generation_checkpoint import sha256_text
+from src.evaluation.generation_checkpoint import (
+    parse_evidence_context,
+    sha256_text,
+)
 from src.evaluation.judge_checkpoint import JudgeParseErrorStub
 from src.generation.generator import SYSTEM_PROMPT, Generator
 
@@ -147,24 +149,10 @@ def build_production_judge_prompt(
     # lines silently fractures one source into multiple fake chunks and can
     # discard the exact figures the judge needs. Source markers are the only
     # structural boundary in the frozen context format.
-    matches = list(
-        re.finditer(
-            r"(?ms)^\[Source (?P<number>\d+)\] (?P<citation>[^\n]*)\n"
-            r"(?P<text>.*?)(?=^\[Source \d+\] |\Z)",
-            evidence_context,
-        )
-    )
-    context_blocks = [
-        (
-            match.group("citation"),
-            match.group("text").rstrip(),
-        )
-        for match in matches
-        if match.group("text").strip()
-    ]
+    context_blocks = parse_evidence_context(evidence_context)
     context_str = "\n\n".join(
-        f"[Chunk {i + 1}] {citation}\n{text}"
-        for i, (citation, text) in enumerate(context_blocks)
+        f"[Chunk {i + 1}] {block['citation']}\n{block['text']}"
+        for i, block in enumerate(context_blocks)
     )
     return JUDGE_PROMPT_TEMPLATE.format(
         question=question,

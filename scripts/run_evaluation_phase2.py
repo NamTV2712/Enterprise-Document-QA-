@@ -38,6 +38,7 @@ from src.evaluation.generation_checkpoint import (
     GenerationCheckpointStore,
     GenerationUpstream,
     build_evidence_context,
+    parse_evidence_context,
     run_generation_phase,
     sha256_text,
 )
@@ -201,14 +202,17 @@ def compute_case_metrics(
     answer: str,
     required_keywords: list[str],
     expects_fallback: bool,
+    evidence_context: str | None = None,
 ) -> dict[str, Any]:
     """Deterministic per-case checks over frozen evidence + the answer."""
+    rendered_context = evidence_context or build_evidence_context(case_payload)
+    source_blocks = parse_evidence_context(rendered_context)
     citation_correctness = compute_citation_correctness(
-        answer, len(case_payload.get("final_chunk_ids", []))
+        answer, len(source_blocks)
     )
     chunks = [
-        SimpleNamespace(text=text)
-        for text in unique_evidence_texts(case_payload)
+        SimpleNamespace(text=block["text"])
+        for block in source_blocks
     ]
     recall_proxy = compute_recall_proxy(required_keywords, chunks)
     fallback_correct = check_fallback_correctness(answer, expects_fallback)
@@ -315,9 +319,9 @@ def run_phase2(
 
     ``generate_fn``/``judge_fn`` are the only provider touchpoints.
     ``evidence_context_fn`` renders a case payload into prompt blocks;
-    it defaults to full-evidence rendering and may substitute a packed
-    subset, which participates in the upstream ``context_strategy``
-    binding so mixed strategies can never resume against each other.
+    it defaults to full-evidence rendering and is shared by generation
+    and judging. The renderer fingerprint and upstream ``context_strategy``
+    both participate in the binding, so stale or mixed contexts cannot resume.
     Quota or hard failures stop the whole run immediately after
     checkpointing so remaining quota is not burned against a dead run.
     """
@@ -339,6 +343,7 @@ def run_phase2(
             checkpoint_store=generation_store,
             max_retries=max_gen_retries,
             sleep_fn=sleep_fn,
+            evidence_context_fn=render_context,
         )
         gen_record = records[0]
         generation_records.append({**gen_record, "question": tc.question})
@@ -354,6 +359,9 @@ def run_phase2(
                 gen_record["answer"],
                 tc.required_keywords,
                 tc.expects_fallback,
+                evidence_context=render_context(
+                    case_by_question[tc.question]
+                ),
             ),
             "question": tc.question,
         })

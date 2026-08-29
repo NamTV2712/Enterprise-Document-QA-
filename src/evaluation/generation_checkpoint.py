@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,7 +20,7 @@ from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
-GENERATION_SCHEMA_VERSION = 1
+GENERATION_SCHEMA_VERSION = 2
 GEN_STATUS_OK = "OK"
 GEN_STATUS_SKIPPED_QUOTA = "GEN_SKIPPED_QUOTA"
 GEN_STATUS_ERROR = "GEN_ERROR"
@@ -47,12 +48,18 @@ def sha256_text(text: str) -> str:
     return f"sha256:{hashlib.sha256(text.encode('utf-8')).hexdigest()}"
 
 
+GENERATION_CONTEXT_BUILDER_FINGERPRINT = sha256_text(
+    "generation-context-renderer-v2-injected-evidence-context"
+)
+
+
 def compute_generation_binding(
     upstream_artifact_sha256: str,
     artifact_schema_version: int,
     model: str,
     prompt_template_sha256: str,
     context_strategy: str,
+    context_builder_fingerprint: str,
 ) -> str:
     """Stable identity of everything that must not drift across resume."""
     payload = {
@@ -62,6 +69,7 @@ def compute_generation_binding(
         "model": model,
         "prompt_template_sha256": prompt_template_sha256,
         "context_strategy": context_strategy,
+        "context_builder_fingerprint": context_builder_fingerprint,
     }
     return sha256_text(json.dumps(payload, sort_keys=True))
 
@@ -76,6 +84,7 @@ class GenerationUpstream:
     model: str
     prompt_template: str = DEFAULT_GENERATION_PROMPT_TEMPLATE
     context_strategy: str = CONTEXT_STRATEGY_FULL_EVIDENCE
+    context_builder_fingerprint: str = GENERATION_CONTEXT_BUILDER_FINGERPRINT
 
     @property
     def prompt_template_sha256(self) -> str:
@@ -89,6 +98,7 @@ class GenerationUpstream:
             self.model,
             self.prompt_template_sha256,
             self.context_strategy,
+            self.context_builder_fingerprint,
         )
 
 
@@ -152,6 +162,24 @@ def build_evidence_context(
     return "\n\n".join(blocks)
 
 
+def parse_evidence_context(evidence_context: str) -> list[dict[str, str]]:
+    """Parse canonical source blocks without splitting internal blank lines."""
+    matches = re.finditer(
+        r"(?ms)^\[Source (?P<number>\d+)\] (?P<citation>[^\n]*)\n"
+        r"(?P<text>.*?)(?=^\[Source \d+\] |\Z)",
+        evidence_context,
+    )
+    return [
+        {
+            "number": match.group("number"),
+            "citation": match.group("citation"),
+            "text": match.group("text").rstrip(),
+        }
+        for match in matches
+        if match.group("text").strip()
+    ]
+
+
 def run_generation_phase(
     selected_questions: list[str],
     artifact_cases: dict[str, dict[str, Any]],
@@ -161,6 +189,7 @@ def run_generation_phase(
     max_retries: int = 2,
     retry_backoff_seconds: tuple[float, ...] = (5.0, 15.0),
     sleep_fn: Callable[[float], None] = time.sleep,
+    evidence_context_fn: Callable[[dict[str, Any]], str] | None = None,
 ) -> list[dict[str, Any]]:
     """Generate answers for the selected questions from frozen evidence.
 
@@ -170,6 +199,7 @@ def run_generation_phase(
     problems later cannot destroy finished generations.
     """
     done = checkpoint_store.load_compatible(upstream)
+    render_context = evidence_context_fn or build_evidence_context
     records: list[dict[str, Any]] = []
 
     for question in selected_questions:
@@ -185,7 +215,7 @@ def run_generation_phase(
             )
 
         prompt = upstream.prompt_template.format(
-            context_blocks=build_evidence_context(case_payload),
+            context_blocks=render_context(case_payload),
             question=question,
         )
 
@@ -212,6 +242,7 @@ def run_generation_phase(
             "model": upstream.model,
             "prompt_template_sha256": upstream.prompt_template_sha256,
             "context_strategy": upstream.context_strategy,
+            "context_builder_fingerprint": upstream.context_builder_fingerprint,
             "upstream_artifact_sha256": upstream.artifact_sha256,
         }
         if answer is not None:

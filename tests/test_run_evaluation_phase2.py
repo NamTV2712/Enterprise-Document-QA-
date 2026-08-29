@@ -218,6 +218,40 @@ def test_complete_run_is_official_with_metrics(tmp_path: Path) -> None:
     assert netflix_case["deterministic"]["fallback_correct"] is True
 
 
+def test_generation_and_judge_receive_the_same_injected_context(
+    tmp_path: Path,
+) -> None:
+    case_by_question = {
+        case["question"]: case for case in _artifact_payload()["cases"][:1]
+    }
+    selected = _selected_two()[:1]
+    generation_prompts: list[str] = []
+    judge_prompts: list[str] = []
+
+    summary = run_phase2(
+        selected=selected,
+        case_by_question=case_by_question,
+        upstream=_upstream(tmp_path),
+        bound_fingerprint=PIN,
+        generate_fn=lambda prompt: (
+            generation_prompts.append(prompt) or APPLE_ANSWER
+        ),
+        judge_fn=lambda prompt: judge_prompts.append(prompt) or _scores(),
+        generation_store=GenerationCheckpointStore(tmp_path / "gen.jsonl"),
+        judge_store=JudgeCheckpointStore(tmp_path / "judge.jsonl"),
+        max_gen_retries=0,
+        max_judge_retries=0,
+        sleep_fn=lambda _seconds: None,
+        evidence_context_fn=lambda _case_payload: (
+            "[Source 1] packed citation\nPACKED-CONTEXT-ONLY"
+        ),
+    )
+
+    assert summary["official"] is True
+    assert "PACKED-CONTEXT-ONLY" in generation_prompts[0]
+    assert "PACKED-CONTEXT-ONLY" in judge_prompts[0]
+
+
 def test_generation_quota_skip_blocks_official(tmp_path: Path) -> None:
     summary = _run(
         tmp_path,
@@ -414,6 +448,20 @@ def test_compute_case_metrics_handles_missing_citations() -> None:
     assert metrics["recall_proxy"] == 1.0
     # No fallback phrase while fallback is not expected: correct behavior.
     assert metrics["fallback_correct"] is True
+
+
+def test_compute_case_metrics_uses_rendered_packed_sources() -> None:
+    case_payload = _artifact_payload()["cases"][0]
+    metrics = compute_case_metrics(
+        case_payload,
+        answer="Claim [Source 2].",
+        required_keywords=["391,035"],
+        expects_fallback=False,
+        evidence_context="[Source 1] packed\nNo required figure here.",
+    )
+
+    assert metrics["citation_correctness"] == 0.0
+    assert metrics["recall_proxy"] == 0.0
 
 
 def test_production_judge_prompt_preserves_source_boundaries_and_blank_lines() -> None:

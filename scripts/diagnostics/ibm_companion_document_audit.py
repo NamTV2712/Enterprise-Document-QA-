@@ -102,6 +102,15 @@ def _page_markers(soup: BeautifulSoup) -> list[tuple[int, int]]:
             if match:
                 markers.append((int(match.group(1)), positions.get(id(node), -1)))
                 break
+    for link in soup.find_all("a", href=True):
+        label = _normalize(link.get_text(" ", strip=True))
+        match = re.fullmatch(r"(\d{1,3})", label)
+        href = str(link["href"])
+        if not match or not href.startswith("#") or len(href) == 1:
+            continue
+        target = soup.find(id=href[1:]) or soup.find(attrs={"name": href[1:]})
+        if isinstance(target, Tag):
+            markers.append((int(match.group(1)), positions.get(id(target), -1)))
     return sorted(set(markers), key=lambda item: (item[1], item[0]))
 
 

@@ -105,6 +105,15 @@ def test_broken_page_markers_leave_interval_unresolved(tmp_path):
     assert evidence["table_count"] == 0
 
 
+def test_anchor_page_markers_resolve_internal_targets(tmp_path):
+    path = tmp_path / "companion.htm"
+    html = '<a href="#start">42</a><div id="start"></div><table><tr><th>2025</th><th>2024</th></tr><tr><td>Total assets</td><td>2</td><td>1</td></tr></table><a href="#end">116</a><div id="end"></div>'
+    path.write_text(html, encoding="utf-8")
+    evidence = _statement_evidence(path, {"start": 42, "end": 116})
+    assert evidence["page_range_resolved"] is True
+    assert evidence["table_count"] == 1
+
+
 def test_broken_reference_has_no_false_companion(tmp_path):
     html, sections, chunks, *_ = _fixture(tmp_path, '<a href="missing.htm">Annual Report to Stockholders</a>')
     report = audit_companion(html, sections, chunks)

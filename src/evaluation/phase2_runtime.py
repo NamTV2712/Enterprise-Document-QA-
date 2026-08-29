@@ -39,6 +39,7 @@ JUDGE_CONTEXT_BUILDER_VERSION = 2
 JUDGE_CONTEXT_BUILDER_FINGERPRINT = sha256_text(
     "judge-source-marker-parser-v2-preserve-internal-blank-lines"
 )
+GENERATION_SYSTEM_PROMPT_FINGERPRINT = sha256_text(SYSTEM_PROMPT)
 
 
 class UsageTracker:

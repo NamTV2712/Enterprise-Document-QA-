@@ -282,6 +282,7 @@ def upstream(tmp_path: Path) -> tuple[GenerationUpstream, Path]:
         artifact_sha256=digest,
         artifact_schema_version=1,
         model="openai/gpt-oss-120b",
+        system_prompt_sha256=sha256_text("test-system-prompt"),
     )
     store_path = tmp_path / "gen.jsonl"
     return upstream, store_path
@@ -366,6 +367,7 @@ def test_resume_refuses_mismatched_upstream(upstream) -> None:
         artifact_sha256="sha256:different",
         artifact_schema_version=1,
         model=gen_upstream.model,
+        system_prompt_sha256=gen_upstream.system_prompt_sha256,
     )
     calls: list[str] = []
 
@@ -403,6 +405,7 @@ def test_resume_refuses_mismatched_context_builder(upstream) -> None:
         artifact_sha256=gen_upstream.artifact_sha256,
         artifact_schema_version=gen_upstream.artifact_schema_version,
         model=gen_upstream.model,
+        system_prompt_sha256=gen_upstream.system_prompt_sha256,
         context_builder_fingerprint="sha256:changed-renderer",
     )
     calls: list[str] = []
@@ -411,6 +414,43 @@ def test_resume_refuses_mismatched_context_builder(upstream) -> None:
         [question],
         payload,
         changed_renderer,
+        lambda prompt: calls.append(prompt) or "second",
+        store,
+        sleep_fn=lambda _seconds: None,
+    )
+
+    assert len(calls) == 1
+    assert records[0]["answer"] == "second"
+
+
+def test_resume_refuses_mismatched_system_prompt(upstream) -> None:
+    gen_upstream, store_path = upstream
+    store = GenerationCheckpointStore(store_path)
+    question = _case().question
+    payload = {question: {"queries": []}}
+
+    first = run_generation_phase(
+        [question],
+        payload,
+        gen_upstream,
+        lambda _prompt: "first",
+        store,
+        sleep_fn=lambda _seconds: None,
+    )[0]
+    assert first["system_prompt_sha256"] == gen_upstream.system_prompt_sha256
+
+    changed_prompt = GenerationUpstream(
+        artifact_path=gen_upstream.artifact_path,
+        artifact_sha256=gen_upstream.artifact_sha256,
+        artifact_schema_version=gen_upstream.artifact_schema_version,
+        model=gen_upstream.model,
+        system_prompt_sha256=sha256_text("changed-system-prompt"),
+    )
+    calls: list[str] = []
+    records = run_generation_phase(
+        [question],
+        payload,
+        changed_prompt,
         lambda prompt: calls.append(prompt) or "second",
         store,
         sleep_fn=lambda _seconds: None,
@@ -493,6 +533,7 @@ def test_judge_quota_failure_preserves_generation_and_aggregate_stays_unofficial
             artifact_sha256="sha256:x",
             artifact_schema_version=1,
             model="m",
+            system_prompt_sha256=sha256_text("test-system-prompt"),
         )
     )
     assert stored_generations == {}

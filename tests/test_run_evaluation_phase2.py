@@ -19,12 +19,14 @@ from src.evaluation.evaluator import JudgeParseError
 from src.evaluation.generation_checkpoint import (
     GenerationCheckpointStore,
     GenerationUpstream,
+    sha256_text,
 )
 from src.evaluation.judge_checkpoint import (
     JudgeCheckpointStore,
     JudgeParseErrorStub,
 )
 from src.evaluation.phase2_runtime import (
+    GENERATION_SYSTEM_PROMPT_FINGERPRINT,
     JUDGE_CONTEXT_BUILDER_FINGERPRINT,
     build_production_judge_prompt,
     generation_pool_keys,
@@ -132,6 +134,7 @@ def _upstream(tmp_path: Path) -> GenerationUpstream:
         artifact_sha256="sha256:" + "1" * 64,
         artifact_schema_version=1,
         model="test-model",
+        system_prompt_sha256=sha256_text("test-system-prompt"),
     )
 
 
@@ -329,6 +332,10 @@ def test_load_bound_artifact_refuses_fingerprint_drift(
     artifact, upstream = load_bound_artifact(path, PIN)
     assert upstream.model == EVAL_MODEL
     assert upstream.artifact_sha256.startswith("sha256:")
+    assert (
+        upstream.system_prompt_sha256
+        == GENERATION_SYSTEM_PROMPT_FINGERPRINT
+    )
 
     from scripts import run_evaluation_phase2 as runner_module
 

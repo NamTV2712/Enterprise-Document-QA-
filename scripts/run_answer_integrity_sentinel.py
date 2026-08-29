@@ -28,6 +28,7 @@ from src.evaluation.judge_checkpoint import (
     run_judge_phase,
 )
 from src.evaluation.phase2_runtime import (
+    GENERATION_SYSTEM_PROMPT_FINGERPRINT,
     PHASE2_MAX_TOKENS,
     JUDGE_CONTEXT_BUILDER_FINGERPRINT,
     UsageTracker,
@@ -74,6 +75,7 @@ def _load() -> tuple[dict, GenerationUpstream]:
         artifact_sha256=f"sha256:{hashlib.sha256(raw).hexdigest()}",
         artifact_schema_version=artifact["schema_version"],
         model=MODEL,
+        system_prompt_sha256=GENERATION_SYSTEM_PROMPT_FINGERPRINT,
         context_strategy="selective_packed_v1",
     )
     return artifact, upstream

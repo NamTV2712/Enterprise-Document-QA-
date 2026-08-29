@@ -2,8 +2,8 @@
 
 The generation phase consumes ONLY the Phase 1 artifact — it never
 touches the retriever. Every checkpoint record stores the upstream
-artifact hash, model id, prompt-template hash, and context strategy, and
-resume accepts records only when all four match exactly, so interrupted
+artifact hash, model id, system/user prompt hashes, and context strategy, and
+resume accepts records only when all inputs match exactly, so interrupted
 runs can never silently mix different evidence, prompts, or models.
 """
 
@@ -20,7 +20,7 @@ from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
-GENERATION_SCHEMA_VERSION = 2
+GENERATION_SCHEMA_VERSION = 3
 GEN_STATUS_OK = "OK"
 GEN_STATUS_SKIPPED_QUOTA = "GEN_SKIPPED_QUOTA"
 GEN_STATUS_ERROR = "GEN_ERROR"
@@ -36,7 +36,11 @@ DEFAULT_GENERATION_PROMPT_TEMPLATE = (
     "Question: {question}\n"
     "Use only canonical inline [Source N] citations; do not use line-number "
     "citation formats such as 【1†L1-L3】. Cite every factual claim. Quote "
-    "numeric values exactly as shown, including the period and sign. If the "
+    "numeric values exactly as shown, including the period and sign. For a "
+    "trend, growth, or comparison, inspect all excerpts and quote every "
+    "relevant underlying period-and-value pair before summarizing the trend; "
+    "do not round, abbreviate, recalculate, or replace those values with only "
+    "a percentage. If the "
     "excerpts do not contain the answer, say you cannot find it in the filings "
     "without describing retrieved sources as relevant."
 )
@@ -60,6 +64,7 @@ def compute_generation_binding(
     prompt_template_sha256: str,
     context_strategy: str,
     context_builder_fingerprint: str,
+    system_prompt_sha256: str,
 ) -> str:
     """Stable identity of everything that must not drift across resume."""
     payload = {
@@ -70,6 +75,7 @@ def compute_generation_binding(
         "prompt_template_sha256": prompt_template_sha256,
         "context_strategy": context_strategy,
         "context_builder_fingerprint": context_builder_fingerprint,
+        "system_prompt_sha256": system_prompt_sha256,
     }
     return sha256_text(json.dumps(payload, sort_keys=True))
 
@@ -82,6 +88,7 @@ class GenerationUpstream:
     artifact_sha256: str
     artifact_schema_version: int
     model: str
+    system_prompt_sha256: str
     prompt_template: str = DEFAULT_GENERATION_PROMPT_TEMPLATE
     context_strategy: str = CONTEXT_STRATEGY_FULL_EVIDENCE
     context_builder_fingerprint: str = GENERATION_CONTEXT_BUILDER_FINGERPRINT
@@ -99,6 +106,7 @@ class GenerationUpstream:
             self.prompt_template_sha256,
             self.context_strategy,
             self.context_builder_fingerprint,
+            self.system_prompt_sha256,
         )
 
 
@@ -243,6 +251,7 @@ def run_generation_phase(
             "prompt_template_sha256": upstream.prompt_template_sha256,
             "context_strategy": upstream.context_strategy,
             "context_builder_fingerprint": upstream.context_builder_fingerprint,
+            "system_prompt_sha256": upstream.system_prompt_sha256,
             "upstream_artifact_sha256": upstream.artifact_sha256,
         }
         if answer is not None:

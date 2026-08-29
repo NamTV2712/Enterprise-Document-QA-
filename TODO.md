@@ -98,10 +98,17 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        and complete the current-corpus official Phase 2 run. The run achieved
        30/30 generation and 30/30 judgment records with no skips or parse
        failures; see the pinned metrics in `README.md` and `PROJECT_STATE.md`.
-18. [ ] Improve comparative/enumeration grounding based on the current Phase 2
-       failures. Start with deterministic evidence-shape diagnostics and
-       per-case answer/citation review; do not change candidate pool, reranker,
-       or context packing without a pre-registered gate.
+18. [x] Improve Phase 2 judge integrity based on the comparative/enumeration
+       failure audit. The production judge now parses only `[Source N]`
+       boundaries, preserves internal blank lines and complete evidence text,
+       and fingerprints the context builder so stale judge checkpoints cannot
+       be reused. The corrected official rerun reaches Faithfulness `0.9793`,
+       Answer Relevancy `0.9733`, Context Precision `0.6197`, and Overall
+       `0.8574` on 30/30 cases.
+19. [ ] Run a fresh deterministic answer/citation review on the corrected
+       benchmark, focusing next on comparative context precision (`0.4533`)
+       and out-of-corpus abstention precision (`0.0000`). Any packing,
+       candidate-pool, or reranker change still requires a pre-registered gate.
 
 ## Always-On Deployment
 

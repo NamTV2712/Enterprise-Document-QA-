@@ -233,15 +233,17 @@ artifact `sha256:8283b628…` completes all 30 priority <= 2 cases with 61
 non-empty queries and `12/12` decomposed-plan evidence checks. The separate
 priority-3 replay covers 22 recovery cases at keyword recall `1.0000`. The
 The current-corpus Phase 2 run completed officially with one binding and no
-skipped or failed records. The three-case probe was run first as a quota
-preflight and remains non-official self-judge evidence.
+skipped or failed records. The judge was rerun after correcting a context
+boundary bug that could split SEC chunks at internal blank lines; the judge
+checkpoint now fingerprints this renderer. The three-case probe was run first
+as a quota preflight and remains non-official self-judge evidence.
 
 | Metric | Score |
 |---|---:|
-| Faithfulness | `0.5382` |
-| Answer relevancy | `0.9233` |
-| Context precision | `0.3810` |
-| Overall judge average | `0.6142` |
+| Faithfulness | `0.9793` |
+| Answer relevancy | `0.9733` |
+| Context precision | `0.6197` |
+| Overall judge average | `0.8574` |
 | Citation correctness | `1.0000` |
 | Recall proxy | `1.0000` |
 | Fallback accuracy | `1.0000` |
@@ -250,19 +252,19 @@ Category table (faithfulness / relevancy / precision):
 
 | Category | N | Scores |
 |---|---:|---|
-| fact_lookup | 8 | `0.6875 / 1.0000 / 0.3850` |
-| summary | 6 | `0.4208 / 0.9000 / 0.5633` |
-| enumeration | 4 | `0.4350 / 0.8250 / 0.3050` |
-| comparative | 6 | `0.2967 / 0.8500 / 0.2917` |
-| multi_hop | 3 | `0.6667 / 1.0000 / 0.6667` |
-| out_of_corpus | 3 | `0.8667 / 0.9667 / 0.0000` |
+| fact_lookup | 8 | `1.0000 / 1.0000 / 0.7500` |
+| summary | 6 | `0.9867 / 0.9917 / 0.8333` |
+| enumeration | 4 | `1.0000 / 0.8500 / 0.5925` |
+| comparative | 6 | `0.9933 / 0.9917 / 0.4533` |
+| multi_hop | 3 | `1.0000 / 1.0000 / 0.8333` |
+| out_of_corpus | 3 | `0.8333 / 0.9667 / 0.0000` |
 
 Current-corpus binding: artifact `sha256:8283b628…`, Phase 2 binding
 `sha256:680e0370…`, with `30/30` generation and `30/30` judgment records.
 Deterministic checks remain citation correctness `1.0000` (`29` scored cases),
 recall proxy `1.0000` (`24` scored cases), and fallback accuracy `1.0000`.
-Token usage was `74,448` generation prompt + `12,304` generation completion
-tokens and `28,856` judging prompt + `16,072` judging completion tokens.
+Token usage for the judge rerun was `65,435` judging prompt + `15,716`
+judging completion tokens; generation resumed from the existing checkpoint.
 
 Historical context-packing A/B (the pre-registration and confirmatory run used
 the prior frozen Phase 1 artifact, paired per-case,
@@ -367,6 +369,7 @@ Create `.env`:
 ```text
 GROQ_API_KEY=your_groq_key
 GROQ_API_KEY2=optional_second_serving_key
+GROQ_API_KEY3=optional_third_failover_key
 GROQ_API_KEY_FALL_BACK=optional_first_evaluation_generation_key
 GROQ_API_KEY_FALL_BACK2=optional_second_evaluation_generation_key
 QDRANT_MODE=local
@@ -474,7 +477,7 @@ instead of the repository's configured Vitest/jsdom environment.
 
 Prerequisites: Docker Desktop installed and running, plus corpus artifacts already built locally under `data/processed/`.
 
-1. Copy `.env.example` to `.env` and fill in `GROQ_API_KEY`. `GROQ_API_KEY2` is an optional serving key. `GROQ_API_KEY_FALL_BACK` and `GROQ_API_KEY_FALL_BACK2` form the optional evaluation-generation pool; evaluation falls back to the primary pair when both are blank. Each pool rotates keys round-robin and cools down a key after a Groq `429` before retrying another key.
+1. Copy `.env.example` to `.env` and fill in `GROQ_API_KEY`. `GROQ_API_KEY2` and `GROQ_API_KEY3` are optional serving failover keys. `GROQ_API_KEY_FALL_BACK` and `GROQ_API_KEY_FALL_BACK2` form the optional evaluation-generation pool; evaluation falls back to the primary pair and then `GROQ_API_KEY3` when the dedicated pair is blank. Each pool rotates keys round-robin and cools down a key after a Groq `429` before retrying another key.
 
 2. Build and run the backend:
 

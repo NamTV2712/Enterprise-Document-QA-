@@ -94,8 +94,10 @@ Generated filings, chunks, embeddings, Qdrant storage, and evaluation artifacts
 remain under `data/` and are excluded from git.
 
 The extractor targets standard 10-K Item boundaries. Annual-report layouts,
-page-range references, and incorporation-by-reference filings require a separate
-extraction branch rather than changes to retrieval.
+page-range references, and incorporation-by-reference filings use separate
+guarded extraction branches; the current IBM companion resolver is one such
+branch and does not alter the standard section path. Remaining unsupported
+annual-report layouts require their own read-only audit before production use.
 
 ## Online Query Paths
 
@@ -246,9 +248,13 @@ first two unique chunks from each decomposition branch and then retains
 structured hits and required-fact donors. Its provider A/B was rejected.
 The offline-only v4 counterfactual instead keeps branch top 1 and adds only a
 missing query-intent or explicit branch-fact donor. Non-comparative contexts
-remain byte-identical to the frozen artifact. The evaluation default stays
-`selective_packed_v1`; v4 is not a provider arm until its separate answer-level
-gate passes.
+remain byte-identical to the frozen artifact. The oracle-free v5 selector is
+shared with production `/query/decomposed` and passed its six-case provider
+candidate gate, but remains experimental. The offline `selective_packed_v2`
+composite applies the already admitted selective v1 policy to
+`fact_lookup`/`multi_hop`/`summary`, v5 to `comparative`, and full evidence to
+enumeration/out-of-corpus. The evaluation default remains
+`selective_packed_v1` until a fresh full N=30 v2 replay passes admission.
 
 Generation, deterministic metrics, and judging must consume the same rendered
 evidence context. The generation binding includes a renderer fingerprint in
@@ -271,7 +277,8 @@ The following are deliberate current boundaries, not accidental omissions:
 - Local Qdrant does not support multiple backend workers.
 - Decomposed responses are not streamed as a live sub-query trace.
 - Cache, sessions, and rate-limit counters are not distributed.
-- Extraction does not yet follow annual-report cross-references.
+- Remaining annual-report cross-references need dedicated extraction routes;
+  IBM's verified companion route is already supported separately.
 - Retrieval parameters already rejected by measured experiments should not be
   reopened without new evidence.
 
@@ -283,7 +290,8 @@ The architecture supports these upgrades without redesigning the entire system:
 - Move cache, sessions, and rate-limit counters to Redis.
 - Add a persistent session backend behind the conversation-memory interface.
 - Add hosting-specific trusted-proxy configuration.
-- Add annual-report-aware extraction as a separate ingestion path.
+- Add annual-report-aware extraction for remaining unsupported layouts as
+  separate ingestion paths.
 - Add true decomposed SSE events while preserving existing response contracts.
 
 Any upgrade that changes retrieval behavior, evaluation methodology, ingestion

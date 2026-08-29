@@ -400,8 +400,21 @@ subset is not the official N=30 benchmark, so published scores and the
 python -m scripts.run_comparative_packing_ab --candidate-strategy comparative_oracle_free_v5 --fresh
 ```
 
-The next step is a separately authorized controlled full N=30 replay on the
-active schema-v2 artifact, followed by an admission decision if its gates hold.
+The raw v5 strategy is not the correct full-set successor because it restores
+full evidence for the 24 non-comparative cases that selective v1 already packs.
+The offline composite `selective_packed_v2` therefore preserves selective v1
+for `fact_lookup`, `multi_hop`, and `summary`, applies v5 only to the six
+comparative cases, and leaves enumeration/out-of-corpus cases unchanged. It
+passes `30/30` evidence and source-boundary checks, `24/24` non-comparative
+byte identity, `6/6` comparative-v5 identity, branch contracts, and selector
+parity. It renders `36,152` tokens versus `49,903` for selective v1 (`27.56%`
+reduction) and `62,262` for full evidence (`41.94%` reduction). The ignored
+report is `data/diagnostics/selective_packing_v2.json` (file SHA-256
+`78d9cd6b2761935884576af16b3e3f9305c573302f0a38b3cab8498fe4c2f703`). No
+provider call or Phase 1 rebuild was made. Before N=30, a remaining v5
+Apple/Microsoft answer-integrity flag for a derived `$12,989` figure must be
+resolved by the shared numeric contract. The next provider run should use a
+fresh `selective_packed_v2` binding only after that small preflight passes.
 
 Historical context-packing A/B (the pre-registration and confirmatory run used
 the prior frozen Phase 1 artifact, paired per-case,

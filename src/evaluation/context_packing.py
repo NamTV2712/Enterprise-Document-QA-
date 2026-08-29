@@ -36,6 +36,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from src.evaluation.generation_checkpoint import build_evidence_context
 from src.generation.comparative_context import (
     ComparativeBranch,
     select_comparative_chunks,
@@ -55,6 +56,9 @@ CONTEXT_STRATEGY_SELECTIVE = "selective_packed_v1"
 CONTEXT_STRATEGY_COMPARATIVE_V3 = "comparative_packed_v3"
 CONTEXT_STRATEGY_COMPARATIVE_V4 = "comparative_intent_packed_v4"
 CONTEXT_STRATEGY_COMPARATIVE_V5 = "comparative_oracle_free_v5"
+# Composite successor to selective_packed_v1. It preserves the already
+# admitted category policy while replacing only comparative contexts with v5.
+CONTEXT_STRATEGY_SELECTIVE_V2 = "selective_packed_v2"
 SELECTIVE_PACKED_CATEGORIES = {"fact_lookup", "multi_hop", "summary"}
 COMPARATIVE_BRANCH_TARGET = 2
 
@@ -206,6 +210,21 @@ def collect_entries(case_payload: dict) -> list[dict]:
             seen.add(chunk_id)
             entries.append(chunk)
     return entries
+
+
+def effective_case_context_strategy(strategy: str, category: str) -> str:
+    """Resolve a named Phase 2 policy to one concrete per-case strategy."""
+    if strategy == CONTEXT_STRATEGY_SELECTIVE:
+        if category in SELECTIVE_PACKED_CATEGORIES:
+            return CONTEXT_STRATEGY_ROUTE_AWARE
+        return CONTEXT_STRATEGY_FULL_EVIDENCE
+    if strategy == CONTEXT_STRATEGY_SELECTIVE_V2:
+        if category in SELECTIVE_PACKED_CATEGORIES:
+            return CONTEXT_STRATEGY_ROUTE_AWARE
+        if category == "comparative":
+            return CONTEXT_STRATEGY_COMPARATIVE_V5
+        return CONTEXT_STRATEGY_FULL_EVIDENCE
+    return strategy
 
 
 @dataclass
@@ -438,6 +457,26 @@ def render_packed_blocks(packed: PackedContext) -> str:
             f"{entry.get('text', '')}"
         )
     return "\n\n".join(blocks)
+
+
+def render_case_context(
+    case_payload: dict,
+    *,
+    required_keywords: list[str] | None = None,
+    strategy: str = CONTEXT_STRATEGY_FULL_EVIDENCE,
+) -> str:
+    """Render one case under a named policy with one shared implementation."""
+    concrete_strategy = effective_case_context_strategy(
+        strategy, case_payload.get("category", "")
+    )
+    if concrete_strategy == CONTEXT_STRATEGY_FULL_EVIDENCE:
+        return build_evidence_context(case_payload)
+    packed = pack_case_context(
+        case_payload,
+        required_keywords=required_keywords,
+        strategy=concrete_strategy,
+    )
+    return render_packed_blocks(packed)
 
 
 def count_tokens(text: str, encoder) -> int:

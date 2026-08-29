@@ -59,8 +59,23 @@ claims. The non-official report is
 `ac4a7dc6f83b2226405874f7f62730c70ba79707fe2486e44db507557743c29c`.
 This is a successful candidate gate, not an official N=30 benchmark; the
 published scores and `selective_packed_v1` Phase 2 default remain unchanged.
-The next improvement requires a separately authorized controlled full N=30
-replay/admission decision on the active schema-v2 artifact.
+An offline policy audit then added `selective_packed_v2`: it preserves the
+admitted route-aware packing for `fact_lookup`, `multi_hop`, and `summary`,
+applies v5 only to `comparative`, and leaves `enumeration` and `out_of_corpus`
+at full evidence. The composite is byte-identical to selective v1 on `24/24`
+non-comparative cases and to v5 on `6/6` comparative cases; all `30/30`
+evidence and source-boundary checks, `6/6` branch contracts, and `6/6`
+production/evaluation selector parity checks pass. It renders `36,152` tokens,
+which is a `27.56%` reduction from selective v1 and `41.94%` from full evidence.
+Two runs were byte-identical, and the artifact input hash was unchanged. The
+ignored report is `data/diagnostics/selective_packing_v2.json` with file
+SHA-256 `78d9cd6b2761935884576af16b3e3f9305c573302f0a38b3cab8498fe4c2f703`.
+No provider call or Phase 1 rebuild was made. Before a full N=30 replay, the
+remaining comparative answer-integrity finding must be handled: one v5
+Apple/Microsoft answer contains a derived `$12,989` figure flagged by the
+deterministic audit even though the AWS-specific gate passed. The next provider
+step is therefore a small numeric-contract preflight, followed by a fresh full
+N=30 `selective_packed_v2` replay if it passes.
 
 The first retrieval-side improvement is now validated offline. A shared
 deterministic query shaper is used by direct and decomposed paths; for

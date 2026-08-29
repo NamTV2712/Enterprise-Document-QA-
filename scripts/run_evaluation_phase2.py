@@ -67,9 +67,8 @@ from src.evaluation.context_packing import (
     CONTEXT_STRATEGY_FULL_EVIDENCE,
     CONTEXT_STRATEGY_ROUTE_AWARE,
     CONTEXT_STRATEGY_SELECTIVE,
-    SELECTIVE_PACKED_CATEGORIES,
-    pack_case_context,
-    render_packed_blocks,
+    CONTEXT_STRATEGY_SELECTIVE_V2,
+    render_case_context,
 )
 from src.evaluation.test_set import TEST_SET, TestCase
 from src.generation.generator import Generator
@@ -532,6 +531,7 @@ def main(argv: list[str] | None = None) -> int:
             CONTEXT_STRATEGY_SELECTIVE,
             CONTEXT_STRATEGY_COMPARATIVE_V3,
             CONTEXT_STRATEGY_COMPARATIVE_V5,
+            CONTEXT_STRATEGY_SELECTIVE_V2,
         ],
         default=CONTEXT_STRATEGY_SELECTIVE,
         help=(
@@ -541,7 +541,8 @@ def main(argv: list[str] | None = None) -> int:
             "renders every frozen chunk and remains available for replay. "
             "comparative_packed_v3 is an offline-gated experimental arm; "
             "comparative_oracle_free_v5 is the newer offline-gated experimental "
-            "arm; neither is the default."
+            "arm; selective_packed_v2 composes the admitted selective policy "
+            "with v5 for comparative cases; neither is the default yet."
         ),
     )
     args = parser.parse_args(argv)
@@ -552,6 +553,7 @@ def main(argv: list[str] | None = None) -> int:
         CONTEXT_STRATEGY_SELECTIVE: "_packed_selective",
         CONTEXT_STRATEGY_COMPARATIVE_V3: "_packed_comparative_v3",
         CONTEXT_STRATEGY_COMPARATIVE_V5: "_packed_comparative_v5",
+        CONTEXT_STRATEGY_SELECTIVE_V2: "_packed_selective_v2",
     }.get(args.context_strategy, "")
     if args.gen_checkpoint is None:
         args.gen_checkpoint = Path(
@@ -580,31 +582,15 @@ def main(argv: list[str] | None = None) -> int:
     }
     meta_by_question = {tc.question: tc for tc in selected}
     evidence_context_fn: Callable[[dict], str] | None = None
-    if args.context_strategy == CONTEXT_STRATEGY_SELECTIVE:
+    if packed_mode:
         def evidence_context_fn(case_payload: dict) -> str:
-            if (
-                case_payload.get("category")
-                not in SELECTIVE_PACKED_CATEGORIES
-            ):
-                return build_evidence_context(case_payload)
-            packed = pack_case_context(
-                case_payload,
-                required_keywords=meta_by_question[
-                    case_payload["question"]
-                ].required_keywords,
-                strategy=CONTEXT_STRATEGY_ROUTE_AWARE,
-            )
-            return render_packed_blocks(packed)
-    elif packed_mode:
-        def evidence_context_fn(case_payload: dict) -> str:
-            packed = pack_case_context(
+            return render_case_context(
                 case_payload,
                 required_keywords=meta_by_question[
                     case_payload["question"]
                 ].required_keywords,
                 strategy=args.context_strategy,
             )
-            return render_packed_blocks(packed)
 
     logger.info(
         "Phase 2 over %d cases bound to %s (strategy=%s)",

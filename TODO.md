@@ -192,10 +192,24 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        the faithfulness bound (`0.9667 -> 0.9583`), preserved deterministic
        metrics, and passed all AWS numeric-pair integrity gates. The result is
        a successful non-official candidate gate; the default remains unchanged.
-33. [ ] Run a separately authorized controlled full N=30 v5 replay against the
-       active schema-v2 artifact, then decide admission only if provider
-       completion, context precision, faithfulness/relevancy, overall score,
-       deterministic non-regression, and AWS numeric-pair integrity all pass.
+33. [x] Build and pass the offline `selective_packed_v2` composite policy. It
+       preserves selective v1 for fact_lookup/multi_hop/summary, applies
+       oracle-free v5 only to comparative cases, and keeps enumeration and
+       out-of-corpus full. The active artifact passes 30/30 evidence and
+       boundary checks, 24/24 non-comparative byte identity, 6/6 comparative
+       v5 identity/parity checks, and renders 36,152 tokens (27.56% below
+       selective v1). The report is byte-stable and provider-free.
+34. [ ] Resolve the remaining comparative answer-integrity preflight before
+       N=30: unify direct/decomposed/Phase 2 numeric contracts so answers do
+       not introduce derived amounts or percentages, then run the focused
+       Apple/Microsoft and AWS sentinels. Require no unsupported numeric claims,
+       valid citations, no fallback, and exact AWS value-period pairs.
+35. [ ] Run a fresh controlled full N=30 replay with
+       `selective_packed_v2` against the active schema-v2 artifact. Do not use
+       raw `comparative_oracle_free_v5`, which restores full evidence for the
+       previously admitted non-comparative categories. Decide admission only
+       if provider completion, absolute quality gates, deterministic
+       non-regression, answer-integrity, and comparative contracts all pass.
 
 ## Always-On Deployment
 

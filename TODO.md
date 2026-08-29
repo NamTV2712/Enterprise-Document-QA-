@@ -170,9 +170,15 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        both AWS values remain present, Apple international rank 2 is dropped,
        and comparative tokens fall `20,939 -> 6,737` (`67.83% >= 45%`). V4
        remains offline-only; no provider call was made.
-30. [ ] After v4 passes offline, tighten exact numeric-pair prompt adherence and
-       run only the AWS sentinel. Require `107,556` and `128,725` in a grounded,
-       cited non-fallback answer before another six-case provider A/B.
+30. [x] After v4 passes offline, tighten exact numeric-pair prompt adherence and
+       run only the AWS sentinel. The sentinel completed `1/1` generation and
+       `1/1` judging with both `107,556` and `128,725` plus their periods in a
+       grounded, cited non-fallback answer; all pre-registered gates passed.
+       The result is non-official and stored under ignored `data/`.
+31. [ ] Run the pre-registered six-case provider A/B for comparative v4 versus
+       full evidence. Admit v4 only if both arms complete, context precision
+       improves, faithfulness/relevancy stay within bounds, deterministic
+       metrics do not regress, and all AWS numeric-pair integrity gates pass.
 
 ## Always-On Deployment
 

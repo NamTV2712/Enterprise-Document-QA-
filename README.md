@@ -345,7 +345,22 @@ missed AMZN security-incidents and Microsoft high-level Cloud-growth chunks,
 keeps both AWS values, and drops the off-topic Apple international-risk support
 chunk. Comparative evidence is `6,737` tokens versus `20,939` full evidence
 (`67.83%` reduction). V4 is offline-only and is not exposed as a Phase 2 arm;
-the next gate is an AWS-only exact-number generation sentinel.
+the next provider gate is an AWS-only exact-number generation sentinel.
+
+The AWS-only v4 sentinel has now passed. It completed `1/1` generation and
+`1/1` judging with one provider call per phase and produced a grounded,
+canonical-citation answer containing AWS `107,556` in 2024 and `128,725` in
+2025. Faithfulness and Answer Relevancy were both `1.00`; Context Precision was
+`0.67`; deterministic citation correctness, recall proxy, and fallback
+correctness were all `1.00`. The run is non-official and stored under ignored
+`data/eval_artifacts/aws_numeric_v4_summary.json` (file SHA-256
+`792e9b94511319ada7ef98902398c9a0860dde39e6edf2ec41ce9585a9f3932f`).
+It can be reproduced after a quota reset with
+`python -m scripts.run_aws_numeric_sentinel --fresh`.
+Generation checkpoint schema v3 now fingerprints the active system prompt in
+addition to the user template and context renderer, so prompt changes cannot
+reuse stale answers. The next step is the pre-registered six-case v4 versus
+full-evidence provider A/B; v4 remains experimental until that gate passes.
 
 Historical context-packing A/B (the pre-registration and confirmatory run used
 the prior frozen Phase 1 artifact, paired per-case,

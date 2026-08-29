@@ -9,8 +9,23 @@ non-fallback answers, 1 legacy line-citation answer, and 4 numeric-review cases.
 Generation and decomposed synthesis prompts now require canonical `[Source N]`
 markers, exact numeric/period grounding, evidence-only enumeration categories,
 and a fallback that does not claim irrelevant retrieved sections are relevant.
-The six flagged answers are reserved for a quota-gated sentinel rerun before any
-full benchmark rerun; diagnostic flags do not alter official judge scores.
+The original six flagged answers were later checked in a separate quota-gated
+sentinel; diagnostic flags do not alter official judge scores.
+
+The current milestone is complete: exact numeric-pair adherence is now locked
+in both production and Phase 2 generation prompts, and generation checkpoint
+schema v3 fingerprints the active system prompt as well as the user template
+and evidence renderer. The AWS-only comparative v4 sentinel completed `1/1`
+generation and `1/1` judging in one provider call each. It produced a grounded,
+cited, non-fallback answer containing AWS `107,556` for 2024 and `128,725` for
+2025, Microsoft Cloud `23%` and `$168.9 billion`, Faithfulness `1.00`, Answer
+Relevancy `1.00`, Context Precision `0.67`, and deterministic citation/recall/
+fallback checks all `1.00`. Every pre-registered gate passed. The run remains
+non-official; its ignored report is
+`data/eval_artifacts/aws_numeric_v4_summary.json` with file SHA-256
+`792e9b94511319ada7ef98902398c9a0860dde39e6edf2ec41ce9585a9f3932f`.
+The next separately authorized milestone is the six-case v4 versus full-evidence
+provider A/B; v4 is not production-default until that gate passes.
 
 The first retrieval-side improvement is now validated offline. A shared
 deterministic query shaper is used by direct and decomposed paths; for

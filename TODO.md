@@ -82,13 +82,17 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
         deterministic retrieval replay before any provider evaluation.
 14. [x] Complete the read-only IBM companion-document audit. The filing
        references pages 42-116 of the 2025 Annual Report to Stockholders and
-       links `ibm-20251231_d2.htm`, but the companion is absent locally;
-       status is `companion_missing` and production remains NO-GO. Report:
-       `data/diagnostics/ibm_companion_document_audit.json`.
+       links `ibm-20251231_d2.htm`. The temporary companion passed the
+       deterministic read-only audit with six unique statement tables and
+       complete income/balance-sheet/cash-flow evidence; production remains
+       unchanged. Report: `data/diagnostics/ibm_companion_document_audit.json`.
 15. [x] Harden the IBM audit to schema v2 with explicit page-interval
        resolution, trial chunk IDs, companion hashing, tri-state gates, and
        an internal byte-determinism check. A complete synthetic companion
        passes all gates; the real corpus remains unchanged and NO-GO.
+16. [ ] Implement the separately authorized production companion resolver
+       only after preserving the audited companion provenance and rerunning
+       all corpus, embedding-generation, index, and retrieval gates.
 
 ## Always-On Deployment
 

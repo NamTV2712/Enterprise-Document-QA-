@@ -9,6 +9,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+import hashlib
+import json
+
+
+QUERY_SHAPER_VERSION = 1
 
 
 TREND_TERMS = (
@@ -20,6 +25,28 @@ TREND_TERMS = (
     "year-over-year",
     "yoy",
 )
+
+
+def _fingerprint() -> str:
+    """Return provenance for every rule that can change retrieval output."""
+    payload = {
+        "version": QUERY_SHAPER_VERSION,
+        "trend_terms": TREND_TERMS,
+        "rules": {
+            "aws_trend": {
+                "requires": ["aws", "trend_term"],
+                "exact_phrases": ["AWS net sales"],
+                "full_terms": ["AWS", "net", "sales"],
+                "additions": ["AWS", "net sales"],
+                "implicit_years": ["2025", "2024"],
+            }
+        },
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return f"sha256:{hashlib.sha256(encoded.encode('utf-8')).hexdigest()}"
+
+
+QUERY_SHAPER_FINGERPRINT = _fingerprint()
 
 
 @dataclass(frozen=True)

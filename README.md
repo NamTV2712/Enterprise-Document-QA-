@@ -280,6 +280,14 @@ The current retrieval follow-up includes a shared deterministic query shaper
 for direct and decomposed paths. In an offline counterfactual, the original
 `Amazon AWS growth` query missed the AWS FY2024/FY2025 values, while the shaped
 query retrieved the correct chunk at rank 1 with both `107,556` and `128,725`.
+The Phase 1 executor now applies the same shaper and records both the original
+effective query and actual retrieval query. Artifact schema v2 fingerprints the
+shaper rules; Phase 2, the quota probe, and the answer sentinel refuse a Phase
+1 artifact without the matching provenance. The current `sha256:8283b628…`
+artifact therefore remains a historical benchmark binding and must be rebuilt
+before any new Phase 2 result is run or compared. The offline 61-subquery A/B
+shaped only two AWS queries, introduced zero ticker leaks or required-term
+regressions, and serialized byte-identically across repeated runs.
 The next lexical-search experiment is gated and must preserve ticker isolation
 and recall before it can change the production candidate set.
 

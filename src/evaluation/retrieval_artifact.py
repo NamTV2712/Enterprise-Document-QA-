@@ -25,8 +25,9 @@ from src.evaluation.retrieval_plan import (
 )
 from src.evaluation.test_set import TestCase
 from src.retrieval.index_manifest import compute_corpus_fingerprint
+from src.retrieval.query_shaper import QUERY_SHAPER_FINGERPRINT, shape_retrieval_query
 
-ARTIFACT_SCHEMA_VERSION = 1
+ARTIFACT_SCHEMA_VERSION = 2
 SCORE_PRECISION = 6
 
 
@@ -92,8 +93,9 @@ def execute_case_retrieval(
     """Run one frozen plan through pure retrieval; never calls an LLM."""
     query_results: list[QueryRetrievalResult] = []
     for plan_query in plan.queries:
+        shaped = shape_retrieval_query(plan_query.effective_query)
         chunks = retriever.retrieve(
-            query=plan_query.effective_query,
+            query=shaped.retrieval_query,
             top_k=top_k,
             ticker=plan_query.ticker,
             section=plan_query.section,
@@ -102,6 +104,7 @@ def execute_case_retrieval(
             QueryRetrievalResult(
                 query={
                     "effective_query": plan_query.effective_query,
+                    "retrieval_query": shaped.retrieval_query,
                     "ticker": plan_query.ticker,
                     "section": plan_query.section,
                     "query_source": plan_query.query_source,
@@ -198,6 +201,7 @@ def build_retrieval_artifact(
         "index_manifest": compute_index_manifest_fingerprint(None),
         "embedding": _embedding_fingerprint(),
         "reranker": _reranker_fingerprint(),
+        "query_shaper": QUERY_SHAPER_FINGERPRINT,
         "retrieval_config": _sha256_text(
             json.dumps(
                 {"top_k": top_k, "route_policy": "frozen_official_v2"},

@@ -47,6 +47,7 @@ from src.evaluation.retrieval_plan import (
 from src.evaluation.test_set import TEST_SET
 from src.evaluation.test_set import TestCase as EvalTestCase
 from src.retrieval.retriever import RetrievedChunk
+from src.retrieval.query_shaper import QUERY_SHAPER_FINGERPRINT
 
 
 def _chunk(chunk_id: str, score: float = 0.5) -> RetrievedChunk:
@@ -174,6 +175,35 @@ def test_execution_records_provenance_and_respects_branch_order() -> None:
     ]
     assert len(retriever.calls) == 2
     assert retriever.calls[0]["ticker"] == "AAPL"
+    assert result.queries[0].query["retrieval_query"] == (
+        "Apple total net sales fiscal 2024 2025"
+    )
+
+
+def test_phase_one_executes_the_same_shaped_query_as_production() -> None:
+    case = _case("How did Amazon's AWS net sales change?")
+    plan = RetrievalPlan(
+        question=case.question,
+        category=case.category,
+        route="direct",
+        queries=(
+            PlanQuery(
+                effective_query="Amazon AWS growth",
+                ticker="AMZN",
+                section="mdna",
+                query_source="saved_subquery",
+            ),
+        ),
+    )
+    shaped_query = "Amazon AWS growth 2025 2024 AWS net sales"
+    retriever = FakeRetriever({shaped_query: ["aws_table"]})
+
+    result = execute_case_retrieval(retriever, case, plan)
+
+    assert retriever.calls[0]["query"] == shaped_query
+    assert result.queries[0].query["effective_query"] == "Amazon AWS growth"
+    assert result.queries[0].query["retrieval_query"] == shaped_query
+    assert result.final_chunk_ids == ["aws_table"]
 
 
 def test_two_executions_are_byte_identical() -> None:
@@ -217,6 +247,8 @@ def test_artifact_contains_no_timestamp_keys() -> None:
     assert "timestamp" not in serialized
     assert "latency" not in serialized
     assert artifact["fingerprints"]["artifact"].startswith("sha256:")
+    assert artifact["schema_version"] == 2
+    assert artifact["fingerprints"]["query_shaper"] == QUERY_SHAPER_FINGERPRINT
 
 
 # ---------------------------------------------------------------------------

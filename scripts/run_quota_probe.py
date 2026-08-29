@@ -58,6 +58,7 @@ from src.evaluation.phase2_runtime import (
     make_judge_call,
 )
 from src.generation.generator import Generator
+from src.retrieval.query_shaper import QUERY_SHAPER_FINGERPRINT
 
 logging.basicConfig(
     level=logging.INFO,
@@ -138,6 +139,11 @@ def _load_artifact_and_binding() -> tuple[dict, GenerationUpstream]:
         )
     raw_bytes = ARTIFACT_PATH.read_bytes()
     artifact = json.loads(raw_bytes.decode("utf-8"))
+    if artifact["fingerprints"].get("query_shaper") != QUERY_SHAPER_FINGERPRINT:
+        raise RuntimeError(
+            "Query-shaper provenance drift: rebuild Phase 1 before running "
+            "the probe."
+        )
     embedded = artifact["fingerprints"]["artifact"]
     if embedded != EXPECTED_ARTIFACT_FINGERPRINT:
         raise RuntimeError(

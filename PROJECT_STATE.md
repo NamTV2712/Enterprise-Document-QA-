@@ -23,6 +23,17 @@ correctly reports `11 evidence_ok / 1 retrieval_miss` on the frozen artifact.
 This is a retrieval-plan finding, not a provider failure; the next step is a
 field-aware lexical candidate ladder and RRF counterfactual.
 
+The Phase 1 provenance milestone is now complete without changing generated
+`data/` artifacts. Phase 1 applies the identical query shaper used in direct
+and decomposed production retrieval, preserves the frozen effective query, and
+records the shaped retrieval query. Artifact schema v2 contains a deterministic
+query-shaper fingerprint, and all Phase 2-derived runners reject artifacts that
+lack or mismatch that fingerprint. A 61-subquery local A/B shaped exactly two
+AWS queries, found zero ticker leaks and zero required-term regressions, and
+produced byte-identical reports over repeated runs. The legacy Phase 1 artifact
+is intentionally no longer eligible for new Phase 2/provider work; rebuild it
+with the verified Phase 1 command before pinning a new benchmark binding.
+
 The six-case sentinel has now completed with `6/6` generation and judge calls
 successful. Against the frozen baseline, legacy line citations fell from `1`
 case to `0`, uncited non-fallback answers fell from `2` to `0`, and numeric

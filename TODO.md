@@ -128,7 +128,14 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        required AWS values, while the shaped query retrieves them in rank 1.
        The decomposed audit now correctly classifies the old frozen case as
        `retrieval_miss` instead of `evidence_ok`.
-24. [ ] Extend the shaper into a field-aware lexical ladder (`exact_phrase`,
+24. [x] Bind the shared shaper to Phase 1 execution and artifact identity.
+       Phase 1 schema v2 now stores original and shaped retrieval queries plus
+       a deterministic rules fingerprint; Phase 2-derived runners reject an
+       artifact without matching provenance. The 61-subquery local A/B shaped
+       two queries with zero ticker leaks, zero required-term regressions, and
+       byte-identical repeated output. Rebuild Phase 1 before any new Phase 2
+       provider run; the existing artifact remains historical only.
+25. [ ] Extend the shaper into a field-aware lexical ladder (`exact_phrase`,
        `full_terms`, `partial_terms`, then guarded `fuzzy`) and merge its
        candidates into RRF only after offline ticker/recall gates pass.
 

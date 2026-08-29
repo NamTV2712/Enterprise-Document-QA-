@@ -1,4 +1,8 @@
-from src.retrieval.query_shaper import shape_retrieval_query
+from src.retrieval.query_shaper import (
+    QUERY_SHAPER_FINGERPRINT,
+    QUERY_SHAPER_VERSION,
+    shape_retrieval_query,
+)
 
 
 def test_aws_trend_query_gets_filing_native_terms() -> None:
@@ -23,3 +27,9 @@ def test_unrelated_query_is_byte_preserving() -> None:
     assert shaped.retrieval_query == query
     assert shaped.exact_phrases == ()
     assert shaped.full_terms == ()
+
+
+def test_fingerprint_is_versioned_and_sha256() -> None:
+    assert QUERY_SHAPER_VERSION == 1
+    assert QUERY_SHAPER_FINGERPRINT.startswith("sha256:")
+    assert len(QUERY_SHAPER_FINGERPRINT) == len("sha256:") + 64

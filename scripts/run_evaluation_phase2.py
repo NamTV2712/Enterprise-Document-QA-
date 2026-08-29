@@ -69,6 +69,7 @@ from src.evaluation.context_packing import (
 )
 from src.evaluation.test_set import TEST_SET, TestCase
 from src.generation.generator import Generator
+from src.retrieval.query_shaper import QUERY_SHAPER_FINGERPRINT
 
 logging.basicConfig(
     level=logging.INFO,
@@ -96,6 +97,26 @@ _JUDGE_SCORE_KEYS = (
 )
 
 
+def assert_phase2_retrieval_hermeticity() -> None:
+    """Reject loaded retrieval executors before touching frozen evidence."""
+    # Imports used only for artifact provenance or type definitions are safe.
+    # Hybrid retrieval, corpus loaders, and manifests would indicate Phase 2
+    # is no longer consuming frozen evidence only.
+    allowed_modules = {
+        "src.retrieval",
+        "src.retrieval.query_shaper",
+        "src.retrieval.retriever",
+        "src.retrieval.embedder",
+        "src.retrieval.vector_store",
+    }
+    forbidden = [
+        name for name in sys.modules
+        if name.startswith("src.retrieval") and name not in allowed_modules
+    ]
+    if forbidden:
+        raise RuntimeError(f"Retrieval machinery loaded in phase 2: {forbidden}")
+
+
 def load_bound_artifact(
     artifact_path: Path,
     expected_fingerprint: str,
@@ -109,6 +130,13 @@ def load_bound_artifact(
         )
     raw_bytes = artifact_path.read_bytes()
     artifact = json.loads(raw_bytes.decode("utf-8"))
+    shaper_fingerprint = artifact["fingerprints"].get("query_shaper")
+    if shaper_fingerprint != QUERY_SHAPER_FINGERPRINT:
+        raise RuntimeError(
+            "Query-shaper provenance drift: Phase 1 artifact is missing the "
+            "current deterministic shaper fingerprint. Rebuild Phase 1 before "
+            "running Phase 2."
+        )
     embedded = artifact["fingerprints"]["artifact"]
     if embedded != expected_fingerprint:
         raise RuntimeError(
@@ -510,6 +538,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.output is None:
         args.output = Path(str(RESULTS_PATH).replace(".json", f"{suffix}.json"))
 
+    assert_phase2_retrieval_hermeticity()
+
     for path in (args.gen_checkpoint, args.judge_checkpoint, args.output):
         if args.fresh and path.exists():
             path.unlink()
@@ -554,25 +584,6 @@ def main(argv: list[str] | None = None) -> int:
         "Phase 2 over %d cases bound to %s (strategy=%s)",
         len(selected), args.artifact, args.context_strategy,
     )
-
-    # Hermeticity by construction instead of a socket guard: no retrieval
-    # EXECUTION happens here. The generator's type-only import chain
-    # (retriever.RetrievedChunk -> embedder -> vector_store) is allowed;
-    # any heavier retrieval machinery (hybrid, chunk loader, manifests)
-    # would indicate retrieval work sneaking back into Phase 2.
-    _allowed_retrieval_modules = {
-        "src.retrieval",
-        "src.retrieval.retriever",
-        "src.retrieval.embedder",
-        "src.retrieval.vector_store",
-    }
-    forbidden = [
-        name for name in sys.modules
-        if name.startswith("src.retrieval")
-        and name not in _allowed_retrieval_modules
-    ]
-    if forbidden:
-        raise RuntimeError(f"Retrieval machinery loaded in phase 2: {forbidden}")
 
     generation_generator = Generator(
         model=EVAL_MODEL, api_keys=generation_pool_keys()

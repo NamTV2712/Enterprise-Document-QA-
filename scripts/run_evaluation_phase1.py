@@ -122,7 +122,8 @@ def _print_stats(artifact: dict) -> None:
     print("\n=== Phase 1 manifest ===")
     for name in (
         "artifact", "plan", "test_set", "corpus",
-        "index_manifest", "embedding", "reranker", "retrieval_config",
+        "index_manifest", "embedding", "reranker", "query_shaper",
+        "retrieval_config",
     ):
         print(f"  {name:<16}: {fingerprints[name]}")
 

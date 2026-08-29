@@ -39,6 +39,7 @@ from src.evaluation.phase2_runtime import (
 )
 from src.evaluation.test_set import TEST_SET
 from src.generation.generator import Generator
+from src.retrieval.query_shaper import QUERY_SHAPER_FINGERPRINT
 
 
 ARTIFACT = Path("data/eval_artifacts/phase1_priority2.json")
@@ -63,6 +64,8 @@ def _load() -> tuple[dict, GenerationUpstream]:
     expected = "sha256:8283b628bb755b00bef86a26d7c608f9b385836c28dad588992b7d533ea51ee4"
     if artifact["fingerprints"]["artifact"] != expected:
         raise RuntimeError("Phase 1 artifact fingerprint drift")
+    if artifact["fingerprints"].get("query_shaper") != QUERY_SHAPER_FINGERPRINT:
+        raise RuntimeError("Phase 1 artifact lacks current query-shaper provenance")
     upstream = GenerationUpstream(
         artifact_path=ARTIFACT,
         artifact_sha256=f"sha256:{hashlib.sha256(raw).hexdigest()}",

@@ -30,6 +30,7 @@ from src.evaluation.phase2_runtime import (
     generation_pool_keys,
     judging_pool_keys,
 )
+from src.retrieval.query_shaper import QUERY_SHAPER_FINGERPRINT
 
 PIN = "sha256:" + "0" * 64
 
@@ -60,8 +61,8 @@ def _scores(faithfulness: float = 1.0) -> dict:
 
 def _artifact_payload() -> dict:
     return {
-        "schema_version": 1,
-        "fingerprints": {"artifact": PIN},
+        "schema_version": 2,
+        "fingerprints": {"artifact": PIN, "query_shaper": QUERY_SHAPER_FINGERPRINT},
         "cases": [
             {
                 "question": APPLE_Q,
@@ -300,6 +301,18 @@ def test_load_bound_artifact_refuses_fingerprint_drift(
 
     with pytest.raises(RuntimeError, match="fingerprint drift"):
         load_bound_artifact(path, "sha256:" + "f" * 64)
+
+
+def test_load_bound_artifact_refuses_missing_query_shaper_provenance(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "artifact.json"
+    payload = _artifact_payload()
+    del payload["fingerprints"]["query_shaper"]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="Query-shaper provenance drift"):
+        load_bound_artifact(path, PIN)
 
 
 # The FY2026-corpus Phase 1 rebuild; both runners must bind to exactly this.

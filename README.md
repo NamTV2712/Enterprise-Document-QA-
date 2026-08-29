@@ -226,7 +226,55 @@ LLM provider:
 
 ## Evaluation Results
 
-Historical completed benchmark: the two-phase pipeline (offline Phase 1
+Current official benchmark: the two-phase pipeline (offline Phase 1
+frozen retrieval artifact, then frozen-evidence generation and judging) now
+uses the admitted `selective_packed_v2` context strategy over all `30` priority
+<= 2 cases. `30/30` generations and `30/30` judgments completed under one
+binding, with no skipped or parse-invalid records. Both generation and judging
+use `openai/gpt-oss-120b` through Groq.
+
+| Metric | Score |
+|---|---:|
+| Faithfulness | `0.9967` |
+| Answer relevancy | `0.9683` |
+| Context precision | `0.7347` |
+| Overall judge average | `0.8999` |
+| Citation correctness | `1.0000` |
+| Recall proxy | `1.0000` |
+| Fallback accuracy | `1.0000` |
+
+Category table (faithfulness / relevancy / precision):
+
+| Category | N | Scores |
+|---|---:|---|
+| fact_lookup | 8 | `1.0000 / 1.0000 / 0.7500` |
+| summary | 6 | `0.9917 / 0.9750 / 0.8333` |
+| enumeration | 4 | `1.0000 / 0.9250 / 0.5925` |
+| comparative | 6 | `0.9917 / 0.9167 / 0.9450` |
+| multi_hop | 3 | `1.0000 / 1.0000 / 1.0000` |
+| out_of_corpus | 3 | `1.0000 / 1.0000 / 0.0000` |
+
+The run is bound to Phase 1 artifact
+`sha256:1ad021ce72af2116f9b4f7ad780d5c6e809fd5a01e46d30d0ae4bfecd62599d9`
+(file SHA-256 `b55d517f07585eda7682b4820da4286d884e4d6c02c4174585ef45325212b054`).
+Its Phase 2 result file SHA-256 is
+`0677799a1425f1b449a15d7311fb6d1baecf422ea93219ae259db78e87996fe8`.
+Compared with the recorded selective v1 baseline, the metric deltas are
+Faithfulness `+0.0174`, Answer Relevancy `-0.0050`, Context Precision
+`+0.1150`, and Overall `+0.0425`, satisfying the registered A/B bars.
+
+Admission audits are clean: the packed-context answer-integrity audit reports
+zero uncited non-fallback answers, legacy line citations, out-of-range
+citations, and numeric-review cases across all 30 answers. The audit file SHA-256
+is `75297eab41c72fc7eb9ebd15a498527872e7f87118526e28b95ba7651c91045e`.
+The offline composite audit passes all `30/30` evidence/source-boundary checks,
+`24/24` non-comparative identity checks, `6/6` comparative selector contracts
+and adapter-parity checks, and reduces rendered evidence by `25.55%` versus
+selective v1 (`49,904 -> 37,156` tokens). The isolated
+Apple/Microsoft-approach case scored `0.60` for answer relevancy but remained
+grounded, cited, and non-fallback; it is retained as a monitoring target.
+
+Historical schema-v1 benchmark: the two-phase pipeline (offline Phase 1
 frozen retrieval artifact, then frozen-evidence generation and judging) over
 all `30` priority <= 2 cases, using `openai/gpt-oss-120b` for both generation
 and judging. All `30` generations and `30` judgments completed with no skips
@@ -280,10 +328,15 @@ judging completion tokens; generation resumed from the existing checkpoint.
 An offline answer-integrity audit is available through
 `python -m scripts.diagnostics.answer_integrity_audit`. It checks all 30
 answers for canonical citations, source-range validity, legacy line citations,
-and numeric claims absent from cited evidence. Its review flags are diagnostic
-and are intentionally not substituted for semantic judge scores.
+and numeric claims absent from cited evidence. For a packed Phase 2 result, pass
+the same policy used by the run so `[Source N]` numbering is aligned:
+`python -m scripts.diagnostics.answer_integrity_audit --results data/eval_artifacts/phase2_results_packed_selective_v2.json --artifact data/eval_artifacts/phase1_priority2.json --context-strategy selective_packed_v2`.
+Its review flags are diagnostic and are intentionally not substituted for
+semantic judge scores.
 
-The current retrieval follow-up includes a shared deterministic query shaper
+### Historical retrieval and packing milestones
+
+The retrieval follow-up included a shared deterministic query shaper
 for direct and decomposed paths. In an offline counterfactual, the original
 `Amazon AWS growth` query missed the AWS FY2024/FY2025 values, while the shaped
 query retrieved the correct chunk at rank 1 with both `107,556` and `128,725`.
@@ -303,15 +356,15 @@ runs. The 59 unhinted queries remained byte-stable, while both AWS queries kept
 the fact-bearing chunk at rank 1. Artifact provenance now binds both shaper and
 ladder fingerprints.
 
-The active offline Phase 1 artifact is now schema v2
+At that historical stage, the offline Phase 1 artifact was schema v2
 `sha256:986991219560…` (file SHA-256 `15ff6eb08aaa…`). It was rebuilt twice
 with byte-identical output over 30 cases and 61 non-empty queries. Ticker
 leakage is zero, the AWS comparative branch stores the shaped retrieval query
 and retrieves `mdna_0012` at rank 1 with both required values, and the
-decomposed evidence audit passes `12/12`. Phase 2 runners pin this artifact,
-but no provider-backed full N=30 Phase 2 result exists on it yet; the published
-scores above remain bound to the historical artifact. The comparative-only A/B
-below is deliberately non-official.
+decomposed evidence audit passes `12/12`. Phase 2 runners pinned this artifact
+at that stage, but no provider-backed full N=30 Phase 2 result existed on it
+yet; the published scores then remained bound to the historical artifact. The
+comparative-only A/B below was deliberately non-official.
 
 Comparative context packing v3 has passed a provider-free offline gate on this
 active artifact. It keeps the first two unique chunks from every decomposition
@@ -321,8 +374,8 @@ non-comparative byte stability, and `6/6` comparative branch coverage, while
 reducing comparative rendered evidence from `20,939` to `10,211` tokens
 (`51.23%`; pre-registered minimum `25%`). Two runs produced byte-identical
 reports. The strategy is available only as the explicit experimental
-`comparative_packed_v3` Phase 2 option; `selective_packed_v1` remains the
-default until a separately authorized comparative-only provider A/B passes.
+`comparative_packed_v3` Phase 2 option; `selective_packed_v1` was still the
+default until the later corrected benchmark and admission recorded above.
 No published score changed in this offline milestone.
 
 That comparative-only provider A/B has now completed as a non-official NO-GO.
@@ -337,7 +390,7 @@ rose `0.8461 -> 0.8928`. It was not admitted because answer relevancy fell
 `107,556` and `128,725` values. The earlier packing results remain historical:
 they passed packed evidence to the judge but not to generation, so they must not
 be used as evidence that packed generation was validated. The Phase 2 default
-therefore remains `selective_packed_v1`, pending a new corrected benchmark.
+therefore remained `selective_packed_v1` pending the new corrected benchmark.
 
 Comparative packing v4 is the provider-free follow-up to that NO-GO. It replaces
 blind top-2 retention with branch top-1 plus only a missing query-intent or
@@ -393,8 +446,8 @@ accuracy remained `1.0000`; the AWS answer preserved `107,556` and `128,725`
 with canonical citations and no unsupported numeric claims. The ignored report
 is `data/eval_artifacts/comparative_packing_v5_ab.json` (file SHA-256
 `ac4a7dc6f83b2226405874f7f62730c70ba79707fe2486e44db507557743c29c`). This
-subset is not the official N=30 benchmark, so published scores and the
-`selective_packed_v1` Phase 2 default remain unchanged. Reproduce the run with:
+subset was a non-official candidate at the time; the current official v2
+decision is recorded above. Reproduce the run with:
 
 ```powershell
 python -m scripts.run_comparative_packing_ab --candidate-strategy comparative_oracle_free_v5 --fresh
@@ -429,8 +482,8 @@ it with:
 python -m scripts.run_comparative_numeric_sentinel --fresh
 ```
 
-This focused preflight does not change official scores; the next gated step is
-a fresh full N=30 `selective_packed_v2` replay.
+The focused preflight preceded the official v2 replay recorded above; it did
+not itself change the benchmark scores.
 
 Historical context-packing A/B (the pre-registration and confirmatory run used
 the prior frozen Phase 1 artifact, paired per-case,

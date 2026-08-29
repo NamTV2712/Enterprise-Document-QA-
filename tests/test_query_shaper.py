@@ -42,6 +42,18 @@ def test_microsoft_cloud_fact_lookup_is_not_treated_as_a_trend() -> None:
     assert shaped.exact_phrases == ()
 
 
+def test_microsoft_cloud_comparison_gets_aggregate_revenue_terms() -> None:
+    shaped = shape_retrieval_query("Microsoft cloud and Azure revenue")
+
+    assert shaped.exact_phrases == ("Microsoft Cloud revenue",)
+    assert shaped.full_terms == ("Microsoft", "Cloud", "revenue")
+    assert shaped.partial_terms == ("Microsoft", "Cloud", "revenue")
+    assert shaped.fuzzy_terms == ("revenue",)
+    assert "Microsoft Cloud revenue" in shaped.retrieval_query
+    assert "2025" not in shaped.retrieval_query
+    assert "2024" not in shaped.retrieval_query
+
+
 def test_unrelated_query_is_byte_preserving() -> None:
     query = "What are Apple's competition risks?"
     shaped = shape_retrieval_query(query)
@@ -54,6 +66,6 @@ def test_unrelated_query_is_byte_preserving() -> None:
 
 
 def test_fingerprint_is_versioned_and_sha256() -> None:
-    assert QUERY_SHAPER_VERSION == 3
+    assert QUERY_SHAPER_VERSION == 4
     assert QUERY_SHAPER_FINGERPRINT.startswith("sha256:")
     assert len(QUERY_SHAPER_FINGERPRINT) == len("sha256:") + 64

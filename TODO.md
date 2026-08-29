@@ -209,12 +209,18 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        `107,556`/`128,725` for `2024`/`2025`, and no unsupported numeric claims
        remained. Report: `data/eval_artifacts/comparative_numeric_v2_summary.json`
        (SHA-256 `b6701de1fe5682aa282a26cd49aaa2956a60c8b1aa6a04527f913f1679340b73`).
-35. [ ] Run a fresh controlled full N=30 replay with
-       `selective_packed_v2` against the active schema-v2 artifact. Do not use
-       raw `comparative_oracle_free_v5`, which restores full evidence for the
-       previously admitted non-comparative categories. Decide admission only
-       if provider completion, absolute quality gates, deterministic
-       non-regression, answer-integrity, and comparative contracts all pass.
+35. [x] Run a fresh controlled full N=30 replay with
+       `selective_packed_v2` against the active schema-v2 artifact. The run
+       completed `30/30` generation and `30/30` judging with no skips or parse
+       failures. Faithfulness/Answer Relevancy/Context Precision/Overall are
+       `0.9967/0.9683/0.7347/0.8999`; deltas versus the recorded v1 baseline
+       are `+0.0174/-0.0050/+0.1150/+0.0425`, so all registered bars pass.
+       Deterministic metrics are `1.0000/1.0000/1.0000`. The packed-context
+       integrity audit reports zero uncited, legacy, out-of-range, or numeric
+       review cases, and the offline composite contracts remain fully green.
+       `selective_packed_v2` is admitted as the Phase 2 default. The audit was
+       also corrected to accept `--context-strategy`, preventing false numeric
+       flags from full-context source numbering on packed results.
 
 ## Always-On Deployment
 

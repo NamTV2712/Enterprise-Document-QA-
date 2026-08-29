@@ -253,8 +253,9 @@ shared with production `/query/decomposed` and passed its six-case provider
 candidate gate, but remains experimental. The offline `selective_packed_v2`
 composite applies the already admitted selective v1 policy to
 `fact_lookup`/`multi_hop`/`summary`, v5 to `comparative`, and full evidence to
-enumeration/out-of-corpus. The evaluation default remains
-`selective_packed_v1` until a fresh full N=30 v2 replay passes admission.
+enumeration/out-of-corpus. Its fresh full N=30 replay passed the registered
+completion, semantic, deterministic, answer-integrity, and comparative
+contracts, so `selective_packed_v2` is now the Phase 2 evaluation default.
 
 The direct generator, decomposed synthesis prompt, and Phase 2 generation
 template share the same numeric-pair contract. When evidence contains
@@ -262,8 +263,8 @@ period/value pairs, answers must list the exact pairs before summarizing a
 trend; they may not calculate differences or percentages, round or abbreviate
 values, introduce ranges or numeric shorthand, or emit numbers absent from
 the cited evidence. The focused two-case provider preflight for
-`selective_packed_v2` passed this contract, but it is non-official and does not
-admit the strategy for the full benchmark.
+`selective_packed_v2` passed this contract in both the focused preflight and the
+admitted full N=30 replay.
 
 Generation, deterministic metrics, and judging must consume the same rendered
 evidence context. The generation binding includes a renderer fingerprint in

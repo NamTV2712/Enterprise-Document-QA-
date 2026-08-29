@@ -86,7 +86,7 @@ ARTIFACT_PATH = Path("data/eval_artifacts/phase1_priority2.json")
 # Must match scripts.run_quota_probe.EXPECTED_ARTIFACT_FINGERPRINT; both
 # runners refuse to bind to any other frozen evidence.
 EXPECTED_ARTIFACT_FINGERPRINT = (
-    "sha256:9869912195606125b0a7efe56f091662fd50d48e08c92141415c1a174ffd0c98"
+    "sha256:1ad021ce72af2116f9b4f7ad780d5c6e809fd5a01e46d30d0ae4bfecd62599d9"
 )
 GEN_CHECKPOINT_PATH = Path("data/eval_artifacts/phase2_gen.jsonl")
 JUDGE_CHECKPOINT_PATH = Path("data/eval_artifacts/phase2_judge.jsonl")
@@ -533,16 +533,13 @@ def main(argv: list[str] | None = None) -> int:
             CONTEXT_STRATEGY_COMPARATIVE_V5,
             CONTEXT_STRATEGY_SELECTIVE_V2,
         ],
-        default=CONTEXT_STRATEGY_SELECTIVE,
+        default=CONTEXT_STRATEGY_SELECTIVE_V2,
         help=(
-            "selective_packed_v1 is the merged default: it packs only the "
-            "fact_lookup/multi_hop/summary categories whose paired A/B "
-            "evidence passed all pre-registered gates. full_evidence_v1 "
-            "renders every frozen chunk and remains available for replay. "
-            "comparative_packed_v3 is an offline-gated experimental arm; "
-            "comparative_oracle_free_v5 is the newer offline-gated experimental "
-            "arm; selective_packed_v2 composes the admitted selective policy "
-            "with v5 for comparative cases; neither is the default yet."
+            "selective_packed_v2 is the merged default: it preserves the "
+            "admitted selective policy for fact_lookup/multi_hop/summary and "
+            "uses the gated oracle-free selector for comparative cases. "
+            "selective_packed_v1, full_evidence_v1, comparative_packed_v3, "
+            "and comparative_oracle_free_v5 remain available for replay."
         ),
     )
     args = parser.parse_args(argv)

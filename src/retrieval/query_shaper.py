@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass
 
 
-QUERY_SHAPER_VERSION = 3
+QUERY_SHAPER_VERSION = 4
 
 
 TREND_TERMS = (
@@ -43,13 +43,18 @@ def _fingerprint() -> str:
                 "implicit_years": ["2025", "2024"],
             },
             "microsoft_cloud_trend": {
-                "requires": ["microsoft", "cloud_or_azure", "trend_term"],
+                "requires": [
+                    "microsoft",
+                    "cloud_or_azure",
+                    "trend_term_or_aggregate_phrase",
+                ],
                 "exact_phrases": ["Microsoft Cloud revenue"],
                 "full_terms": ["Microsoft", "Cloud", "revenue"],
                 "partial_terms": ["Microsoft", "Cloud", "revenue"],
                 "fuzzy_terms": ["revenue"],
                 "additions": ["Microsoft Cloud revenue"],
                 "implicit_years": ["2025", "2024"],
+                "aggregate_phrase": ["cloud and azure", "azure and cloud"],
             },
         },
     }
@@ -73,6 +78,18 @@ class ShapedQuery:
 def _has_trend_intent(query: str) -> bool:
     normalized = query.casefold()
     return any(term in normalized for term in TREND_TERMS)
+
+
+def _has_aggregate_cloud_phrase(query: str) -> bool:
+    """Recognize comparative cloud-revenue wording needing an aggregate donor."""
+    normalized = query.casefold()
+    return (
+        "revenue" in normalized
+        and any(
+            phrase in normalized
+            for phrase in ("cloud and azure", "azure and cloud")
+        )
+    )
 
 
 def shape_retrieval_query(query: str) -> ShapedQuery:
@@ -103,13 +120,13 @@ def shape_retrieval_query(query: str) -> ShapedQuery:
     if (
         "microsoft" in normalized
         and ("cloud" in normalized or "azure" in normalized)
-        and _has_trend_intent(query)
+        and (_has_trend_intent(query) or _has_aggregate_cloud_phrase(query))
     ):
         exact_phrases.append("Microsoft Cloud revenue")
         full_terms.extend(("Microsoft", "Cloud", "revenue"))
         partial_terms.extend(("Microsoft", "Cloud", "revenue"))
         fuzzy_terms.append("revenue")
-        if not re.search(r"\b20\d{2}\b", query):
+        if _has_trend_intent(query) and not re.search(r"\b20\d{2}\b", query):
             additions.extend(("2025", "2024"))
         if "microsoft cloud revenue" not in normalized:
             additions.append("Microsoft Cloud revenue")

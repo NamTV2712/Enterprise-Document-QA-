@@ -2,89 +2,61 @@
 
 ## Current Milestone
 
-Answer-quality follow-up is now implemented offline. The deterministic
-answer-integrity audit (`scripts/diagnostics/answer_integrity_audit.py`) covers
-all 30 frozen answers without provider calls and currently reports 2 uncited
-non-fallback answers, 1 legacy line-citation answer, and 4 numeric-review cases.
-Generation and decomposed synthesis prompts now require canonical `[Source N]`
-markers, exact numeric/period grounding, evidence-only enumeration categories,
-and a fallback that does not claim irrelevant retrieved sections are relevant.
-The original six flagged answers were later checked in a separate quota-gated
-sentinel; diagnostic flags do not alter official judge scores.
+The selective context-packing improvement is now admitted. The generic
+comparative v5 selector remains oracle-free and shared with production
+decomposed synthesis; `selective_packed_v2` composes it with the already
+admitted selective policy for `fact_lookup`, `multi_hop`, and `summary`, while
+keeping enumeration and out-of-corpus cases at full evidence. Direct
+generation, decomposed synthesis, and Phase 2 share the exact numeric-pair
+contract, including the requirement to quote underlying period/value pairs
+before a trend summary.
 
-The current milestone is complete: comparative context packing v5 is now
-oracle-free and shared between production decomposed synthesis and the offline
-Phase 2 adapter. Direct generation, decomposed synthesis, and Phase 2 now use
-the same numeric-pair contract: inspect all provided sources and quote every
-period/value pair instead of answering with only a percentage. The Microsoft
-Cloud trend shaper is now version 3, adding filing-native `Microsoft Cloud
-revenue` vocabulary and implicit FY2025/FY2024 hints only for Microsoft
-cloud/Azure trend queries. The generic selector has no dependency on evaluation
-labels or expected answer values; it keeps each branch leader, structured hits,
-and only a deterministic exact-phrase or missing-intent donor, with a safe
-full-context fallback if a company branch would be lost.
+The active schema-v2 Phase 1 artifact was rebuilt offline with the version-4
+query shaper and verified byte-deterministically. Its artifact fingerprint is
+`sha256:1ad021ce72af2116f9b4f7ad780d5c6e809fd5a01e46d30d0ae4bfecd62599d9`;
+file SHA-256 is
+`b55d517f07585eda7682b4820da4286d884e4d6c02c4174585ef45325212b054`. It
+covers `30/30` priority <= 2 cases, `61` non-empty queries, and `12/12`
+decomposed plans with `evidence_ok`. The current query-shaper A/B is green:
+`61` subqueries, `7` shaped, zero ticker leakage, zero required-term
+regressions, byte-stable unchanged queries, and no changed-query regression.
+Report SHA-256:
+`2079638c70ae5bda29305efe9db6284c42b2c4cf20b4663d16226b5e66b9b511`.
 
-The Phase 1 artifact was rebuilt offline and deterministically after the shaper
-change. The active schema-v2 artifact is
-`sha256:9869912195606125b0a7efe56f091662fd50d48e08c92141415c1a174ffd0c98`
-(file SHA-256
-`15ff6eb08aaa9ca2dc8d0c8ab078bd2a3be323dccf844328c05a737f2d757914`). It
-covers 30/30 priority <= 2 cases, 61 non-empty queries, and the decomposed
-audit is `12/12 evidence_ok`. The local query-shaper A/B passed with 61
-subqueries, 4 shaped queries, zero ticker leakage, zero required-term
-regressions, byte-stable unchanged queries, and no regression on changed
-queries.
+The fresh official N=30 Phase 2 replay completed under one
+`selective_packed_v2` binding: `30/30` generations and `30/30` judgments, no
+skips, and no parse-invalid records. Scores are Faithfulness `0.9967`, Answer
+Relevancy `0.9683`, Context Precision `0.7347`, and Overall `0.8999`.
+Deterministic citation correctness, recall proxy, and fallback accuracy are
+all `1.0000`. Relative to the recorded selective v1 baseline, the deltas are
+`+0.0174`, `-0.0050`, `+0.1150`, and `+0.0425`, respectively, satisfying the
+pre-registered semantic and non-regression bars. The result file is
+`data/eval_artifacts/phase2_results_packed_selective_v2.json` with file
+SHA-256
+`0677799a1425f1b449a15d7311fb6d1baecf422ea93219ae259db78e87996fe8`.
 
-The v5 offline gate passed `30/30` evidence coverage, `30/30` source
-boundaries, `24/24` non-comparative byte stability, `6/6` branch coverage,
-`6/6` branch contracts, `6/6` known findings, and `6/6` production/evaluation
-adapter parity. Comparative evidence fell from `20,455` to `6,704` tokens
-(`67.23%`). It retains the Microsoft high-level Cloud-growth donor and the
-Amazon cybersecurity donor without oracle facts; the AWS value leader remains
-intact. The ignored diagnostic report is
-`data/diagnostics/comparative_packing_v5.json` with file SHA-256
-`63169abbd872a97e4912f714ac0399d27a17056e697822dc9060b30dd9accbd5`.
-The fresh pre-registered six-case provider A/B is now complete. Both the full-
-evidence baseline and v5 completed `6/6` generation and `6/6` judging with no
-skips or parse failures. V5 improved context precision from `0.4452` to
-`0.9033` (`+0.4581`), answer relevancy from `0.8667` to `0.9833`
-(`+0.1166`), and overall judge average from `0.7595` to `0.9483`
-(`+0.1888`); faithfulness moved from `0.9667` to `0.9583` (`-0.0084`),
-inside the pre-registered bound. Rendered evidence fell from `20,455` to
-`6,704` tokens (`67.23%`). Deterministic citation correctness, recall proxy,
-and fallback accuracy stayed at `1.0000`, and the AWS answer retained both
-`107,556` and `128,725` with canonical citations and no unsupported numeric
-claims. The non-official report is
-`data/eval_artifacts/comparative_packing_v5_ab.json` with file SHA-256
-`ac4a7dc6f83b2226405874f7f62730c70ba79707fe2486e44db507557743c29c`.
-This is a successful candidate gate, not an official N=30 benchmark; the
-published scores and `selective_packed_v1` Phase 2 default remain unchanged.
-An offline policy audit then added `selective_packed_v2`: it preserves the
-admitted route-aware packing for `fact_lookup`, `multi_hop`, and `summary`,
-applies v5 only to `comparative`, and leaves `enumeration` and `out_of_corpus`
-at full evidence. The composite is byte-identical to selective v1 on `24/24`
-non-comparative cases and to v5 on `6/6` comparative cases; all `30/30`
-evidence and source-boundary checks, `6/6` branch contracts, and `6/6`
-production/evaluation selector parity checks pass. It renders `36,152` tokens,
-which is a `27.56%` reduction from selective v1 and `41.94%` from full evidence.
-Two runs were byte-identical, and the artifact input hash was unchanged. The
-ignored report is `data/diagnostics/selective_packing_v2.json` with file
-SHA-256 `78d9cd6b2761935884576af16b3e3f9305c573302f0a38b3cab8498fe4c2f703`.
-No provider call or Phase 1 rebuild was made. The next numeric-contract
-milestone is now complete: direct generation, decomposed synthesis, and Phase
-2 share a stricter contract that requires exact period/value pairs before any
-trend summary and forbids calculated, rounded, approximate, range-based, or
-numeric-shorthand claims. A fresh provider sentinel over Apple/Microsoft and
-AWS/Microsoft under `selective_packed_v2` completed `2/2` generation and `2/2`
-judging with no skips or parse failures. It passed context, citation,
-deterministic, semantic, and numeric-integrity gates; in particular, AWS
-preserved `107,556`/`128,725` with `2024`/`2025`, and the Apple/Microsoft answer
-introduced neither the prior `$12,989` nor `13.5%` derived claims. The
-non-official report is
-`data/eval_artifacts/comparative_numeric_v2_summary.json` with file SHA-256
-`b6701de1fe5682aa282a26cd49aaa2956a60c8b1aa6a04527f913f1679340b73`.
-The focused run is a preflight, not an official benchmark; the next gated step
-is a fresh full N=30 `selective_packed_v2` replay.
+The full admission evidence is also clean. The correct packed-context audit
+reports `0` uncited non-fallback answers, `0` legacy line-citation cases, `0`
+out-of-range citations, and `0` numeric-review cases across all 30 answers;
+its report SHA-256 is
+`75297eab41c72fc7eb9ebd15a498527872e7f87118526e28b95ba7651c91045e`.
+The offline composite audit passes `30/30` evidence coverage and source
+boundaries, `24/24` non-comparative byte identity, `6/6` comparative v5
+identity, branch contracts, known findings, and production/evaluation parity.
+It reduces rendered evidence from `49,904` to `37,156` tokens (`25.55%`)
+versus selective v1 and to `40.32%` versus full evidence. The current report
+is `data/diagnostics/selective_packing_v2_v4.json` with SHA-256
+`3e81220395beac287e547589e5b48956f211c05c08b5653cd889e1e2069d734f`.
+
+Admission decision: `selective_packed_v2` is now the default Phase 2 context
+strategy. The isolated comparative `Apple/Microsoft approach` case received
+the lowest answer-relevancy subscore (`0.60`), but it remained fully grounded,
+cited, non-fallback, and did not violate any registered aggregate gate; it is
+recorded as the next quality-monitoring target rather than hidden or manually
+adjusted. Production serving behavior outside the Phase 2 context strategy is
+unchanged.
+
+## Historical Milestones
 
 The first retrieval-side improvement is now validated offline. A shared
 deterministic query shaper is used by direct and decomposed paths; for

@@ -253,6 +253,58 @@ def test_synthesis_exception_does_not_leak_to_public_response() -> None:
     )
 
 
+def test_synthesis_applies_shared_period_value_correction() -> None:
+    generator = MagicMock()
+    generator.model = "fake-model"
+    first = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content="AWS grew 20% in 2025 [Source 1]."
+                )
+            )
+        ]
+    )
+    corrected = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content=(
+                        "AWS net sales were 107,556 in 2024 and 128,725 in "
+                        "2025 [Source 1]."
+                    )
+                )
+            )
+        ]
+    )
+    generator._create_groq_chat_completion.side_effect = [first, corrected]
+    decomposer = QueryDecomposer(
+        SimpleNamespace(generator=generator, retriever=MagicMock())
+    )
+    chunk = RetrievedChunk(
+        chunk_id="AMZN_growth_0",
+        ticker="AMZN",
+        section="mdna",
+        filing_date="2026-02-06",
+        score=0.9,
+        text=(
+            "Year Ended December 31,\n\n2024\n2025\nNet Sales:\nAWS\n"
+            "107,556\n128,725\n"
+        ),
+        citation="AMZN 10-K, MD&A",
+    )
+
+    answer = decomposer._synthesize(
+        "How does Amazon's AWS segment compare to Microsoft's cloud business "
+        "in terms of growth?",
+        [chunk],
+    )
+
+    assert "107,556" in answer
+    assert "128,725" in answer
+    assert generator._create_groq_chat_completion.call_count == 2
+
+
 def test_comparative_query_with_all_evidence_from_one_company_falls_back(
     monkeypatch,
 ) -> None:

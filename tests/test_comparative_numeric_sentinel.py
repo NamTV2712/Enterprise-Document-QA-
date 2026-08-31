@@ -62,6 +62,22 @@ def _provider_run(apple_answer: str, aws_answer: str) -> dict:
         "num_judged_ok": 2,
         "context_strategy": "selective_packed_v2",
         "cases": cases,
+        "period_value_corrections": {
+            APPLE_QUESTION: {
+                "applicable": False,
+                "initial_passed": True,
+                "correction_attempted": False,
+                "correction_accepted": False,
+                "final_passed": True,
+            },
+            AWS_QUESTION: {
+                "applicable": True,
+                "initial_passed": False,
+                "correction_attempted": True,
+                "correction_accepted": True,
+                "final_passed": True,
+            },
+        },
     }
 
 
@@ -124,3 +140,23 @@ def test_sentinel_rejects_percentage_only_aws_answer() -> None:
     assert report["gate_passed"] is False
     assert report["gates"]["answer_integrity"] is False
     assert report["numeric_contract"]["aws_exact_values_and_periods"] is False
+
+
+def test_sentinel_rejects_answer_that_compares_only_reporting_formats() -> None:
+    report = build_sentinel_report(
+        _provider_run(
+            "Apple reports a multi-year Services series [Source 1], while "
+            "Microsoft reports one latest-year figure [Source 2].",
+            "AWS net sales increased from $107,556 million in 2024 to "
+            "$128,725 million in 2025 [Source 1]. Microsoft Cloud revenue "
+            "increased [Source 2].",
+        ),
+        _contexts(),
+    )
+
+    assert report["gate_passed"] is False
+    assert report["gates"]["approach_contract"] is False
+    assert report["approach_contract"] == {
+        "apple_revenue_approach": False,
+        "microsoft_revenue_approach": False,
+    }

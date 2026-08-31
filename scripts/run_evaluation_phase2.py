@@ -4,12 +4,14 @@ Consumes ONLY the Phase 1 artifact — retrieval never reruns here. Every
 generation/judge record is checkpointed against the artifact binding, so
 interrupted runs resume without mixing evidence, prompts, or models.
 
-The run is OFFICIAL only when every selected case completes both phases
-with OK status under one shared binding (see
+The provider run is complete only when every selected case completes both
+phases with OK status under one shared binding (see
 ``judge_checkpoint.build_official_aggregate`` plus the explicit coverage
-check in ``run_phase2``). Any quota skip, provider error, invalid judge
-schema, or early stop forces ``official=false`` and a nonzero exit;
-partial output must never be published as a benchmark.
+check in ``run_phase2``). A complete run written to the protected official
+path is marked ``official=true``; a complete candidate run remains
+``official=false`` until a separate admission decision promotes it. Any
+quota skip, provider error, invalid judge schema, or early stop forces a
+nonzero exit; partial output must never be published as a benchmark.
 
 Usage:
     python -m scripts.run_evaluation_phase2 --priority 2 --fresh
@@ -60,6 +62,7 @@ from src.evaluation.phase2_runtime import (
     judging_pool_keys,
     make_generation_call,
     make_judge_call,
+    make_period_value_postprocessor,
 )
 from src.evaluation.context_packing import (
     CONTEXT_STRATEGY_COMPARATIVE_V3,
@@ -68,10 +71,15 @@ from src.evaluation.context_packing import (
     CONTEXT_STRATEGY_ROUTE_AWARE,
     CONTEXT_STRATEGY_SELECTIVE,
     CONTEXT_STRATEGY_SELECTIVE_V2,
+    CONTEXT_STRATEGY_SELECTIVE_V4,
+    CONTEXT_STRATEGY_SELECTIVE_V5,
     render_case_context,
 )
 from src.evaluation.test_set import TEST_SET, TestCase
 from src.generation.generator import Generator
+from src.generation.period_value_completeness import (
+    PERIOD_VALUE_CORRECTION_FINGERPRINT,
+)
 from src.retrieval.lexical_ladder import LEXICAL_LADDER_FINGERPRINT
 from src.retrieval.query_shaper import QUERY_SHAPER_FINGERPRINT
 
@@ -91,8 +99,24 @@ EXPECTED_ARTIFACT_FINGERPRINT = (
 GEN_CHECKPOINT_PATH = Path("data/eval_artifacts/phase2_gen.jsonl")
 JUDGE_CHECKPOINT_PATH = Path("data/eval_artifacts/phase2_judge.jsonl")
 RESULTS_PATH = Path("data/eval_artifacts/phase2_results.json")
+# This is the immutable reference result used for admission comparisons. A
+# fresh candidate run must write to an explicit candidate path instead of
+# deleting or replacing this file by accident.
+OFFICIAL_SELECTIVE_V2_RESULTS_PATH = Path(
+    "data/eval_artifacts/phase2_results_packed_selective_v2.json"
+)
 
 RESULTS_SCHEMA_VERSION = 1
+
+REPRODUCIBILITY_AUDITS = {
+    "context_precision_reproducibility",
+    "enumeration_context_reproducibility",
+    "grounded_completion_v3_reproducibility",
+}
+COMPLETION_BOUND_REPRODUCIBILITY_AUDITS = {
+    "enumeration_context_reproducibility",
+    "grounded_completion_v3_reproducibility",
+}
 
 _JUDGE_SCORE_KEYS = (
     "faithfulness",
@@ -185,6 +209,45 @@ def select_questions(
     return selected
 
 
+def require_reproducibility_report(
+    report_path: Path | None,
+    candidate_strategy: str,
+) -> None:
+    """Require a passed all-replicates gate before a candidate N=30 run."""
+    if report_path is None:
+        raise SystemExit(
+            "Candidate priority-2 runs require --reproducibility-report "
+            "from a passed reproducibility diagnostic."
+        )
+    try:
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SystemExit(
+            f"Cannot read reproducibility report {report_path}: {exc}"
+        ) from exc
+    rule = payload.get("pre_registered_rule") or {}
+    gates = payload.get("gates") or {}
+    if not (
+        payload.get("audit") in REPRODUCIBILITY_AUDITS
+        and payload.get("passed") is True
+        and payload.get("candidate_strategy") == candidate_strategy
+        and rule.get("minimum_replicates", 0) >= 2
+        and rule.get("required_pass_rate") == 1.0
+        and rule.get("best_of_selection_forbidden") is True
+        and gates.get("all_replicates_pass") is True
+        and (
+            payload.get("audit")
+            not in COMPLETION_BOUND_REPRODUCIBILITY_AUDITS
+            or PERIOD_VALUE_CORRECTION_FINGERPRINT
+            in (payload.get("completion_fingerprints") or [])
+        )
+    ):
+        raise SystemExit(
+            "Reproducibility gate failed or does not match candidate strategy; "
+            "refusing candidate priority-2 run."
+        )
+
+
 def unique_evidence_texts(case_payload: dict[str, Any]) -> list[str]:
     """Deduplicated chunk texts in deterministic source order."""
     texts: list[str] = []
@@ -207,7 +270,11 @@ def compute_case_metrics(
     evidence_context: str | None = None,
 ) -> dict[str, Any]:
     """Deterministic per-case checks over frozen evidence + the answer."""
-    rendered_context = evidence_context or build_evidence_context(case_payload)
+    rendered_context = (
+        evidence_context
+        if evidence_context is not None
+        else build_evidence_context(case_payload)
+    )
     source_blocks = parse_evidence_context(rendered_context)
     citation_correctness = compute_citation_correctness(
         answer, len(source_blocks)
@@ -316,6 +383,9 @@ def run_phase2(
     max_judge_retries: int = 2,
     sleep_fn: Callable[[float], None] = time.sleep,
     evidence_context_fn: Callable[[dict], str] | None = None,
+    answer_postprocessor: Callable[[str, str, str], str] | None = None,
+    answer_completion_metadata: dict[str, dict[str, Any]] | None = None,
+    publish_official: bool = True,
 ) -> dict[str, Any]:
     """Execute both phases sequentially and compose the results payload.
 
@@ -330,6 +400,19 @@ def run_phase2(
     render_context = evidence_context_fn or build_evidence_context
     tracker = UsageTracker()
     meta_by_question = {tc.question: tc for tc in selected}
+    # Render each case once. The exact same byte string is then passed to
+    # generation, deterministic metrics, and judging, preventing a renderer
+    # drift from producing three subtly different evidence views.
+    rendered_context_by_question = {
+        tc.question: render_context(case_by_question[tc.question])
+        for tc in selected
+    }
+
+    def context_for(case_payload: dict[str, Any]) -> str:
+        question = case_payload.get("question")
+        if question not in rendered_context_by_question:
+            raise KeyError(f"No rendered context for question: {question!r}")
+        return rendered_context_by_question[question]
 
     generation_records: list[dict[str, Any]] = []
     judge_records: list[dict[str, Any]] = []
@@ -345,7 +428,9 @@ def run_phase2(
             checkpoint_store=generation_store,
             max_retries=max_gen_retries,
             sleep_fn=sleep_fn,
-            evidence_context_fn=render_context,
+            evidence_context_fn=context_for,
+            answer_postprocessor=answer_postprocessor,
+            answer_completion_metadata=answer_completion_metadata,
         )
         gen_record = records[0]
         generation_records.append({**gen_record, "question": tc.question})
@@ -361,9 +446,7 @@ def run_phase2(
                 gen_record["answer"],
                 tc.required_keywords,
                 tc.expects_fallback,
-                evidence_context=render_context(
-                    case_by_question[tc.question]
-                ),
+                evidence_context=rendered_context_by_question[tc.question],
             ),
             "question": tc.question,
         })
@@ -379,9 +462,7 @@ def run_phase2(
                 selected_questions=[question],
                 generation_records_by_question={question: question_record},
                 evidence_context_by_question={
-                    question: render_context(
-                        case_by_question[question]
-                    )
+                    question: rendered_context_by_question[question]
                 },
                 ground_truth_by_question={
                     question: tc.ground_truth
@@ -430,8 +511,15 @@ def run_phase2(
         ]) == len(selected)
         and stopped_reason is None
     )
-    official = bool(aggregate.get("official")) and complete
-    reason = aggregate.get("reason") if not official else ""
+    benchmark_eligible = bool(aggregate.get("official")) and complete
+    official = benchmark_eligible and publish_official
+    if benchmark_eligible and not publish_official:
+        reason = (
+            "provider-complete candidate: not published as official; "
+            "run the separate admission audit before promotion"
+        )
+    else:
+        reason = aggregate.get("reason") if not official else ""
     if not official and not reason:
         reason = (
             f"incomplete run: stopped_reason={stopped_reason!r}, "
@@ -470,6 +558,8 @@ def run_phase2(
     return {
         "schema_version": RESULTS_SCHEMA_VERSION,
         "official": official,
+        "provider_complete": complete,
+        "benchmark_eligible": benchmark_eligible,
         "reason": reason,
         "model": EVAL_MODEL,
         "judge_model": EVAL_MODEL,
@@ -488,6 +578,7 @@ def run_phase2(
         "token_usage_totals": tracker.totals,
         "metrics": aggregate_scores(judge_records),
         "deterministic": aggregate_deterministic(metric_rows),
+        "period_value_corrections": answer_completion_metadata or {},
         "cases": cases,
     }
 
@@ -517,12 +608,29 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument(
+        "--reproducibility-report",
+        type=Path,
+        default=None,
+        help=(
+            "Passed all-replicates sentinel report required before a "
+            "priority-2 experimental packing run."
+        ),
+    )
+    parser.add_argument(
         "--fresh",
         action="store_true",
         help="Delete existing checkpoints and results before running.",
     )
     parser.add_argument("--max-gen-retries", type=int, default=2)
     parser.add_argument("--max-judge-retries", type=int, default=2)
+    parser.add_argument(
+        "--allow-official-overwrite",
+        action="store_true",
+        help=(
+            "Explicitly allow writing the protected official selective-v2 "
+            "result path. Candidate/admission runs must omit this flag."
+        ),
+    )
     parser.add_argument(
         "--context-strategy",
         choices=[
@@ -532,6 +640,8 @@ def main(argv: list[str] | None = None) -> int:
             CONTEXT_STRATEGY_COMPARATIVE_V3,
             CONTEXT_STRATEGY_COMPARATIVE_V5,
             CONTEXT_STRATEGY_SELECTIVE_V2,
+            CONTEXT_STRATEGY_SELECTIVE_V4,
+            CONTEXT_STRATEGY_SELECTIVE_V5,
         ],
         default=CONTEXT_STRATEGY_SELECTIVE_V2,
         help=(
@@ -549,8 +659,10 @@ def main(argv: list[str] | None = None) -> int:
         CONTEXT_STRATEGY_ROUTE_AWARE: "_packed",
         CONTEXT_STRATEGY_SELECTIVE: "_packed_selective",
         CONTEXT_STRATEGY_COMPARATIVE_V3: "_packed_comparative_v3",
-        CONTEXT_STRATEGY_COMPARATIVE_V5: "_packed_comparative_v5",
-        CONTEXT_STRATEGY_SELECTIVE_V2: "_packed_selective_v2",
+            CONTEXT_STRATEGY_COMPARATIVE_V5: "_packed_comparative_v5",
+            CONTEXT_STRATEGY_SELECTIVE_V2: "_packed_selective_v2",
+            CONTEXT_STRATEGY_SELECTIVE_V4: "_packed_selective_v4",
+            CONTEXT_STRATEGY_SELECTIVE_V5: "_packed_selective_v5_enumeration",
     }.get(args.context_strategy, "")
     if args.gen_checkpoint is None:
         args.gen_checkpoint = Path(
@@ -564,6 +676,33 @@ def main(argv: list[str] | None = None) -> int:
         args.output = Path(str(RESULTS_PATH).replace(".json", f"{suffix}.json"))
 
     assert_phase2_retrieval_hermeticity()
+
+    try:
+        output_is_official = (
+            args.output.resolve()
+            == OFFICIAL_SELECTIVE_V2_RESULTS_PATH.resolve()
+        )
+    except OSError:
+        output_is_official = args.output == OFFICIAL_SELECTIVE_V2_RESULTS_PATH
+    if output_is_official and not args.allow_official_overwrite:
+        raise SystemExit(
+            "Refusing to write the protected official selective-v2 result. "
+            "Pass an explicit candidate --output path; the official result "
+            "is changed only after a separate admission audit."
+        )
+
+    if (
+        args.priority >= 2
+        and args.context_strategy not in {
+            CONTEXT_STRATEGY_FULL_EVIDENCE,
+            CONTEXT_STRATEGY_SELECTIVE_V2,
+        }
+        and not output_is_official
+    ):
+        require_reproducibility_report(
+            args.reproducibility_report,
+            args.context_strategy,
+        )
 
     for path in (args.gen_checkpoint, args.judge_checkpoint, args.output):
         if args.fresh and path.exists():
@@ -599,19 +738,35 @@ def main(argv: list[str] | None = None) -> int:
     )
     judge_generator = Generator(model=EVAL_MODEL, api_keys=judging_pool_keys())
     tracker = UsageTracker()
+    generation_call = make_generation_call(generation_generator, tracker)
+    correction_rows: dict[str, dict[str, Any]] = {}
+    if args.output.exists() and not args.fresh:
+        try:
+            previous = json.loads(args.output.read_text(encoding="utf-8"))
+            if previous.get("binding") == upstream.binding:
+                previous_rows = previous.get("period_value_corrections") or {}
+                if isinstance(previous_rows, dict):
+                    correction_rows.update(previous_rows)
+        except (OSError, json.JSONDecodeError):
+            logger.warning("Ignoring unreadable prior Phase 2 summary: %s", args.output)
 
     summary = run_phase2(
         selected=selected,
         case_by_question=case_by_question,
         upstream=upstream,
         bound_fingerprint=args.expected_fingerprint,
-        generate_fn=make_generation_call(generation_generator, tracker),
+        generate_fn=generation_call,
         judge_fn=make_judge_call(judge_generator, tracker),
         generation_store=GenerationCheckpointStore(args.gen_checkpoint),
         judge_store=JudgeCheckpointStore(args.judge_checkpoint),
         max_gen_retries=args.max_gen_retries,
         max_judge_retries=args.max_judge_retries,
         evidence_context_fn=evidence_context_fn,
+        answer_postprocessor=make_period_value_postprocessor(
+            generation_call, correction_rows
+        ),
+        answer_completion_metadata=correction_rows,
+        publish_official=output_is_official,
     )
     summary["token_usage_totals"] = tracker.totals
 
@@ -632,7 +787,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {key:<19}: {metrics[key]}")
     print(f"  Results written    : {args.output}")
 
-    return 0 if summary["official"] else 1
+    return 0 if summary["provider_complete"] else 1
 
 
 if __name__ == "__main__":

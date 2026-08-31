@@ -7,7 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from scripts.run_quota_probe import PROBE_QUESTIONS, build_probe_acceptance
+from scripts.run_quota_probe import (
+    PROBE_CONTEXT_STRATEGY,
+    PROBE_QUESTIONS,
+    audit_probe_answer,
+    build_probe_acceptance,
+    build_probe_contexts,
+)
 from scripts.diagnostics.audit_decomposed_plans import (
     STATUS_EVIDENCE_OK,
     STATUS_PLAN_GAP,
@@ -112,6 +118,58 @@ def test_comparative_probe_acceptance_distinguishes_years() -> None:
 
     assert latest_year is not None and latest_year["passed"] is False
     assert fiscal_2024 is not None and fiscal_2024["passed"] is True
+
+
+def test_probe_uses_selective_v2_context_instead_of_full_evidence() -> None:
+    question = PROBE_QUESTIONS[0]
+    case = {
+        "question": question,
+        "category": "fact_lookup",
+        "queries": [{
+            "query": {"ticker": "AAPL"},
+            "chunks": [
+                {
+                    "chunk_id": "AAPL_lead",
+                    "citation": "lead",
+                    "text": "General Apple context.",
+                    "score": 3.0,
+                },
+                {
+                    "chunk_id": "AAPL_table",
+                    "citation": "table",
+                    "text": "Total net sales were 391,035 in 2024.",
+                    "score": 10.0,
+                },
+                {
+                    "chunk_id": "AAPL_noise",
+                    "citation": "noise",
+                    "text": "Unrelated third source.",
+                    "score": 2.0,
+                },
+            ],
+        }],
+    }
+
+    context = build_probe_contexts({question: case}, [question])[question]
+
+    assert PROBE_CONTEXT_STRATEGY == "selective_packed_v2"
+    assert context.count("[Source ") == 2
+    assert "391,035" in context
+    assert "Unrelated third source" not in context
+
+
+def test_probe_quality_gate_rejects_safe_fallback_for_answerable_case() -> None:
+    context = "[Source 1] MSFT 10-K\nTotal assets were 619,003."
+
+    audit = audit_probe_answer(
+        "I could not find sufficient information in the available documents "
+        "to answer this question with confidence.",
+        context,
+    )
+
+    assert audit["answer_audit"]["fallback_answer"] is True
+    assert audit["integrity"]["non_fallback"] is False
+    assert audit["integrity_passed"] is False
 
 
 # ---------------------------------------------------------------------------

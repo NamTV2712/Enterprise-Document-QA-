@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -42,9 +43,12 @@ from src.evaluation.phase2_runtime import (
     judging_pool_keys,
     make_generation_call,
     make_judge_call,
+    make_period_value_postprocessor,
 )
 from src.evaluation.test_set import TEST_SET, TestCase
 from src.generation.generator import Generator
+
+logger = logging.getLogger(__name__)
 
 
 APPLE_QUESTION = "Compare Apple and Microsoft's approach to cloud/services revenue."
@@ -55,6 +59,17 @@ AWS_QUESTION = (
 AWS_REQUIRED_VALUES = ("107,556", "128,725")
 AWS_REQUIRED_PERIODS = ("2024", "2025")
 APPLE_CONTEXT_TERMS = ("Services", "Azure")
+# This semantic regression was not a retrieval miss: the answer compared
+# reporting formats instead of the revenue approach asked about. Sentinel-only
+# lexical gates pin the requested dimension without feeding answer labels into
+# production selection or generation.
+APPLE_APPROACH_ALTERNATIVES = (
+    "cloud services",
+    "cloud storage",
+    "App Store",
+    "advertising",
+)
+MICROSOFT_APPROACH_TERM = "Azure"
 AWS_CONTEXT_TERMS = (
     *AWS_REQUIRED_VALUES,
     "Microsoft Cloud revenue increased",
@@ -140,6 +155,16 @@ def _case_report(
         term: term.casefold() in answer.casefold()
         for term in APPLE_FORBIDDEN_DERIVED_TERMS
     } if not is_aws else {}
+    folded_answer = answer.casefold()
+    approach_terms = {} if is_aws else {
+        "apple_revenue_approach": any(
+            term.casefold() in folded_answer
+            for term in APPLE_APPROACH_ALTERNATIVES
+        ),
+        "microsoft_revenue_approach": (
+            MICROSOFT_APPROACH_TERM.casefold() in folded_answer
+        ),
+    }
     integrity = {
         "non_fallback": not audit.fallback_answer,
         "exact_values_present": all(answer_values.values()),
@@ -150,6 +175,7 @@ def _case_report(
         "not_uncited": not audit.uncited_answer,
         "no_unsupported_numeric_claims": not audit.unsupported_numeric_claims,
         "no_forbidden_derived_terms": not any(forbidden_derived.values()),
+        "requested_approach_answered": all(approach_terms.values()),
     }
     gates = {
         "generation_ok": case.get("generation_status") == "OK",
@@ -176,6 +202,7 @@ def _case_report(
         "answer_values": answer_values,
         "answer_periods": answer_periods,
         "forbidden_derived_terms": forbidden_derived,
+        "approach_terms": approach_terms,
         "answer_audit": audit.to_dict(),
         "integrity": integrity,
         "scores": scores,
@@ -238,6 +265,36 @@ def build_sentinel_report(
             }
         ),
     }
+    apple_case = next(
+        (r for r in case_reports if r["question"] == APPLE_QUESTION),
+        {"approach_terms": {}},
+    )
+    approach_contract = {
+        "apple_revenue_approach": (
+            apple_case["approach_terms"].get("apple_revenue_approach") is True
+        ),
+        "microsoft_revenue_approach": (
+            apple_case["approach_terms"].get("microsoft_revenue_approach") is True
+        ),
+    }
+    correction_rows = provider_run.get("period_value_corrections") or {}
+    apple_correction = correction_rows.get(APPLE_QUESTION, {})
+    aws_correction = correction_rows.get(AWS_QUESTION, {})
+    correction_contract = {
+        "apple_not_applicable_without_correction": (
+            apple_correction.get("applicable") is False
+            and apple_correction.get("correction_attempted") is False
+            and apple_correction.get("final_passed") is True
+        ),
+        "aws_applicable_and_final_complete": (
+            aws_correction.get("applicable") is True
+            and aws_correction.get("final_passed") is True
+            and (
+                aws_correction.get("correction_attempted") is False
+                or aws_correction.get("correction_accepted") is True
+            )
+        ),
+    }
     gates = {
         "provider_complete": provider_complete,
         "context_contract": (
@@ -251,6 +308,8 @@ def build_sentinel_report(
             and all(all(values.values()) for values in answer_integrity.values())
         ),
         "numeric_contract": all(numeric_contract.values()),
+        "approach_contract": all(approach_contract.values()),
+        "bounded_correction": all(correction_contract.values()),
         "semantic_scores": (
             len(case_reports) == len(expected_questions)
             and all(
@@ -293,15 +352,22 @@ def build_sentinel_report(
             "required_aws_answer_values": list(AWS_REQUIRED_VALUES),
             "required_aws_answer_periods": list(AWS_REQUIRED_PERIODS),
             "forbidden_apple_derived_terms": list(APPLE_FORBIDDEN_DERIVED_TERMS),
+            "required_apple_approach_alternatives": list(
+                APPLE_APPROACH_ALTERNATIVES
+            ),
+            "required_microsoft_approach_term": MICROSOFT_APPROACH_TERM,
             "minimum_faithfulness": MIN_FAITHFULNESS,
             "minimum_answer_relevancy": MIN_ANSWER_RELEVANCY,
             "require_grounded_canonical_citations": True,
             "require_deterministic_metrics": True,
+            "maximum_corrections_per_case": 1,
         },
         "cases": case_reports,
         "context_contract": context_contract,
         "answer_integrity": answer_integrity,
         "numeric_contract": numeric_contract,
+        "approach_contract": approach_contract,
+        "correction_contract": correction_contract,
         "gates": gates,
         "gate_passed": all(gates.values()),
         "token_usage_totals": provider_run.get("token_usage_totals", {}),
@@ -316,10 +382,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fresh", action="store_true")
     parser.add_argument("--max-gen-retries", type=int, default=0)
     parser.add_argument("--max-judge-retries", type=int, default=0)
+    parser.add_argument("--gen-checkpoint", type=Path, default=GEN_CHECKPOINT)
+    parser.add_argument("--judge-checkpoint", type=Path, default=JUDGE_CHECKPOINT)
+    parser.add_argument("--output", type=Path, default=SUMMARY)
     args = parser.parse_args(argv)
 
     if args.fresh:
-        for path in (GEN_CHECKPOINT, JUDGE_CHECKPOINT, SUMMARY):
+        for path in (args.gen_checkpoint, args.judge_checkpoint, args.output):
             if path.exists():
                 path.unlink()
 
@@ -342,27 +411,52 @@ def main(argv: list[str] | None = None) -> int:
     tracker = UsageTracker()
     generation = Generator(model=EVAL_MODEL, api_keys=generation_pool_keys())
     judge = Generator(model=EVAL_MODEL, api_keys=judging_pool_keys())
+    raw_generate = make_generation_call(generation, tracker)
+    correction_rows: dict[str, dict[str, Any]] = {}
+    previous_token_usage: dict[str, int] = {}
+    if args.output.exists():
+        try:
+            previous = json.loads(args.output.read_text(encoding="utf-8"))
+            previous_run = previous.get("provider_run") or {}
+            if previous_run.get("binding") == upstream.binding:
+                correction_rows.update(
+                    previous_run.get("period_value_corrections") or {}
+                )
+                previous_token_usage.update(
+                    previous_run.get("token_usage_totals") or {}
+                )
+        except (OSError, json.JSONDecodeError):
+            logger.warning("Ignoring unreadable prior sentinel summary: %s", args.output)
+
     provider_run = run_phase2(
         selected=selected,
         case_by_question=case_by_question,
         upstream=upstream,
         bound_fingerprint=EXPECTED_ARTIFACT_FINGERPRINT,
-        generate_fn=make_generation_call(generation, tracker),
+        generate_fn=raw_generate,
         judge_fn=make_judge_call(judge, tracker),
-        generation_store=GenerationCheckpointStore(GEN_CHECKPOINT),
-        judge_store=JudgeCheckpointStore(JUDGE_CHECKPOINT),
+        generation_store=GenerationCheckpointStore(args.gen_checkpoint),
+        judge_store=JudgeCheckpointStore(args.judge_checkpoint),
         max_gen_retries=args.max_gen_retries,
         max_judge_retries=args.max_judge_retries,
         evidence_context_fn=renderer,
+        answer_postprocessor=make_period_value_postprocessor(
+            raw_generate, correction_rows
+        ),
+        answer_completion_metadata=correction_rows,
     )
     provider_run["provider_complete"] = bool(provider_run["official"])
     provider_run["official"] = False
     provider_run["reason"] = "two-case sentinel evidence; non-official"
-    provider_run["token_usage_totals"] = tracker.totals
+    provider_run["token_usage_totals"] = {
+        key: previous_token_usage.get(key, 0) + value
+        for key, value in tracker.totals.items()
+    }
+    provider_run["period_value_corrections"] = correction_rows
 
     report = build_sentinel_report(provider_run, evidence_contexts)
-    SUMMARY.parent.mkdir(parents=True, exist_ok=True)
-    SUMMARY.write_text(
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     print(json.dumps(report, ensure_ascii=False, indent=2))

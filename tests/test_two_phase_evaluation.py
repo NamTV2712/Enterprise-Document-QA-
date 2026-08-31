@@ -23,6 +23,7 @@ from src.evaluation.generation_checkpoint import (
     run_generation_phase,
     sha256_text,
 )
+from src.generation.period_value_completeness import PeriodValueCorrectionError
 from src.evaluation.judge_checkpoint import (
     JUDGE_STATUS_OK,
     JUDGE_STATUS_SKIPPED_QUOTA,
@@ -348,6 +349,98 @@ def test_generation_phase_uses_injected_evidence_context(upstream) -> None:
     assert "context_builder_fingerprint" in records[0]
 
 
+def test_generation_phase_applies_postprocessor_to_exact_rendered_context(upstream) -> None:
+    gen_upstream, store_path = upstream
+    store = GenerationCheckpointStore(store_path)
+    question = _case().question
+    calls: list[tuple[str, str, str]] = []
+
+    def postprocess(case_question: str, evidence: str, draft: str) -> str:
+        calls.append((case_question, evidence, draft))
+        return "corrected"
+
+    records = run_generation_phase(
+        [question],
+        {question: {"queries": []}},
+        gen_upstream,
+        lambda _prompt: "draft",
+        store,
+        sleep_fn=lambda _seconds: None,
+        answer_postprocessor=postprocess,
+    )
+
+    assert records[0]["answer"] == "corrected"
+    assert calls == [(question, "", "draft")]
+    assert "answer_completion_fingerprint" in records[0]
+
+
+def test_generation_phase_persists_and_restores_completion_metadata(upstream) -> None:
+    gen_upstream, store_path = upstream
+    question = _case().question
+    payload = {question: {"queries": []}}
+    metadata = {
+        question: {
+            "applicable": True,
+            "correction_attempted": True,
+            "correction_accepted": True,
+            "final_passed": True,
+        }
+    }
+
+    first = run_generation_phase(
+        [question],
+        payload,
+        gen_upstream,
+        lambda _prompt: "draft",
+        GenerationCheckpointStore(store_path),
+        sleep_fn=lambda _seconds: None,
+        answer_postprocessor=lambda _q, _e, _d: "corrected",
+        answer_completion_metadata=metadata,
+    )
+
+    assert first[0]["period_value_correction"] == metadata[question]
+
+    restored: dict[str, dict] = {}
+    resumed = run_generation_phase(
+        [question],
+        payload,
+        gen_upstream,
+        lambda _prompt: (_ for _ in ()).throw(
+            AssertionError("compatible generation must resume")
+        ),
+        GenerationCheckpointStore(store_path),
+        sleep_fn=lambda _seconds: None,
+        answer_completion_metadata=restored,
+    )
+
+    assert resumed[0]["answer"] == "corrected"
+    assert restored == metadata
+
+
+def test_correction_failure_is_not_retried_by_generation_loop(upstream) -> None:
+    gen_upstream, store_path = upstream
+    store = GenerationCheckpointStore(store_path)
+    question = _case().question
+    generation_calls: list[str] = []
+
+    def postprocess(_question: str, _evidence: str, _draft: str) -> str:
+        raise PeriodValueCorrectionError("429 correction quota")
+
+    records = run_generation_phase(
+        [question],
+        {question: {"queries": []}},
+        gen_upstream,
+        lambda prompt: generation_calls.append(prompt) or "draft",
+        store,
+        max_retries=2,
+        sleep_fn=lambda _seconds: None,
+        answer_postprocessor=postprocess,
+    )
+
+    assert len(generation_calls) == 1
+    assert records[0]["status"] == GEN_STATUS_SKIPPED_QUOTA
+
+
 def test_resume_refuses_mismatched_upstream(upstream) -> None:
     gen_upstream, store_path = upstream
     store = GenerationCheckpointStore(store_path)
@@ -414,6 +507,42 @@ def test_resume_refuses_mismatched_context_builder(upstream) -> None:
         [question],
         payload,
         changed_renderer,
+        lambda prompt: calls.append(prompt) or "second",
+        store,
+        sleep_fn=lambda _seconds: None,
+    )
+
+    assert len(calls) == 1
+    assert records[0]["answer"] == "second"
+
+
+def test_resume_refuses_mismatched_answer_completion_policy(upstream) -> None:
+    gen_upstream, store_path = upstream
+    store = GenerationCheckpointStore(store_path)
+    question = _case().question
+    payload = {question: {"queries": []}}
+
+    run_generation_phase(
+        [question],
+        payload,
+        gen_upstream,
+        lambda _prompt: "first",
+        store,
+        sleep_fn=lambda _seconds: None,
+    )
+    changed_completion = GenerationUpstream(
+        artifact_path=gen_upstream.artifact_path,
+        artifact_sha256=gen_upstream.artifact_sha256,
+        artifact_schema_version=gen_upstream.artifact_schema_version,
+        model=gen_upstream.model,
+        system_prompt_sha256=gen_upstream.system_prompt_sha256,
+        answer_completion_fingerprint="sha256:changed-completion",
+    )
+    calls: list[str] = []
+    records = run_generation_phase(
+        [question],
+        payload,
+        changed_completion,
         lambda prompt: calls.append(prompt) or "second",
         store,
         sleep_fn=lambda _seconds: None,

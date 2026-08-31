@@ -18,11 +18,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from src.generation.prompt_contracts import NUMERIC_PAIR_CONTRACT
+from src.generation.prompt_contracts import (
+    NUMERIC_PAIR_CONTRACT,
+    answer_focus_contract_for_question,
+)
+from src.generation.period_value_completeness import (
+    PERIOD_VALUE_CORRECTION_FINGERPRINT,
+    PeriodValueCorrectionError,
+    render_chunk_evidence,
+)
 
 logger = logging.getLogger(__name__)
 
-GENERATION_SCHEMA_VERSION = 3
+GENERATION_SCHEMA_VERSION = 4
 GEN_STATUS_OK = "OK"
 GEN_STATUS_SKIPPED_QUOTA = "GEN_SKIPPED_QUOTA"
 GEN_STATUS_ERROR = "GEN_ERROR"
@@ -36,6 +44,7 @@ DEFAULT_GENERATION_PROMPT_TEMPLATE = (
     "Context:\n{context_blocks}\n"
     "\n"
     "Question: {question}\n"
+    "{answer_focus_contract} "
     "Use only canonical inline [Source N] citations; do not use line-number "
     "citation formats such as 【1†L1-L3】. Cite every factual claim. Quote "
     "numeric values exactly as shown, including the period and sign. "
@@ -52,7 +61,7 @@ def sha256_text(text: str) -> str:
 
 
 GENERATION_CONTEXT_BUILDER_FINGERPRINT = sha256_text(
-    "generation-context-renderer-v2-injected-evidence-context"
+    "generation-context-renderer-v3-shared-source-adapter-canonical-trim"
 )
 
 
@@ -64,6 +73,7 @@ def compute_generation_binding(
     context_strategy: str,
     context_builder_fingerprint: str,
     system_prompt_sha256: str,
+    answer_completion_fingerprint: str = PERIOD_VALUE_CORRECTION_FINGERPRINT,
 ) -> str:
     """Stable identity of everything that must not drift across resume."""
     payload = {
@@ -75,6 +85,7 @@ def compute_generation_binding(
         "context_strategy": context_strategy,
         "context_builder_fingerprint": context_builder_fingerprint,
         "system_prompt_sha256": system_prompt_sha256,
+        "answer_completion_fingerprint": answer_completion_fingerprint,
     }
     return sha256_text(json.dumps(payload, sort_keys=True))
 
@@ -91,6 +102,7 @@ class GenerationUpstream:
     prompt_template: str = DEFAULT_GENERATION_PROMPT_TEMPLATE
     context_strategy: str = CONTEXT_STRATEGY_FULL_EVIDENCE
     context_builder_fingerprint: str = GENERATION_CONTEXT_BUILDER_FINGERPRINT
+    answer_completion_fingerprint: str = PERIOD_VALUE_CORRECTION_FINGERPRINT
 
     @property
     def prompt_template_sha256(self) -> str:
@@ -106,6 +118,7 @@ class GenerationUpstream:
             self.context_strategy,
             self.context_builder_fingerprint,
             self.system_prompt_sha256,
+            self.answer_completion_fingerprint,
         )
 
 
@@ -152,8 +165,7 @@ def build_evidence_context(
     case_payload: dict[str, Any],
 ) -> str:
     """Render frozen artifact evidence into deterministic context blocks."""
-    blocks: list[str] = []
-    source_number = 0
+    chunks: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
     for query_entry in case_payload.get("queries", []):
         for chunk in query_entry.get("chunks", []):
@@ -161,12 +173,8 @@ def build_evidence_context(
             if chunk_id in seen_ids:
                 continue
             seen_ids.add(chunk_id)
-            source_number += 1
-            blocks.append(
-                f"[Source {source_number}] {chunk.get('citation', '')}\n"
-                f"{chunk.get('text', '')}"
-            )
-    return "\n\n".join(blocks)
+            chunks.append(chunk)
+    return render_chunk_evidence(chunks)
 
 
 def parse_evidence_context(evidence_context: str) -> list[dict[str, str]]:
@@ -197,13 +205,17 @@ def run_generation_phase(
     retry_backoff_seconds: tuple[float, ...] = (5.0, 15.0),
     sleep_fn: Callable[[float], None] = time.sleep,
     evidence_context_fn: Callable[[dict[str, Any]], str] | None = None,
+    answer_postprocessor: Callable[[str, str, str], str] | None = None,
+    answer_completion_metadata: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Generate answers for the selected questions from frozen evidence.
 
     ``generate_fn`` is the only provider touchpoint (injected so tests can
     prove no retriever or network is involved). Quota failures are
     checkpointed separately from completed answers so judge-side quota
-    problems later cannot destroy finished generations.
+    problems later cannot destroy finished generations. ``answer_postprocessor``
+    runs after the draft provider call and receives the exact rendered context;
+    its own bounded correction failures are not retried by this outer loop.
     """
     done = checkpoint_store.load_compatible(upstream)
     render_context = evidence_context_fn or build_evidence_context
@@ -212,7 +224,12 @@ def run_generation_phase(
     for question in selected_questions:
         if question in done:
             logger.info("GEN resume OK: %s", question[:60])
-            records.append(done[question])
+            record = done[question]
+            if answer_completion_metadata is not None:
+                metadata = record.get("period_value_correction")
+                if isinstance(metadata, dict):
+                    answer_completion_metadata[question] = metadata
+            records.append(record)
             continue
 
         case_payload = artifact_cases.get(question)
@@ -221,9 +238,11 @@ def run_generation_phase(
                 f"Artifact has no evidence for selected question: {question!r}"
             )
 
+        evidence_context = render_context(case_payload)
         prompt = upstream.prompt_template.format(
-            context_blocks=render_context(case_payload),
+            context_blocks=evidence_context,
             question=question,
+            answer_focus_contract=answer_focus_contract_for_question(question),
         )
 
         answer: str | None = None
@@ -234,6 +253,19 @@ def run_generation_phase(
                 sleep_fn(wait)
             try:
                 answer = generate_fn(prompt)
+                if answer_postprocessor is not None:
+                    answer = answer_postprocessor(
+                        question,
+                        evidence_context,
+                        answer,
+                    )
+                break
+            except PeriodValueCorrectionError as exc:
+                # The bounded correction owns its single provider attempt. Do
+                # not retry the whole draft+correction pair here.
+                answer = None
+                error = str(exc)
+                logger.warning("Period/value correction failed: %s", error[:180])
                 break
             except Exception as exc:  # noqa: BLE001 - provider errors are data here
                 error = str(exc)
@@ -250,11 +282,16 @@ def run_generation_phase(
             "prompt_template_sha256": upstream.prompt_template_sha256,
             "context_strategy": upstream.context_strategy,
             "context_builder_fingerprint": upstream.context_builder_fingerprint,
+            "answer_completion_fingerprint": upstream.answer_completion_fingerprint,
             "system_prompt_sha256": upstream.system_prompt_sha256,
             "upstream_artifact_sha256": upstream.artifact_sha256,
         }
         if answer is not None:
             record.update({"status": GEN_STATUS_OK, "answer": answer})
+            if answer_completion_metadata is not None:
+                metadata = answer_completion_metadata.get(question)
+                if isinstance(metadata, dict):
+                    record["period_value_correction"] = metadata
         elif error is not None and _looks_like_quota_error(error):
             record.update({"status": GEN_STATUS_SKIPPED_QUOTA, "error": error})
         else:

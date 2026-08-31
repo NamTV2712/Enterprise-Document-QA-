@@ -26,6 +26,10 @@ from src.evaluation.generation_checkpoint import (
 )
 from src.evaluation.judge_checkpoint import JudgeParseErrorStub
 from src.generation.generator import SYSTEM_PROMPT, Generator
+from src.generation.period_value_completeness import (
+    correct_period_value_once,
+    validate_grounded_answer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +81,13 @@ def generation_pool_keys() -> list[str]:
     ]
     if not any(configured):
         configured = [settings.groq_api_key, settings.groq_api_key2]
-    configured.append(settings.groq_api_key3)
+    configured.extend(
+        (
+            settings.groq_api_key3,
+            settings.groq_api_key4,
+            settings.groq_api_key5,
+        )
+    )
     return list(dict.fromkeys(key for key in configured if key))
 
 
@@ -90,6 +100,8 @@ def judging_pool_keys() -> list[str]:
                 settings.groq_api_key,
                 settings.groq_api_key2,
                 settings.groq_api_key3,
+                settings.groq_api_key4,
+                settings.groq_api_key5,
             )
             if key
         )
@@ -115,6 +127,62 @@ def make_generation_call(
         return response.choices[0].message.content or ""
 
     return generate
+
+
+def make_period_value_postprocessor(
+    generate_fn: Callable[[str], str],
+    metadata: dict[str, dict[str, Any]] | None = None,
+) -> Callable[[str, str, str], str]:
+    """Apply the shared one-correction policy to a Phase 2 draft."""
+    def postprocess(
+        question: str,
+        evidence_context: str,
+        draft_answer: str,
+    ) -> str:
+        outcome = correct_period_value_once(
+            question,
+            evidence_context,
+            draft_answer,
+            generate_fn,
+            validate_answer=lambda answer: validate_grounded_answer(
+                answer, evidence_context
+            ),
+        )
+        if outcome.correction_attempted:
+            logger.info(
+                "Phase 2 period/value correction %s for question: %s",
+                "accepted" if outcome.correction_accepted else "rejected",
+                question[:80],
+            )
+        if metadata is not None:
+            metadata[question] = {
+                "applicable": outcome.initial.applicable,
+                "initial_passed": outcome.initial.passed,
+                "missing_pairs": [
+                    {
+                        "label": pair.label,
+                        "period": pair.period,
+                        "value": pair.value,
+                        "source_number": pair.source_number,
+                    }
+                    for pair in outcome.initial.missing_pairs
+                ],
+                "correction_attempted": outcome.correction_attempted,
+                "correction_accepted": outcome.correction_accepted,
+                "final_passed": outcome.final.passed,
+                "initial_grounding_passed": outcome.initial_grounding_passed,
+                "final_grounding_passed": outcome.final_grounding_passed,
+                "initial_unsupported_numeric_claims": list(
+                    outcome.initial_unsupported_numeric_claims
+                ),
+                "final_unsupported_numeric_claims": list(
+                    outcome.final_unsupported_numeric_claims
+                ),
+                "correction_reason": outcome.correction_reason,
+            }
+        return outcome.answer
+
+    return postprocess
 
 
 def make_judge_call(

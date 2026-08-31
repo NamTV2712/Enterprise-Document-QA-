@@ -6,8 +6,11 @@ with explicit guardrails:
 
 - model openai/gpt-oss-120b for BOTH generation and judging (self-judge
   bias is expected and results are never official)
-- strictly sequential cases, one generation + one judge call each
-  (judge allows at most one retry; generation none)
+- the same ``selective_packed_v2`` renderer and generation binding used by
+  the default official Phase 2 runner
+- strictly sequential cases, one draft generation plus at most one bounded
+  period/value correction generation, then one judge call each (judge allows
+  at most one retry; draft generation none)
 - separate generation/judge checkpoint files bound to the Phase 1
   artifact hash; retrieval is never rerun
 - any quota error stops the whole probe immediately after checkpointing
@@ -25,6 +28,11 @@ import logging
 import sys
 from pathlib import Path
 
+from src.evaluation.answer_contract import audit_answer
+from src.evaluation.context_packing import (
+    CONTEXT_STRATEGY_SELECTIVE_V2,
+    render_case_context,
+)
 from src.evaluation.evaluator import (
     JUDGE_PROMPT_TEMPLATE,
     compute_citation_correctness,
@@ -34,10 +42,11 @@ from src.evaluation.generation_checkpoint import (
     GEN_STATUS_SKIPPED_QUOTA,
     GenerationCheckpointStore,
     GenerationUpstream,
-    build_evidence_context,
+    parse_evidence_context,
     run_generation_phase,
     sha256_text,
 )
+from src.evaluation.test_set import TEST_SET
 from src.evaluation.judge_checkpoint import (
     JUDGE_STATUS_OK,
     JUDGE_STATUS_PARSE_INVALID,
@@ -57,6 +66,7 @@ from src.evaluation.phase2_runtime import (
     judging_pool_keys,
     make_generation_call,
     make_judge_call,
+    make_period_value_postprocessor,
 )
 from src.generation.generator import Generator
 from src.retrieval.lexical_ladder import LEXICAL_LADDER_FINGERPRINT
@@ -77,6 +87,7 @@ JUDGE_CHECKPOINT_PATH = Path("data/eval_artifacts/probe_judge.jsonl")
 SUMMARY_PATH = Path("data/eval_artifacts/probe_summary.json")
 
 PROBE_MODEL = "openai/gpt-oss-120b"
+PROBE_CONTEXT_STRATEGY = CONTEXT_STRATEGY_SELECTIVE_V2
 PROBE_QUESTIONS = [
     "What was Apple's total net sales in fiscal year 2024?",
     "Which company, Apple or Amazon, had higher total revenue in fiscal year 2024?",
@@ -133,6 +144,57 @@ class ProbeQuotaStop(Exception):
     """Raised to unwind the sequential probe after a quota checkpoint."""
 
 
+def build_probe_contexts(
+    case_by_question: dict[str, dict],
+    selected_questions: list[str],
+) -> dict[str, str]:
+    """Render the exact default official context for each probe case."""
+    metadata = {case.question: case for case in TEST_SET}
+    missing_metadata = [q for q in selected_questions if q not in metadata]
+    if missing_metadata:
+        raise RuntimeError(
+            f"Probe questions absent from TEST_SET: {missing_metadata}"
+        )
+    return {
+        question: render_case_context(
+            case_by_question[question],
+            required_keywords=metadata[question].required_keywords,
+            strategy=PROBE_CONTEXT_STRATEGY,
+        )
+        for question in selected_questions
+    }
+
+
+def audit_probe_answer(answer: str, evidence_context: str) -> dict:
+    """Apply deterministic integrity gates against the exact probe context."""
+    source_blocks = parse_evidence_context(evidence_context)
+    source_texts = [block["text"] for block in source_blocks]
+    answer_audit = audit_answer(answer, source_texts)
+    citation_correctness = compute_citation_correctness(
+        answer,
+        len(source_blocks),
+    )
+    integrity = {
+        "non_fallback": not answer_audit.fallback_answer,
+        "canonical_citation_present": bool(answer_audit.canonical_citations),
+        "not_uncited": not answer_audit.uncited_answer,
+        "no_legacy_line_citations": (
+            answer_audit.malformed_line_citations == 0
+        ),
+        "no_out_of_range_citations": not answer_audit.out_of_range_citations,
+        "no_unsupported_numeric_claims": (
+            not answer_audit.unsupported_numeric_claims
+        ),
+    }
+    return {
+        "num_sources": len(source_blocks),
+        "citation_correctness": citation_correctness,
+        "answer_audit": answer_audit.to_dict(),
+        "integrity": integrity,
+        "integrity_passed": all(integrity.values()),
+    }
+
+
 def _load_artifact_and_binding() -> tuple[dict, GenerationUpstream]:
     if not ARTIFACT_PATH.exists():
         raise FileNotFoundError(
@@ -164,15 +226,13 @@ def _load_artifact_and_binding() -> tuple[dict, GenerationUpstream]:
         artifact_schema_version=artifact["schema_version"],
         model=PROBE_MODEL,
         system_prompt_sha256=GENERATION_SYSTEM_PROMPT_FINGERPRINT,
+        context_strategy=PROBE_CONTEXT_STRATEGY,
     )
     return artifact, upstream
 
 
 def _generation_pool_keys() -> list[str]:
     return generation_pool_keys()
-
-
-_usage_tracker = UsageTracker()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -193,10 +253,28 @@ def main(argv: list[str] | None = None) -> int:
             "Defaults to the original three-case probe."
         ),
     )
+    parser.add_argument(
+        "--gen-checkpoint",
+        type=Path,
+        default=GEN_CHECKPOINT_PATH,
+        help="Override the generation checkpoint path for this probe run.",
+    )
+    parser.add_argument(
+        "--judge-checkpoint",
+        type=Path,
+        default=JUDGE_CHECKPOINT_PATH,
+        help="Override the judge checkpoint path for this probe run.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=SUMMARY_PATH,
+        help="Override the probe summary output path.",
+    )
     args = parser.parse_args(argv)
     selected_questions = args.question or PROBE_QUESTIONS
 
-    for path in (GEN_CHECKPOINT_PATH, JUDGE_CHECKPOINT_PATH):
+    for path in (args.gen_checkpoint, args.judge_checkpoint):
         if args.fresh and path.exists():
             path.unlink()
             logger.info("Deleted stale probe checkpoint: %s", path)
@@ -206,6 +284,12 @@ def main(argv: list[str] | None = None) -> int:
     missing = [q for q in selected_questions if q not in case_by_question]
     if missing:
         raise RuntimeError(f"Probe questions absent from artifact: {missing}")
+    evidence_contexts = build_probe_contexts(
+        case_by_question, selected_questions
+    )
+
+    def probe_context(case_payload: dict) -> str:
+        return evidence_contexts[case_payload["question"]]
 
     # Hermeticity by construction instead of a socket guard: no retrieval
     # EXECUTION happens here. The generator's type-only import chain
@@ -217,6 +301,10 @@ def main(argv: list[str] | None = None) -> int:
         "src.retrieval.retriever",
         "src.retrieval.embedder",
         "src.retrieval.vector_store",
+        # Phase 2 imports these only to validate the frozen artifact's
+        # provenance; they do not execute retrieval.
+        "src.retrieval.lexical_ladder",
+        "src.retrieval.query_shaper",
     }
     forbidden = [
         name for name in sys.modules
@@ -230,8 +318,16 @@ def main(argv: list[str] | None = None) -> int:
         model=PROBE_MODEL, api_keys=_generation_pool_keys()
     )
     judge_generator = Generator(model=PROBE_MODEL, api_keys=judging_pool_keys())
-    generation_store = GenerationCheckpointStore(GEN_CHECKPOINT_PATH)
-    judge_store = JudgeCheckpointStore(JUDGE_CHECKPOINT_PATH)
+    generation_store = GenerationCheckpointStore(args.gen_checkpoint)
+    judge_store = JudgeCheckpointStore(args.judge_checkpoint)
+    tracker = UsageTracker()
+    generation_call = make_generation_call(
+        generation_generator, tracker
+    )
+    correction_rows: dict[str, dict] = {}
+    answer_postprocessor = make_period_value_postprocessor(
+        generation_call, correction_rows
+    )
 
     per_case: list[dict] = []
     stopped_reason = None
@@ -242,12 +338,12 @@ def main(argv: list[str] | None = None) -> int:
             selected_questions=[question],
             artifact_cases=case_by_question,
             upstream=upstream,
-            generate_fn=make_generation_call(
-                generation_generator, _usage_tracker
-            ),
+            generate_fn=generation_call,
             checkpoint_store=generation_store,
             max_retries=0,
             sleep_fn=lambda seconds: None,
+            evidence_context_fn=probe_context,
+            answer_postprocessor=answer_postprocessor,
         )
         gen_record = gen_records[0]
         if gen_record["status"] == GEN_STATUS_SKIPPED_QUOTA:
@@ -263,14 +359,14 @@ def main(argv: list[str] | None = None) -> int:
             selected_questions=[question],
             generation_records_by_question={question: gen_record},
             evidence_context_by_question={
-                question: build_evidence_context(case_by_question[question])
+                question: evidence_contexts[question]
             },
             ground_truth_by_question={
                 q: GROUND_TRUTHS[q] for q in selected_questions
             },
             judge_model=PROBE_MODEL,
             judge_prompt_template_sha256=sha256_text(JUDGE_PROMPT_TEMPLATE),
-            judge_fn=make_judge_call(judge_generator, _usage_tracker),
+            judge_fn=make_judge_call(judge_generator, tracker),
             checkpoint_store=judge_store,
             max_retries=1,
             sleep_fn=lambda seconds: None,
@@ -295,7 +391,7 @@ def main(argv: list[str] | None = None) -> int:
             stopped_reason = f"judge error at: {question[:60]}"
             break
 
-    stored_judge = load_judge_records(JUDGE_CHECKPOINT_PATH)
+    stored_judge = load_judge_records(args.judge_checkpoint)
     generation_records = [entry["generation"] for entry in per_case]
     raw_aggregate = build_official_aggregate(
         generation_records=generation_records,
@@ -314,18 +410,19 @@ def main(argv: list[str] | None = None) -> int:
     for entry in per_case:
         question = entry["question"]
         answer = entry["generation"].get("answer") or ""
-        citation_correctness = compute_citation_correctness(
-            answer,
-            len(case_by_question[question]["final_chunk_ids"]),
+        answer_integrity = audit_probe_answer(
+            answer, evidence_contexts[question]
+        )
+        acceptance = build_probe_acceptance(
+            question, answer, answer_integrity["citation_correctness"]
         )
         case_summaries.append({
             "question": question,
+            "context_sha256": sha256_text(evidence_contexts[question]),
             "generation_status": entry["generation"]["status"],
             "answer": entry["generation"].get("answer"),
-            "citation_correctness": citation_correctness,
-            "acceptance": build_probe_acceptance(
-                question, answer, citation_correctness
-            ),
+            **answer_integrity,
+            "acceptance": acceptance,
             "judge_status": entry.get("judge", {}).get("status"),
             "scores": {
                 key: entry["judge"]["scores"][key]
@@ -346,8 +443,18 @@ def main(argv: list[str] | None = None) -> int:
         case["acceptance"] for case in case_summaries
         if case["acceptance"] is not None
     ]
-    probe_acceptance_passed = (
+    provider_calls_complete = (
         stopped_reason is None
+        and len(case_summaries) == len(selected_questions)
+        and all(
+            case["generation_status"] == GEN_STATUS_OK
+            and case["judge_status"] == JUDGE_STATUS_OK
+            for case in case_summaries
+        )
+    )
+    quality_preflight_passed = (
+        provider_calls_complete
+        and all(case["integrity_passed"] for case in case_summaries)
         and all(result["passed"] for result in acceptance_results)
     )
 
@@ -358,6 +465,7 @@ def main(argv: list[str] | None = None) -> int:
             "forced false: quota probe subset with self-judge bias; never a benchmark"
         ),
         "model": PROBE_MODEL,
+        "context_strategy": PROBE_CONTEXT_STRATEGY,
         "self_judge_bias": (
             "generation and judging share one model; scores are directional only"
         ),
@@ -365,18 +473,22 @@ def main(argv: list[str] | None = None) -> int:
         "binding": upstream.binding,
         "selected_questions": selected_questions,
         "stopped_reason": stopped_reason,
-        "probe_acceptance_passed": probe_acceptance_passed,
-        "token_usage_totals": _usage_tracker.totals,
+        "provider_calls_complete": provider_calls_complete,
+        "quality_preflight_passed": quality_preflight_passed,
+        "probe_acceptance_passed": quality_preflight_passed,
+        "period_value_corrections": correction_rows,
+        "token_usage_totals": tracker.totals,
         "aggregate_check": aggregate,
         "cases": case_summaries,
     }
-    SUMMARY_PATH.write_text(
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(
         json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
     print(json.dumps(summary, indent=2, ensure_ascii=False))
-    logger.info("Probe summary written: %s", SUMMARY_PATH)
-    return 0 if probe_acceptance_passed else 1
+    logger.info("Probe summary written: %s", args.output)
+    return 0 if quality_preflight_passed else 1
 
 
 if __name__ == "__main__":

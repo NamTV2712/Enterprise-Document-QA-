@@ -37,6 +37,7 @@ from src.evaluation.phase2_runtime import (
     judging_pool_keys,
     make_generation_call,
     make_judge_call,
+    make_period_value_postprocessor,
 )
 from src.evaluation.test_set import TEST_SET
 from src.generation.generator import Generator
@@ -105,13 +106,16 @@ def main() -> int:
     judge = Generator(model=MODEL, api_keys=judging_pool_keys())
     gen_store = GenerationCheckpointStore(GEN_CHECKPOINT)
     judge_store = JudgeCheckpointStore(JUDGE_CHECKPOINT)
+    generation_call = make_generation_call(generation, tracker)
+    answer_postprocessor = make_period_value_postprocessor(generation_call)
     rows = []
 
     for question in QUESTIONS:
         gen_record = run_generation_phase(
             [question], cases, upstream,
-            make_generation_call(generation, tracker), gen_store,
+            generation_call, gen_store,
             max_retries=0, sleep_fn=lambda _: None,
+            answer_postprocessor=answer_postprocessor,
         )[0]
         if gen_record.get("status") != "OK":
             rows.append({"question": question, "generation": gen_record})

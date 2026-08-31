@@ -10,12 +10,19 @@ import pytest
 
 from scripts.run_evaluation_phase2 import (
     EVAL_MODEL,
+    OFFICIAL_SELECTIVE_V2_RESULTS_PATH,
     compute_case_metrics,
     load_bound_artifact,
+    require_reproducibility_report,
     run_phase2,
     select_questions,
 )
 from src.evaluation.evaluator import JudgeParseError
+from src.evaluation.context_packing import (
+    CONTEXT_STRATEGY_COMPARATIVE_V5,
+    CONTEXT_STRATEGY_SELECTIVE_V2,
+    CONTEXT_STRATEGY_SELECTIVE_V4,
+)
 from src.evaluation.generation_checkpoint import (
     GenerationCheckpointStore,
     GenerationUpstream,
@@ -143,6 +150,7 @@ def _run(
     answers: dict[str, str],
     judge_scores: list[dict | Exception],
     fail_generation_on_call: int | None = None,
+    publish_official: bool = True,
 ):
     case_by_question = {
         case["question"]: case
@@ -183,6 +191,7 @@ def _run(
         max_gen_retries=0,
         max_judge_retries=0,
         sleep_fn=lambda seconds: None,
+        publish_official=publish_official,
     )
     return summary
 
@@ -195,6 +204,8 @@ def test_complete_run_is_official_with_metrics(tmp_path: Path) -> None:
     )
 
     assert summary["official"] is True
+    assert summary["provider_complete"] is True
+    assert summary["benchmark_eligible"] is True
     assert summary["stopped_reason"] is None
     assert summary["num_generation_ok"] == 2
     assert summary["num_judged_ok"] == 2
@@ -204,6 +215,20 @@ def test_complete_run_is_official_with_metrics(tmp_path: Path) -> None:
     assert metrics["overall_judge_average"] == pytest.approx(
         (1.0 + 1.0 + 0.5) / 3, abs=1e-4
     )
+
+
+def test_complete_candidate_run_is_not_marked_official(tmp_path: Path) -> None:
+    summary = _run(
+        tmp_path,
+        answers={APPLE_Q: APPLE_ANSWER, NETFLIX_Q: NETFLIX_FALLBACK},
+        judge_scores=[_scores(1.0), _scores(1.0)],
+        publish_official=False,
+    )
+
+    assert summary["official"] is False
+    assert summary["provider_complete"] is True
+    assert summary["benchmark_eligible"] is True
+    assert "not published as official" in summary["reason"]
 
     deterministic = summary["deterministic"]
     # Apple case has citations and its figure in evidence; Netflix fallback
@@ -406,6 +431,7 @@ def test_both_phase_two_runners_pin_the_current_artifact() -> None:
         probe.EXPECTED_ARTIFACT_FINGERPRINT
         == runner.EXPECTED_ARTIFACT_FINGERPRINT
     )
+    assert probe.PROBE_CONTEXT_STRATEGY == CONTEXT_STRATEGY_SELECTIVE_V2
 
 
 @pytest.mark.parametrize("superseded", sorted(SUPERSEDED_FINGERPRINTS))
@@ -444,6 +470,120 @@ def test_phase_two_main_never_imports_retrieval_machinery(
         runner.main(["--help"])
 
 
+def test_phase_two_main_protects_official_result_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A candidate invocation must not silently replace the official result."""
+    import sys
+
+    from scripts import run_evaluation_phase2 as runner
+
+    allowed = {
+        "src.retrieval",
+        "src.retrieval.query_shaper",
+        "src.retrieval.lexical_ladder",
+        "src.retrieval.retriever",
+        "src.retrieval.embedder",
+        "src.retrieval.vector_store",
+    }
+
+    monkeypatch.setattr(
+        sys,
+        "modules",
+        {
+            name: module
+            for name, module in sys.modules.items()
+            if not name.startswith("src.retrieval") or name in allowed
+        },
+    )
+    with pytest.raises(SystemExit, match="protected official selective-v2"):
+        runner.main(["--output", str(OFFICIAL_SELECTIVE_V2_RESULTS_PATH)])
+
+
+def _passing_reproducibility_report(strategy: str) -> dict:
+    return {
+        "audit": "context_precision_reproducibility",
+        "passed": True,
+        "candidate_strategy": strategy,
+        "pre_registered_rule": {
+            "minimum_replicates": 2,
+            "required_pass_rate": 1.0,
+            "best_of_selection_forbidden": True,
+        },
+        "gates": {"all_replicates_pass": True},
+    }
+
+
+def test_candidate_priority_two_requires_passed_reproducibility_report(
+    tmp_path: Path,
+) -> None:
+    report_path = tmp_path / "repro.json"
+    report_path.write_text(
+        json.dumps(_passing_reproducibility_report(CONTEXT_STRATEGY_COMPARATIVE_V5)),
+        encoding="utf-8",
+    )
+
+    require_reproducibility_report(
+        report_path,
+        CONTEXT_STRATEGY_COMPARATIVE_V5,
+    )
+
+
+def test_candidate_priority_two_accepts_grounded_completion_reproducibility(
+    tmp_path: Path,
+) -> None:
+    from src.generation.period_value_completeness import (
+        PERIOD_VALUE_CORRECTION_FINGERPRINT,
+    )
+
+    report = _passing_reproducibility_report(CONTEXT_STRATEGY_SELECTIVE_V4)
+    report["audit"] = "grounded_completion_v3_reproducibility"
+    report["completion_fingerprints"] = [PERIOD_VALUE_CORRECTION_FINGERPRINT]
+    report_path = tmp_path / "grounded-repro.json"
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+
+    require_reproducibility_report(
+        report_path,
+        CONTEXT_STRATEGY_SELECTIVE_V4,
+    )
+
+
+def test_candidate_priority_two_accepts_enumeration_reproducibility(
+    tmp_path: Path,
+) -> None:
+    from src.evaluation.context_packing import CONTEXT_STRATEGY_SELECTIVE_V5
+    from src.generation.period_value_completeness import (
+        PERIOD_VALUE_CORRECTION_FINGERPRINT,
+    )
+
+    report = _passing_reproducibility_report(CONTEXT_STRATEGY_SELECTIVE_V5)
+    report["audit"] = "enumeration_context_reproducibility"
+    report["completion_fingerprints"] = [PERIOD_VALUE_CORRECTION_FINGERPRINT]
+    report_path = tmp_path / "enumeration-repro.json"
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+
+    require_reproducibility_report(
+        report_path,
+        CONTEXT_STRATEGY_SELECTIVE_V5,
+    )
+
+
+def test_candidate_priority_two_rejects_missing_or_mismatched_gate(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(SystemExit, match="require --reproducibility-report"):
+        require_reproducibility_report(None, CONTEXT_STRATEGY_COMPARATIVE_V5)
+
+    report_path = tmp_path / "repro.json"
+    report_path.write_text(
+        json.dumps(_passing_reproducibility_report(CONTEXT_STRATEGY_SELECTIVE_V2)),
+        encoding="utf-8",
+    )
+    with pytest.raises(SystemExit, match="Reproducibility gate failed"):
+        require_reproducibility_report(
+            report_path,
+            CONTEXT_STRATEGY_COMPARATIVE_V5,
+        )
 def test_compute_case_metrics_handles_missing_citations() -> None:
     case_payload = _artifact_payload()["cases"][0]
     metrics = compute_case_metrics(
@@ -473,6 +613,19 @@ def test_compute_case_metrics_uses_rendered_packed_sources() -> None:
     assert metrics["recall_proxy"] == 0.0
 
 
+def test_compute_case_metrics_preserves_explicit_empty_context() -> None:
+    case_payload = _artifact_payload()["cases"][0]
+    metrics = compute_case_metrics(
+        case_payload,
+        answer="No citations here at all.",
+        required_keywords=["391,035"],
+        expects_fallback=False,
+        evidence_context="",
+    )
+
+    assert metrics["recall_proxy"] == 0.0
+
+
 def test_production_judge_prompt_preserves_source_boundaries_and_blank_lines() -> None:
     evidence = (
         "[Source 1] AAPL 10-K\n"
@@ -494,7 +647,7 @@ def test_production_judge_prompt_preserves_source_boundaries_and_blank_lines() -
     assert "AWS net sales were 107,556.\n\nThe next paragraph" in prompt
 
 
-def test_phase2_pools_append_key3_after_existing_keys(
+def test_phase2_pools_append_all_failover_keys_after_existing_keys(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from configs.settings import settings
@@ -502,9 +655,23 @@ def test_phase2_pools_append_key3_after_existing_keys(
     monkeypatch.setattr(settings, "groq_api_key", "primary-1")
     monkeypatch.setattr(settings, "groq_api_key2", "primary-2")
     monkeypatch.setattr(settings, "groq_api_key3", "primary-3")
+    monkeypatch.setattr(settings, "groq_api_key4", "primary-4")
+    monkeypatch.setattr(settings, "groq_api_key5", "primary-5")
     monkeypatch.setattr(settings, "groq_api_key_fall_back", "fallback-1")
     monkeypatch.setattr(settings, "groq_api_key_fall_back2", "fallback-2")
 
-    assert generation_pool_keys() == ["fallback-1", "fallback-2", "primary-3"]
-    assert judging_pool_keys() == ["primary-1", "primary-2", "primary-3"]
+    assert generation_pool_keys() == [
+        "fallback-1",
+        "fallback-2",
+        "primary-3",
+        "primary-4",
+        "primary-5",
+    ]
+    assert judging_pool_keys() == [
+        "primary-1",
+        "primary-2",
+        "primary-3",
+        "primary-4",
+        "primary-5",
+    ]
     assert JUDGE_CONTEXT_BUILDER_FINGERPRINT.startswith("sha256:")

@@ -13,6 +13,13 @@ from typing import Any
 from src.generation.prompt_contracts import (
     NUMERIC_PAIR_CONTRACT,
     NUMERIC_PAIR_REMINDER,
+    answer_focus_contract_for_question,
+)
+from src.generation.period_value_completeness import (
+    assess_period_value_completeness,
+    correct_period_value_once,
+    render_chunk_evidence,
+    validate_grounded_answer,
 )
 from src.retrieval.retriever import RetrievedChunk
 
@@ -69,6 +76,12 @@ def _format_context(chunks: list[RetrievedChunk]) -> str:
 
 def _build_user_message(query: str, chunks: list[RetrievedChunk]) -> str:
     context_str = _format_context(chunks)
+    answer_focus = answer_focus_contract_for_question(query)
+    focus_line = (
+        f"Answer-focus checklist: {answer_focus}\n"
+        if answer_focus
+        else ""
+    )
     return f"""Based on the following context sections from SEC filings, answer the question.
 Reference sources as [Source 1], [Source 2], etc.
 
@@ -76,7 +89,7 @@ Reference sources as [Source 1], [Source 2], etc.
 
 Question: {query}
 
-Important: if a specific number is not explicitly in the context above, do not state it.
+{focus_line}Important: if a specific number is not explicitly in the context above, do not state it.
 {NUMERIC_PAIR_REMINDER}"""
 
 
@@ -107,6 +120,8 @@ class Generator:
                     settings.groq_api_key,
                     settings.groq_api_key2,
                     settings.groq_api_key3,
+                    settings.groq_api_key4,
+                    settings.groq_api_key5,
                 ]
             )
         )
@@ -222,6 +237,9 @@ class Generator:
         user_message = _build_user_message(query, chunks)
 
         response_text = self._call_groq(user_message, conversation_history)
+        response_text = self._apply_period_value_completion(
+            query, chunks, response_text, conversation_history
+        )
 
         logger.info("Generated response (%d chars) from %s", len(response_text), self.model)
         return RAGResponse(
@@ -229,6 +247,32 @@ class Generator:
             retrieved_chunks=chunks,
             model_used=self.model,
         )
+
+    def _apply_period_value_completion(
+        self,
+        query: str,
+        chunks: list[RetrievedChunk],
+        draft_answer: str,
+        conversation_history: list[dict] | None = None,
+    ) -> str:
+        """Validate and, at most once, correct a numeric trend answer."""
+        evidence_context = render_chunk_evidence(chunks)
+        outcome = correct_period_value_once(
+            query,
+            evidence_context,
+            draft_answer,
+            lambda prompt: self._call_groq(prompt, conversation_history),
+            validate_answer=lambda answer: validate_grounded_answer(
+                answer, evidence_context
+            ),
+        )
+        if outcome.correction_attempted:
+            logger.info(
+                "Period/value correction %s for query: %s",
+                "accepted" if outcome.correction_accepted else "rejected",
+                query[:80],
+            )
+        return outcome.answer
 
     def _call_groq(
         self,
@@ -271,11 +315,49 @@ class Generator:
 
         user_message = _build_user_message(query, chunks)
 
-        yield from self._call_groq_stream(
+        evidence_context = render_chunk_evidence(chunks)
+        applicable = assess_period_value_completeness(
+            query, evidence_context, ""
+        ).applicable
+        if not applicable:
+            yield from self._call_groq_stream(
+                user_message,
+                conversation_history,
+                cancel_event=cancel_event,
+            )
+            return
+
+        # An applicable answer must be buffered so an incomplete draft is never
+        # emitted before the bounded correction has had a chance to run.
+        draft_parts: list[str] = []
+        for token in self._call_groq_stream(
             user_message,
             conversation_history,
             cancel_event=cancel_event,
+        ):
+            if cancel_event is not None and cancel_event.is_set():
+                return
+            draft_parts.append(token)
+        if cancel_event is not None and cancel_event.is_set():
+            return
+
+        outcome = correct_period_value_once(
+            query,
+            evidence_context,
+            "".join(draft_parts),
+            lambda prompt: self._call_groq(prompt, conversation_history),
+            validate_answer=lambda answer: validate_grounded_answer(
+                answer, evidence_context
+            ),
         )
+        if outcome.correction_attempted:
+            logger.info(
+                "Period/value stream correction %s for query: %s",
+                "accepted" if outcome.correction_accepted else "rejected",
+                query[:80],
+            )
+        if cancel_event is None or not cancel_event.is_set():
+            yield outcome.answer
 
     def _call_groq_stream(
         self,

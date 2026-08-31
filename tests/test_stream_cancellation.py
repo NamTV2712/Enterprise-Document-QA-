@@ -30,6 +30,27 @@ def _retrieved_chunk() -> RetrievedChunk:
     )
 
 
+def _aws_growth_chunk() -> RetrievedChunk:
+    return RetrievedChunk(
+        chunk_id="AMZN_test_mdna_0",
+        ticker="AMZN",
+        section="mdna",
+        filing_date="2026-02-06",
+        score=0.9,
+        text=(
+            "Year Ended December 31,\n\n2024\n2025\nNet Sales:\nAWS\n"
+            "107,556\n128,725\n"
+        ),
+        citation="AMZN 10-K, MD&A",
+    )
+
+
+AWS_GROWTH_QUESTION = (
+    "How does Amazon's AWS segment compare to Microsoft's cloud business "
+    "in terms of growth?"
+)
+
+
 def test_pipeline_stops_without_caching_partial_stream() -> None:
     cancel_event = threading.Event()
     generator = MagicMock()
@@ -86,3 +107,58 @@ def test_groq_stream_closes_provider_connection_on_cancel() -> None:
     cancel_event.set()
     assert list(tokens) == []
     assert provider_stream.closed is True
+
+
+def test_applicable_stream_buffers_before_emitting_corrected_answer() -> None:
+    generator = Generator.__new__(Generator)
+    generator.model = "mock-model"
+    generator._call_groq_stream = lambda *args, **kwargs: iter(
+        ["AWS grew 20% in 2025 [Source 1]."]
+    )
+    correction = "AWS net sales were 107,556 in 2024 and 128,725 in 2025 [Source 1]."
+    generator._call_groq = MagicMock(return_value=correction)
+
+    tokens = list(
+        generator.generate_stream(
+            AWS_GROWTH_QUESTION,
+            [_aws_growth_chunk()],
+        )
+    )
+
+    assert tokens == [correction]
+    generator._call_groq.assert_called_once()
+
+
+def test_non_applicable_stream_keeps_original_streaming_path() -> None:
+    generator = Generator.__new__(Generator)
+    generator.model = "mock-model"
+    generator._call_groq_stream = MagicMock(
+        return_value=iter(["first", "second"])
+    )
+
+    tokens = list(
+        generator.generate_stream(
+            "What is Apple's business?",
+            [_retrieved_chunk()],
+        )
+    )
+
+    assert tokens == ["first", "second"]
+    generator._call_groq_stream.assert_called_once()
+
+
+def test_direct_generation_applies_one_period_value_correction() -> None:
+    generator = Generator.__new__(Generator)
+    generator.model = "mock-model"
+    generator._call_groq = MagicMock(
+        side_effect=[
+            "AWS grew 20% in 2025 [Source 1].",
+            "AWS net sales were 107,556 in 2024 and 128,725 in 2025 [Source 1].",
+        ]
+    )
+
+    response = generator.generate(AWS_GROWTH_QUESTION, [_aws_growth_chunk()])
+
+    assert "107,556" in response.answer
+    assert "128,725" in response.answer
+    assert generator._call_groq.call_count == 2

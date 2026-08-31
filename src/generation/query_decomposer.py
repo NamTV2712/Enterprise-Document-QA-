@@ -15,7 +15,15 @@ from src.generation.comparative_context import (
     ComparativeBranch,
     select_comparative_chunks,
 )
-from src.generation.prompt_contracts import NUMERIC_PAIR_CONTRACT
+from src.generation.prompt_contracts import (
+    NUMERIC_PAIR_CONTRACT,
+    answer_focus_contract_for_question,
+)
+from src.generation.period_value_completeness import (
+    correct_period_value_once,
+    render_chunk_evidence,
+    validate_grounded_answer,
+)
 from src.retrieval.retriever import RetrievedChunk
 from src.retrieval.query_shaper import shape_retrieval_query
 
@@ -111,7 +119,8 @@ Rules:
 3. When comparing companies, structure your answer to make the comparison clear.
 4. If information for one company is missing, explicitly state it.
 5. Quote numbers exactly as shown in the context, including currency, sign,
-   period, and fiscal year. For comparisons, list every available
+   period, and fiscal year. For numeric comparisons, trends, or growth
+   questions, list every available
    period-and-value pair before any trend summary; do not answer with only a
    percentage, rounded value, approximation, or numeric range. Do not
    calculate or invent a difference, ratio, percentage, average, approximation,
@@ -452,24 +461,52 @@ class QueryDecomposer:
                 f"Content:\n{chunk.text}\n"
             )
         context_str = "\n".join(context_parts)
+        answer_focus = answer_focus_contract_for_question(original_question)
+        focus_line = (
+            f"Answer-focus checklist: {answer_focus}"
+            if answer_focus
+            else ""
+        )
 
         user_message = (
             f"Based on the following context from multiple SEC filings, "
             f"answer this question: {original_question}\n\n"
             f"Context:\n{context_str}\n\n"
-            f"Provide a clear, comparative answer with citations [Source N]."
+            f"Provide a clear, comparative answer with citations [Source N].\n"
+            f"{focus_line}"
         )
 
-        try:
-            return self.generator._create_groq_chat_completion(
+        def synthesize_call(prompt: str) -> str:
+            response = self.generator._create_groq_chat_completion(
                 model=self.generator.model,
                 messages=[
                     {"role": "system", "content": SYNTHESIS_SYSTEM_PROMPT},
-                    {"role": "user", "content": user_message},
+                    {"role": "user", "content": prompt},
                 ],
                 max_tokens=1024,
                 temperature=0,
-            ).choices[0].message.content
+            )
+            return response.choices[0].message.content or ""
+
+        try:
+            draft_answer = synthesize_call(user_message)
+            evidence_context = render_chunk_evidence(all_chunks)
+            outcome = correct_period_value_once(
+                original_question,
+                evidence_context,
+                draft_answer,
+                synthesize_call,
+                validate_answer=lambda answer: validate_grounded_answer(
+                    answer, evidence_context
+                ),
+            )
+            if outcome.correction_attempted:
+                logger.info(
+                    "Period/value synthesis correction %s for question: %s",
+                    "accepted" if outcome.correction_accepted else "rejected",
+                    original_question[:80],
+                )
+            return outcome.answer
         except Exception as error:
             if _is_retryable_external_error(error):
                 raise

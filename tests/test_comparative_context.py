@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from src.generation.comparative_context import (
     ComparativeBranch,
     select_comparative_chunks,
+    select_comparative_chunks_intent_first,
 )
 
 
@@ -108,3 +109,38 @@ def test_runtime_object_adapter_matches_dict_adapter_and_preserves_order() -> No
     assert [chunk["chunk_id"] for chunk in dict_selected] == ["A_0", "A_1"]
     assert [chunk.chunk_id for chunk in object_selected] == ["A_0", "A_1"]
     assert [chunk["chunk_id"] for chunk in dict_chunks] == ["A_0", "A_1"]
+
+
+def test_intent_first_replaces_generic_leader_with_stronger_cyber_donor() -> None:
+    chunks = [
+        _chunk("AMZN_0", "Competition and regulatory risk disclosures.", 3.0),
+        _chunk(
+            "AMZN_1",
+            "We Could Be Harmed by Data Loss or Other Security Incidents; "
+            "these cybersecurity risks can affect customers.",
+            1.0,
+        ),
+    ]
+
+    selected = select_comparative_chunks_intent_first([
+        ComparativeBranch("Amazon cybersecurity risk disclosures", "AMZN", chunks)
+    ])
+
+    assert [chunk["chunk_id"] for chunk in selected] == ["AMZN_1"]
+
+
+def test_intent_first_preserves_a_self_contained_numeric_leader() -> None:
+    chunks = [
+        _chunk(
+            "AMZN_0",
+            "AWS net sales were $107,556 in 2024 and $128,725 in 2025.",
+            6.8,
+        ),
+        _chunk("AMZN_1", "AWS growth discussion.", 5.0),
+    ]
+
+    selected = select_comparative_chunks_intent_first([
+        ComparativeBranch("Amazon AWS growth", "AMZN", chunks)
+    ])
+
+    assert [chunk["chunk_id"] for chunk in selected] == ["AMZN_0"]

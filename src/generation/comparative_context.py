@@ -62,6 +62,14 @@ COMPARATIVE_SELECTOR_FINGERPRINT = (
     "e3c7d6a17e420d0640e4a2d52bd8a6a3c8ee286cb0ffacac6958d3732f76e7c8"
 )
 
+# Experimental successor used only by the provider-free counterfactual audit.
+# It is deliberately separate from the production v5 fingerprint until a
+# provider-backed sentinel validates the changed branch semantics.
+COMPARATIVE_INTENT_FIRST_FINGERPRINT = (
+    "sha256:"
+    "0f7efb98b5d1e7e859b9b8a5f7a0f27f6335e35dc2d3c761e514c2f8d0c1d1d4"
+)
+
 
 @dataclass(frozen=True)
 class ComparativeBranch:
@@ -257,3 +265,69 @@ def select_comparative_chunks(
         if _entry_key(entry) in kept_ids:
             selected.append(entry)
     return selected
+
+
+def select_comparative_chunks_intent_first(
+    branches: Sequence[ComparativeBranch],
+) -> list[Any]:
+    """Select comparative evidence with an intent-qualified branch leader.
+
+    The admitted selector keeps the first ranked chunk for every branch and
+    augments it when a lower-ranked donor fills a missing intent.  This
+    counterfactual makes one narrow change: when that donor covers strictly
+    more of the branch query's intent groups, it replaces the generic leader
+    instead of keeping both.  A leader carrying multiple period/value pairs
+    is never replaced because it is already a self-contained numeric trend.
+
+    The function is not wired into the production default.  Its independent
+    fingerprint lets offline reports and future checkpoints distinguish this
+    semantic change from v5.
+    """
+    all_entries: list[Any] = []
+    seen_all: set[tuple[str, str | int]] = set()
+    for branch in branches:
+        for entry in branch.chunks:
+            key = _entry_key(entry)
+            if key in seen_all:
+                continue
+            seen_all.add(key)
+            all_entries.append(entry)
+
+    kept_ids: set[tuple[str, str | int]] = set()
+
+    def add(entry: Any | None) -> None:
+        if entry is not None:
+            kept_ids.add(_entry_key(entry))
+
+    for branch in branches:
+        entries = _unique_chunks(branch.chunks)
+        if not entries:
+            continue
+        primary = entries[0]
+        add(primary)
+        for entry in entries:
+            if _score(entry) >= 10.0:
+                add(entry)
+
+        groups = _intent_groups(branch.query)
+        donor = _best_hint_donor(entries, primary, branch.query)
+        if donor is None:
+            donor = _best_intent_donor(entries, primary, groups)
+        if donor is None:
+            continue
+
+        primary_coverage = _matched_intent_groups(primary, groups)
+        donor_coverage = _matched_intent_groups(donor, groups)
+        numeric_leader = _has_multiple_period_value_pairs(_text(primary))
+        if (
+            not numeric_leader
+            and len(donor_coverage) > len(primary_coverage)
+        ):
+            kept_ids.discard(_entry_key(primary))
+            add(donor)
+        else:
+            add(donor)
+
+    return [
+        entry for entry in all_entries if _entry_key(entry) in kept_ids
+    ]

@@ -9,8 +9,16 @@ from src.evaluation.context_packing import (
     CONTEXT_STRATEGY_COMPARATIVE_V4,
     CONTEXT_STRATEGY_FULL_EVIDENCE,
     CONTEXT_STRATEGY_ROUTE_AWARE,
+    CONTEXT_STRATEGY_ROUTE_AWARE_V3,
+    CONTEXT_STRATEGY_ROUTE_AWARE_V4,
+    CONTEXT_STRATEGY_COMPARATIVE_V6,
+    CONTEXT_STRATEGY_SELECTIVE_V3,
+    CONTEXT_STRATEGY_SELECTIVE_V4,
+    CONTEXT_STRATEGY_SELECTIVE_V5,
+    CONTEXT_STRATEGY_ENUMERATION_V1,
     PackedContext,
     collect_entries,
+    effective_case_context_strategy,
     pack_case_context,
     render_packed_blocks,
 )
@@ -156,6 +164,155 @@ def test_summary_fills_to_target_by_score() -> None:
 
     assert len(packed.kept) == 4
     assert "S_c4" in [e["chunk_id"] for e in packed.dropped]
+
+
+def test_summary_intent_counterfactual_drops_score_only_primary() -> None:
+    entries = [
+        _chunk("S_noise", "Stock price volatility risk.", 9.0),
+        _chunk(
+            "S_trade",
+            "International operations face trade and tariff risks.",
+            1.0,
+        ),
+        _chunk(
+            "S_currency",
+            "International operations face currency and exchange risks.",
+            0.5,
+        ),
+    ]
+    case = _case(
+        [{"query": "international operations trade currency risks", "ticker": "AMZN", "chunks": entries}],
+        "summary",
+    )
+
+    packed = pack_case_context(
+        case,
+        required_keywords=["international"],
+        strategy=CONTEXT_STRATEGY_ROUTE_AWARE_V3,
+    )
+
+    assert packed.kept_ids == ["S_trade", "S_currency"]
+    assert "S_noise" in [e["chunk_id"] for e in packed.dropped]
+
+
+def test_selective_v3_is_an_unadmitted_summary_and_comparative_candidate() -> None:
+    assert effective_case_context_strategy(
+        CONTEXT_STRATEGY_SELECTIVE_V3, "summary"
+    ) == CONTEXT_STRATEGY_ROUTE_AWARE_V3
+    assert effective_case_context_strategy(
+        CONTEXT_STRATEGY_SELECTIVE_V3, "comparative"
+    ) == CONTEXT_STRATEGY_COMPARATIVE_V6
+
+
+def test_summary_anchor_candidate_preserves_direct_component_evidence() -> None:
+    entries = [
+        _chunk(
+            "AAPL_0004",
+            "Supply and manufacturing chain risks can delay products and components.",
+            2.7,
+        ),
+        _chunk(
+            "AAPL_0001",
+            "Economic conditions affect suppliers and manufacturers; supply chain control matters.",
+            2.2,
+        ),
+        _chunk(
+            "AAPL_0007",
+            "Competition, regulatory, product quality, sourcing, and defect risks affect customers.",
+            1.6,
+        ),
+        _chunk(
+            "AAPL_0010",
+            "Products may have design and manufacturing defects affecting quality.",
+            4.5,
+        ),
+        _chunk(
+            "AAPL_0009",
+            "Custom components are available from only one source.",
+            2.4,
+        ),
+        _chunk(
+            "AAPL_0002",
+            "Business reputation and regulatory compliance risks affect operations.",
+            2.3,
+        ),
+    ]
+    case = _case(
+        [
+            {"query": "Apple supply chain risks", "ticker": "AAPL", "chunks": entries[:3]},
+            {"query": "Apple manufacturing process risks", "ticker": "AAPL", "chunks": [entries[2], entries[3], entries[5]]},
+            {"query": "Apple component sourcing risks", "ticker": "AAPL", "chunks": [entries[2], entries[4]]},
+        ],
+        "summary",
+    )
+
+    baseline = pack_case_context(
+        case,
+        required_keywords=["defect"],
+        strategy=CONTEXT_STRATEGY_ROUTE_AWARE_V3,
+    )
+    packed = pack_case_context(
+        case,
+        required_keywords=["defect"],
+        strategy=CONTEXT_STRATEGY_ROUTE_AWARE_V4,
+    )
+
+    assert "AAPL_0009" not in baseline.kept_ids
+    assert "AAPL_0009" in packed.kept_ids
+    assert "AAPL_0010" in packed.kept_ids
+    assert len(packed.kept_ids) <= 4
+
+
+def test_selective_v4_maps_only_summary_to_anchor_policy() -> None:
+    assert effective_case_context_strategy(
+        CONTEXT_STRATEGY_SELECTIVE_V4, "summary"
+    ) == CONTEXT_STRATEGY_ROUTE_AWARE_V4
+    assert effective_case_context_strategy(
+        CONTEXT_STRATEGY_SELECTIVE_V4, "comparative"
+    ) == CONTEXT_STRATEGY_COMPARATIVE_V6
+
+
+def test_selective_v5_changes_only_enumeration_from_admitted_v2() -> None:
+    assert effective_case_context_strategy(
+        CONTEXT_STRATEGY_SELECTIVE_V5, "enumeration"
+    ) == CONTEXT_STRATEGY_ENUMERATION_V1
+    assert effective_case_context_strategy(
+        CONTEXT_STRATEGY_SELECTIVE_V5, "summary"
+    ) == CONTEXT_STRATEGY_ROUTE_AWARE
+    assert effective_case_context_strategy(
+        CONTEXT_STRATEGY_SELECTIVE_V5, "comparative"
+    ) == "comparative_oracle_free_v5"
+
+
+def test_enumeration_candidate_ignores_required_keyword_labels() -> None:
+    dominant = _chunk("E_0", "broad enumeration evidence", 3.0)
+    support = _chunk("E_1", "corroborating evidence", 2.0)
+    tails = [_chunk(f"E_{index}", f"tail {index}", 1.0) for index in range(2, 6)]
+    case = _case(
+        [
+            {"query": f"branch {index}", "ticker": "TEST", "chunks": [dominant]}
+            for index in range(3)
+        ]
+        + [
+            {"query": "branch 4", "ticker": "TEST", "chunks": [dominant, support]},
+            {"query": "branch 5", "ticker": "TEST", "chunks": [dominant, support, *tails]},
+        ],
+        "enumeration",
+    )
+
+    first = pack_case_context(
+        case,
+        required_keywords=["label that is absent"],
+        strategy=CONTEXT_STRATEGY_SELECTIVE_V5,
+    )
+    second = pack_case_context(
+        case,
+        required_keywords=["different evaluation label"],
+        strategy=CONTEXT_STRATEGY_SELECTIVE_V5,
+    )
+
+    assert first.kept_ids == ["E_0", "E_1"]
+    assert second.kept_ids == first.kept_ids
 
 
 def test_out_of_corpus_keeps_only_primary() -> None:

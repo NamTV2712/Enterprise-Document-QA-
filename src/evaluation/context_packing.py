@@ -37,8 +37,14 @@ import re
 from dataclasses import dataclass, field
 
 from src.evaluation.generation_checkpoint import build_evidence_context
+from src.generation.period_value_completeness import render_chunk_evidence
+from src.generation.enumeration_context import (
+    EnumerationBranch,
+    select_enumeration_chunks,
+)
 from src.generation.comparative_context import (
     ComparativeBranch,
+    select_comparative_chunks_intent_first,
     select_comparative_chunks,
 )
 from src.evaluation.evidence_contracts import (
@@ -56,9 +62,22 @@ CONTEXT_STRATEGY_SELECTIVE = "selective_packed_v1"
 CONTEXT_STRATEGY_COMPARATIVE_V3 = "comparative_packed_v3"
 CONTEXT_STRATEGY_COMPARATIVE_V4 = "comparative_intent_packed_v4"
 CONTEXT_STRATEGY_COMPARATIVE_V5 = "comparative_oracle_free_v5"
+CONTEXT_STRATEGY_COMPARATIVE_V6 = "comparative_intent_first_v6"
+# Provider-free summary counterfactual.  It is intentionally not part of the
+# admitted default until a provider-backed sentinel validates the changed
+# context shape.
+CONTEXT_STRATEGY_ROUTE_AWARE_V3 = "route_aware_v3_intent"
+# Provider-free summary successor. It retains direct, early query anchors
+# after intent-first packing has selected the broadest coverage. This remains
+# a candidate policy until its bounded provider sentinel is complete.
+CONTEXT_STRATEGY_ROUTE_AWARE_V4 = "route_aware_v4_anchor"
 # Composite successor to selective_packed_v1. It preserves the already
 # admitted category policy while replacing only comparative contexts with v5.
 CONTEXT_STRATEGY_SELECTIVE_V2 = "selective_packed_v2"
+CONTEXT_STRATEGY_SELECTIVE_V3 = "selective_packed_v3_candidate"
+CONTEXT_STRATEGY_SELECTIVE_V4 = "selective_packed_v4_candidate"
+CONTEXT_STRATEGY_ENUMERATION_V1 = "enumeration_consensus_v1"
+CONTEXT_STRATEGY_SELECTIVE_V5 = "selective_packed_v5_enumeration_candidate"
 SELECTIVE_PACKED_CATEGORIES = {"fact_lookup", "multi_hop", "summary"}
 COMPARATIVE_BRANCH_TARGET = 2
 
@@ -100,6 +119,28 @@ _INTENT_SYNONYMS: dict[str, tuple[str, ...]] = {
     "risk": ("risk", "risks", "threat"),
     "services": ("services", "service"),
     "subscription": ("subscription", "subscriptions"),
+}
+
+_SUMMARY_INTENT_STOPWORDS = _INTENT_STOPWORDS | {
+    "about",
+    "and",
+    "does",
+    "face",
+    "factors",
+    "from",
+    "how",
+    "in",
+    "its",
+    "key",
+    "mention",
+    "of",
+    "related",
+    "risks",
+    "say",
+    "summarize",
+    "the",
+    "to",
+    "what",
 }
 
 # Structured lookup promotes exact table rows/auditor signatures to
@@ -198,6 +239,351 @@ def _best_intent_donor(
     return max(ranked, key=lambda item: item[:-1])[-1]
 
 
+def _summary_intent_groups(case_payload: dict) -> tuple[tuple[str, ...], ...]:
+    """Return meaningful intent groups across all summary subqueries."""
+    groups: list[tuple[str, ...]] = []
+    seen: set[tuple[str, ...]] = set()
+    for query_entry in case_payload.get("queries", []):
+        query = query_entry.get("query", {})
+        text = (
+            query.get("effective_query")
+            or query.get("retrieval_query")
+            or ""
+        )
+        for token in re.findall(r"[a-z0-9]+", text.casefold()):
+            if len(token) < 4 or token in _SUMMARY_INTENT_STOPWORDS:
+                continue
+            group = _INTENT_SYNONYMS.get(token, (token,))
+            if group in seen:
+                continue
+            seen.add(group)
+            groups.append(group)
+    return tuple(groups)
+
+
+def _summary_intent_matches(
+    entry: dict, groups: tuple[tuple[str, ...], ...]
+) -> frozenset[int]:
+    text = _compact(entry.get("text", ""))
+    return frozenset(
+        index
+        for index, alternatives in enumerate(groups)
+        if any(_compact(term) in text for term in alternatives)
+    )
+
+
+def _pack_summary_intent_first(
+    case_payload: dict,
+    required_keywords: list[str] | None,
+) -> PackedContext:
+    """Pack summary evidence by marginal query-intent coverage.
+
+    This is a bounded counterfactual for decomposed summaries.  It selects
+    from the frozen retrieved set only, preserves structured hits and required
+    keyword donors, and avoids score-only filler once a relevant candidate is
+    available.  The fixed target remains four chunks to keep the context
+    budget comparable with route_aware_v2.
+    """
+    entries = collect_entries(case_payload)
+    result = PackedContext(strategy=CONTEXT_STRATEGY_ROUTE_AWARE_V3)
+    if not entries:
+        return result
+
+    kept: list[dict] = []
+    kept_ids: set[str] = set()
+
+    def add(entry: dict | None) -> bool:
+        if entry is None:
+            return False
+        chunk_id = entry.get("chunk_id")
+        if chunk_id in kept_ids:
+            return False
+        kept.append(entry)
+        kept_ids.add(chunk_id)
+        return True
+
+    # Structured rows remain mandatory, independent of lexical intent.
+    for entry in entries:
+        score = entry.get("score")
+        if isinstance(score, (int, float)) and score >= STRUCTURED_PROMOTION_SCORE:
+            add(entry)
+
+    groups = _summary_intent_groups(case_payload)
+    covered_groups: set[int] = set()
+    if groups:
+        ranked = list(enumerate(entries))
+        while len(kept) < _FILL_TARGETS["summary"]:
+            candidates: list[tuple[int, int, float, int, dict]] = []
+            for index, entry in ranked:
+                if entry.get("chunk_id") in kept_ids:
+                    continue
+                matched = _summary_intent_matches(entry, groups)
+                new_groups = matched - covered_groups
+                if not matched:
+                    continue
+                score = entry.get("score")
+                numeric_score = (
+                    float(score) if isinstance(score, (int, float))
+                    else float("-inf")
+                )
+                candidates.append(
+                    (
+                        len(new_groups),
+                        len(matched),
+                        numeric_score,
+                        -index,
+                        entry,
+                    )
+                )
+            if not candidates:
+                break
+            selected = max(candidates, key=lambda item: item[:-1])[-1]
+            add(selected)
+            covered_groups.update(_summary_intent_matches(selected, groups))
+
+    # If the query has no usable intent signal, retain the historical primary
+    # rather than inventing a new selection rule.
+    if not kept:
+        add(entries[0])
+
+    # Required-keyword coverage is still a hard packing contract.
+    for keyword in tuple(required_keywords or ()):
+        needle = _compact(keyword)
+        if not needle or any(needle in _compact(e.get("text", "")) for e in kept):
+            continue
+        donor = next(
+            (entry for entry in entries if needle in _compact(entry.get("text", ""))),
+            None,
+        )
+        if donor is None:
+            result.uncovered_keywords.append(keyword)
+        else:
+            add(donor)
+
+    result.kept = [
+        entry for entry in entries if entry.get("chunk_id") in kept_ids
+    ]
+    result.dropped = [
+        entry for entry in entries if entry.get("chunk_id") not in kept_ids
+    ]
+    return result
+
+
+_SUMMARY_ANCHOR_VARIANTS: dict[str, tuple[str, ...]] = {
+    "component": ("component", "components"),
+    "compliance": ("compliance", "comply", "compliant"),
+    "control": ("control", "controls"),
+    "currency": ("currency", "currencies", "exchange"),
+    "geopolitical": ("geopolitical", "geopolitics"),
+    "growth": ("growth", "grew", "increase", "increased"),
+    "international": ("international", "internationally", "foreign", "global"),
+    "manufacturing": ("manufacturing", "manufacture", "manufactured"),
+    "operations": ("operations", "operational"),
+    "quality": ("quality", "defect", "defects"),
+    "regulatory": ("regulatory", "regulation", "regulations"),
+    "services": ("services", "service"),
+    "sourcing": ("sourcing", "source", "sources", "supplier", "suppliers"),
+    "tariff": ("tariff", "tariffs", "trade"),
+}
+
+_SUMMARY_ANCHOR_PREFIX_CHARS = 750
+_SUMMARY_ANCHOR_CORE_PREFIX_CHARS = 250
+
+
+def _summary_anchor_groups(query: str) -> tuple[tuple[str, ...], ...]:
+    """Return query signals suitable for identifying a direct evidence anchor."""
+    groups: list[tuple[str, ...]] = []
+    seen: set[tuple[str, ...]] = set()
+    for token in re.findall(r"[a-z0-9]+", query.casefold()):
+        if len(token) < 4 or token in _SUMMARY_INTENT_STOPWORDS:
+            continue
+        alternatives = _SUMMARY_ANCHOR_VARIANTS.get(token, (token,))
+        group = tuple(dict.fromkeys(alternatives))
+        if group in seen:
+            continue
+        seen.add(group)
+        groups.append(group)
+    return tuple(groups)
+
+
+def _summary_anchor_profile(
+    entry: dict,
+    query: str,
+) -> tuple[int, int, int, int, float, int]:
+    """Score how directly a chunk answers one summary subquery.
+
+    The profile rewards distinct query signals appearing near the beginning
+    of the chunk. Retrieval score is only a late tie-breaker; this prevents a
+    high-scoring generic passage from displacing a lower-scoring passage that
+    opens with the requested fact.
+    """
+    text = " ".join(str(entry.get("text", "")).casefold().split())
+    groups = _summary_anchor_groups(query)
+    positions: list[int] = []
+    for alternatives in groups:
+        hits = [text.find(term.casefold()) for term in alternatives]
+        hits = [position for position in hits if position >= 0]
+        if hits:
+            positions.append(min(hits))
+    early = sum(position < _SUMMARY_ANCHOR_PREFIX_CHARS for position in positions)
+    core = sum(
+        position < _SUMMARY_ANCHOR_CORE_PREFIX_CHARS for position in positions
+    )
+    very_early = sum(position < 150 for position in positions)
+    earliest = min(positions) if positions else 10**9
+    score = entry.get("score")
+    numeric_score = float(score) if isinstance(score, (int, float)) else float("-inf")
+    return (core, early, len(positions), very_early, numeric_score, -earliest)
+
+
+def _summary_anchor_strength(
+    entry: dict,
+    query: str,
+) -> tuple[int, int, int, int, float, int]:
+    """Return the sortable profile used for anchor admission."""
+    profile = _summary_anchor_profile(entry, query)
+    return profile
+
+
+def _pack_summary_with_direct_anchors(
+    case_payload: dict,
+    required_keywords: list[str] | None,
+) -> PackedContext:
+    """Keep early direct anchors while retaining v3 intent coverage.
+
+    The v3 selector can prefer a broad, high-scoring passage even when a
+    lower-ranked passage starts with the exact fact requested by one of the
+    decomposed summary queries. A strong direct anchor may replace only a
+    non-mandatory chunk whose removal does not reduce the union of meaningful
+    intent coverage. The globally first chunk, structured hits, and required
+    keyword donors remain protected.
+    """
+    base = _pack_summary_intent_first(case_payload, required_keywords)
+    entries = collect_entries(case_payload)
+    result = PackedContext(strategy=CONTEXT_STRATEGY_ROUTE_AWARE_V4)
+    if not entries:
+        return result
+
+    target = _FILL_TARGETS["summary"]
+    kept_ids = set(base.kept_ids)
+    entry_by_id = {entry.get("chunk_id"): entry for entry in entries}
+
+    protected_ids: set[str] = {entries[0].get("chunk_id")}
+    for entry in entries:
+        score = entry.get("score")
+        if isinstance(score, (int, float)) and score >= STRUCTURED_PROMOTION_SCORE:
+            protected_ids.add(entry.get("chunk_id"))
+    for keyword in tuple(required_keywords or ()):
+        needle = _compact(keyword)
+        if not needle:
+            continue
+        donors = [
+            entry
+            for entry in entries
+            if needle in _compact(entry.get("text", ""))
+        ]
+        donor = max(
+            enumerate(donors),
+            key=lambda pair: (
+                -_compact(pair[1].get("text", "")).find(needle),
+                float(pair[1].get("score"))
+                if isinstance(pair[1].get("score"), (int, float))
+                else float("-inf"),
+                -pair[0],
+            ),
+        )[1] if donors else None
+        if donor is not None:
+            protected_ids.add(donor.get("chunk_id"))
+
+    anchors: dict[str, tuple[int, int, int, int, float, int]] = {}
+    for query_entry in case_payload.get("queries", []):
+        query = query_entry.get("query", {})
+        query_text = (
+            query.get("effective_query")
+            or query.get("retrieval_query")
+            or ""
+        )
+        groups = _summary_anchor_groups(query_text)
+        if not groups:
+            continue
+        ranked: list[tuple[tuple[int, int, int, int, float, int], int, dict]] = []
+        for index, entry in enumerate(query_entry.get("chunks", [])):
+            profile = _summary_anchor_profile(entry, query_text)
+            # A direct anchor needs either two early signals or one very early
+            # signal plus another signal somewhere in the chunk. This avoids
+            # reintroducing score-only filler.
+            if not (
+                (profile[0] >= 2)
+                or (profile[3] >= 1 and profile[2] >= 2)
+            ):
+                continue
+            ranked.append((profile, -index, entry))
+        if not ranked:
+            continue
+        profile, _, anchor = max(ranked, key=lambda item: (item[0], item[1]))
+        chunk_id = anchor.get("chunk_id")
+        if chunk_id is not None:
+            previous = anchors.get(chunk_id)
+            if previous is None or _summary_anchor_strength(anchor, query_text) > previous:
+                anchors[chunk_id] = _summary_anchor_strength(anchor, query_text)
+
+    # A currently kept chunk with a genuinely direct opening is itself a
+    # mandatory anchor. Generic passages that happen to contain a query word
+    # deep in the chunk remain replaceable.
+    for chunk_id, strength in anchors.items():
+        if chunk_id in kept_ids and strength[0] >= 1:
+            protected_ids.add(chunk_id)
+
+    def coverage(ids: set[str]) -> set[int]:
+        groups = _summary_intent_groups(case_payload)
+        covered: set[int] = set()
+        for chunk_id in ids:
+            entry = entry_by_id.get(chunk_id)
+            if entry is not None:
+                covered.update(_summary_intent_matches(entry, groups))
+        return covered
+
+    for anchor_id, _ in sorted(
+        anchors.items(), key=lambda item: item[1], reverse=True
+    ):
+        if anchor_id in kept_ids or anchor_id not in entry_by_id:
+            continue
+        anchor_entry = entry_by_id[anchor_id]
+        if len(kept_ids) < target:
+            kept_ids.add(anchor_id)
+            continue
+
+        removable = [
+            chunk_id
+            for chunk_id in kept_ids
+            if chunk_id not in protected_ids
+        ]
+        if not removable:
+            continue
+        victim = min(
+            removable,
+            key=lambda chunk_id: (
+                len(
+                    coverage(kept_ids)
+                    - coverage((kept_ids - {chunk_id}) | {anchor_id})
+                ),
+                float(entry_by_id[chunk_id].get("score"))
+                if isinstance(entry_by_id[chunk_id].get("score"), (int, float))
+                else float("-inf"),
+                -entries.index(entry_by_id[chunk_id]),
+            ),
+        )
+        kept_ids.remove(victim)
+        kept_ids.add(anchor_id)
+
+    result.kept = [entry for entry in entries if entry.get("chunk_id") in kept_ids]
+    result.dropped = [
+        entry for entry in entries if entry.get("chunk_id") not in kept_ids
+    ]
+    result.uncovered_keywords = list(base.uncovered_keywords)
+    return result
+
+
 def collect_entries(case_payload: dict) -> list[dict]:
     """Deduplicated evidence entries in deterministic source order."""
     entries: list[dict] = []
@@ -224,6 +610,30 @@ def effective_case_context_strategy(strategy: str, category: str) -> str:
         if category == "comparative":
             return CONTEXT_STRATEGY_COMPARATIVE_V5
         return CONTEXT_STRATEGY_FULL_EVIDENCE
+    if strategy == CONTEXT_STRATEGY_SELECTIVE_V3:
+        if category in {"fact_lookup", "multi_hop"}:
+            return CONTEXT_STRATEGY_ROUTE_AWARE
+        if category == "summary":
+            return CONTEXT_STRATEGY_ROUTE_AWARE_V3
+        if category == "comparative":
+            return CONTEXT_STRATEGY_COMPARATIVE_V6
+        return CONTEXT_STRATEGY_FULL_EVIDENCE
+    if strategy == CONTEXT_STRATEGY_SELECTIVE_V4:
+        if category in {"fact_lookup", "multi_hop"}:
+            return CONTEXT_STRATEGY_ROUTE_AWARE
+        if category == "summary":
+            return CONTEXT_STRATEGY_ROUTE_AWARE_V4
+        if category == "comparative":
+            return CONTEXT_STRATEGY_COMPARATIVE_V6
+        return CONTEXT_STRATEGY_FULL_EVIDENCE
+    if strategy == CONTEXT_STRATEGY_SELECTIVE_V5:
+        if category in SELECTIVE_PACKED_CATEGORIES:
+            return CONTEXT_STRATEGY_ROUTE_AWARE
+        if category == "comparative":
+            return CONTEXT_STRATEGY_COMPARATIVE_V5
+        if category == "enumeration":
+            return CONTEXT_STRATEGY_ENUMERATION_V1
+        return CONTEXT_STRATEGY_FULL_EVIDENCE
     return strategy
 
 
@@ -248,6 +658,9 @@ def pack_case_context(
     strategy: str = CONTEXT_STRATEGY_ROUTE_AWARE,
 ) -> PackedContext:
     """Select the evidence subset for one case under the given strategy."""
+    strategy = effective_case_context_strategy(
+        strategy, case_payload.get("category", "")
+    )
     entries = collect_entries(case_payload)
     result = PackedContext(strategy=strategy)
     if strategy == CONTEXT_STRATEGY_FULL_EVIDENCE:
@@ -259,9 +672,37 @@ def pack_case_context(
         CONTEXT_STRATEGY_COMPARATIVE_V3,
         CONTEXT_STRATEGY_COMPARATIVE_V4,
         CONTEXT_STRATEGY_COMPARATIVE_V5,
+        CONTEXT_STRATEGY_COMPARATIVE_V6,
     }
     if strategy in comparative_only_strategies and category != "comparative":
         result.kept = list(entries)
+        return result
+
+    if strategy == CONTEXT_STRATEGY_ENUMERATION_V1:
+        if category != "enumeration":
+            result.kept = list(entries)
+            return result
+        branches = [
+            EnumerationBranch(
+                query=(
+                    query_entry.get("query", {}).get("effective_query")
+                    or query_entry.get("query", {}).get("retrieval_query")
+                    or ""
+                ),
+                ticker=query_entry.get("query", {}).get("ticker"),
+                chunks=query_entry.get("chunks", []),
+            )
+            for query_entry in case_payload.get("queries", [])
+        ]
+        kept_ids = {
+            entry.get("chunk_id") for entry in select_enumeration_chunks(branches)
+        }
+        result.kept = [
+            entry for entry in entries if entry.get("chunk_id") in kept_ids
+        ]
+        result.dropped = [
+            entry for entry in entries if entry.get("chunk_id") not in kept_ids
+        ]
         return result
 
     if strategy == CONTEXT_STRATEGY_COMPARATIVE_V5:
@@ -288,6 +729,34 @@ def pack_case_context(
             entry for entry in entries if entry.get("chunk_id") not in kept_ids
         ]
         return result
+    if strategy == CONTEXT_STRATEGY_COMPARATIVE_V6:
+        branches = [
+            ComparativeBranch(
+                query=(
+                    query_entry.get("query", {}).get("effective_query")
+                    or query_entry.get("query", {}).get("retrieval_query")
+                    or ""
+                ),
+                ticker=query_entry.get("query", {}).get("ticker"),
+                chunks=query_entry.get("chunks", []),
+            )
+            for query_entry in case_payload.get("queries", [])
+        ]
+        kept_ids = {
+            entry.get("chunk_id")
+            for entry in select_comparative_chunks_intent_first(branches)
+        }
+        result.kept = [
+            entry for entry in entries if entry.get("chunk_id") in kept_ids
+        ]
+        result.dropped = [
+            entry for entry in entries if entry.get("chunk_id") not in kept_ids
+        ]
+        return result
+    if strategy == CONTEXT_STRATEGY_ROUTE_AWARE_V3 and category == "summary":
+        return _pack_summary_intent_first(case_payload, required_keywords)
+    if strategy == CONTEXT_STRATEGY_ROUTE_AWARE_V4 and category == "summary":
+        return _pack_summary_with_direct_anchors(case_payload, required_keywords)
     expected_tickers = sorted({
         query["query"].get("ticker")
         for query in case_payload.get("queries", [])
@@ -450,13 +919,7 @@ def pack_case_context(
 
 def render_packed_blocks(packed: PackedContext) -> str:
     """Render the kept subset in the shared [Source N] block format."""
-    blocks: list[str] = []
-    for index, entry in enumerate(packed.kept):
-        blocks.append(
-            f"[Source {index + 1}] {entry.get('citation', '')}\n"
-            f"{entry.get('text', '')}"
-        )
-    return "\n\n".join(blocks)
+    return render_chunk_evidence(packed.kept)
 
 
 def render_case_context(

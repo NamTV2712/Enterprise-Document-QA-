@@ -33,13 +33,20 @@ OUTPUT_PATH = Path("data/diagnostics/planner_wording_check.json")
 
 
 def main() -> int:
-    generation_keys = [
+    dedicated_generation_keys = [
         settings.groq_api_key_fall_back,
         settings.groq_api_key_fall_back2,
-        settings.groq_api_key3,
     ]
-    if not any(generation_keys):
+    generation_keys = list(dedicated_generation_keys)
+    if not any(dedicated_generation_keys):
         generation_keys = [settings.groq_api_key, settings.groq_api_key2]
+    generation_keys.extend(
+        [
+            settings.groq_api_key3,
+            settings.groq_api_key4,
+            settings.groq_api_key5,
+        ]
+    )
 
     generator = Generator(model=PLANNER_MODEL, api_keys=generation_keys)
     # _plan only touches pipeline.generator; retrieval never runs here.

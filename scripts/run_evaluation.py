@@ -395,13 +395,20 @@ def main() -> None:
         model_name=settings.embedding_model_id,
         revision=settings.embedding_model_revision or None,
     )
-    generation_api_keys = [
+    dedicated_generation_keys = [
         settings.groq_api_key_fall_back,
         settings.groq_api_key_fall_back2,
-        settings.groq_api_key3,
     ]
-    if not any(generation_api_keys):
+    generation_api_keys = list(dedicated_generation_keys)
+    if not any(dedicated_generation_keys):
         generation_api_keys = [settings.groq_api_key, settings.groq_api_key2]
+    generation_api_keys.extend(
+        [
+            settings.groq_api_key3,
+            settings.groq_api_key4,
+            settings.groq_api_key5,
+        ]
+    )
     generator = Generator(model=GENERATOR_MODEL, api_keys=generation_api_keys)
     judge_generator = Generator(model=JUDGE_MODEL)
     evaluator = RAGEvaluator(judge_generator=judge_generator)

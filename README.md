@@ -218,6 +218,14 @@ The generator uses a strict financial analyst prompt:
   categories supported by the filing excerpts.
 - Return an explicit insufficient-context fallback when evidence is missing.
 
+For a growth/trend question whose rendered evidence contains a complete
+multi-period table row, the direct, decomposed, and Phase 2 paths apply one
+bounded evidence-derived completion check. If the draft omits an explicit
+period/value pair, one correction call receives the same evidence and must
+pass completeness plus grounding validation; otherwise the safe fallback is
+returned. The detector is conservative and does not calculate or invent
+values. Applicable streaming drafts are buffered until this check completes.
+
 LLM provider:
 
 | Provider | Status |
@@ -235,10 +243,10 @@ use `openai/gpt-oss-120b` through Groq.
 
 | Metric | Score |
 |---|---:|
-| Faithfulness | `0.9967` |
-| Answer relevancy | `0.9683` |
-| Context precision | `0.7347` |
-| Overall judge average | `0.8999` |
+| Faithfulness | `0.9983` |
+| Answer relevancy | `0.9833` |
+| Context precision | `0.7413` |
+| Overall judge average | `0.9076` |
 | Citation correctness | `1.0000` |
 | Recall proxy | `1.0000` |
 | Fallback accuracy | `1.0000` |
@@ -247,10 +255,10 @@ Category table (faithfulness / relevancy / precision):
 
 | Category | N | Scores |
 |---|---:|---|
-| fact_lookup | 8 | `1.0000 / 1.0000 / 0.7500` |
-| summary | 6 | `0.9917 / 0.9750 / 0.8333` |
-| enumeration | 4 | `1.0000 / 0.9250 / 0.5925` |
-| comparative | 6 | `0.9917 / 0.9167 / 0.9450` |
+| fact_lookup | 8 | `1.0000 / 0.9938 / 0.7500` |
+| summary | 6 | `1.0000 / 0.9833 / 0.8750` |
+| enumeration | 4 | `1.0000 / 0.9500 / 0.6425` |
+| comparative | 6 | `0.9917 / 0.9750 / 0.9033` |
 | multi_hop | 3 | `1.0000 / 1.0000 / 1.0000` |
 | out_of_corpus | 3 | `1.0000 / 1.0000 / 0.0000` |
 
@@ -258,21 +266,262 @@ The run is bound to Phase 1 artifact
 `sha256:1ad021ce72af2116f9b4f7ad780d5c6e809fd5a01e46d30d0ae4bfecd62599d9`
 (file SHA-256 `b55d517f07585eda7682b4820da4286d884e4d6c02c4174585ef45325212b054`).
 Its Phase 2 result file SHA-256 is
+`db121babe17ac213222dead90a476e03a2fa256007f0335deac01ff1ff8fc648`.
+Compared with the previous official result, the metric deltas are
+Faithfulness `+0.0016`, Answer Relevancy `+0.0150`, Context Precision
+`+0.0066`, and Overall `+0.0077`. The previous bytes are archived under their
+original SHA-256
 `0677799a1425f1b449a15d7311fb6d1baecf422ea93219ae259db78e87996fe8`.
-Compared with the recorded selective v1 baseline, the metric deltas are
-Faithfulness `+0.0174`, Answer Relevancy `-0.0050`, Context Precision
-`+0.1150`, and Overall `+0.0425`, satisfying the registered A/B bars.
 
-Admission audits are clean: the packed-context answer-integrity audit reports
-zero uncited non-fallback answers, legacy line citations, out-of-range
-citations, and numeric-review cases across all 30 answers. The audit file SHA-256
-is `75297eab41c72fc7eb9ebd15a498527872e7f87118526e28b95ba7651c91045e`.
+Admission audits are clean: the promoted-official self-check reports zero
+uncited non-fallback answers, legacy line citations, out-of-range citations,
+numeric-review cases, or answerable fallbacks across all 30 answers. Its
+SHA-256 is
+`7711abf6bbd7ccaca9c20104d08e34b205b6a157650917ea65308525ae892875`.
 The offline composite audit passes all `30/30` evidence/source-boundary checks,
 `24/24` non-comparative identity checks, `6/6` comparative selector contracts
 and adapter-parity checks, and reduces rendered evidence by `25.55%` versus
 selective v1 (`49,904 -> 37,156` tokens). The isolated
 Apple/Microsoft-approach case scored `0.60` for answer relevancy but remained
-grounded, cited, and non-fallback; it is retained as a monitoring target.
+grounded, cited, and non-fallback. A later non-official focused sentinel (not
+included in the table above) added an answer-focus contract and scored that
+case at `1.00/1.00/1.00` for faithfulness/relevancy/precision. Its companion
+AWS growth draft initially omitted the underlying values; a conservative
+rendered-evidence detector derived `2024 = 107,556` and `2025 = 128,725`, made
+exactly one correction call, and restored both values. The detector activated
+for only `1/30` frozen contexts. The final sentinel passed `2/2` generation,
+`2/2` judging, and all deterministic gates. The later clean N=30 candidate
+passed admission and was explicitly promoted, producing the official scores
+above. The shared completion policy is now
+also wired into direct generation, decomposed synthesis, normal Phase 2, and
+streaming. Its offline parity audit is reproducible with:
+
+```powershell
+python -m scripts.diagnostics.period_value_parity --output data/diagnostics/period_value_parity_v2.json
+```
+
+The audit passes `30/30` source-boundary, production-adapter, and
+generation/metrics/judge evidence-content checks and is byte-stable. Its full-
+evidence shadow gate also activates only the same AWS case and exact
+`107,556`/`128,725` pair, preventing generic `Total` rows or later same-label
+chunks from expanding the correction contract. The quota probe now uses the
+same `selective_packed_v2` renderer/binding as official Phase 2 and reports
+`provider_calls_complete` separately from `quality_preflight_passed`:
+
+```powershell
+python -m scripts.run_quota_probe --fresh
+```
+
+The first clean candidate replay after this hardening completed `30/30`
+generation and `30/30` judging, but admission correctly rejected it: Faithfulness
+`1.0000`, Answer Relevancy `0.9767`, Context Precision `0.6970`, and Overall
+`0.8912` were not all at least the official scores. Deterministic integrity,
+Apple/AWS target checks, and completion metadata all passed; the failures were
+Context Precision/Overall plus a `0.80 -> 0.60` Answer Relevancy regression on
+the Apple product-category enumeration. The cause was the new answer-focus
+contract being applied globally. It has now been scoped to `approach` questions
+only, which changes the generation binding and invalidates that candidate for
+resume. The replacement sentinel passed `2/2` generation and `2/2` judging, and
+the replacement N=30 candidate completed `30/30` generation and `30/30`
+judging with `official=false` until admission. Its scores were Faithfulness
+`0.9983`, Answer Relevancy `0.9883`, Context Precision `0.6987`, and Overall
+`0.8951`; admission still rejected it because Context Precision and Overall
+were below the official bars. The candidate had no grounding, citation,
+completion-policy, target-case, or non-target Faithfulness/Answer Relevancy
+regressions. The official scores above remain unchanged.
+
+The next Context Precision experiment is isolated as the provider-free
+`selective_packed_v3_candidate`. It keeps fact lookup, multi-hop, enumeration,
+and out-of-corpus rendering identical to v2. Comparative branches use an
+intent-qualified leader replacement only when a lower-ranked donor covers more
+query intent; decomposed summaries use bounded marginal-intent fill instead of
+score-only filler. The offline audit
+`python -m scripts.diagnostics.context_precision_counterfactual` passed
+`30/30` evidence, source-boundary, frozen-subset, and structured-hit checks,
+`6/6` comparative branch contracts, and `18/18` non-target identity checks.
+Rendered context decreased by `316` tokens (`37,156 -> 36,840`) and four
+contexts changed. This is candidate evidence only; it made no provider calls
+and does not change the official score. After quota recovery, validate the
+four changed cases with a fresh provider generation/judge sentinel before a
+full N=30 replay.
+
+When quota is available, the bounded provider check is:
+
+```powershell
+python -m scripts.run_context_precision_sentinel --fresh
+```
+
+Omit `--fresh` to resume compatible checkpoints after a quota interruption.
+The sentinel writes strategy-specific candidate artifacts (for example
+`context_precision_v3_sentinel_*` or `context_precision_v4_sentinel_*`) and
+keeps the official v2 result protected.
+
+To run the isolated v4 candidate explicitly, use:
+
+```powershell
+python -m scripts.run_context_precision_sentinel `
+  --candidate-strategy selective_packed_v4_candidate --fresh
+```
+
+The v3 sentinel completed `4/4` generation and `4/4` judging. It improved the
+four-case Context Precision aggregate from `0.7500` to `0.8125` and Faithfulness
+from `0.9875` to `1.0000`, but Answer Relevancy fell from `0.9750` to `0.9500`.
+The Apple quality/manufacturing case was the regression (`1.00 -> 0.80`), so
+the candidate is `NO-GO` and remains non-official. Do not run a full N=30 replay
+for this binding. The next offline iteration must preserve Apple's direct
+component/manufacturing anchor while retaining the successful cybersecurity
+leader replacement.
+
+The follow-up summary-anchor counterfactual is implemented as the isolated
+`selective_packed_v4_candidate` policy. It starts from v3 intent-first
+packing, then protects direct early query anchors such as Apple's
+component-sourcing evidence while keeping the successful cybersecurity
+replacement. The provider-free audit passes `30/30` evidence coverage,
+source boundaries, frozen-subset, and structured-hit checks; `6/6`
+comparative contracts; `18/18` non-target identity; and reduces rendered
+context from `37,156` to `36,670` tokens (`-486`). It is diagnostic only.
+Report: `data/diagnostics/context_precision_counterfactual_v4.json` (SHA-256
+`dcf97787a7a03b652519fc66289e70ecffff92d004c3e74d5ff2d2ebb671c3ed`).
+
+The isolated v4 provider sentinel completed `4/4` generation and `4/4`
+judging with deterministic citation, recall, and fallback checks green, but
+the final recorded run is `NO-GO`: Faithfulness `0.9875 -> 0.9650`, Answer
+Relevancy `0.9750 -> 0.9875`, and Context Precision `0.7500 -> 0.7500`.
+Recovered provider `429` responses caused no skipped records. The candidate
+remains non-official and no N=30 replay is authorized until the bounded result
+is reproducible. Report:
+`data/eval_artifacts/context_precision_v4_sentinel_summary.json` (SHA-256
+`fadb7aca4bb9ca83019591e801cc704e1665fd2b8dbf7bd7b15c4de39c9ef9dc`).
+
+Candidate sentinel reproducibility is now enforced before any experimental
+priority-2 Phase 2 run. Use distinct replicate IDs so every generation and
+judge checkpoint remains isolated:
+
+```powershell
+python -m scripts.run_context_precision_sentinel `
+  --candidate-strategy selective_packed_v4_candidate `
+  --replicate-id r1 --fresh
+python -m scripts.run_context_precision_sentinel `
+  --candidate-strategy selective_packed_v4_candidate `
+  --replicate-id r2 --fresh
+python -m scripts.diagnostics.context_precision_reproducibility `
+  --reports data/eval_artifacts/context_precision_v4_sentinel_summary_r1.json `
+           data/eval_artifacts/context_precision_v4_sentinel_summary_r2.json `
+  --output data/diagnostics/context_precision_reproducibility_v4.json
+```
+
+The protocol requires at least two complete replicates with the same frozen
+artifact, strategy, and generation binding; every replicate must pass the
+deterministic and aggregate no-regression gates. It never averages away a
+failed replicate or selects the best run. A candidate priority-2 Phase 2
+command must provide the resulting passed report with
+`--reproducibility-report`; the current one-run legacy v4 report correctly
+fails this gate. The fresh v4 `r1`/`r2` protocol now passes at `2/2` with
+complete provenance. Report:
+`data/diagnostics/context_precision_reproducibility_v4_r1_r2.json`.
+
+The gated clean v4 priority-2 candidate completed `30/30` generation and
+`30/30` judging with no skipped records. Its scores were Faithfulness
+`0.9987`, Answer Relevancy `0.9723`, Context Precision `0.7303`, and Overall
+`0.9004`. The provider-free admission audit is `NO-GO`: Context Precision is
+below the official `0.7347` floor, one AWS trend answer contains an unsupported
+derived `$21,169` claim, and Apple product-category Answer Relevancy regressed
+from `0.80` to `0.60`. The candidate remains non-official and the official v2
+result is unchanged. Reports:
+`data/eval_artifacts/phase2_results_context_precision_v4_candidate.json` and
+`data/diagnostics/phase2_admission_context_precision_v4.json`.
+
+The next bounded improvement is Grounded Completion v3. For applicable
+period/value questions, it applies at most one evidence-bound correction when
+the draft contains unsupported derived numeric claims, including the case
+where all required period/value pairs are already present. The new policy is
+shared by direct, decomposed, streaming, and Phase 2 generation paths and is
+bound by completion fingerprint
+`sha256:ddfb6457cc77fc8a107c7677b6b002d18e35d2325a3b13cc00fa6aae4c3922b0`.
+The provider-free attribution audit passed all 30 cases and separated three
+context changes from 24 unchanged-context answer changes attributable to
+provider/runtime variance. It also passed a synthetic AWS probe for the
+unsupported `$21,169` derived claim. Report:
+`data/diagnostics/context_precision_attribution_v4.json`.
+
+After the offline gate passed (`509` tests), two fresh isolated three-case
+sentinels completed `3/3` generation and `3/3` judging each, with deterministic
+grounding/completion and score gates green. Both matched the selected official
+v2 reference aggregate `1.0000/1.0000/0.7233`; the reproducibility gate passed
+`2/2` with no best-of selection. Reports:
+`data/eval_artifacts/grounded_completion_v3_sentinel_r1_summary.json`,
+`data/eval_artifacts/grounded_completion_v3_sentinel_r2_summary.json`, and
+`data/diagnostics/grounded_completion_v3_reproducibility.json`. These remain
+candidate-only; do not promote them or overwrite the official v2 artifact.
+
+To reproduce this bounded gate after quota recovery, use isolated replicate
+IDs and then run the reproducibility check:
+
+```powershell
+python -m scripts.run_grounded_completion_sentinel --replicate-id r1 `
+  --max-gen-retries 0 --max-judge-retries 0
+python -m scripts.run_grounded_completion_sentinel --replicate-id r2 `
+  --max-gen-retries 0 --max-judge-retries 0
+python -m scripts.diagnostics.grounded_completion_reproducibility `
+  --reports data/eval_artifacts/grounded_completion_v3_sentinel_r1_summary.json `
+           data/eval_artifacts/grounded_completion_v3_sentinel_r2_summary.json `
+  --output data/diagnostics/grounded_completion_v3_reproducibility.json
+```
+
+Only after this provider-free and sentinel gate should a fresh priority-2
+candidate replay be attempted. The candidate must use separate checkpoints and
+the new completion binding; official v2 remains protected.
+
+The fresh full replay was run in two arms. The combined v4-packing plus v3
+completion candidate completed `30/30` generation and judging but was `NO-GO`
+(Faithfulness `0.9873`, Answer Relevancy `0.9823`, Context Precision `0.7153`,
+Overall `0.8950`). The isolated v3-completion candidate on the admitted
+`selective_packed_v2` strategy completed `30/30` generation and judging and
+passed every admission gate with Faithfulness `0.9983`, Answer Relevancy
+`0.9833`, Context Precision `0.7413`, and Overall `0.9076`. After explicit
+approval, `scripts.promote_phase2_result` verified the pinned candidate,
+admission, prior-official, and binding hashes, archived the old bytes, and
+atomically promoted this exact result. The promotion itself made no provider
+calls. Future admission floors are derived from the current official metrics:
+`0.9883/0.9833/0.7413/0.9076`.
+
+The subsequent enumeration Context Precision experiment remains non-official.
+Its oracle-free branch-consensus policy changes only the Apple product and
+Amazon segment enumerations, keeps the other 28 contexts byte-identical, and
+passes the provider-free safety audit while reducing rendered evidence from
+`37,156` to `33,994` tokens. Two isolated four-case provider replicates both
+raised enumeration Context Precision from `0.6425` to `0.8750` and kept
+Faithfulness at `1.0000`, but failed the 100% semantic reproducibility gate.
+Replicate r1 scored `0.9625` Answer Relevancy; r2 scored `0.9000`, including
+Apple products at `0.75` after omitting the evidence-backed services category.
+The reproducibility result is `0/2`, so
+`selective_packed_v5_enumeration_candidate` is `NO-GO` and no N=30 replay was
+run. The next iteration must first add an oracle-free exhaustive-answer
+coverage contract for `all`/enumeration questions.
+
+Candidate Phase 2 runs are protected from accidentally replacing the official
+result. Supply separate checkpoint and output paths for a new run, then run the
+provider-free admission audit before considering the result for promotion:
+
+```powershell
+python -m scripts.run_evaluation_phase2 --priority 2 `
+  --context-strategy selective_packed_v2 `
+  --gen-checkpoint data/eval_artifacts/phase2_gen_completion_v2_candidate.jsonl `
+  --judge-checkpoint data/eval_artifacts/phase2_judge_completion_v2_candidate.jsonl `
+  --output data/eval_artifacts/phase2_results_completion_v2_candidate.json `
+  --fresh --max-gen-retries 0 --max-judge-retries 0
+
+python -m scripts.diagnostics.phase2_admission `
+  --candidate data/eval_artifacts/phase2_results_completion_v2_candidate.json `
+  --output data/diagnostics/phase2_admission.json
+```
+
+The admission audit requires complete generation and judging, one binding,
+zero deterministic grounding violations, valid Period/Value correction
+metadata, targeted Apple/AWS contracts, and aggregate scores no lower than the
+recorded official result. It never writes the official result. If quota stops a
+candidate, rerun the same command without `--fresh` to resume its compatible
+checkpoints.
 
 Historical schema-v1 benchmark: the two-phase pipeline (offline Phase 1
 frozen retrieval artifact, then frozen-evidence generation and judging) over
@@ -464,8 +713,9 @@ parity. It renders `36,152` tokens versus `49,903` for selective v1 (`27.56%`
 reduction) and `62,262` for full evidence (`41.94%` reduction). The ignored
 report is `data/diagnostics/selective_packing_v2.json` (file SHA-256
 `78d9cd6b2761935884576af16b3e3f9305c573302f0a38b3cab8498fe4c2f703`). No
-provider call or Phase 1 rebuild was made. The numeric-contract preflight is
-now complete: direct generation, decomposed synthesis, and Phase 2 share a
+provider call or Phase 1 rebuild was made. The original numeric-contract
+preflight established that direct generation, decomposed synthesis, and Phase 2
+share a
 stricter contract requiring exact period/value pairs before trend summaries
 and forbidding calculated, rounded, approximate, range-based, or numeric-
 shorthand claims. A fresh Apple/Microsoft plus AWS/Microsoft sentinel under
@@ -475,11 +725,12 @@ AWS preserved `107,556`/`128,725` with `2024`/`2025`; the Apple/Microsoft answer
 did not reproduce the prior `$12,989` or `13.5%` derived claims. The
 non-official report is
 `data/eval_artifacts/comparative_numeric_v2_summary.json` (file SHA-256
-`b6701de1fe5682aa282a26cd49aaa2956a60c8b1aa6a04527f913f1679340b73`). Reproduce
-it with:
+`1986ed1964bec8884f2108948b1261ba58145880ebe96465568e5f0f67cecd31`). The
+current report also records the answer-focus and one-correction follow-up
+described above. Reproduce or resume it with:
 
 ```powershell
-python -m scripts.run_comparative_numeric_sentinel --fresh
+python -m scripts.run_comparative_numeric_sentinel
 ```
 
 The focused preflight preceded the official v2 replay recorded above; it did
@@ -589,6 +840,8 @@ Create `.env`:
 GROQ_API_KEY=your_groq_key
 GROQ_API_KEY2=optional_second_serving_key
 GROQ_API_KEY3=optional_third_failover_key
+GROQ_API_KEY4=optional_fourth_failover_key
+GROQ_API_KEY5=optional_fifth_failover_key
 GROQ_API_KEY_FALL_BACK=optional_first_evaluation_generation_key
 GROQ_API_KEY_FALL_BACK2=optional_second_evaluation_generation_key
 QDRANT_MODE=local
@@ -651,8 +904,16 @@ with checkpointed, binding-verified resume):
 
 ```powershell
 .venv\Scripts\python.exe -m scripts.run_evaluation_phase1 --priority 2 --output data/eval_artifacts/phase1_priority2.json --verify-determinism
-.venv\Scripts\python.exe -m scripts.run_evaluation_phase2 --priority 2
+.venv\Scripts\python.exe -m scripts.run_evaluation_phase2 --priority 2 `
+  --gen-checkpoint data/eval_artifacts/phase2_gen_candidate.jsonl `
+  --judge-checkpoint data/eval_artifacts/phase2_judge_candidate.jsonl `
+  --output data/eval_artifacts/phase2_results_candidate.json `
+  --fresh
 ```
+
+The runner refuses the protected official `selective_packed_v2` result path
+unless `--allow-official-overwrite` is explicitly supplied. Promotion is a
+separate, manual decision after the admission audit.
 
 The legacy single-phase runner remains available:
 
@@ -696,7 +957,7 @@ instead of the repository's configured Vitest/jsdom environment.
 
 Prerequisites: Docker Desktop installed and running, plus corpus artifacts already built locally under `data/processed/`.
 
-1. Copy `.env.example` to `.env` and fill in `GROQ_API_KEY`. `GROQ_API_KEY2` and `GROQ_API_KEY3` are optional serving failover keys. `GROQ_API_KEY_FALL_BACK` and `GROQ_API_KEY_FALL_BACK2` form the optional evaluation-generation pool; evaluation falls back to the primary pair and then `GROQ_API_KEY3` when the dedicated pair is blank. Each pool rotates keys round-robin and cools down a key after a Groq `429` before retrying another key.
+1. Copy `.env.example` to `.env` and fill in `GROQ_API_KEY`. `GROQ_API_KEY2` through `GROQ_API_KEY5` are optional serving and judging failover keys. `GROQ_API_KEY_FALL_BACK` and `GROQ_API_KEY_FALL_BACK2` form the optional evaluation-generation pool; evaluation uses the primary pair when that dedicated pair is blank, then appends keys 3 through 5. Duplicate values are removed. Each pool rotates keys round-robin and cools down a key after a Groq `429` before retrying another key.
 
 2. Build and run the backend:
 

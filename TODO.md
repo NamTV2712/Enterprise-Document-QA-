@@ -221,6 +221,182 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        `selective_packed_v2` is admitted as the Phase 2 default. The audit was
        also corrected to accept `--context-strategy`, preventing false numeric
        flags from full-context source numbering on packed results.
+36. [x] Close the isolated Apple/Microsoft answer-relevancy sentinel. A shared
+       answer-focus prompt contract moved the case from `0.60` to `1.00`
+       answer relevancy while keeping faithfulness/context precision at
+       `1.00`. The same run exposed the AWS percentage-only omission; an
+       oracle-free table-row detector matched only that case across the frozen
+       N=30 set, derived its two period/value pairs from rendered evidence, and
+       accepted exactly one grounded correction. The final non-official
+       sentinel completed 2/2 generation and 2/2 judging with every gate green.
+37. [x] Promote the bounded period/value correction from the focused sentinel
+       into the shared production decomposed-synthesis and normal Phase 2
+       generation path. Bind its fingerprint to checkpoints, prove rendered-
+       evidence/source-number parity, add direct/streaming behavior contracts,
+       and run an offline N=30 preflight before authorizing a clean provider
+       replay. The detector applies to exactly 1/30 frozen contexts; the
+       parity report is byte-stable and passes 30/30 source-boundary,
+       production-adapter, and judge-content checks. The hermetic suite passes
+       475 tests. No provider replay was made and the sentinel remains
+       non-official.
+38. [x] Harden the provider preflight without spending further quota. The old
+       quota probe used full evidence and exposed a generic `Total`-row false
+       positive on Microsoft assets. Completion v2 now excludes generic row
+       matches, consumes one year header once, and keeps only the earliest
+       matching source. The quota probe now shares the official
+       `selective_packed_v2` context/binding, packed source numbering,
+       correction metadata, and separate provider/quality gates. Offline
+       selected and full-evidence audits both activate only the AWS case with
+       the exact `107,556`/`128,725` pairs; 30/30 parity checks and all 480
+       hermetic tests pass.
+39. [x] Run one fresh clean provider replay under generation schema 4 after a
+        quota preflight. Runner hardening is complete: candidate paths are
+        explicit, the official selective-v2 result is protected, and
+        `scripts.diagnostics.phase2_admission` performs the provider-free
+        admission check. Require 30/30 generation and judging with one binding,
+        then compare against the recorded official v2 scores. Keep the result
+        non-official until every registered aggregate, deterministic grounding,
+        fallback, completion-policy, and no-regression gate passes; never merge
+        it with old checkpoints. The first candidate completed 30/30 but was
+        rejected because Context Precision/Overall fell (`0.6970`/`0.8912`)
+        and Apple product enumeration Answer Relevancy regressed `0.80 -> 0.60`;
+        the global answer-focus contract was the cause. It is now scoped to
+        `approach` questions. The replacement sentinel passed `2/2` generation
+        and `2/2` judging; the replacement candidate completed `30/30` and
+        `30/30` with `official=false`, but remains NO-GO because Context
+        Precision/Overall were `0.6987`/`0.8951` below the registered floors.
+        All integrity, completion, target, and non-target semantic gates passed.
+        Those two attempts remained diagnostic; the later Grounded Completion
+        v3 replay in items 48-51 supplied the admitted and promoted result.
+40. [x] Build and run the provider-free Context Precision counterfactual.
+         `selective_packed_v3_candidate` changes only intent-first comparative
+         leader selection and bounded summary fill; all other category contexts
+         remain byte-identical to v2. The frozen 30-case audit passes `30/30`
+         evidence/source-boundary/subset/structured-hit gates, `6/6` branch
+         contracts, and `18/18` non-target identity, with `37,156 -> 36,840`
+         rendered tokens. It changes exactly four contexts and makes zero
+         provider calls. The result is diagnostic only and does not alter the
+         official v2 benchmark.
+41. [x] Run a fresh four-case provider sentinel for the four changed contexts
+         under the v3 candidate binding. Generation and judging completed `4/4`
+         with deterministic citation/recall/fallback gates green. Context
+         Precision improved `0.7500 -> 0.8125` and Faithfulness
+         `0.9875 -> 1.0000`, but Answer Relevancy fell `0.9750 -> 0.9500`
+         because Apple quality/manufacturing fell `1.00 -> 0.80`; the
+         candidate is NO-GO and no N=30 replay is authorized for this binding.
+         Report: `data/eval_artifacts/context_precision_v3_sentinel_summary.json`.
+         Reproduce with `python -m scripts.run_context_precision_sentinel --fresh`;
+         omit `--fresh` to resume compatible checkpoints.
+42. [x] Build the next provider-free summary counterfactual. The new
+         `selective_packed_v4_candidate` policy preserves direct early anchors
+         (including Apple's component-sourcing chunk) while retaining the v3
+         Amazon cybersecurity leader replacement. It passes `30/30` evidence,
+         source-boundary, frozen-subset, and structured-hit gates, `6/6`
+         comparative contracts, and `18/18` non-target identity. Rendered
+         context falls `37,156 -> 36,670` tokens (`-486`) with zero provider
+         calls. Report: `data/diagnostics/context_precision_counterfactual_v4.json`.
+43. [x] Run the fresh four-case provider sentinel under the isolated v4
+         binding. Generation and judging completed `4/4`; deterministic
+         citation/recall/fallback gates passed. The final recorded run is
+         `NO-GO`: Faithfulness `0.9875 -> 0.9650`, Answer Relevancy
+         `0.9750 -> 0.9875`, and Context Precision `0.7500 -> 0.7500`.
+         Provider retries recovered HTTP 429 responses, so no records were
+         skipped. Keep v4 non-official and do not run N=30; the result also
+         shows that the apparent improvement from the earlier console attempt
+         was not reproducible under the isolated artifact. Report:
+         `data/eval_artifacts/context_precision_v4_sentinel_summary.json`.
+44. [x] Investigate judge/generation variance for the four-case context
+         sentinel. Both generation and judging explicitly use `temperature=0`,
+         but the provider can still return different completions/scores across
+         fresh calls and rotated keys; the first console-only pass was also
+         invalidated as evidence because a CLI path bug wrote it to the v3
+         filename. The isolated v4 artifact is therefore judged from the final
+         reproducible file only: provider-complete `4/4`, deterministic gates
+         green, but Faithfulness regressed to `0.9650`. Do not promote v4,
+         overwrite official v2, or run a full replay.
+45. [x] Add a bounded reproducibility protocol for candidate sentinels. The
+         runner now supports `--replicate-id` and derives separate
+         strategy-specific checkpoint/output paths; each report records per-case
+         generation binding, answer hash, and judge binding. The diagnostic
+         requires at least two replicates, one frozen artifact/strategy/
+         generation binding, complete provenance, and a `100%` pass rate; it
+         forbids best-of selection and averaging failed runs away. The Phase 2
+         runner refuses priority-2 experimental packing runs without a passed
+         protocol report. A single legacy v4 report correctly fails the new
+         gate (`1` replicate, no provenance).
+46. [x] After quota recovery, run two fresh v4 sentinel replicates with
+         `--replicate-id r1` and `--replicate-id r2`, then run
+         `scripts.diagnostics.context_precision_reproducibility`. Both
+         replicates completed `4/4` generation and `4/4` judging, shared the
+         v4 binding, carried complete provenance, and passed the protocol at
+         `2/2` (`100%`). Report:
+         `data/diagnostics/context_precision_reproducibility_v4_r1_r2.json`.
+47. [x] Run the gated clean priority-2 v4 candidate with separate checkpoints
+         and the passed reproducibility report. It completed `30/30`
+         generation and `30/30` judging with no skips. Scores were
+         `0.9987/0.9723/0.7303/0.9004` for
+         Faithfulness/Answer Relevancy/Context Precision/Overall. Admission
+         is `NO-GO`: Context Precision missed `0.7347`, the AWS trend answer
+         added unsupported `$21,169`, and Apple product-category Answer
+         Relevancy fell `0.80 -> 0.60`. The candidate remains non-official;
+         official v2 is unchanged. The admission audit was fixed to bind the
+         candidate's declared strategy instead of hardcoding v2 before this
+         final assessment. Reports:
+         `data/eval_artifacts/phase2_results_context_precision_v4_candidate.json`
+         and `data/diagnostics/phase2_admission_context_precision_v4.json`.
+48. [x] Implement the next context/answer-integrity improvement without a
+         full replay: Grounded Completion v3 now enforces removal or one
+         bounded correction of unsupported derived numeric claims even when all
+         required period/value pairs are present. Add the provider-free paired
+         repeat attribution audit and require a fresh sentinel binding before
+         any priority-2 run. The attribution audit passed `30/30`; the shared
+         completion fingerprint is
+         `sha256:ddfb6457cc77fc8a107c7677b6b002d18e35d2325a3b13cc00fa6aae4c3922b0`.
+49. [x] Run two fresh isolated three-case Grounded Completion v3 provider
+         sentinels after the offline gate. Both completed `3/3` generation and
+         `3/3` judging, passed all deterministic and score gates, matched the
+         selected v2 reference aggregate `1.0000/1.0000/0.7233`, and passed the
+         reproducibility protocol at `2/2` (`100%`). Keep these artifacts
+         candidate-only; do not merge them into the official benchmark.
+         Reports: `data/eval_artifacts/grounded_completion_v3_sentinel_r1_summary.json`,
+         `data/eval_artifacts/grounded_completion_v3_sentinel_r2_summary.json`,
+         and `data/diagnostics/grounded_completion_v3_reproducibility.json`.
+50. [x] Run fresh priority-2 candidate replays with the new Grounded
+         Completion v3 binding and isolated checkpoints, then run the
+         strategy-aware Phase 2 admission audit. The combined v4-packing arm
+         is `NO-GO` (`0.9873/0.9823/0.7153/0.8950`), while the isolated v3
+         completion arm on admitted `selective_packed_v2` is `GO` with
+         `0.9983/0.9833/0.7413/0.9076` and every admission gate true. Reports:
+         `data/eval_artifacts/phase2_results_grounded_completion_v3_v2_candidate.json`
+         and `data/diagnostics/phase2_admission_grounded_completion_v3_v2_candidate.json`.
+51. [x] Promote the exact admitted Grounded Completion v3 candidate after
+         explicit approval. The dry-run-first command pinned candidate,
+         admission, baseline, and binding hashes; archived the old official
+         bytes under SHA-256 `0677799a...`; and atomically published the new
+         official SHA-256 `db121bab...`. Official metrics are now
+         `0.9983/0.9833/0.7413/0.9076`. Admission floors are derived from this
+         protected result, and the promoted-official self-check passes.
+52. [x] Build the provider-free enumeration Context Precision candidate.
+         `selective_packed_v5_enumeration_candidate` adds an oracle-free
+         branch-consensus selector only for enumeration and preserves all 26
+         non-enumeration contexts byte-for-byte. The audit changes Apple and
+         Amazon only, keeps every branch representative and official citation
+         mapping, and reduces rendered context `37,156 -> 33,994` tokens.
+53. [x] Run two isolated all-enumeration provider sentinels and the 100%
+         reproducibility gate. Both completed `4/4 + 4/4`, repeated Context
+         Precision `0.6425 -> 0.8750`, and kept Faithfulness `1.0000`, but
+         semantic gates failed: r1 Answer Relevancy was `0.9625` with the
+         unchanged Microsoft revenue case at `0.95`; r2 was `0.9000`, with
+         Microsoft revenue at `0.85` and Apple products at `0.75` after
+         omitting services. Reproducibility is `0/2`; candidate is `NO-GO`,
+         and no N=30 replay is authorized.
+54. [ ] Build an offline enumeration-answer completeness contract before any
+         further provider run. It must detect exhaustive wording such as
+         `all`, require evidence-backed category coverage (especially Apple
+         services) without using evaluation ground truth, and leave ordinary
+         fact/summary/comparative prompts unchanged. Keep the current
+         enumeration packing candidate non-official until a new binding passes
+         two fresh all-enumeration replicates at 100%.
 
 ## Always-On Deployment
 

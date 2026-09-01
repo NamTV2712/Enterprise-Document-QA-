@@ -1,9 +1,11 @@
 from scripts.diagnostics.phase2_admission import (
     AWS_QUESTION,
+    ENUMERATION_QUESTIONS,
     _aggregate_metric_gates,
     _baseline_metrics,
     _completion_gate,
     _metric_thresholds,
+    _expected_admission_binding,
     _structural_gates,
 )
 
@@ -91,6 +93,29 @@ def test_completion_gate_rejects_second_correction() -> None:
     assert not detail["max_one_correction"]
 
 
+def test_completion_gate_allows_grounding_false_for_safe_fallback_rows() -> None:
+    questions = [AWS_QUESTION, *sorted(ENUMERATION_QUESTIONS), "out-of-corpus"]
+    rows = {
+        question: {
+            "applicable": question != "out-of-corpus",
+            "period_value_applicable": question == AWS_QUESTION,
+            "enumeration_applicable": question in ENUMERATION_QUESTIONS,
+            "correction_attempted": False,
+            "correction_accepted": False,
+            "final_passed": True,
+            "final_grounding_passed": question != "out-of-corpus",
+            "correction_attempts": 0,
+        }
+        for question in questions
+    }
+    passed, detail = _completion_gate(
+        {"period_value_corrections": rows}, questions
+    )
+
+    assert passed
+    assert detail["final_grounding_scope"] == "applicable_answers_only"
+
+
 def test_structural_gate_accepts_complete_non_official_candidate() -> None:
     candidate = {
         "official": False,
@@ -144,3 +169,19 @@ def test_structural_gate_binds_candidate_strategy() -> None:
 
     assert gates["single_binding"]
     assert gates["strategy_bound"]
+
+
+def test_official_self_check_can_use_its_recorded_historical_binding(
+    tmp_path,
+) -> None:
+    baseline = tmp_path / "official.json"
+    candidate = {
+        "official": True,
+        "binding": "historical-binding",
+    }
+    assert _expected_admission_binding(
+        baseline, baseline, candidate, "current-binding"
+    ) == "historical-binding"
+    assert _expected_admission_binding(
+        tmp_path / "candidate.json", baseline, candidate, "current-binding"
+    ) == "current-binding"

@@ -77,6 +77,11 @@ AWS_QUESTION = (
 )
 AWS_VALUES = ("107,556", "128,725")
 AWS_PERIODS = ("2024", "2025")
+ENUMERATION_QUESTIONS = {
+    case.question
+    for case in TEST_SET
+    if case.priority <= 2 and case.category == "enumeration"
+}
 
 
 def _file_sha256(path: Path) -> str:
@@ -167,7 +172,16 @@ def _completion_gate(
         if isinstance(rows.get(question), dict)
         and rows[question].get("applicable") is True
     ]
+    has_unified_metadata = any(
+        isinstance(row, dict)
+        and (
+            "enumeration_applicable" in row
+            or "period_value_applicable" in row
+        )
+        for row in rows.values()
+    )
     valid_rows = True
+    correction_limits_passed = True
     for question in expected_questions:
         row = rows.get(question)
         if not isinstance(row, dict):
@@ -180,34 +194,69 @@ def _completion_gate(
         # compatibility for those frozen records while requiring the field
         # whenever a newer run provides it.
         final_grounding_passed = row.get("final_grounding_passed", True) is True
-        if (
-            not final_passed
-            or not final_grounding_passed
-            or (attempted and not accepted)
-        ):
+        if has_unified_metadata:
+            expected_period = question == AWS_QUESTION
+            expected_enumeration = question in ENUMERATION_QUESTIONS
+            if (
+                row.get("period_value_applicable") is not expected_period
+                or row.get("enumeration_applicable") is not expected_enumeration
+            ):
+                valid_rows = False
+            if row.get("correction_attempted") is True and not (
+                accepted and final_passed and final_grounding_passed
+            ):
+                valid_rows = False
+        if attempted and not accepted:
+            correction_limits_passed = False
+        # Safe out-of-corpus fallbacks intentionally have no grounded answer;
+        # final grounding is required only for a scoped completion contract or
+        # for an answer that attempted a correction. The independent answer
+        # integrity gate still audits every non-fallback answer.
+        grounding_required = (
+            not has_unified_metadata
+            or row.get("applicable") is True
+            or attempted
+        )
+        if not final_passed or (
+            grounding_required and not final_grounding_passed
+        ) or not correction_limits_passed:
             valid_rows = False
+    correction_count = sum(
+        rows[question].get("correction_attempted") is True
+        for question in expected_questions
+        if isinstance(rows.get(question), dict)
+    )
+    max_one_correction = (
+        all(
+            isinstance(rows.get(question), dict)
+            and isinstance(rows[question].get("correction_attempts", 0), int)
+            and not isinstance(rows[question].get("correction_attempts"), bool)
+            and rows[question].get("correction_attempts", 0) <= 1
+            for question in expected_questions
+        )
+        if has_unified_metadata
+        else correction_count <= 1
+    )
     passed = (
         complete
-        and applicable_questions == [AWS_QUESTION]
+        and (
+            set(applicable_questions) == {AWS_QUESTION}
+            if not has_unified_metadata
+            else set(applicable_questions)
+            == {AWS_QUESTION, *ENUMERATION_QUESTIONS}
+        )
         and valid_rows
-        and sum(
-            rows[question].get("correction_attempted") is True
-            for question in expected_questions
-            if isinstance(rows.get(question), dict)
-        ) <= 1
+        and max_one_correction
     )
     return passed, {
         "metadata_complete": complete,
         "applicable_questions": applicable_questions,
+        "unified_metadata": has_unified_metadata,
         "rows_valid": valid_rows,
         "final_grounding_required": True,
-        "max_one_correction": (
-            sum(
-                rows[question].get("correction_attempted") is True
-                for question in expected_questions
-                if isinstance(rows.get(question), dict)
-            ) <= 1
-        ),
+        "final_grounding_scope": "applicable_answers_only",
+        "correction_count": correction_count,
+        "max_one_correction": max_one_correction,
     }
 
 
@@ -315,6 +364,20 @@ def _structural_gates(
     }
 
 
+def _expected_admission_binding(
+    candidate_path: Path,
+    baseline_path: Path,
+    candidate: dict[str, Any],
+    current_binding: str,
+) -> str:
+    """Select the binding expected by a candidate or official self-check."""
+    if candidate_path.resolve() == baseline_path.resolve():
+        recorded_binding = candidate.get("binding")
+        if candidate.get("official") is True and isinstance(recorded_binding, str):
+            return recorded_binding
+    return current_binding
+
+
 def run(
     candidate_path: Path,
     baseline_path: Path = BASELINE_RESULTS,
@@ -338,10 +401,21 @@ def run(
         case.get("question"): case for case in candidate.get("cases", [])
     }
 
+    # The protected official is a historical, content-addressed benchmark.
+    # Its recorded generation binding must remain auditable after a later
+    # completion-policy fingerprint changes. Experimental candidates still
+    # have to match the current binding computed from the frozen artifact.
+    expected_binding = _expected_admission_binding(
+        candidate_path,
+        baseline_path,
+        candidate,
+        upstream.binding,
+    )
+
     structural = _structural_gates(
         candidate,
         expected,
-        upstream.binding,
+        expected_binding,
         candidate_strategy,
     )
     structural["supported_strategy"] = candidate_strategy in SUPPORTED_CANDIDATE_STRATEGIES

@@ -2,6 +2,8 @@
 
 import re
 
+from src.generation.enumeration_completeness import enumeration_kind
+
 ANSWER_FOCUS_CONTRACT = (
     "Answer the exact dimension asked in the question before adding supporting "
     "detail. For a comparison about each company's approach, first compare the "
@@ -27,6 +29,45 @@ def answer_focus_contract_for_question(question: str) -> str:
         return ANSWER_FOCUS_CONTRACT
     return ""
 
+
+ENUMERATION_COMPLETENESS_CONTRACT = (
+    "For an exhaustive enumeration question, return a compact evidence-backed "
+    "list. Include every distinct item explicitly exposed by the provided "
+    "filing excerpts, give each item a canonical [Source N] citation, and do "
+    "not add categories from general knowledge. Keep grouped filing categories "
+    "grouped unless the evidence explicitly separates them. Do not omit an "
+    "evidence-backed item merely because another item is more prominent. Use "
+    "one concise bullet per filing-native category; do not expand examples, "
+    "sub-products, features, brands, or sub-risks into extra bullets unless "
+    "the excerpts present them as separate top-level categories. For a "
+    "question asking for main sources or categories, answer at the same "
+    "top-level granularity as the filing headings and omit descriptive "
+    "details that are not themselves requested categories."
+    " For revenue-source questions, omit reporting-segment or container "
+    "labels and list only the revenue-bearing product or service headings "
+    "explicitly described in the excerpts."
+)
+
+
+def enumeration_contract_for_question(question: str) -> str:
+    """Return the list-completeness contract only for exhaustive enumerations."""
+    return (
+        ENUMERATION_COMPLETENESS_CONTRACT
+        if enumeration_kind(question) is not None
+        else ""
+    )
+
+
+def answer_completion_contract_for_question(question: str) -> str:
+    """Combine the narrowly scoped answer contracts for one question."""
+    return "\n".join(
+        contract
+        for contract in (
+            answer_focus_contract_for_question(question),
+            enumeration_contract_for_question(question),
+        )
+        if contract
+    )
 NUMERIC_PAIR_CONTRACT = (
     "For every question that explicitly asks for a numeric trend, numeric "
     "comparison, or growth, inspect all provided "

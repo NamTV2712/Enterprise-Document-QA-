@@ -43,7 +43,7 @@ from src.evaluation.phase2_runtime import (
     judging_pool_keys,
     make_generation_call,
     make_judge_call,
-    make_period_value_postprocessor,
+    make_answer_completion_postprocessor,
 )
 from src.evaluation.test_set import TEST_SET, TestCase
 from src.generation.generator import Generator
@@ -440,7 +440,7 @@ def main(argv: list[str] | None = None) -> int:
         max_gen_retries=args.max_gen_retries,
         max_judge_retries=args.max_judge_retries,
         evidence_context_fn=renderer,
-        answer_postprocessor=make_period_value_postprocessor(
+        answer_postprocessor=make_answer_completion_postprocessor(
             raw_generate, correction_rows
         ),
         answer_completion_metadata=correction_rows,

@@ -26,6 +26,10 @@ from src.evaluation.generation_checkpoint import (
 )
 from src.evaluation.judge_checkpoint import JudgeParseErrorStub
 from src.generation.generator import SYSTEM_PROMPT, Generator
+from src.generation.answer_completion import (
+    completion_metadata,
+    correct_answer_once,
+)
 from src.generation.period_value_completeness import (
     correct_period_value_once,
     validate_grounded_answer,
@@ -180,6 +184,39 @@ def make_period_value_postprocessor(
                 ),
                 "correction_reason": outcome.correction_reason,
             }
+        return outcome.answer
+
+    return postprocess
+
+
+def make_answer_completion_postprocessor(
+    generate_fn: Callable[[str], str],
+    metadata: dict[str, dict[str, Any]] | None = None,
+) -> Callable[[str, str, str], str]:
+    """Apply one shared period/value or enumeration correction."""
+
+    def postprocess(
+        question: str,
+        evidence_context: str,
+        draft_answer: str,
+    ) -> str:
+        outcome = correct_answer_once(
+            question,
+            evidence_context,
+            draft_answer,
+            generate_fn,
+            validate_answer=lambda answer: validate_grounded_answer(
+                answer, evidence_context
+            ),
+        )
+        if outcome.correction_attempted:
+            logger.info(
+                "Phase 2 answer completion %s for question: %s",
+                "accepted" if outcome.correction_accepted else "rejected",
+                question[:80],
+            )
+        if metadata is not None:
+            metadata[question] = completion_metadata(outcome)
         return outcome.answer
 
     return postprocess

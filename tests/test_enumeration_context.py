@@ -57,6 +57,23 @@ def test_rank_two_consensus_keeps_dissenting_branch_leader() -> None:
     assert [chunk.chunk_id for chunk in selected] == ["dominant", "dissent"]
 
 
+def test_deeply_demoted_branch_leader_is_not_kept_as_support() -> None:
+    dominant = Chunk("dominant", 3.0)
+    noisy_leader = Chunk("noisy-leader", 4.0)
+    branches = [
+        _branch("one", dominant),
+        _branch("two", noisy_leader, dominant),
+        _branch("three", dominant),
+        _branch("four", dominant),
+        _branch("five", dominant, Chunk("other", 1.0), Chunk("other-2", 0.5),
+                Chunk("other-3", 0.25), noisy_leader),
+    ]
+
+    selected = select_enumeration_chunks(branches)
+
+    assert [chunk.chunk_id for chunk in selected] == ["dominant"]
+
+
 def test_no_consensus_returns_full_deduplicated_evidence() -> None:
     chunks = [Chunk(f"c{index}", float(index)) for index in range(5)]
     branches = [

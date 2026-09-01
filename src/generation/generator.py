@@ -13,11 +13,10 @@ from typing import Any
 from src.generation.prompt_contracts import (
     NUMERIC_PAIR_CONTRACT,
     NUMERIC_PAIR_REMINDER,
-    answer_focus_contract_for_question,
+    answer_completion_contract_for_question,
 )
+from src.generation.answer_completion import correct_answer_once
 from src.generation.period_value_completeness import (
-    assess_period_value_completeness,
-    correct_period_value_once,
     render_chunk_evidence,
     validate_grounded_answer,
 )
@@ -76,7 +75,7 @@ def _format_context(chunks: list[RetrievedChunk]) -> str:
 
 def _build_user_message(query: str, chunks: list[RetrievedChunk]) -> str:
     context_str = _format_context(chunks)
-    answer_focus = answer_focus_contract_for_question(query)
+    answer_focus = answer_completion_contract_for_question(query)
     focus_line = (
         f"Answer-focus checklist: {answer_focus}\n"
         if answer_focus
@@ -237,7 +236,7 @@ class Generator:
         user_message = _build_user_message(query, chunks)
 
         response_text = self._call_groq(user_message, conversation_history)
-        response_text = self._apply_period_value_completion(
+        response_text = self._apply_answer_completion(
             query, chunks, response_text, conversation_history
         )
 
@@ -248,16 +247,16 @@ class Generator:
             model_used=self.model,
         )
 
-    def _apply_period_value_completion(
+    def _apply_answer_completion(
         self,
         query: str,
         chunks: list[RetrievedChunk],
         draft_answer: str,
         conversation_history: list[dict] | None = None,
     ) -> str:
-        """Validate and, at most once, correct a numeric trend answer."""
+        """Validate and, at most once, correct a scoped answer contract."""
         evidence_context = render_chunk_evidence(chunks)
-        outcome = correct_period_value_once(
+        outcome = correct_answer_once(
             query,
             evidence_context,
             draft_answer,
@@ -268,7 +267,7 @@ class Generator:
         )
         if outcome.correction_attempted:
             logger.info(
-                "Period/value correction %s for query: %s",
+                "Answer completion correction %s for query: %s",
                 "accepted" if outcome.correction_accepted else "rejected",
                 query[:80],
             )
@@ -316,9 +315,11 @@ class Generator:
         user_message = _build_user_message(query, chunks)
 
         evidence_context = render_chunk_evidence(chunks)
-        applicable = assess_period_value_completeness(
+        from src.generation.answer_completion import assess_answer_completion
+
+        applicable = assess_answer_completion(
             query, evidence_context, ""
-        ).applicable
+        ).correction_required
         if not applicable:
             yield from self._call_groq_stream(
                 user_message,
@@ -341,7 +342,7 @@ class Generator:
         if cancel_event is not None and cancel_event.is_set():
             return
 
-        outcome = correct_period_value_once(
+        outcome = correct_answer_once(
             query,
             evidence_context,
             "".join(draft_parts),
@@ -352,7 +353,7 @@ class Generator:
         )
         if outcome.correction_attempted:
             logger.info(
-                "Period/value stream correction %s for query: %s",
+                "Answer completion stream correction %s for query: %s",
                 "accepted" if outcome.correction_accepted else "rejected",
                 query[:80],
             )

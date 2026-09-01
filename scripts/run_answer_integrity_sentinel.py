@@ -37,7 +37,7 @@ from src.evaluation.phase2_runtime import (
     judging_pool_keys,
     make_generation_call,
     make_judge_call,
-    make_period_value_postprocessor,
+    make_answer_completion_postprocessor,
 )
 from src.evaluation.test_set import TEST_SET
 from src.generation.generator import Generator
@@ -107,7 +107,7 @@ def main() -> int:
     gen_store = GenerationCheckpointStore(GEN_CHECKPOINT)
     judge_store = JudgeCheckpointStore(JUDGE_CHECKPOINT)
     generation_call = make_generation_call(generation, tracker)
-    answer_postprocessor = make_period_value_postprocessor(generation_call)
+    answer_postprocessor = make_answer_completion_postprocessor(generation_call)
     rows = []
 
     for question in QUESTIONS:

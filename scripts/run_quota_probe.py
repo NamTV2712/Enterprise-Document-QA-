@@ -66,7 +66,7 @@ from src.evaluation.phase2_runtime import (
     judging_pool_keys,
     make_generation_call,
     make_judge_call,
-    make_period_value_postprocessor,
+    make_answer_completion_postprocessor,
 )
 from src.generation.generator import Generator
 from src.retrieval.lexical_ladder import LEXICAL_LADDER_FINGERPRINT
@@ -325,7 +325,7 @@ def main(argv: list[str] | None = None) -> int:
         generation_generator, tracker
     )
     correction_rows: dict[str, dict] = {}
-    answer_postprocessor = make_period_value_postprocessor(
+    answer_postprocessor = make_answer_completion_postprocessor(
         generation_call, correction_rows
     )
 

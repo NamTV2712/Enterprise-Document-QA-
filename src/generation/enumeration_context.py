@@ -18,7 +18,7 @@ from typing import Any, Sequence
 
 ENUMERATION_CONSENSUS_FINGERPRINT = (
     "sha256:"
-    "41dce17be00d42693b451f340b4ad7de606316fd57a2c065c2b48d3d45bfb1e1"
+    "a8f540b80de0db5e9a2c8838c947337c68145dc19fa55bcd0cf86cc8f2d7c0f2"
 )
 MIN_BRANCHES = 4
 CONSENSUS_RANK_WINDOW = 2
@@ -142,20 +142,32 @@ def enumeration_consensus_profile(
     dominant_ranks = ranks[dominant]
     support_ids = {dominant}
 
-    # Preserve a branch's dissenting leader instead of assuming the consensus
-    # chunk is sufficient merely because it was retrieved at rank two.
+    # Preserve a branch's dissenting leader only when the other branches do
+    # not independently demote that same chunk.  A branch-specific leader
+    # that also appears deep in another branch is usually retrieval noise, not
+    # corroborating evidence; keeping it would lower context precision while
+    # adding no coverage guarantee.
     for branch in ranked:
         leader_id = _chunk_id(branch[0])
-        if leader_id and leader_id != dominant:
+        observed_ranks = ranks.get(leader_id, {}) if leader_id else {}
+        if (
+            leader_id
+            and leader_id != dominant
+            and max(observed_ranks.values(), default=1)
+            <= CONSENSUS_RANK_WINDOW
+        ):
             support_ids.add(leader_id)
 
     # Keep early corroborating evidence only when at least two independent
-    # branches retrieved it.  This retains useful broad support without
-    # admitting a single branch's low-ranked tail.
+    # branches retrieved it near the top.  Counting only the minimum rank
+    # would admit a chunk that is rank 1 in one branch but rank 5 elsewhere.
     for chunk_id, observed in ranks.items():
         if (
-            len(observed) >= SUPPORT_MIN_BRANCHES
-            and min(observed.values()) <= CONSENSUS_RANK_WINDOW
+            sum(
+                rank <= CONSENSUS_RANK_WINDOW
+                for rank in observed.values()
+            )
+            >= SUPPORT_MIN_BRANCHES
         ):
             support_ids.add(chunk_id)
 

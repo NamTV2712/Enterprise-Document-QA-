@@ -20,17 +20,20 @@ from typing import Any, Callable
 
 from src.generation.prompt_contracts import (
     NUMERIC_PAIR_CONTRACT,
-    answer_focus_contract_for_question,
+    answer_completion_contract_for_question,
 )
 from src.generation.period_value_completeness import (
-    PERIOD_VALUE_CORRECTION_FINGERPRINT,
     PeriodValueCorrectionError,
     render_chunk_evidence,
 )
-
+from src.generation.answer_completion import (
+    ANSWER_COMPLETION_FINGERPRINT,
+    AnswerCompletionError,
+)
+from src.generation.enumeration_context import ENUMERATION_CONSENSUS_FINGERPRINT
 logger = logging.getLogger(__name__)
 
-GENERATION_SCHEMA_VERSION = 4
+GENERATION_SCHEMA_VERSION = 5
 GEN_STATUS_OK = "OK"
 GEN_STATUS_SKIPPED_QUOTA = "GEN_SKIPPED_QUOTA"
 GEN_STATUS_ERROR = "GEN_ERROR"
@@ -61,7 +64,9 @@ def sha256_text(text: str) -> str:
 
 
 GENERATION_CONTEXT_BUILDER_FINGERPRINT = sha256_text(
-    "generation-context-renderer-v3-shared-source-adapter-canonical-trim"
+    "generation-context-renderer-v4-shared-source-adapter-canonical-trim-"
+    "enumeration-selector-"
+    + ENUMERATION_CONSENSUS_FINGERPRINT
 )
 
 
@@ -73,7 +78,7 @@ def compute_generation_binding(
     context_strategy: str,
     context_builder_fingerprint: str,
     system_prompt_sha256: str,
-    answer_completion_fingerprint: str = PERIOD_VALUE_CORRECTION_FINGERPRINT,
+    answer_completion_fingerprint: str = ANSWER_COMPLETION_FINGERPRINT,
 ) -> str:
     """Stable identity of everything that must not drift across resume."""
     payload = {
@@ -102,7 +107,7 @@ class GenerationUpstream:
     prompt_template: str = DEFAULT_GENERATION_PROMPT_TEMPLATE
     context_strategy: str = CONTEXT_STRATEGY_FULL_EVIDENCE
     context_builder_fingerprint: str = GENERATION_CONTEXT_BUILDER_FINGERPRINT
-    answer_completion_fingerprint: str = PERIOD_VALUE_CORRECTION_FINGERPRINT
+    answer_completion_fingerprint: str = ANSWER_COMPLETION_FINGERPRINT
 
     @property
     def prompt_template_sha256(self) -> str:
@@ -226,7 +231,9 @@ def run_generation_phase(
             logger.info("GEN resume OK: %s", question[:60])
             record = done[question]
             if answer_completion_metadata is not None:
-                metadata = record.get("period_value_correction")
+                metadata = record.get("answer_completion")
+                if not isinstance(metadata, dict):
+                    metadata = record.get("period_value_correction")
                 if isinstance(metadata, dict):
                     answer_completion_metadata[question] = metadata
             records.append(record)
@@ -242,7 +249,7 @@ def run_generation_phase(
         prompt = upstream.prompt_template.format(
             context_blocks=evidence_context,
             question=question,
-            answer_focus_contract=answer_focus_contract_for_question(question),
+            answer_focus_contract=answer_completion_contract_for_question(question),
         )
 
         answer: str | None = None
@@ -260,9 +267,15 @@ def run_generation_phase(
                         answer,
                     )
                 break
-            except PeriodValueCorrectionError as exc:
+            except AnswerCompletionError as exc:
                 # The bounded correction owns its single provider attempt. Do
                 # not retry the whole draft+correction pair here.
+                answer = None
+                error = str(exc)
+                logger.warning("Answer completion failed: %s", error[:180])
+                break
+            except PeriodValueCorrectionError as exc:
+                # Backward compatibility for legacy numeric-only postprocessors.
                 answer = None
                 error = str(exc)
                 logger.warning("Period/value correction failed: %s", error[:180])
@@ -291,6 +304,7 @@ def run_generation_phase(
             if answer_completion_metadata is not None:
                 metadata = answer_completion_metadata.get(question)
                 if isinstance(metadata, dict):
+                    record["answer_completion"] = metadata
                     record["period_value_correction"] = metadata
         elif error is not None and _looks_like_quota_error(error):
             record.update({"status": GEN_STATUS_SKIPPED_QUOTA, "error": error})

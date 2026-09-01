@@ -62,7 +62,7 @@ from src.evaluation.phase2_runtime import (
     judging_pool_keys,
     make_generation_call,
     make_judge_call,
-    make_period_value_postprocessor,
+    make_answer_completion_postprocessor,
 )
 from src.evaluation.context_packing import (
     CONTEXT_STRATEGY_COMPARATIVE_V3,
@@ -77,9 +77,7 @@ from src.evaluation.context_packing import (
 )
 from src.evaluation.test_set import TEST_SET, TestCase
 from src.generation.generator import Generator
-from src.generation.period_value_completeness import (
-    PERIOD_VALUE_CORRECTION_FINGERPRINT,
-)
+from src.generation.answer_completion import ANSWER_COMPLETION_FINGERPRINT
 from src.retrieval.lexical_ladder import LEXICAL_LADDER_FINGERPRINT
 from src.retrieval.query_shaper import QUERY_SHAPER_FINGERPRINT
 
@@ -111,11 +109,11 @@ RESULTS_SCHEMA_VERSION = 1
 REPRODUCIBILITY_AUDITS = {
     "context_precision_reproducibility",
     "enumeration_context_reproducibility",
+    "enumeration_answer_completion_reproducibility",
     "grounded_completion_v3_reproducibility",
 }
-COMPLETION_BOUND_REPRODUCIBILITY_AUDITS = {
-    "enumeration_context_reproducibility",
-    "grounded_completion_v3_reproducibility",
+UNIFIED_COMPLETION_REPRODUCIBILITY_AUDITS = {
+    "enumeration_answer_completion_reproducibility",
 }
 
 _JUDGE_SCORE_KEYS = (
@@ -237,8 +235,8 @@ def require_reproducibility_report(
         and gates.get("all_replicates_pass") is True
         and (
             payload.get("audit")
-            not in COMPLETION_BOUND_REPRODUCIBILITY_AUDITS
-            or PERIOD_VALUE_CORRECTION_FINGERPRINT
+            not in UNIFIED_COMPLETION_REPRODUCIBILITY_AUDITS
+            or ANSWER_COMPLETION_FINGERPRINT
             in (payload.get("completion_fingerprints") or [])
         )
     ):
@@ -762,7 +760,7 @@ def main(argv: list[str] | None = None) -> int:
         max_gen_retries=args.max_gen_retries,
         max_judge_retries=args.max_judge_retries,
         evidence_context_fn=evidence_context_fn,
-        answer_postprocessor=make_period_value_postprocessor(
+        answer_postprocessor=make_answer_completion_postprocessor(
             generation_call, correction_rows
         ),
         answer_completion_metadata=correction_rows,

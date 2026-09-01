@@ -17,10 +17,10 @@ from src.generation.comparative_context import (
 )
 from src.generation.prompt_contracts import (
     NUMERIC_PAIR_CONTRACT,
-    answer_focus_contract_for_question,
+    answer_completion_contract_for_question,
 )
+from src.generation.answer_completion import correct_answer_once
 from src.generation.period_value_completeness import (
-    correct_period_value_once,
     render_chunk_evidence,
     validate_grounded_answer,
 )
@@ -461,7 +461,7 @@ class QueryDecomposer:
                 f"Content:\n{chunk.text}\n"
             )
         context_str = "\n".join(context_parts)
-        answer_focus = answer_focus_contract_for_question(original_question)
+        answer_focus = answer_completion_contract_for_question(original_question)
         focus_line = (
             f"Answer-focus checklist: {answer_focus}"
             if answer_focus
@@ -491,7 +491,7 @@ class QueryDecomposer:
         try:
             draft_answer = synthesize_call(user_message)
             evidence_context = render_chunk_evidence(all_chunks)
-            outcome = correct_period_value_once(
+            outcome = correct_answer_once(
                 original_question,
                 evidence_context,
                 draft_answer,
@@ -502,7 +502,7 @@ class QueryDecomposer:
             )
             if outcome.correction_attempted:
                 logger.info(
-                    "Period/value synthesis correction %s for question: %s",
+                    "Answer completion synthesis correction %s for question: %s",
                     "accepted" if outcome.correction_accepted else "rejected",
                     original_question[:80],
                 )

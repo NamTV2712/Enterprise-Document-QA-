@@ -379,6 +379,225 @@ and no N=30 candidate run is authorized. Report SHA-256 values are
 (reproducibility). The next enumeration iteration must address exhaustive
 answer coverage, especially retaining `services`, before another provider run.
 
+The next enumeration improvement is now implemented offline as a unified
+evidence-derived Answer Completion v1 contract. It detects only exhaustive
+product, revenue, segment, and risk enumeration intent; ordinary fact,
+summary, comparative, and out-of-corpus questions remain no-ops. It extracts
+closed-list items and filing-native headings from the same rendered context,
+requires coverage of every extracted item, preserves the existing grounding
+and unsupported-numeric audit, and permits at most one provider correction.
+For grounded corrections that still omit a detected top-level item after
+compaction, a deterministic last-mile repair appends only that evidence label
+with its canonical `[Source N]` citation; it cannot invent descriptions or
+categories. The policy is shared by direct, decomposed, streaming, quota
+probe, sentinel, and Phase 2 paths. Its current completion fingerprint is
+`sha256:22a9654e7019710050bb9dd59e7fa49cb71b226098dc9c1b28604f20af40ae5a`,
+and generation schema is `5`.
+
+The provider-free enumeration audit passes: `30/30` source roundtrips,
+exactly `4` enumeration cases, `26` ordinary-question no-ops, all required
+evidence items including Apple `services`, and deterministic renderer
+repetition. Report SHA-256:
+`6294a29e608cc5a3df16f8562a88acf21e8a4d85214f51b0bd87749c2bb78950`.
+Focused completion tests pass `23/23`; the full hermetic suite passes `545/545` with
+`117` warnings, and the official result remains byte-identical. The admission
+self-check was also hardened for historical official bindings and passes all
+gates; report SHA-256:
+`3a8bd8da61aedddb6132ab0bd7473ed305f0412b121e2755b0542f1ca4ee166a`.
+
+A fresh provider sentinel was started under the new binding, but Groq TPD
+quota stopped it at `1/4` generation records before judging. Its summary is
+therefore incomplete and non-benchmark evidence, with no metric or
+reproducibility conclusion. Report SHA-256:
+`b28a632770a766eb1e9221cdfc652f73c0c4eeccee0832b2aa3850a35d4531f6`.
+
+The first post-recovery fresh replay completed both `r1` and `r2`, but `r2`
+was `NO-GO`: provider coverage, Faithfulness, Answer Relevancy, deterministic
+contracts, and completion contracts passed, while aggregate Context Precision
+was `0.8250` (`r1` was `0.8750`). Offline inspection showed that the Amazon
+segment selector retained `AMZN...business_0005` because it was rank 1 in the
+AWS branch even though another branch ranked the same chunk 5th; the judge
+explicitly identified that second chunk as irrelevant. The official result was
+untouched and the reproducibility/N=30 gates were not run.
+
+The selector was tightened without using labels or ground-truth answers:
+early support now requires top-two retrieval in at least two independent
+branches, and a dissenting branch leader is retained only when no other branch
+demotes it beyond the consensus window. Amazon now renders one source while
+retaining all three segment labels. The selector fingerprint is
+`sha256:a8f540b80de0db5e9a2c8838c947337c68145dc19fa55bcd0cf86cc8f2d7c0f2`;
+the generation context-builder fingerprint was advanced to
+`sha256:f3fff8439fa1bf00beac8366bce3af9ac682cefa6e219c5d90af9ead6f599cbc`
+and the shared answer-completion fingerprint was advanced to
+`sha256:22a9654e7019710050bb9dd59e7fa49cb71b226098dc9c1b28604f20af40ae5a`
+so stale checkpoints cannot resume across these behavior changes. Q0 now passes
+the official hash check, offline completeness audit, focused tests `29/29`,
+and the full hermetic suite `545/545` with `117` warnings. After this note,
+restart fresh `r1` and `r2`; do not reuse the failed reports for
+reproducibility or admission.
+
+With that selector fix, the clean priority-2 Q4 candidate completed `30/30`
+generation and `30/30` judging at Faithfulness `1.0000`, Answer Relevancy
+`0.9867`, Context Precision `0.7863`, and Overall `0.9243`. Q5 admission was
+`NO-GO` only because the comparative answer for Microsoft versus Apple added
+the unsupported derived shorthand `≈ $96.2 billion`; all structural, target,
+completion, citation, fallback, and other metric gates passed. The candidate
+and admission report hashes are respectively
+`a4428eca87c5ec7e8dbe1c51917391bda3fc71a6a22a9276f40fdbf85807d816` and
+`0edbeefa9833938d825e497dabe376817da72d3f264743358483309667a0efc5`.
+
+The next offline fix extends the unified answer-completion audit to trigger
+one grounded correction when any non-period/non-enumeration answer contains an
+unsupported numeric claim. It does not alter semantic scores or relax the
+numeric audit; ordinary qualitative answers remain no-ops. The new completion
+fingerprint is
+`sha256:22a9654e7019710050bb9dd59e7fa49cb71b226098dc9c1b28604f20af40ae5a`.
+The Q4 candidate remains non-official and must be rerun fresh after Q0 because
+its binding is now stale.
+
+After the generic numeric-grounding fix, the clean priority-2 candidate was
+rerun under binding
+`sha256:84bcae1c2418a4868db7086885a0c8022adfaa6b2f1dc1515c9e72f3537a1717`.
+It completed `30/30` generation and `30/30` judging with no skipped or
+parse-invalid records. Candidate scores were Faithfulness `1.0000`, Answer
+Relevancy `0.9917`, Context Precision `0.7613`, and Overall `0.9177`, all above
+the protected official floors. Candidate SHA-256:
+`a98544d808c057d284ce3f24e3649e71f8a568f27417811be1d78bbed58e7b06`.
+
+The first provider-free admission pass exposed an audit-only defect: it
+required `final_grounding_passed=true` for safe out-of-corpus fallback rows.
+Those rows are intentionally not grounded and are already covered by the
+independent fallback/integrity gates. The completion gate now requires final
+grounding only for applicable completion answers or answers that attempted a
+correction; a regression test covers this policy. No provider artifact or
+metric was changed by that fix. The admission audit was rerun and is now
+`GO`, with every structural, aggregate, integrity, completion, target, and
+non-target gate passing. Admission report SHA-256:
+`a3d8f1c3b209bbbd999fac4e0a299d6ed3568cd59c195fd0830031d5a0f68897`.
+
+Final offline verification passes: enumeration audit `30/30` source
+roundtrips with `4` applicable enumeration cases and `26` no-ops, focused
+admission/completion tests `38/38`, full hermetic suite `548/548` with `117`
+warnings, `compileall`, and `git diff --check`. The protected official result
+remains byte-identical at SHA-256
+`db121babe17ac213222dead90a476e03a2fa256007f0335deac01ff1ff8fc648`.
+The candidate is admitted but remains `official=false`; promotion and GitHub
+push are intentionally separate explicit actions.
+
+### Locked Quota-Recovery Execution Runbook
+
+When the user says `làm tiếp theo kế hoạch`, continue this runbook without
+asking for confirmation between successful checkpoints. Run provider work
+sequentially, never in parallel. Stop immediately on quota exhaustion, a
+failed pre-registered gate, binding drift, or incomplete provenance. A stopped
+or resumed run is never reported as a valid benchmark until its final summary
+contains complete coverage under one compatible binding.
+
+Checkpoint Q0 - freeze and verify the offline state:
+
+1. Read `AGENTS.md`, this current milestone, `TODO.md`, and the latest git
+   status/diff. Preserve the existing dirty worktree; do not revert it.
+2. Verify the protected official file still has SHA-256
+   `db121babe17ac213222dead90a476e03a2fa256007f0335deac01ff1ff8fc648`.
+3. Run `scripts.diagnostics.enumeration_answer_completeness`; require all
+   offline gates, `30/30` source roundtrips, exactly four applicable
+   enumeration cases, and 26 ordinary-question no-ops.
+4. Run the focused completion/admission tests, then the full hermetic suite,
+   `compileall`, and `git diff --check`. Any failure blocks provider calls.
+5. Record the active completion fingerprint. If it differs from
+   `sha256:22a9654e7019710050bb9dd59e7fa49cb71b226098dc9c1b28604f20af40ae5a`,
+   invalidate both sentinel replicates and restart from Q1 after documenting
+   the intentional semantic change.
+
+Checkpoint Q1 - fresh isolated sentinel replicate r1:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.run_enumeration_answer_completion_sentinel `
+  --replicate-id r1 --fresh --max-gen-retries 0 --max-judge-retries 0
+```
+
+Require `4/4` generation, `4/4` judging, `provider_complete=true`, no skipped
+records, all deterministic/completion/per-case/aggregate gates true, and
+`passed=true`. A 429 or partial summary ends the run; on the next invocation,
+restart r1 with `--fresh` rather than combining the partial report.
+
+Checkpoint Q2 - fresh isolated sentinel replicate r2:
+
+Run only after r1 passes, using the same command with `--replicate-id r2`.
+Require the identical gate set. Do not average a failed replicate away and do
+not generate extra replicates to select the best two.
+
+Checkpoint Q3 - provider-free reproducibility gate:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.diagnostics.enumeration_answer_completion_reproducibility `
+  --reports data/eval_artifacts/enumeration_answer_completion_v1_sentinel_summary_r1.json `
+            data/eval_artifacts/enumeration_answer_completion_v1_sentinel_summary_r2.json `
+  --output data/diagnostics/enumeration_answer_completion_reproducibility_v1.json
+```
+
+Require two unique replicates, one frozen artifact, one strategy, one
+generation binding, one completion fingerprint, one question set, complete
+answer/judge provenance, `2/2` passing replicates, and pass rate `1.0`. Any
+failure blocks N=30.
+
+Checkpoint Q4 - clean priority-2 candidate:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.run_evaluation_phase2 `
+  --priority 2 `
+  --context-strategy selective_packed_v5_enumeration_candidate `
+  --reproducibility-report data/diagnostics/enumeration_answer_completion_reproducibility_v1.json `
+  --gen-checkpoint data/eval_artifacts/phase2_gen_answer_completion_v1_v5_candidate.jsonl `
+  --judge-checkpoint data/eval_artifacts/phase2_judge_answer_completion_v1_v5_candidate.jsonl `
+  --output data/eval_artifacts/phase2_results_answer_completion_v1_v5_candidate.json `
+  --fresh --max-gen-retries 0 --max-judge-retries 0
+```
+
+The command must omit `--allow-official-overwrite`. Require `30/30`
+generation and `30/30` judging, one binding, no skipped/parse-invalid records,
+and `official=false`. If quota stops this N=30 run, retain the exact compatible
+checkpoints. On a later invocation, verify code/fingerprint/binding are
+unchanged and resume the same command without `--fresh`; otherwise restart it
+fresh. Never calculate metrics from the partial summary.
+
+Checkpoint Q5 - provider-free admission:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.diagnostics.phase2_admission `
+  --candidate data/eval_artifacts/phase2_results_answer_completion_v1_v5_candidate.json `
+  --output data/diagnostics/phase2_admission_answer_completion_v1_v5_candidate.json
+```
+
+Require every structural, integrity, completion, target, aggregate, and
+non-target gate. Current official-derived floors are Faithfulness `0.9883`,
+Answer Relevancy `0.9833`, Context Precision `0.7413`, and Overall `0.9076`.
+Unified completion metadata must cover all 30 cases; exactly the AWS
+period/value case plus four enumeration cases must be applicable; every
+applicable answer must finish grounded, with no missing enumeration item,
+unsupported numeric claim, or more than one correction.
+
+Checkpoint Q6 - decision and next improvement:
+
+- If admission is `NO-GO`, keep the official untouched, classify each failed
+  case as evidence packing, answer completeness, over-detail, grounding, or
+  provider/judge variance, and design the smallest provider-free correction.
+  Do not weaken thresholds and do not run another N=30 under the same failed
+  binding.
+- If admission is `GO`, rerun full tests, compile, diff-check, verify the
+  official hash is still unchanged, update `PROJECT_STATE.md`, `TODO.md`, and
+  `README.md`, and prepare logically split local commits. Stop before promotion
+  or push. Promotion of the candidate to the protected official and pushing to
+  GitHub require a separate explicit user instruction.
+
+Checkpoint Q7 - final state:
+
+The current run has completed Q0-Q6. The next action is review of the
+candidate and, only with explicit approval, separate promotion/commit/push
+work. Do not treat the admitted candidate as the official benchmark until
+that promotion is intentionally performed and its protected SHA-256 is
+rechecked.
+
 ## Historical Milestones
 
 The first retrieval-side improvement is now validated offline. A shared

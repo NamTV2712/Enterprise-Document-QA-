@@ -390,13 +390,24 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
          Microsoft revenue at `0.85` and Apple products at `0.75` after
          omitting services. Reproducibility is `0/2`; candidate is `NO-GO`,
          and no N=30 replay is authorized.
-54. [ ] Build an offline enumeration-answer completeness contract before any
-         further provider run. It must detect exhaustive wording such as
-         `all`, require evidence-backed category coverage (especially Apple
-         services) without using evaluation ground truth, and leave ordinary
-         fact/summary/comparative prompts unchanged. Keep the current
-         enumeration packing candidate non-official until a new binding passes
-         two fresh all-enumeration replicates at 100%.
+54. [x] Build an offline enumeration-answer completeness contract before any
+         further provider run. It detects exhaustive wording such as `all`,
+         requires evidence-backed category coverage (including Apple services)
+         without evaluation ground truth, leaves ordinary fact/summary/
+         comparative prompts unchanged, and shares one bounded completion
+         policy across generation and evaluation paths.
+55. [x] Complete the locked quota-recovery runbook through admission. Fresh
+         enumeration replicates `r1` and `r2` each passed `4/4` generation and
+         `4/4` judging; the provider-free reproducibility gate passed `2/2`.
+         The clean priority-2 candidate passed `30/30` generation and judging
+         with F=`1.0000`, AR=`0.9917`, CP=`0.7613`, and Overall=`0.9177`.
+         Admission initially exposed an audit-only grounding-scope defect for
+         safe out-of-corpus fallbacks; after the regression fix, every gate
+         passes. Keep the candidate non-official until explicit promotion.
+         The full runbook is recorded in `PROJECT_STATE.md`.
+56. [ ] Decide whether to promote the admitted candidate to the protected
+         official result. This requires explicit approval, a separate review of
+         logically split local commits, and only then an intentional GitHub push.
 
 ## Always-On Deployment
 

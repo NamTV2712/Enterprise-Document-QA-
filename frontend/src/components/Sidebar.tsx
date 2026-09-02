@@ -233,10 +233,10 @@ const SidebarBase: React.FC<SidebarProps> = ({
           <div className="flex items-center gap-2.5">
             <BrandMark size="md" />
             <div>
-              <h1 className="text-xs font-black tracking-tight text-[#26324A] dark:text-[#FCFBF8] uppercase font-serif">
+              <h1 className="sidebar-brand-title text-xs font-black tracking-tight uppercase font-serif">
                 SEC RAG Engine
               </h1>
-              <span className="text-xs text-slate-500 dark:text-slate-450 font-medium">
+              <span className="sidebar-brand-subtitle text-xs font-medium">
                 SEC 10-K Research
               </span>
             </div>

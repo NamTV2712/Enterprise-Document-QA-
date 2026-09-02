@@ -79,7 +79,7 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
           your question below. The workspace keeps the source excerpts beside
           every grounded answer.
         </p>
-        <h2 className="max-w-full text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-[#26324A] dark:text-[#FCFBF8] py-1 font-serif break-words">
+        <h2 className="hero-title max-w-full text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight py-1 font-serif break-words">
           Ask questions. Verify every answer.
         </h2>
         <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 max-w-xl mx-auto leading-relaxed font-sans">

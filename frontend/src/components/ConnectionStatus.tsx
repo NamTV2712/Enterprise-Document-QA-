@@ -31,14 +31,14 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
     >
       <span
         aria-hidden="true"
-        className={`h-2 w-2 rounded-full ${
+        className={`connection-dot ${
           isChecking
-            ? "bg-slate-400"
+            ? "connection-dot--checking"
             : isReady
-              ? "bg-verified-green dark:bg-[#53B89A]"
+              ? "connection-dot--ready"
               : !isBackendConnected
-                ? "bg-rose-500"
-                : "bg-amber-500"
+                ? "connection-dot--offline"
+                : "connection-dot--loading"
         }`}
       />
       <span className="hidden whitespace-nowrap sm:inline">{label}</span>

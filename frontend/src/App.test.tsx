@@ -121,7 +121,7 @@ describe("App request cancellation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Overview" }));
     expect(
-      await screen.findByText("Research SEC 10-K filings with cited evidence"),
+      await screen.findByText("Ask questions. Verify every answer."),
     ).toBeInTheDocument();
     expect(screen.queryByText(longAnswer)).not.toBeInTheDocument();
     expect(
@@ -136,7 +136,7 @@ describe("App request cancellation", () => {
     render(<App />);
 
     expect(
-      await screen.findByText("Research SEC 10-K filings with cited evidence"),
+      await screen.findByText("Ask questions. Verify every answer."),
     ).toBeInTheDocument();
     expect(screen.queryByText(/API:\s*https?:\/\//i)).not.toBeInTheDocument();
     expect(screen.getByText("How to read the workspace")).toBeInTheDocument();

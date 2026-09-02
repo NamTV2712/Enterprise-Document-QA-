@@ -25,9 +25,11 @@ import {
   BookOpen,
   MessageSquare,
   ChevronDown,
+  AlertTriangle,
+  X,
 } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
-import { ChatInput, ConnectionBanner } from "./components/ChatInput";
+import { ChatInput } from "./components/ChatInput";
 import { Tooltip } from "./components/Tooltip";
 import { SampleQuestion } from "./components/SampleQuestionChips";
 import { Message, HealthResponse } from "./types";
@@ -123,6 +125,7 @@ export default function App() {
   const [healthData, setHealthData] = useState<HealthResponse | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [isClearingSession, setIsClearingSession] = useState<boolean>(false);
+  const [showResetDialog, setShowResetDialog] = useState<boolean>(false);
   const [activeView, setActiveView] = useState<"overview" | "conversation">(
     "overview",
   );
@@ -619,6 +622,16 @@ export default function App() {
     }
   }, [refreshHealth, sessionId]);
 
+  const requestNewConversation = useCallback(() => {
+    if (messages.length === 0) return;
+    setShowResetDialog(true);
+  }, [messages.length]);
+
+  const confirmNewConversation = useCallback(async () => {
+    setShowResetDialog(false);
+    await handleNewConversation();
+  }, [handleNewConversation]);
+
   const handleStopGenerating = useCallback(() => {
     const controller = requestAbortRef.current;
     if (!controller) return;
@@ -673,7 +686,7 @@ export default function App() {
         onChangeTopK={setTopK}
         enableComparative={enableComparative}
         onToggleComparative={setEnableComparative}
-        onNewConversation={handleNewConversation}
+        onNewConversation={requestNewConversation}
         onSelectSample={handleSelectSample}
         healthData={healthData}
         isBackendConnected={isBackendConnected}
@@ -711,9 +724,10 @@ export default function App() {
                 type="button"
                 onClick={() => setActiveView("overview")}
                 aria-label="Show overview"
-                className="lg:hidden p-1.5 rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                className="lg:hidden min-h-9 inline-flex items-center gap-1.5 px-2 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <BookOpen className="w-4 h-4" />
+                <span className="hidden sm:inline">Overview</span>
               </button>
             )}
             <nav
@@ -724,7 +738,7 @@ export default function App() {
                 type="button"
                 onClick={() => setActiveView("overview")}
                 aria-pressed={activeView === "overview"}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
                   activeView === "overview"
                     ? "bg-brand-indigo/10 text-brand-indigo"
                     : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -738,7 +752,7 @@ export default function App() {
                 onClick={() => setActiveView("conversation")}
                 disabled={messages.length === 0}
                 aria-pressed={activeView === "conversation"}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-colors ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
                   activeView === "conversation"
                     ? "bg-brand-indigo/10 text-brand-indigo"
                     : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -803,10 +817,10 @@ export default function App() {
               id="quick-reset-btn"
               disabled={isClearingSession || messages.length === 0}
               aria-busy={isClearingSession}
-              onClick={handleNewConversation}
+              onClick={requestNewConversation}
               className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-rose-500 text-slate-400 dark:text-slate-500 disabled:opacity-50 transition-colors cursor-pointer"
-              title="Reset Conversation"
-              aria-label="Reset conversation"
+              title="Start a new conversation"
+              aria-label="Start a new conversation"
             >
               <RefreshCw
                 className={`w-4 h-4 ${isClearingSession ? "animate-spin" : ""}`}
@@ -838,39 +852,28 @@ export default function App() {
                     Return to conversation
                   </button>
                 )}
-                {isBackendConnected === null || isPipelineReady === null ? (
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-900/30 text-slate-600 dark:text-slate-400 font-mono text-[10px] font-bold uppercase tracking-wider">
-                    <span>[STATUS: CONNECTING TO BACKEND]</span>
-                  </div>
-                ) : !isBackendConnected ? (
-                  <div className="space-y-1">
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded border border-red-300 dark:border-red-900 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-rose-400 font-mono text-[10px] font-bold uppercase tracking-wider">
-                      <span>[STATUS: BACKEND UNREACHABLE]</span>
-                    </div>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
-                      The research service is temporarily unavailable. Please refresh shortly.
-                    </p>
-                  </div>
-                ) : !isPipelineReady ? (
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded border border-amber-300 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 font-mono text-[10px] font-bold uppercase tracking-wider">
-                    <span>[STATUS: PIPELINE INITIALIZING]</span>
-                  </div>
-                ) : (
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded border border-verified-green/20 dark:border-[#287A68]/30 bg-verified-green/5 dark:bg-[#287A68]/10 text-verified-green dark:text-[#53B89A] font-mono text-[10px] font-bold uppercase tracking-wider">
-                    <span>
-                      [STATUS: LIVE — {tickers.length} COMPANIES INDEXED]
-                    </span>
-                  </div>
-                )}
+                <p className="mx-auto max-w-lg text-xs font-medium text-slate-500 dark:text-slate-400">
+                  Choose an optional company or filing section in the sidebar,
+                  then ask your question below. The workspace keeps the source
+                  excerpts beside every grounded answer.
+                </p>
                 <h2 className="max-w-full text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-[#26324A] dark:text-[#FCFBF8] py-1 font-serif break-words">
-                  Research SEC 10-K filings with cited evidence
+                  Ask questions. Verify every answer.
                 </h2>
                 <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 max-w-xl mx-auto leading-relaxed font-sans">
-                  Ask a financial or business question across {tickers.length || 44}{" "}
-                  searchable companies. The system retrieves filing excerpts,
-                  reranks them, and asks Groq-hosted Llama to answer only from
-                  that context.
+                  Research SEC 10-K filings across {tickers.length || 44} searchable
+                  companies with cited evidence and a clear retrieval trail.
                 </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 rounded-xl border border-brand-indigo/15 bg-white/80 dark:bg-[#26324A]/20 p-3.5 shadow-3xs">
+                <span className="text-sm font-semibold text-[#26324A] dark:text-[#FCFBF8]">
+                  Start with a natural-language question
+                </span>
+                <span className="hidden sm:inline text-slate-300 dark:text-slate-600">·</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  Press Enter to search, Shift+Enter for a new line
+                </span>
               </div>
 
               {/* Specification parameters info grid */}
@@ -884,10 +887,10 @@ export default function App() {
                       <Database className="w-4 h-4" />
                     </div>
                   </Tooltip>
-                  <h3 className="text-xs font-bold text-[#26324A] dark:text-[#FCFBF8] uppercase tracking-wider font-sans group-hover:text-brand-indigo transition-colors duration-300">
+                  <h3 className="text-sm font-bold text-[#26324A] dark:text-[#FCFBF8] font-sans group-hover:text-brand-indigo transition-colors duration-300">
                     Granular Chunk Scan
                   </h3>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300 leading-relaxed font-sans transition-colors duration-300">
+                  <p className="text-sm text-slate-600 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300 leading-relaxed font-sans transition-colors duration-300">
                     Scans individual 10-K blocks in business descriptions, risk
                     matrices, and financial statements.
                   </p>
@@ -899,10 +902,10 @@ export default function App() {
                       <GitFork className="w-4 h-4" />
                     </div>
                   </Tooltip>
-                  <h3 className="text-xs font-bold text-[#26324A] dark:text-[#FCFBF8] uppercase tracking-wider font-sans group-hover:text-brand-indigo transition-colors duration-300">
+                  <h3 className="text-sm font-bold text-[#26324A] dark:text-[#FCFBF8] font-sans group-hover:text-brand-indigo transition-colors duration-300">
                     Multi-Hop Querying
                   </h3>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300 leading-relaxed font-sans transition-colors duration-300">
+                  <p className="text-sm text-slate-600 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300 leading-relaxed font-sans transition-colors duration-300">
                     Decomposes comparative requests into focused retrievals and
                     presents a grounded execution summary.
                   </p>
@@ -914,22 +917,25 @@ export default function App() {
                       <CheckCircle2 className="w-4 h-4" />
                     </div>
                   </Tooltip>
-                  <h3 className="text-xs font-bold text-[#26324A] dark:text-[#FCFBF8] uppercase tracking-wider font-sans group-hover:text-brand-indigo transition-colors duration-300">
+                  <h3 className="text-sm font-bold text-[#26324A] dark:text-[#FCFBF8] font-sans group-hover:text-brand-indigo transition-colors duration-300">
                     Verifiable Sources
                   </h3>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300 leading-relaxed font-sans transition-colors duration-300">
+                  <p className="text-sm text-slate-600 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300 leading-relaxed font-sans transition-colors duration-300">
                     Every answer keeps the retrieved filing excerpts visible so
                     you can inspect the source text behind each claim.
                   </p>
                 </article>
               </div>
 
-              <div className="rounded-xl border border-brand-indigo/20 bg-brand-indigo/[0.035] dark:bg-brand-indigo/[0.06] p-4 md:p-5 space-y-3">
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-brand-indigo">
-                  <HelpCircle className="w-4 h-4" />
-                  How to read the workspace
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] leading-relaxed text-slate-600 dark:text-slate-350">
+              <details className="group rounded-xl border border-brand-indigo/20 bg-brand-indigo/[0.035] dark:bg-brand-indigo/[0.06] p-4 md:p-5">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-brand-indigo [&::-webkit-details-marker]:hidden">
+                  <span className="flex items-center gap-2">
+                    <HelpCircle className="w-4 h-4" />
+                    How to read the workspace
+                  </span>
+                  <ChevronDown className="w-4 h-4 transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="ui-expand-enter grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-350">
                   <p>
                     <strong className="block text-slate-800 dark:text-slate-100">1. Choose scope</strong>
                     Select a company and 10-K section, or leave both on All for
@@ -946,19 +952,11 @@ export default function App() {
                     order results; they are not confidence percentages.
                   </p>
                 </div>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono border-t border-brand-indigo/10 pt-3">
+                <p className="md:col-span-3 text-xs text-slate-500 dark:text-slate-400 border-t border-brand-indigo/10 pt-3">
                   Research demo only · Answers may be incomplete and are not
                   financial advice.
                 </p>
-              </div>
-
-              {/* ConnectionBanner in normal document flow BELOW the cards */}
-              <div className="pt-4 max-w-2xl mx-auto">
-                <ConnectionBanner
-                  isBackendConnected={isBackendConnected}
-                  isPipelineReady={isPipelineReady}
-                />
-              </div>
+              </details>
             </div>
           ) : (
             /* Active Chat Stream */
@@ -1012,6 +1010,64 @@ export default function App() {
           />
         </div>
       </div>
+
+      {showResetDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#26324A]/30 p-4 backdrop-blur-sm dark:bg-black/50"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setShowResetDialog(false);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reset-dialog-title"
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-[#FCFBF8] p-5 shadow-2xl dark:border-slate-700 dark:bg-[#1E2738]"
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <h2 id="reset-dialog-title" className="text-base font-semibold text-[#26324A] dark:text-[#FCFBF8]">
+                    Start a new conversation?
+                  </h2>
+                  <button
+                    type="button"
+                    aria-label="Close confirmation dialog"
+                    onClick={() => setShowResetDialog(false)}
+                    className="min-h-9 min-w-9 rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                  This clears the current messages and starts a fresh session.
+                  Your backend history for this conversation will also be removed.
+                </p>
+                <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowResetDialog(false)}
+                    className="min-h-10 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    Keep conversation
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmNewConversation}
+                    className="min-h-10 rounded-lg bg-[#26324A] px-4 py-2 text-sm font-semibold text-[#FCFBF8] hover:opacity-90 dark:bg-[#FCFBF8] dark:text-[#26324A]"
+                  >
+                    Start new conversation
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

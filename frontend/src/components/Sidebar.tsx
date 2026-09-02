@@ -42,7 +42,6 @@ interface SidebarProps {
   onNewConversation: () => void;
   onSelectSample: (question: SampleQuestion) => void;
   healthData: HealthResponse | null;
-  isBackendConnected: boolean | null;
   isOpen: boolean;
   onClose: () => void;
   isClearingSession: boolean;
@@ -62,7 +61,6 @@ const SidebarBase: React.FC<SidebarProps> = ({
   onNewConversation,
   onSelectSample,
   healthData,
-  isBackendConnected,
   isOpen,
   onClose,
   isClearingSession,
@@ -535,43 +533,11 @@ const SidebarBase: React.FC<SidebarProps> = ({
 
         {/* Footer with Pipeline Status / Session Actions */}
         <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#171D2B] space-y-3 relative overflow-hidden">
-          {/* Health Metrics Dashboard */}
+          {/* Health metrics stay secondary to the search controls. */}
           <div className="space-y-2.5 text-xs relative z-10" role="status" aria-live="polite">
             <div className="flex items-center justify-between">
               <span className="text-slate-500 dark:text-slate-400 font-semibold text-xs">
-                SYSTEM STATS
-              </span>
-
-              {/* Verified Green dot for pipeline_ready */}
-              <span
-                className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded ${
-                  isBackendConnected === null
-                    ? "bg-slate-100 dark:bg-slate-900/30 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-800"
-                    : isBackendConnected === false
-                      ? "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-950/30"
-                      : healthData?.pipeline_ready
-                        ? "bg-verified-green/5 dark:bg-[#287A68]/10 text-verified-green dark:text-[#53B89A] border border-verified-green/20 dark:border-[#287A68]/30"
-                        : "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-950/30"
-                }`}
-              >
-                <span
-                  className={`w-1.5 h-1.5 rounded-full ${
-                    isBackendConnected === null
-                      ? "bg-slate-400"
-                      : isBackendConnected === false
-                        ? "bg-rose-400"
-                        : healthData?.pipeline_ready
-                          ? "bg-verified-green dark:bg-[#53B89A]"
-                          : "bg-amber-400"
-                  }`}
-                />
-                {isBackendConnected === null
-                  ? "connecting"
-                  : isBackendConnected === false
-                    ? "offline"
-                    : healthData?.pipeline_ready
-                      ? "pipeline_ready"
-                      : "pipeline_pending"}
+                System metrics
               </span>
             </div>
 

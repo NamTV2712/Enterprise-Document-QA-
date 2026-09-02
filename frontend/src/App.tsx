@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { ChatInput } from "./components/ChatInput";
+import { ConnectionStatus } from "./components/ConnectionStatus";
 import { Tooltip } from "./components/Tooltip";
 import { SampleQuestion } from "./components/SampleQuestionChips";
 import { Message, HealthResponse } from "./types";
@@ -703,7 +704,6 @@ export default function App() {
         onNewConversation={requestNewConversation}
         onSelectSample={handleSelectSample}
         healthData={healthData}
-        isBackendConnected={isBackendConnected}
         isOpen={isSidebarOpen}
         onClose={handleCloseSidebar}
         isClearingSession={isClearingSession}
@@ -779,34 +779,11 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2 md:gap-3">
-            {/* Connection badge */}
-            <div
-              role="status"
-              aria-live="polite"
-              aria-label="Backend connection status"
-              className="flex items-center gap-1.5 px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono font-medium"
-            >
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  isBackendConnected === null || isPipelineReady === null
-                    ? "bg-slate-400"
-                    : isBackendConnected && isPipelineReady
-                      ? "bg-emerald-500"
-                      : isBackendConnected
-                        ? "bg-amber-500"
-                        : "bg-rose-500"
-                }`}
-              />
-              <span className="hidden sm:inline text-slate-600 dark:text-slate-300">
-                {isBackendConnected === null || isPipelineReady === null
-                  ? "Connecting..."
-                  : isBackendConnected
-                    ? isPipelineReady
-                      ? "Pipeline: Ready"
-                      : "Pipeline: Pending"
-                    : "API: Offline"}
-              </span>
-            </div>
+            <ConnectionStatus
+              isBackendConnected={isBackendConnected}
+              isPipelineReady={isPipelineReady}
+              companyCount={tickers.length || undefined}
+            />
 
             {/* Dark mode switcher */}
             <button

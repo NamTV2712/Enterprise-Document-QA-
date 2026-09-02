@@ -92,6 +92,44 @@ outputs. V7 remains non-official, the protected official remains unchanged,
 and the priority-3 shadow is still gated. No threshold relaxation or replay
 under this binding is justified.
 
+M11-M15 of the next Answer Focus campaign are now complete. The provider-free
+variance audit confirmed that the two remaining V7 Answer Relevancy regressions
+are Apple quality/manufacturing and Microsoft major-risk answers, while their
+contexts remain unchanged; the new risk-focus and risk-enumeration contracts
+therefore target answer scope and filing-native granularity rather than
+retrieval. The offline counterfactual is provider-free, changes only the
+Microsoft risk completion output, preserves source boundaries, and recognizes
+eleven evidence-backed filing risk groups without using evaluation ground
+truth. The risk-focus fingerprint is
+`sha256:82e7f775f07585eb2a27f10e7cb115c3b1ee83650384b7685221f56c7c174c3c218`.
+
+Two clean eight-case provider sentinels completed `8/8` generation and `8/8`
+judging under the single binding
+`sha256:ea9c442cf9d2492c27d1d546dbed8b52e2f943912261dc4c37f76b0c46b86c0d`.
+Both preserved Faithfulness `1.0000`, deterministic citation/recall/fallback
+correctness, the Microsoft risk completeness contract, Azure numeric
+stability, and the AWS period/value comparison contract. Both are NO-GO on the
+pre-registered semantic target floor: Apple quality/manufacturing and
+Microsoft major-risk Answer Relevancy are each `0.9000 < 0.9500`. Their
+aggregate Answer Relevancy is `0.9625`, but that does not override the
+per-target gate. The provider-free reproducibility audit is consequently
+`0/2`; no priority-2 N=30 replay, promotion, or priority-3 shadow is
+authorized. Clean reports are retained at
+`data/eval_artifacts/answer_focus_v2_sentinel_summary_r1_clean.json`,
+`data/eval_artifacts/answer_focus_v2_sentinel_summary_r2_clean.json`, and
+`data/diagnostics/answer_focus_reproducibility_v1.json`.
+
+The campaign also exposed and fixed a checkpoint-safety issue: generation
+checkpoint loading now refuses to append records from a different generation
+binding and requires a fresh checkpoint path. Judge checkpoints remain
+per-case-binding append-only because the runner intentionally invokes judging
+one case at a time. The invalid mixed diagnostic files from the interrupted
+binding transition are not admissible evidence; only the two clean reports
+above may be used for the next decision. The next improvement must reduce
+scope over-answering or revise the evidence-backed risk taxonomy with a new
+offline gate; it must not relax the relevancy floor or reuse these failed
+replicates.
+
 The remainder of this section preserves the pre-M2 state as historical
 context; the active status above is authoritative for current work.
 

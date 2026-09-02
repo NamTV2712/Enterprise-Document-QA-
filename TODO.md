@@ -441,12 +441,28 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
          only on aggregate Answer Relevancy (`0.9883 < 0.9917`); completion,
          target, integrity, Faithfulness, Context Precision, and Overall gates
          pass. Keep V7 non-official and preserve the protected official.
-62. [ ] Do not start the priority-3 generalization shadow while V7 admission
+62. [x] Do not start the priority-3 generalization shadow while V7 admission
          is `NO-GO`. First perform a provider-free diagnosis of the remaining
          aggregate Answer Relevancy variance and design a new bounded contract
          or binding. Do not replay V7, relax the relevancy floor, or merge
          checkpoint-mixed metrics. Reopen the priority-3 shadow only after a
          fresh provider-free gate passes; keep it separate from official N=30.
+63. [x] Execute the Answer Focus follow-up with an offline variance audit,
+       risk-focus contract, filing-native risk enumeration, provider-free
+       counterfactual, and two clean eight-case provider sentinels. The
+       deterministic and source-boundary gates passed, but both replicates
+       failed the registered semantic target floor: Apple quality/manufacturing
+       and Microsoft major-risk Answer Relevancy were `0.9000 < 0.9500`.
+       Reproducibility is `0/2`; do not run N=30, promote, relax the floor, or
+       start the priority-3 shadow. Clean evidence is in the two
+       `answer_focus_v2_sentinel_summary_*_clean.json` reports and
+       `data/diagnostics/answer_focus_reproducibility_v1.json`.
+64. [ ] Design the next risk-answer revision from the M14/M15 NO-GO evidence:
+       narrow Apple quality/manufacturing output to the defect and third-party
+       component dimension, and decide whether prose-only Microsoft risk
+       statements are supporting detail or canonical enumeration items. Add a
+       provider-free gate before any fresh sentinel; preserve the `0.95` target
+       floor and use new clean checkpoints only.
 
 ## Always-On Deployment
 

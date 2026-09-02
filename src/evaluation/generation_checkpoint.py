@@ -31,6 +31,7 @@ from src.generation.answer_completion import (
     AnswerCompletionError,
 )
 from src.generation.enumeration_context import ENUMERATION_CONSENSUS_FINGERPRINT
+from src.generation.fact_context import FACT_CONTEXT_SELECTOR_FINGERPRINT
 logger = logging.getLogger(__name__)
 
 GENERATION_SCHEMA_VERSION = 5
@@ -67,6 +68,8 @@ GENERATION_CONTEXT_BUILDER_FINGERPRINT = sha256_text(
     "generation-context-renderer-v4-shared-source-adapter-canonical-trim-"
     "enumeration-selector-"
     + ENUMERATION_CONSENSUS_FINGERPRINT
+    + "-fact-selector-"
+    + FACT_CONTEXT_SELECTOR_FINGERPRINT
 )
 
 

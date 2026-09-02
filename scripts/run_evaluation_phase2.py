@@ -73,6 +73,7 @@ from src.evaluation.context_packing import (
     CONTEXT_STRATEGY_SELECTIVE_V2,
     CONTEXT_STRATEGY_SELECTIVE_V4,
     CONTEXT_STRATEGY_SELECTIVE_V5,
+    CONTEXT_STRATEGY_SELECTIVE_V6,
     render_case_context,
 )
 from src.evaluation.test_set import TEST_SET, TestCase
@@ -111,9 +112,16 @@ REPRODUCIBILITY_AUDITS = {
     "enumeration_context_reproducibility",
     "enumeration_answer_completion_reproducibility",
     "grounded_completion_v3_reproducibility",
+    "fact_evidence_sufficiency_reproducibility_v1",
 }
 UNIFIED_COMPLETION_REPRODUCIBILITY_AUDITS = {
     "enumeration_answer_completion_reproducibility",
+}
+# These strategies have already passed the provider-free admission contract and
+# are allowed as stable runner defaults without an experimental sentinel.
+ADMITTED_CONTEXT_STRATEGIES = {
+    CONTEXT_STRATEGY_SELECTIVE_V2,
+    CONTEXT_STRATEGY_SELECTIVE_V5,
 }
 
 _JUDGE_SCORE_KEYS = (
@@ -640,12 +648,13 @@ def main(argv: list[str] | None = None) -> int:
             CONTEXT_STRATEGY_SELECTIVE_V2,
             CONTEXT_STRATEGY_SELECTIVE_V4,
             CONTEXT_STRATEGY_SELECTIVE_V5,
+            CONTEXT_STRATEGY_SELECTIVE_V6,
         ],
-        default=CONTEXT_STRATEGY_SELECTIVE_V2,
+        default=CONTEXT_STRATEGY_SELECTIVE_V5,
         help=(
-            "selective_packed_v2 is the merged default: it preserves the "
-            "admitted selective policy for fact_lookup/multi_hop/summary and "
-            "uses the gated oracle-free selector for comparative cases. "
+            "selective_packed_v5_enumeration_candidate is the admitted default: "
+            "it preserves the selective-v2 policy while using the gated "
+            "enumeration consensus selector. selective_packed_v2, "
             "selective_packed_v1, full_evidence_v1, comparative_packed_v3, "
             "and comparative_oracle_free_v5 remain available for replay."
         ),
@@ -661,6 +670,7 @@ def main(argv: list[str] | None = None) -> int:
             CONTEXT_STRATEGY_SELECTIVE_V2: "_packed_selective_v2",
             CONTEXT_STRATEGY_SELECTIVE_V4: "_packed_selective_v4",
             CONTEXT_STRATEGY_SELECTIVE_V5: "_packed_selective_v5_enumeration",
+            CONTEXT_STRATEGY_SELECTIVE_V6: "_packed_selective_v6_fact",
     }.get(args.context_strategy, "")
     if args.gen_checkpoint is None:
         args.gen_checkpoint = Path(
@@ -691,10 +701,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if (
         args.priority >= 2
-        and args.context_strategy not in {
-            CONTEXT_STRATEGY_FULL_EVIDENCE,
-            CONTEXT_STRATEGY_SELECTIVE_V2,
-        }
+        and args.context_strategy not in ADMITTED_CONTEXT_STRATEGIES
+        and args.context_strategy != CONTEXT_STRATEGY_FULL_EVIDENCE
         and not output_is_official
     ):
         require_reproducibility_report(

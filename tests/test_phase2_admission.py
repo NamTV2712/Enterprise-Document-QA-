@@ -1,6 +1,7 @@
 from scripts.diagnostics.phase2_admission import (
     AWS_QUESTION,
     ENUMERATION_QUESTIONS,
+    SUPPORTED_CANDIDATE_STRATEGIES,
     _aggregate_metric_gates,
     _baseline_metrics,
     _completion_gate,
@@ -8,6 +9,11 @@ from scripts.diagnostics.phase2_admission import (
     _expected_admission_binding,
     _structural_gates,
 )
+from src.evaluation.context_packing import CONTEXT_STRATEGY_SELECTIVE_V6
+
+
+def test_supported_strategies_include_fact_candidate() -> None:
+    assert CONTEXT_STRATEGY_SELECTIVE_V6 in SUPPORTED_CANDIDATE_STRATEGIES
 
 
 def test_aggregate_admission_gates_require_baseline_non_regression() -> None:

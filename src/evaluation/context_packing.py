@@ -42,6 +42,10 @@ from src.generation.enumeration_context import (
     EnumerationBranch,
     select_enumeration_chunks,
 )
+from src.generation.fact_context import (
+    FACT_CONTEXT_STRATEGY,
+    selected_fact_entries,
+)
 from src.generation.comparative_context import (
     ComparativeBranch,
     select_comparative_chunks_intent_first,
@@ -78,6 +82,7 @@ CONTEXT_STRATEGY_SELECTIVE_V3 = "selective_packed_v3_candidate"
 CONTEXT_STRATEGY_SELECTIVE_V4 = "selective_packed_v4_candidate"
 CONTEXT_STRATEGY_ENUMERATION_V1 = "enumeration_consensus_v1"
 CONTEXT_STRATEGY_SELECTIVE_V5 = "selective_packed_v5_enumeration_candidate"
+CONTEXT_STRATEGY_SELECTIVE_V6 = "selective_packed_v6_fact_candidate"
 SELECTIVE_PACKED_CATEGORIES = {"fact_lookup", "multi_hop", "summary"}
 COMPARATIVE_BRANCH_TARGET = 2
 
@@ -634,6 +639,12 @@ def effective_case_context_strategy(strategy: str, category: str) -> str:
         if category == "enumeration":
             return CONTEXT_STRATEGY_ENUMERATION_V1
         return CONTEXT_STRATEGY_FULL_EVIDENCE
+    if strategy == CONTEXT_STRATEGY_SELECTIVE_V6:
+        if category == "fact_lookup":
+            return FACT_CONTEXT_STRATEGY
+        return effective_case_context_strategy(
+            CONTEXT_STRATEGY_SELECTIVE_V5, category
+        )
     return strategy
 
 
@@ -702,6 +713,15 @@ def pack_case_context(
         ]
         result.dropped = [
             entry for entry in entries if entry.get("chunk_id") not in kept_ids
+        ]
+        return result
+
+    if strategy == FACT_CONTEXT_STRATEGY:
+        selected = selected_fact_entries(case_payload)
+        selected_ids = {entry.get("chunk_id") for entry in selected}
+        result.kept = selected
+        result.dropped = [
+            entry for entry in entries if entry.get("chunk_id") not in selected_ids
         ]
         return result
 

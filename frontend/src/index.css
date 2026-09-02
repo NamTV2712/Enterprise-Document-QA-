@@ -664,6 +664,9 @@ body {
   background: linear-gradient(110deg, #fffdf8 0%, #aeb5ff 52%, #69c9ad 100%);
   background-size: 160% 100%;
   background-position: 0% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .sidebar-brand-title {

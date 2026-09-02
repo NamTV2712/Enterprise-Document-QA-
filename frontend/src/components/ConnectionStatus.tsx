@@ -26,6 +26,7 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
       role="status"
       aria-live="polite"
       aria-label={`Backend connection status: ${label}`}
+      title={label}
       className="inline-flex min-h-8 items-center gap-2 rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300"
     >
       <span
@@ -40,7 +41,7 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
                 : "bg-amber-500"
         }`}
       />
-      <span>{label}</span>
+      <span className="hidden whitespace-nowrap sm:inline">{label}</span>
       {isReady && companyCount ? (
         <span className="hidden sm:inline text-slate-400 dark:text-slate-500">
           · {companyCount} indexed

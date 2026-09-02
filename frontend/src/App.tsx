@@ -94,6 +94,18 @@ function safeRemoveItem(key: string): void {
   }
 }
 
+function createSessionId(): string {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+
+  // Some embedded browsers and non-secure LAN previews do not expose
+  // crypto.randomUUID. Keep session creation resilient without adding a
+  // dependency or changing the backend contract.
+  const randomPart = Math.random().toString(36).slice(2, 10);
+  return `session-${Date.now().toString(36)}-${randomPart}`;
+}
+
 export default function App() {
   const [sessionId, setSessionId] = useState<string>("");
   const [tickers, setTickers] = useState<string[]>([]);
@@ -223,7 +235,7 @@ export default function App() {
     // 1. Session ID creation/restoration
     let sid = safeGetItem("sec_qa_session_id");
     if (!sid) {
-      sid = crypto.randomUUID();
+      sid = createSessionId();
       safeSetItem("sec_qa_session_id", sid);
     }
     setSessionId(sid);
@@ -603,7 +615,7 @@ export default function App() {
     } catch (err) {
       console.error("Session clearance exception:", err);
     } finally {
-      const newSid = crypto.randomUUID();
+      const newSid = createSessionId();
       safeSetItem("sec_qa_session_id", newSid);
       setSessionId(newSid);
       setMessages([]);

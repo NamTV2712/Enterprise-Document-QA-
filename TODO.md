@@ -403,11 +403,42 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
          with F=`1.0000`, AR=`0.9917`, CP=`0.7613`, and Overall=`0.9177`.
          Admission initially exposed an audit-only grounding-scope defect for
          safe out-of-corpus fallbacks; after the regression fix, every gate
-         passes. Keep the candidate non-official until explicit promotion.
+         passed. The candidate was then promoted atomically in item 56 below.
          The full runbook is recorded in `PROJECT_STATE.md`.
-56. [ ] Decide whether to promote the admitted candidate to the protected
-         official result. This requires explicit approval, a separate review of
-         logically split local commits, and only then an intentional GitHub push.
+56. [x] Harden cross-strategy promotion, dry-run the exact admitted
+         Answer Completion v1 / enumeration candidate, then atomically promote
+         it using the pinned candidate/admission/official hashes. Archived the
+         previous official under SHA-256
+         `db121babe17ac213222dead90a476e03a2fa256007f0335deac01ff1ff8fc648`, aligned the Phase 2
+         default to `selective_packed_v5_enumeration_candidate`, and passed the
+         promoted official self-check without spending provider quota.
+57. [x] Build the provider-free Fact Evidence Sufficiency v1 audit for the four
+         answerable fact cases formerly at Context Precision `0.50`. The
+         strict selector passed `30/30` source roundtrips, preserved all `22`
+         non-fact contexts byte-for-byte, and selected one self-contained source
+         for each target case. Fuzzy matches remain diagnostic-only.
+58. [x] Share the fact selector across direct, streaming, cache, and Phase 2
+         paths; bind fingerprint
+         `sha256:a068e14bf0dfaec29be37af653e2ae01b0101fcd91dba51ecbf1918f4489a882`;
+         run two isolated four-case provider sentinels and pass the `2/2`
+         reproducibility report with complete checkpoint provenance.
+59. [x] Run one clean N=30 fact-evidence candidate after reproducibility and
+         apply the dynamic provider-free admission gates. The V6 candidate
+         completed `30/30 + 30/30` with F=`0.9990`, AR=`0.9850`, CP=`0.8613`,
+         and Overall=`0.9484`. Admission is `NO-GO` only on aggregate Answer
+         Relevancy (`0.9850 < 0.9917`) after the V6 strategy-validator omission
+         was corrected; all integrity, completion, target, CP, and Overall
+         gates pass. Keep the candidate non-official; do not replay this
+         binding or promote it.
+60. [ ] Do not start the priority-3 generalization shadow after the M8 NO-GO
+         automatically. The provider-free variance audit now records a
+         correction decision: all three regressions have unchanged contexts
+         and changed answer hashes, so no retrieval change or threshold
+         relaxation is justified. A new answer-stability/completeness contract
+         and binding is required before any provider replay. Only after that
+         gate is explicitly reopened may exact-priority Phase 1/2 shadow
+         selection run for the existing 22 priority-3 cases across 15
+         additional tickers. Keep the report separate from official N=30.
 
 ## Always-On Deployment
 

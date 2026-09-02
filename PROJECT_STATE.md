@@ -2,6 +2,72 @@
 
 ## Current Milestone
 
+### Active post-admission status
+
+The admitted Answer Completion v1 / enumeration candidate was promoted to the
+protected official result in M2. The official file remains
+`data/eval_artifacts/phase2_results_packed_selective_v2.json` and now has
+SHA-256
+`a5b3c16e43c44ea79199c525e6345acf837172d956d8b659e5a234dc4692a7ba`.
+Its active strategy is `selective_packed_v5_enumeration_candidate`; the
+official metrics are Faithfulness `1.0000`, Answer Relevancy `0.9917`,
+Context Precision `0.7613`, and Overall `0.9177`. The previous official bytes
+were preserved in the content-addressed archive at SHA-256
+`db121babe17ac213222dead90a476e03a2fa256007f0335deac01ff1ff8fc648`.
+The promoted-official self-check passes all admission gates, and no provider
+quota was used for the promotion.
+
+M3-M6 of the active Fact Evidence Sufficiency campaign are complete. The
+provider-free selector passed `30/30` source roundtrips, preserved all `22`
+non-fact contexts byte-for-byte, and safely reduced the four target fact
+contexts to one self-contained source each. Its selector fingerprint is
+`sha256:a068e14bf0dfaec29be37af653e2ae01b0101fcd91dba51ecbf1918f4489a882`.
+Two isolated provider sentinels both passed `4/4` generation and `4/4` judging
+with Faithfulness, Answer Relevancy, and Context Precision all `1.0000`; the
+provider-free reproducibility audit passed `2/2` with complete checkpoint
+provenance. These are candidate evidence only and have not changed the
+official benchmark.
+
+M7 has now completed after resuming the compatible checkpoint: the clean
+priority-2 V6 fact candidate has `30/30` generation and `30/30` judging with
+no skipped or parse-invalid records. Its candidate metrics are Faithfulness
+`0.9990`, Answer Relevancy `0.9850`, Context Precision `0.8613`, and Overall
+`0.9484`. Candidate SHA-256 is
+`9aebcd4661530cf89888d08d191789bc566adf3933ac2a18227a51a75dd65fe7`.
+
+M8 is closed as `NO-GO` and the official result remains unchanged. The first
+admission run exposed an audit-only omission: V6 was not listed as a supported
+candidate strategy. That validator defect was fixed without changing the
+candidate, binding, renderer, or provider output; the rerun reports
+`supported_strategy=true` and all structural, integrity, completion, target,
+Context Precision, and Overall gates passing. The only remaining failure is
+aggregate Answer Relevancy `0.9850 < 0.9917`. The three `0.10` case drops are
+Apple quality/manufacturing, Microsoft Azure/cloud growth, and Microsoft
+revenue-source questions; offline V6 context comparison shows these are
+non-fact byte-identical no-op contexts, so this run is classified as
+provider/judge variance rather than a fact-selector evidence regression.
+Admission report SHA-256 is
+`b73116f5c24e133aa6d9f807421d6f69b954f3e720e5db291cfc714a13c74739`.
+The V6 candidate must not be promoted, and no additional N=30 replay under
+this binding is authorized. M9 remains gated until a new provider-free
+correction/reproducibility decision is recorded.
+
+The provider-free post-M8 variance audit is now recorded at
+`data/diagnostics/fact_candidate_variance_v1.json` (SHA-256
+`a001ac198fc7420d1f0939b8a0e4fc00eb61b145db0585e9bfad22b3db140402`). It
+re-rendered all 30 cases with V5 and V6, confirmed exactly four changed fact
+contexts, and confirmed byte identity for every non-fact context. The three
+Answer Relevancy regressions all have unchanged contexts plus changed answer
+hashes. This rules out a retrieval/packing correction for the failed cases;
+the next candidate must address answer-output stability or completeness with a
+new provider-free contract and new binding. Admission thresholds remain
+unchanged.
+
+The remainder of this section preserves the pre-M2 state as historical
+context; the active status above is authoritative for current work.
+
+### Historical context before M2 promotion
+
 The selective context-packing improvement is now admitted. The generic
 comparative v5 selector remains oracle-free and shared with production
 decomposed synthesis; `selective_packed_v2` composes it with the already
@@ -484,14 +550,13 @@ remains byte-identical at SHA-256
 The candidate is admitted but remains `official=false`; promotion and GitHub
 push are intentionally separate explicit actions.
 
-### Locked Quota-Recovery Execution Runbook
+### Completed Quota-Recovery Execution Runbook
 
-When the user says `làm tiếp theo kế hoạch`, continue this runbook without
-asking for confirmation between successful checkpoints. Run provider work
-sequentially, never in parallel. Stop immediately on quota exhaustion, a
-failed pre-registered gate, binding drift, or incomplete provenance. A stopped
-or resumed run is never reported as a valid benchmark until its final summary
-contains complete coverage under one compatible binding.
+This runbook completed on 2026-09-01 and is retained as execution history. Do
+not restart it when the user says `làm tiếp theo kế hoạch`; that phrase now
+selects the active post-admission runbook below. A stopped or resumed provider
+run is never reported as a valid benchmark until its final summary contains
+complete coverage under one compatible binding.
 
 Checkpoint Q0 - freeze and verify the offline state:
 
@@ -597,6 +662,223 @@ candidate and, only with explicit approval, separate promotion/commit/push
 work. Do not treat the admitted candidate as the official benchmark until
 that promotion is intentionally performed and its protected SHA-256 is
 rechecked.
+
+### Locked Post-Admission Improvement Runbook
+
+When the user says exactly `làm tiếp theo kế hoạch`, start at the first
+incomplete milestone below and continue automatically through every passing
+checkpoint. The phrase authorizes local code changes, tests, provider calls,
+ignored diagnostic artifacts, and the atomic promotion of the already-admitted
+Answer Completion v1 / enumeration candidate in M2. It does not authorize a
+GitHub push, deployment, secret changes, corpus regeneration, Qdrant rebuild,
+or promotion of any later experimental candidate. Provider work must remain
+sequential. Stop immediately on quota exhaustion, binding drift, incomplete
+provenance, or a failed pre-registered gate; the next invocation resumes only
+when the code and binding are still compatible.
+
+The ordering is deliberate. The admitted candidate has already solved the
+enumeration problem (`CP=1.0000` for all four enumeration cases). Three
+out-of-corpus cases contribute `CP=0` by benchmark design and must not be
+"improved" by making irrelevant evidence look relevant. The next answerable
+bottleneck is four fact-lookup cases at `CP=0.50`: Microsoft assets, Amazon AWS
+net sales, and the Apple and Microsoft auditor questions. Three carry an exact
+structured source plus one backup; the AWS case carries one exact full-term
+donor behind a weaker leader. This makes fact evidence sufficiency a smaller
+and safer target than reopening the rejected summary/comparative packing arms.
+
+#### M0 - freeze the promotion inputs and verify the repository
+
+1. Read `AGENTS.md`, this current milestone, `TODO.md`, and the latest Git
+   status/diff/log. Preserve unrelated work and never stage ignored `data/`
+   artifacts.
+2. Require the following exact inputs before changing promotion code:
+   - candidate:
+     `data/eval_artifacts/phase2_results_answer_completion_v1_v5_candidate.json`,
+     SHA-256
+     `a98544d808c057d284ce3f24e3649e71f8a568f27417811be1d78bbed58e7b06`;
+   - admission:
+     `data/diagnostics/phase2_admission_answer_completion_v1_v5_candidate.json`,
+     SHA-256
+     `a3d8f1c3b209bbbd999fac4e0a299d6ed3568cd59c195fd0830031d5a0f68897`;
+   - protected official:
+     `data/eval_artifacts/phase2_results_packed_selective_v2.json`, SHA-256
+     `db121babe17ac213222dead90a476e03a2fa256007f0335deac01ff1ff8fc648`;
+   - candidate binding:
+     `sha256:84bcae1c2418a4868db7086885a0c8022adfaa6b2f1dc1515c9e72f3537a1717`.
+3. Require candidate `30/30 + 30/30`, `official=false`, all admission gates
+   true, and metrics `1.0000 / 0.9917 / 0.7613 / 0.9177`.
+4. Run focused promotion/admission/checkpoint/completion tests, then the full
+   hermetic suite, `compileall`, and `git diff --check`. No provider call is
+   allowed in M0.
+
+#### M1 - harden cross-strategy promotion without touching the official
+
+The current promotion helper assumes the candidate and baseline use the same
+context strategy. That was valid for the previous Grounded Completion v3
+promotion but is false here: the admitted successor is
+`selective_packed_v5_enumeration_candidate`, while the protected baseline is
+`selective_packed_v2`.
+
+1. Extend `scripts/promote_phase2_result.py` to pin and validate separate
+   candidate and previous-official strategies. Preserve backward compatibility
+   for same-strategy promotions.
+2. Record both strategies in the receipt and promoted provenance. Continue to
+   require exact candidate/admission/official hashes, one candidate binding,
+   30 unique OK cases, all-true admission gates, atomic replacement, and an
+   immutable content-addressed archive.
+3. Add tests for a passing cross-strategy dry run/apply, wrong candidate
+   strategy, wrong baseline strategy, source drift, archive collision, and
+   same-strategy backward compatibility.
+4. Run the exact promotion command without `--apply`. It must be read-only and
+   produce one projected official SHA-256. Any mismatch stops M1.
+
+#### M2 - promote the admitted candidate and align the official default
+
+After M1 passes, run the dry run and then the same command with `--apply`:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.promote_phase2_result `
+  --candidate data/eval_artifacts/phase2_results_answer_completion_v1_v5_candidate.json `
+  --admission data/diagnostics/phase2_admission_answer_completion_v1_v5_candidate.json `
+  --official data/eval_artifacts/phase2_results_packed_selective_v2.json `
+  --receipt data/diagnostics/phase2_promotion_answer_completion_v1_v5.json `
+  --expected-candidate-sha256 a98544d808c057d284ce3f24e3649e71f8a568f27417811be1d78bbed58e7b06 `
+  --expected-admission-sha256 a3d8f1c3b209bbbd999fac4e0a299d6ed3568cd59c195fd0830031d5a0f68897 `
+  --expected-official-sha256 db121babe17ac213222dead90a476e03a2fa256007f0335deac01ff1ff8fc648 `
+  --expected-binding sha256:84bcae1c2418a4868db7086885a0c8022adfaa6b2f1dc1515c9e72f3537a1717 `
+  --expected-candidate-strategy selective_packed_v5_enumeration_candidate `
+  --expected-official-strategy selective_packed_v2
+```
+
+1. The apply run must produce exactly the projected SHA, archive the old
+   `db121...` bytes, and write a receipt whose hashes and strategies match.
+2. Change the Phase 2 default to the promoted V5 enumeration composite and
+   treat it as admitted rather than requiring an experimental reproducibility
+   report. Keep the protected official filename stable for compatibility.
+3. Run an official self-check with the official as both candidate and baseline:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.diagnostics.phase2_admission `
+  --candidate data/eval_artifacts/phase2_results_packed_selective_v2.json `
+  --baseline data/eval_artifacts/phase2_results_packed_selective_v2.json `
+  --output data/diagnostics/phase2_admission_promoted_answer_completion_v1_v5_selfcheck.json
+```
+
+4. Require every self-check gate, rerun the full offline validation, and update
+   README/project/TODO metrics. Do not spend provider quota or rerun N=30 in
+   this milestone.
+
+#### M3 - build the provider-free Fact Evidence Sufficiency v1 audit
+
+Create `scripts/diagnostics/fact_evidence_sufficiency.py` over the frozen N=30
+artifact and newly promoted official. The selector under test may use only the
+question, ranked chunk text, citation, score, ticker, and section. It must not
+consume ground truth, `required_keywords`, official answers, or judge scores.
+
+The candidate ladder is strict:
+
+1. `structured_exact`: one score-10 structured source whose canonical query
+   type and requested slots are self-contained;
+2. `exact_phrase`;
+3. `full_terms`, including entity/metric/period coverage;
+4. `partial_terms` only as supporting evidence, never as sole authority;
+5. `fuzzy` is diagnostic-only and can never authorize source removal.
+
+Require all `30/30` source roundtrips, frozen-subset behavior, byte identity for
+all 22 non-fact cases, preservation of structured hits and current cited-source
+support, zero evaluation-label dependence, and deterministic repeated output.
+The target is to reduce each of the four `CP=0.50` fact contexts to one
+self-contained source while retaining its exact answer evidence. If fewer than
+three of the four can be proven safe offline, stop this campaign rather than
+loosening the selector.
+
+#### M4 - share the fact selector across production and evaluation
+
+Only after M3 passes:
+
+1. Add a small `src/generation/fact_context.py` selector with its own semantic
+   fingerprint.
+2. Apply it before direct generation in both normal and SSE paths. The selected
+   chunks must also be the chunks returned to the client and stored in cache,
+   so `[Source N]` numbering cannot diverge from displayed evidence.
+3. Add `selective_packed_v6_fact_candidate` as a Phase 2 composite: promoted
+   V5 behavior for every existing category plus Fact Evidence Sufficiency v1
+   for fact lookup. Non-fact contexts must remain byte-identical.
+4. Include the selector fingerprint in generation bindings and invalidate old
+   candidate checkpoints intentionally.
+5. Test direct, streaming, cache-hit, source numbering, structured exactness,
+   AWS full-term selection, fallback, and non-fact no-op behavior. Run the full
+   hermetic suite, `compileall`, and diff-check before any provider call.
+
+#### M5 - run two bounded fact sentinels
+
+Create an isolated four-case sentinel with strategy-specific paths and run only
+fresh replicates `r1` and `r2`, sequentially. Each replicate must complete
+`4/4` generation and `4/4` judging, preserve Faithfulness `1.0000`, keep every
+case Answer Relevancy at least `0.95`, raise aggregate Context Precision from
+the `0.50` baseline to at least `0.90`, and pass every citation, recall,
+fallback, unsupported-numeric, source-boundary, and completion gate. A failed
+replicate is a NO-GO; do not create extra replicates or average it away.
+
+Quota interruption rules are the same as before: a partial replicate has no
+metrics, and the next invocation restarts that replicate with `--fresh` unless
+the runner explicitly proves all stored records share the unchanged binding.
+
+#### M6 - require provider-free reproducibility
+
+Add `scripts/diagnostics/fact_evidence_sufficiency_reproducibility.py`. Require
+two unique replicate IDs, one artifact, one strategy, one generation binding,
+one selector/completion fingerprint set, complete answer/judge provenance,
+`2/2` passing replicates, and pass rate `1.0`. This report is mandatory input
+for M7.
+
+#### M7 - run one clean N=30 fact candidate
+
+Run only after M6 passes, with explicit paths and no official overwrite:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.run_evaluation_phase2 `
+  --priority 2 `
+  --context-strategy selective_packed_v6_fact_candidate `
+  --reproducibility-report data/diagnostics/fact_evidence_sufficiency_reproducibility_v1.json `
+  --gen-checkpoint data/eval_artifacts/phase2_gen_fact_evidence_v1_candidate.jsonl `
+  --judge-checkpoint data/eval_artifacts/phase2_judge_fact_evidence_v1_candidate.jsonl `
+  --output data/eval_artifacts/phase2_results_fact_evidence_v1_candidate.json `
+  --fresh --max-gen-retries 0 --max-judge-retries 0
+```
+
+Require `30/30 + 30/30`, one binding, no skipped/parse-invalid records, and
+`official=false`. After M2, the dynamic floors become Faithfulness `0.9900`,
+Answer Relevancy `0.9917`, Context Precision `0.7613`, and Overall `0.9177`.
+Never weaken those floors to admit a noisy run.
+
+#### M8 - admission, decision, verification, and commit boundary
+
+Run the strategy-aware provider-free admission audit against the protected
+official. If any structural, metric, integrity, completion, target, or
+non-target gate fails, keep the official unchanged, classify the failure, and
+stop; do not run another N=30 under the same failed binding. If every gate
+passes, update docs, run full tests/compile/diff-check, and prepare logically
+split local commits. Stop before promoting this later fact candidate or pushing
+to GitHub; either action requires a new explicit instruction.
+
+#### M9 - expand generalization evidence with a priority-3 shadow
+
+This starts only after M8 closes and does not alter the official N=30 contract.
+Add exact-priority selection to both Phase 1 and Phase 2 so the existing 22
+priority-3 cases can run without re-spending quota on the 30 official cases.
+Build a byte-deterministic `phase1_priority3_shadow.json`, require all `22/22`
+cases, keyword recall `1.0000`, valid decomposed evidence plans, and immutable
+artifact provenance. The set covers 15 additional tickers with 9 fact, 6
+summary, 5 multi-hop, 1 enumeration, and 1 comparative case.
+
+Only after the offline shadow passes may a separate provider shadow run begin.
+Its artifacts and category metrics remain explicitly non-official. Require
+complete provider coverage, deterministic citation/recall/fallback gates,
+zero unsupported numeric claims, and per-category reporting. The first shadow
+establishes a generalization baseline; it must not be compared numerically to
+the differently distributed official N=30 aggregate or used to promote a
+context strategy.
 
 ## Historical Milestones
 

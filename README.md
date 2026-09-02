@@ -241,17 +241,18 @@ LLM provider:
 
 Current official benchmark: the two-phase pipeline (offline Phase 1
 frozen retrieval artifact, then frozen-evidence generation and judging) now
-uses the admitted `selective_packed_v2` context strategy over all `30` priority
-<= 2 cases. `30/30` generations and `30/30` judgments completed under one
-binding, with no skipped or parse-invalid records. Both generation and judging
-use `openai/gpt-oss-120b` through Groq.
+uses the promoted `selective_packed_v5_enumeration_candidate` strategy over
+all `30` priority <= 2 cases. `30/30` generations and `30/30` judgments
+completed under one binding, with no skipped or parse-invalid records. Both
+generation and judging use `openai/gpt-oss-120b` through Groq. The protected
+official filename remains stable for compatibility.
 
 | Metric | Score |
 |---|---:|
-| Faithfulness | `0.9983` |
-| Answer relevancy | `0.9833` |
-| Context precision | `0.7413` |
-| Overall judge average | `0.9076` |
+| Faithfulness | `1.0000` |
+| Answer relevancy | `0.9917` |
+| Context precision | `0.7613` |
+| Overall judge average | `0.9177` |
 | Citation correctness | `1.0000` |
 | Recall proxy | `1.0000` |
 | Fallback accuracy | `1.0000` |
@@ -260,10 +261,10 @@ Category table (faithfulness / relevancy / precision):
 
 | Category | N | Scores |
 |---|---:|---|
-| fact_lookup | 8 | `1.0000 / 0.9938 / 0.7500` |
-| summary | 6 | `1.0000 / 0.9833 / 0.8750` |
-| enumeration | 4 | `1.0000 / 0.9500 / 0.6425` |
-| comparative | 6 | `0.9917 / 0.9750 / 0.9033` |
+| fact_lookup | 8 | `1.0000 / 0.9875 / 0.7500` |
+| summary | 6 | `1.0000 / 1.0000 / 0.7917` |
+| enumeration | 4 | `1.0000 / 0.9875 / 1.0000` |
+| comparative | 6 | `1.0000 / 0.9833 / 0.8483` |
 | multi_hop | 3 | `1.0000 / 1.0000 / 1.0000` |
 | out_of_corpus | 3 | `1.0000 / 1.0000 / 0.0000` |
 
@@ -271,12 +272,32 @@ The run is bound to Phase 1 artifact
 `sha256:1ad021ce72af2116f9b4f7ad780d5c6e809fd5a01e46d30d0ae4bfecd62599d9`
 (file SHA-256 `b55d517f07585eda7682b4820da4286d884e4d6c02c4174585ef45325212b054`).
 Its Phase 2 result file SHA-256 is
-`db121babe17ac213222dead90a476e03a2fa256007f0335deac01ff1ff8fc648`.
+`a5b3c16e43c44ea79199c525e6345acf837172d956d8b659e5a234dc4692a7ba`.
 Compared with the previous official result, the metric deltas are
-Faithfulness `+0.0016`, Answer Relevancy `+0.0150`, Context Precision
-`+0.0066`, and Overall `+0.0077`. The previous bytes are archived under their
+Faithfulness `+0.0017`, Answer Relevancy `+0.0084`, Context Precision
+`+0.0200`, and Overall `+0.0100`. The previous bytes are archived under their
 original SHA-256
-`0677799a1425f1b449a15d7311fb6d1baecf422ea93219ae259db78e87996fe8`.
+`db121babe17ac213222dead90a476e03a2fa256007f0335deac01ff1ff8fc648`.
+
+The next active improvement is the provider-free Fact Evidence Sufficiency
+v1 selector for four fact-lookup contexts whose official Context Precision was
+`0.5000`. Its offline audit passed `30/30` source roundtrips, preserved all
+`22` non-fact contexts byte-for-byte, and selected one self-contained source
+for each target case. Two isolated four-case sentinels passed `4/4` generation
+and `4/4` judging each with `1.0000/1.0000/1.0000` scores, and the
+provider-free reproducibility report passed `2/2` with complete checkpoint
+provenance. The clean V6 priority-2 candidate later completed `30/30`
+generation and `30/30` judging after Groq quota recovery, scoring
+`0.9990/0.9850/0.8613/0.9484` for faithfulness/relevancy/precision/overall.
+Its provider-free admission is `NO-GO` only because Answer Relevancy
+`0.9850` is below the dynamic `0.9917` floor. The three regressions are on
+non-fact no-op contexts, so the candidate remains unpromoted and no replay
+under this binding is authorized. The provider-free variance audit
+`data/diagnostics/fact_candidate_variance_v1.json` confirms all three contexts
+are byte-identical to the official renderer while their answer hashes differ;
+no retrieval change or threshold relaxation is justified.
+
+### Historical evaluation log
 
 Admission audits are clean: the promoted-official self-check reports zero
 uncited non-fallback answers, legacy line citations, out-of-range citations,
@@ -1168,12 +1189,19 @@ Secrets are loaded from `.env` and should never be committed.
 
 ## Roadmap
 
-1. Improve comparative and enumeration grounding using deterministic evidence-shape
-   diagnostics and per-case answer/citation review; require a pre-registered gate
-   before changing retrieval, reranking, or context packing.
-2. Add production logging, quota monitoring, and error alerts before selecting a paid always-on backend.
-3. Expand deterministic evaluation coverage across the clean extended corpus without changing the official benchmark contract.
-4. Revisit permanent hosting only when always-on public availability is required.
+1. Safely promote the admitted enumeration-completion candidate after adding
+   cross-strategy promotion validation, then align the default Phase 2 context
+   strategy and rerun the provider-free official self-check.
+2. Target the four answerable fact-lookup cases whose Context Precision is
+   `0.50` with an oracle-free evidence-sufficiency selector. Require offline
+   source-parity gates, two bounded provider replicates, and reproducibility
+   before a new N=30 candidate.
+3. Expand deterministic and provider-shadow evaluation to the existing 22
+   priority-3 cases across 15 additional tickers without changing the official
+   N=30 benchmark contract.
+4. Add production logging, quota monitoring, and error alerts before selecting
+   a paid always-on backend; revisit permanent hosting only when always-on
+   public availability is required.
 
 ## Why This Project Matters
 

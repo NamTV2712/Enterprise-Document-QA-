@@ -105,7 +105,8 @@ def _validate_contract(
     admission_sha256: str,
     official_sha256: str,
     expected_binding: str,
-    expected_strategy: str,
+    expected_candidate_strategy: str,
+    expected_official_strategy: str,
 ) -> None:
     del admission_sha256  # Bound into promotion provenance after validation.
     failures: list[str] = []
@@ -143,13 +144,13 @@ def _validate_contract(
 
     if candidate.get("binding") != expected_binding:
         failures.append("candidate binding does not match the pinned binding")
-    if candidate.get("context_strategy") != expected_strategy:
+    if candidate.get("context_strategy") != expected_candidate_strategy:
         failures.append("candidate context strategy does not match the pinned strategy")
 
     if official.get("official") is not True:
         failures.append("protected baseline is not marked official")
-    if official.get("context_strategy") != expected_strategy:
-        failures.append("protected baseline strategy differs from the candidate strategy")
+    if official.get("context_strategy") != expected_official_strategy:
+        failures.append("protected baseline context strategy does not match the pinned strategy")
 
     if admission.get("admission") is not True or admission.get("passed") is not True:
         failures.append("admission report is not a passing decision")
@@ -165,7 +166,7 @@ def _validate_contract(
         failures.append("admission report baseline SHA-256 does not match")
     if admission.get("binding") != expected_binding:
         failures.append("admission report binding does not match")
-    if admission.get("context_strategy") != expected_strategy:
+    if admission.get("context_strategy") != expected_candidate_strategy:
         failures.append("admission report context strategy does not match")
     if admission.get("expected_cases") != 30:
         failures.append("admission report is not for the official N=30 set")
@@ -231,10 +232,31 @@ def promote(
     expected_admission_sha256: str,
     expected_official_sha256: str,
     expected_binding: str,
-    expected_strategy: str = CONTEXT_STRATEGY_SELECTIVE_V2,
+    expected_strategy: str | None = None,
+    expected_candidate_strategy: str | None = None,
+    expected_official_strategy: str | None = None,
     apply: bool = False,
 ) -> dict[str, Any]:
     """Validate and optionally apply one exact, previously admitted promotion."""
+    if expected_strategy is not None:
+        if (
+            expected_candidate_strategy is not None
+            and expected_candidate_strategy != expected_strategy
+        ) or (
+            expected_official_strategy is not None
+            and expected_official_strategy != expected_strategy
+        ):
+            raise RuntimeError(
+                "promotion contract failed: conflicting strategy expectations"
+            )
+        expected_candidate_strategy = expected_candidate_strategy or expected_strategy
+        expected_official_strategy = expected_official_strategy or expected_strategy
+    expected_candidate_strategy = (
+        expected_candidate_strategy or CONTEXT_STRATEGY_SELECTIVE_V2
+    )
+    expected_official_strategy = (
+        expected_official_strategy or CONTEXT_STRATEGY_SELECTIVE_V2
+    )
     candidate_sha256 = _require_digest(
         candidate_path, expected_candidate_sha256, "candidate"
     )
@@ -258,7 +280,8 @@ def promote(
         admission_sha256=admission_sha256,
         official_sha256=official_sha256,
         expected_binding=expected_binding,
-        expected_strategy=expected_strategy,
+        expected_candidate_strategy=expected_candidate_strategy,
+        expected_official_strategy=expected_official_strategy,
     )
 
     promoted = deepcopy(candidate)
@@ -275,7 +298,9 @@ def promote(
         "previous_official_path": admission["baseline_path"],
         "previous_official_sha256": official_sha256,
         "binding": expected_binding,
-        "context_strategy": expected_strategy,
+        "context_strategy": expected_candidate_strategy,
+        "candidate_context_strategy": expected_candidate_strategy,
+        "previous_official_context_strategy": expected_official_strategy,
     }
     promoted_bytes = _canonical_json_bytes(promoted)
     promoted_sha256 = _sha256_bytes(promoted_bytes)
@@ -297,7 +322,9 @@ def promote(
         "archive_path": archive_path.as_posix(),
         "promoted_official_sha256": promoted_sha256,
         "binding": expected_binding,
-        "context_strategy": expected_strategy,
+        "context_strategy": expected_candidate_strategy,
+        "candidate_context_strategy": expected_candidate_strategy,
+        "previous_official_context_strategy": expected_official_strategy,
         "metrics": promoted.get("metrics"),
     }
 
@@ -333,8 +360,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--expected-official-sha256", required=True)
     parser.add_argument("--expected-binding", required=True)
     parser.add_argument(
-        "--expected-strategy", default=CONTEXT_STRATEGY_SELECTIVE_V2
+        "--expected-strategy",
+        default=None,
+        help=(
+            "Backward-compatible same-strategy expectation. Prefer the separate "
+            "candidate and official strategy flags for cross-strategy promotion."
+        ),
     )
+    parser.add_argument("--expected-candidate-strategy", default=None)
+    parser.add_argument("--expected-official-strategy", default=None)
     parser.add_argument(
         "--apply",
         action="store_true",
@@ -353,6 +387,8 @@ def main(argv: list[str] | None = None) -> int:
         expected_official_sha256=args.expected_official_sha256,
         expected_binding=args.expected_binding,
         expected_strategy=args.expected_strategy,
+        expected_candidate_strategy=args.expected_candidate_strategy,
+        expected_official_strategy=args.expected_official_strategy,
         apply=args.apply,
     )
     print(json.dumps(receipt, ensure_ascii=False, indent=2))

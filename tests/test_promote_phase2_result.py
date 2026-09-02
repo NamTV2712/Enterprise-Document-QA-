@@ -4,7 +4,10 @@ from pathlib import Path
 import pytest
 
 from scripts.promote_phase2_result import _file_sha256, promote
-from src.evaluation.context_packing import CONTEXT_STRATEGY_SELECTIVE_V2
+from src.evaluation.context_packing import (
+    CONTEXT_STRATEGY_SELECTIVE_V2,
+    CONTEXT_STRATEGY_SELECTIVE_V5,
+)
 
 
 BINDING = "sha256:binding"
@@ -15,7 +18,12 @@ def _write(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
-def _fixture(tmp_path: Path) -> dict[str, Path | str]:
+def _fixture(
+    tmp_path: Path,
+    *,
+    candidate_strategy: str = CONTEXT_STRATEGY_SELECTIVE_V2,
+    official_strategy: str = CONTEXT_STRATEGY_SELECTIVE_V2,
+) -> dict[str, Path | str]:
     candidate_path = tmp_path / "candidate.json"
     official_path = tmp_path / "official.json"
     admission_path = tmp_path / "admission.json"
@@ -49,13 +57,13 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str]:
         "num_judged_ok": 30,
         "binding": BINDING,
         "bound_artifact_fingerprint": "sha256:artifact",
-        "context_strategy": CONTEXT_STRATEGY_SELECTIVE_V2,
+        "context_strategy": candidate_strategy,
         "metrics": {**metrics, "num_judged_ok": 30, "categories": {}},
         "cases": cases,
     }
     official = {
         "official": True,
-        "context_strategy": CONTEXT_STRATEGY_SELECTIVE_V2,
+        "context_strategy": official_strategy,
         "metrics": {**old_metrics, "num_judged_ok": 30, "categories": {}},
     }
     _write(candidate_path, candidate)
@@ -69,7 +77,7 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str]:
         "baseline_sha256": _file_sha256(official_path),
         "artifact_fingerprint": "sha256:artifact",
         "binding": BINDING,
-        "context_strategy": CONTEXT_STRATEGY_SELECTIVE_V2,
+        "context_strategy": candidate_strategy,
         "expected_cases": 30,
         "candidate_metrics": metrics,
         "baseline_metrics": old_metrics,
@@ -86,7 +94,13 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str]:
     }
 
 
-def _promote(paths: dict[str, Path | str], *, apply: bool) -> dict:
+def _promote(
+    paths: dict[str, Path | str],
+    *,
+    apply: bool,
+    expected_candidate_strategy: str | None = None,
+    expected_official_strategy: str | None = None,
+) -> dict:
     return promote(
         candidate_path=paths["candidate"],
         admission_path=paths["admission"],
@@ -97,6 +111,8 @@ def _promote(paths: dict[str, Path | str], *, apply: bool) -> dict:
         expected_admission_sha256=str(paths["admission_sha"]),
         expected_official_sha256=str(paths["official_sha"]),
         expected_binding=BINDING,
+        expected_candidate_strategy=expected_candidate_strategy,
+        expected_official_strategy=expected_official_strategy,
         apply=apply,
     )
 
@@ -128,6 +144,75 @@ def test_apply_archives_old_bytes_and_atomically_promotes(tmp_path: Path) -> Non
     assert archive.read_bytes() == before
     assert _file_sha256(Path(paths["official"])) == receipt["promoted_official_sha256"]
     assert json.loads((tmp_path / "receipt.json").read_text(encoding="utf-8")) == receipt
+
+
+def test_cross_strategy_promotion_pins_each_strategy_independently(
+    tmp_path: Path,
+) -> None:
+    paths = _fixture(
+        tmp_path,
+        candidate_strategy=CONTEXT_STRATEGY_SELECTIVE_V5,
+        official_strategy=CONTEXT_STRATEGY_SELECTIVE_V2,
+    )
+
+    receipt = _promote(
+        paths,
+        apply=False,
+        expected_candidate_strategy=CONTEXT_STRATEGY_SELECTIVE_V5,
+        expected_official_strategy=CONTEXT_STRATEGY_SELECTIVE_V2,
+    )
+
+    assert receipt["context_strategy"] == CONTEXT_STRATEGY_SELECTIVE_V5
+    assert receipt["candidate_context_strategy"] == CONTEXT_STRATEGY_SELECTIVE_V5
+    assert (
+        receipt["previous_official_context_strategy"]
+        == CONTEXT_STRATEGY_SELECTIVE_V2
+    )
+
+
+def test_cross_strategy_promotion_rejects_wrong_official_strategy(
+    tmp_path: Path,
+) -> None:
+    paths = _fixture(
+        tmp_path,
+        candidate_strategy=CONTEXT_STRATEGY_SELECTIVE_V5,
+        official_strategy=CONTEXT_STRATEGY_SELECTIVE_V2,
+    )
+
+    with pytest.raises(RuntimeError, match="protected baseline context strategy"):
+        _promote(
+            paths,
+            apply=True,
+            expected_candidate_strategy=CONTEXT_STRATEGY_SELECTIVE_V5,
+            expected_official_strategy=CONTEXT_STRATEGY_SELECTIVE_V5,
+        )
+
+    assert not (tmp_path / "archive").exists()
+
+
+def test_cross_strategy_promotion_rejects_admission_strategy_drift(
+    tmp_path: Path,
+) -> None:
+    paths = _fixture(
+        tmp_path,
+        candidate_strategy=CONTEXT_STRATEGY_SELECTIVE_V5,
+        official_strategy=CONTEXT_STRATEGY_SELECTIVE_V2,
+    )
+    admission_path = Path(paths["admission"])
+    admission = json.loads(admission_path.read_text(encoding="utf-8"))
+    admission["context_strategy"] = CONTEXT_STRATEGY_SELECTIVE_V2
+    _write(admission_path, admission)
+    paths["admission_sha"] = _file_sha256(admission_path)
+
+    with pytest.raises(RuntimeError, match="admission report context strategy"):
+        _promote(
+            paths,
+            apply=True,
+            expected_candidate_strategy=CONTEXT_STRATEGY_SELECTIVE_V5,
+            expected_official_strategy=CONTEXT_STRATEGY_SELECTIVE_V2,
+        )
+
+    assert not (tmp_path / "archive").exists()
 
 
 def test_source_drift_is_rejected_before_any_write(tmp_path: Path) -> None:

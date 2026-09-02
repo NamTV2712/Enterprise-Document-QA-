@@ -14,6 +14,28 @@ conversation requires confirmation when messages exist. These changes preserve
 the existing API contract, visual theme, and query behavior; frontend checks
 remain green after each UX/UI commit.
 
+### Frontend workspace polish checkpoint (2026-09-02)
+
+The latest frontend commits `09d4e69` and `7b2f7af` extract the workspace
+header, overview panel, and sidebar footer into memoized presentational
+components. Shared stable callbacks reduce prop churn during streaming. The
+dark-mode palette now uses a high-contrast indigo/teal brand mark with a
+CSS-only ambient gradient, the favicon matches the mark, and primary actions
+use the same accessible accent treatment. Overview now explains offline and
+loading backend states with a retry action. No API or interaction contract
+changed; 16 Vitest tests, TypeScript lint, and Vite production build pass.
+
+Measured baseline on the currently served Vercel deployment (before these
+commits) was Lighthouse mobile `71` (FCP `3.50s`, LCP `4.25s`, CLS `0`, TBT
+`246ms`, transfer `293 kB`) and desktop `98`. The local production preview
+after these commits measured mobile `88` (FCP `3.08s`, LCP `3.12s`, CLS
+`0.052`, TBT `0`, transfer `179 kB`); desktop measured LCP `2.36s` and CLS
+`0.008` with a lab score of `75`. These are not a valid production A/B because
+the Vercel domain still serves a cached pre-change deployment (`Age` over 8h,
+`X-Vercel-Cache: HIT`) and the linked Vercel project rejects CLI deployment
+with `Not authorized`. Re-run the production Lighthouse matrix after an
+authorized Vercel redeploy and a reachable backend are available.
+
 ### Frontend performance checkpoint (2026-09-02)
 
 The Vite client now uses `LazyMotion` with the DOM animation feature set,

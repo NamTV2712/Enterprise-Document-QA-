@@ -21,10 +21,21 @@ from src.generation.period_value_completeness import (
     parse_evidence_sources,
     validate_grounded_answer,
 )
+from src.generation.answer_stability import (
+    ANSWER_STABILITY_FINGERPRINT,
+    AnswerStabilityAssessment,
+    assess_answer_stability,
+)
 
 
 ANSWER_COMPLETION_FINGERPRINT = "sha256:" + hashlib.sha256(
-    b"answer-completion-v1-generic-enumeration-boundary-revenue-granularity-scoped-bullet-compaction-grouped-home-alias-evidence-label-repair-revenue-top-level-dedup-generic-numeric-grounding-repair-period-value-one-correction"
+    (
+        b"answer-completion-v1-generic-enumeration-boundary-revenue-granularity-"
+        b"scoped-bullet-compaction-grouped-home-alias-evidence-label-repair-"
+        b"revenue-top-level-dedup-generic-numeric-grounding-repair-period-value-"
+        b"one-correction-answer-stability-"
+        + ANSWER_STABILITY_FINGERPRINT.encode()
+    )
 ).hexdigest()
 
 
@@ -38,6 +49,7 @@ class AnswerCompletionAssessment:
 
     period_value: GroundedCompletionAssessment
     enumeration: EnumerationCompleteness
+    stability: AnswerStabilityAssessment
     grounding_passed: bool
     unsupported_numeric_claims: tuple[str, ...]
     correction_required: bool
@@ -84,6 +96,11 @@ def assess_answer_completion(
     period_value = assess_grounded_completion(
         question, evidence_context, answer
     )
+    stability = assess_answer_stability(question, evidence_context, answer)
+    # Table-shaped period/value evidence has its own stricter detector. Avoid
+    # adding prose anchors from another source to the same correction request.
+    if period_value.period_value.applicable:
+        stability = AnswerStabilityAssessment(False, None, (), (), (), True)
     enumeration = assess_enumeration_completeness(
         question, evidence_context, answer
     )
@@ -92,12 +109,16 @@ def assess_answer_completion(
             answer, evidence_context
         )
         correction_required = (
-            not enumeration.passed or not grounding_passed
+            not enumeration.passed
+            or not grounding_passed
+            or stability.correction_required
         )
     elif period_value.period_value.applicable:
         grounding_passed = period_value.grounding_passed
         unsupported_numeric_claims = period_value.unsupported_numeric_claims
-        correction_required = period_value.correction_required
+        correction_required = (
+            period_value.correction_required or stability.correction_required
+        )
     else:
         # Keep the unified postprocessor lightweight for ordinary qualitative
         # answers, but do not let an unsupported numeric claim bypass the
@@ -106,10 +127,13 @@ def assess_answer_completion(
         grounding_passed, unsupported_numeric_claims = _answer_contract_audit(
             answer, evidence_context
         )
-        correction_required = bool(unsupported_numeric_claims)
+        correction_required = (
+            bool(unsupported_numeric_claims) or stability.correction_required
+        )
     return AnswerCompletionAssessment(
         period_value,
         enumeration,
+        stability,
         grounding_passed,
         unsupported_numeric_claims,
         correction_required,
@@ -155,6 +179,15 @@ def _build_correction_prompt(
         sections.append(
             "Enumeration evidence was insufficient or ambiguous; do not add "
             "unsupported categories."
+        )
+    if assessment.stability.applicable and assessment.stability.missing_facts:
+        missing = "\n".join(
+            f"- Source {fact.source_number}: {fact.value}"
+            for fact in assessment.stability.missing_facts
+        )
+        sections.append(
+            "The draft omitted these exact query-anchored numeric facts from "
+            f"the evidence:\n{missing}"
         )
     if assessment.unsupported_numeric_claims:
         sections.append(
@@ -214,6 +247,8 @@ def correct_answer_once(
         )
     if not initial.grounding_passed:
         reasons.append("grounding_violation")
+    if initial.stability.correction_required:
+        reasons.append("missing_query_anchored_numeric_facts")
     try:
         corrected = generate_fn(
             _build_correction_prompt(
@@ -271,9 +306,28 @@ def completion_metadata(outcome: AnswerCompletion) -> dict[str, Any]:
         or outcome.final.enumeration.passed
     )
     return {
-        "applicable": period.applicable or outcome.initial.enumeration.applicable,
+        "applicable": (
+            period.applicable
+            or outcome.initial.enumeration.applicable
+            or outcome.initial.stability.applicable
+        ),
         "period_value_applicable": period.applicable,
         "enumeration_applicable": outcome.initial.enumeration.applicable,
+        "stability_applicable": outcome.initial.stability.applicable,
+        "stability_kind": outcome.initial.stability.kind,
+        "stability_expected_facts": [
+            {
+                "value": fact.value,
+                "source_number": fact.source_number,
+            }
+            for fact in outcome.initial.stability.expected_facts
+        ],
+        "stability_covered_facts": [
+            fact.value for fact in outcome.initial.stability.covered_facts
+        ],
+        "stability_missing_facts": [
+            fact.value for fact in outcome.initial.stability.missing_facts
+        ],
         "enumeration_kind": outcome.initial.enumeration.kind,
         "evidence_items": [
             {
@@ -298,8 +352,33 @@ def completion_metadata(outcome: AnswerCompletion) -> dict[str, Any]:
             item.label for item in outcome.final.enumeration.missing_items
         ],
         "final_overdetailed": outcome.final.enumeration.overdetailed,
-        "initial_passed": initial_period_passed and initial_enumeration_passed,
-        "final_passed": final_period_passed and final_enumeration_passed,
+        "initial_passed": (
+            initial_period_passed
+            and initial_enumeration_passed
+            and (
+                not outcome.initial.stability.applicable
+                or outcome.initial.stability.passed
+            )
+        ),
+        "final_passed": (
+            final_period_passed
+            and final_enumeration_passed
+            and (
+                not outcome.final.stability.applicable
+                or outcome.final.stability.passed
+            )
+        ),
+        "initial_stability_passed": (
+            not outcome.initial.stability.applicable
+            or outcome.initial.stability.passed
+        ),
+        "final_stability_passed": (
+            not outcome.final.stability.applicable
+            or outcome.final.stability.passed
+        ),
+        "final_stability_missing_facts": [
+            fact.value for fact in outcome.final.stability.missing_facts
+        ],
         "correction_attempted": outcome.correction_attempted,
         "correction_attempts": int(outcome.correction_attempted),
         "correction_accepted": outcome.correction_accepted,

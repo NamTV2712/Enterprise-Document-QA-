@@ -219,6 +219,54 @@ def test_unsupported_numeric_claim_gets_one_grounded_correction_outside_period_q
     assert "$96.2" not in result.answer
 
 
+def test_prose_numeric_stability_gets_one_grounded_correction() -> None:
+    context = """[Source 1] MSFT 10-K, MD&A
+Server products and cloud services revenue increased 23% driven by Azure and other cloud services revenue growth of 34%.
+Microsoft Cloud revenue increased 23% to $168.9 billion.
+"""
+    calls: list[str] = []
+    corrected = (
+        "Azure and other cloud services revenue growth was 34%, while "
+        "server products and cloud services revenue increased 23%. Microsoft "
+        "Cloud revenue increased 23% to $168.9 billion [Source 1]."
+    )
+
+    result = correct_answer_once(
+        "How does Microsoft describe its Azure and cloud services growth?",
+        context,
+        "Azure and other cloud services revenue growth was 34% and server "
+        "products and cloud services revenue increased 23% [Source 1].",
+        lambda prompt: calls.append(prompt) or corrected,
+    )
+
+    assert len(calls) == 1
+    assert "$168.9 billion" in calls[0]
+    assert result.correction_accepted is True
+    assert result.initial.stability.missing_facts
+    assert result.final.stability.passed is True
+
+
+def test_prose_numeric_stability_metadata_is_serialized() -> None:
+    context = """[Source 1] MSFT 10-K, MD&A
+Server products and cloud services revenue increased 23% driven by Azure and other cloud services revenue growth of 34%.
+Microsoft Cloud revenue increased 23% to $168.9 billion.
+"""
+    result = correct_answer_once(
+        "How does Microsoft describe its Azure and cloud services growth?",
+        context,
+        "Azure growth was 34% and server products and cloud services revenue "
+        "increased 23%; Microsoft Cloud revenue increased 23% to $168.9 "
+        "billion [Source 1].",
+        lambda _prompt: "unused",
+    )
+
+    metadata = completion_metadata(result)
+    assert metadata["stability_applicable"] is True
+    assert metadata["initial_stability_passed"] is True
+    assert metadata["final_stability_passed"] is True
+    assert metadata["stability_missing_facts"] == []
+
+
 def test_correction_provider_failure_is_not_hidden_or_retried() -> None:
     calls: list[str] = []
 

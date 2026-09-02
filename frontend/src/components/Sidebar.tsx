@@ -163,6 +163,26 @@ const SidebarBase: React.FC<SidebarProps> = ({
     };
   }, [isResizing]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    sidebarRef.current?.querySelector<HTMLElement>("button")?.focus();
+
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+      document.body.style.overflow = previousOverflow;
+      previouslyFocused?.focus();
+    };
+  }, [isOpen, onClose]);
+
   const resizeWithKeyboard = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     event.preventDefault();
@@ -178,6 +198,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
       {isOpen && (
         <div
           onClick={onClose}
+          aria-hidden="true"
           className="fixed inset-0 bg-[#26324A]/20 dark:bg-[#171D2B]/50 backdrop-blur-xs z-40 lg:hidden transition-opacity"
         />
       )}

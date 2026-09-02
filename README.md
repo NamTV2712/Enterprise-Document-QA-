@@ -279,23 +279,27 @@ Faithfulness `+0.0017`, Answer Relevancy `+0.0084`, Context Precision
 original SHA-256
 `db121babe17ac213222dead90a476e03a2fa256007f0335deac01ff1ff8fc648`.
 
-The next active improvement is the provider-free Fact Evidence Sufficiency
-v1 selector for four fact-lookup contexts whose official Context Precision was
-`0.5000`. Its offline audit passed `30/30` source roundtrips, preserved all
-`22` non-fact contexts byte-for-byte, and selected one self-contained source
-for each target case. Two isolated four-case sentinels passed `4/4` generation
-and `4/4` judging each with `1.0000/1.0000/1.0000` scores, and the
-provider-free reproducibility report passed `2/2` with complete checkpoint
-provenance. The clean V6 priority-2 candidate later completed `30/30`
-generation and `30/30` judging after Groq quota recovery, scoring
-`0.9990/0.9850/0.8613/0.9484` for faithfulness/relevancy/precision/overall.
-Its provider-free admission is `NO-GO` only because Answer Relevancy
-`0.9850` is below the dynamic `0.9917` floor. The three regressions are on
-non-fact no-op contexts, so the candidate remains unpromoted and no replay
-under this binding is authorized. The provider-free variance audit
-`data/diagnostics/fact_candidate_variance_v1.json` confirms all three contexts
-are byte-identical to the official renderer while their answer hashes differ;
-no retrieval change or threshold relaxation is justified.
+The Fact Evidence Sufficiency v1 selector and its follow-up Answer Stability
+v1 contract are complete as non-official candidates. The provider-free fact
+audit passed `30/30` source roundtrips, preserved all `22` non-fact contexts
+byte-for-byte, and selected one self-contained source for each target case.
+Two seven-case stability sentinels both completed `7/7` generation and `7/7`
+judging under binding
+`sha256:6cd6497a007199fd2323b056c27ac3d9eacd1ece4b3dabbab7d1cdafd684cc1f`;
+each passed the Azure numeric-stability canary and scored
+`1.0000/0.9857/0.8929/0.9595` for faithfulness/relevancy/precision/overall.
+The provider-free reproducibility report passed all `8/8` provenance and
+selector gates.
+
+The clean V7 priority-2 candidate completed `30/30` generation and `30/30`
+judging with no skips or parse failures. It scores
+`0.9987/0.9883/0.8463/0.9444` for faithfulness/relevancy/precision/overall.
+Admission is `NO-GO` only on aggregate Answer Relevancy
+(`0.9883 < 0.9917`); completion, target, integrity, Faithfulness, Context
+Precision, and Overall gates pass. The candidate remains non-official and the
+protected official is unchanged. The failed relevancy gate is not a retrieval
+failure: the remaining no-op context answers are provider/judge-sensitive,
+so thresholds must not be relaxed and the priority-3 shadow remains gated.
 
 ### Historical evaluation log
 

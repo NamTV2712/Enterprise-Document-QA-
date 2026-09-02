@@ -430,15 +430,23 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
          was corrected; all integrity, completion, target, CP, and Overall
          gates pass. Keep the candidate non-official; do not replay this
          binding or promote it.
-60. [ ] Do not start the priority-3 generalization shadow after the M8 NO-GO
-         automatically. The provider-free variance audit now records a
-         correction decision: all three regressions have unchanged contexts
-         and changed answer hashes, so no retrieval change or threshold
-         relaxation is justified. A new answer-stability/completeness contract
-         and binding is required before any provider replay. Only after that
-         gate is explicitly reopened may exact-priority Phase 1/2 shadow
-         selection run for the existing 22 priority-3 cases across 15
-         additional tickers. Keep the report separate from official N=30.
+60. [x] Add the provider-free Answer Stability v1 contract for exact numeric
+         growth facts, bind the new completion fingerprint, and run the
+         seven-case sentinel twice. Both replicates completed `7/7` generation
+         and judging, passed the Azure correction canary, and the reproducibility
+         audit passed all `8/8` provenance/selector gates.
+61. [x] Run one clean N=30 Answer Stability v1 candidate and apply the dynamic
+         admission gates. V7 completed `30/30 + 30/30` with F=`0.9987`,
+         AR=`0.9883`, CP=`0.8463`, and Overall=`0.9444`. Admission is `NO-GO`
+         only on aggregate Answer Relevancy (`0.9883 < 0.9917`); completion,
+         target, integrity, Faithfulness, Context Precision, and Overall gates
+         pass. Keep V7 non-official and preserve the protected official.
+62. [ ] Do not start the priority-3 generalization shadow while V7 admission
+         is `NO-GO`. First perform a provider-free diagnosis of the remaining
+         aggregate Answer Relevancy variance and design a new bounded contract
+         or binding. Do not replay V7, relax the relevancy floor, or merge
+         checkpoint-mixed metrics. Reopen the priority-3 shadow only after a
+         fresh provider-free gate passes; keep it separate from official N=30.
 
 ## Always-On Deployment
 

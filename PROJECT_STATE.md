@@ -63,6 +63,35 @@ the next candidate must address answer-output stability or completeness with a
 new provider-free contract and new binding. Admission thresholds remain
 unchanged.
 
+M9-M10 have now completed the answer-stability follow-up. The provider-free
+Answer Stability v1 contract is bound by fingerprint
+`sha256:2a39e719d04584631b3c3e871c2af7c9a5734cf36412d2f129652ec28e36d7fd`.
+It checks exact numeric facts derived from the rendered evidence for the
+Azure/cloud-growth and AWS-vs-Microsoft growth cases, while leaving table and
+enumeration completion contracts unchanged. Two isolated seven-case provider
+sentinels both completed `7/7` generation and `7/7` judging under binding
+`sha256:6cd6497a007199fd2323b056c27ac3d9eacd1ece4b3dabbab7d1cdafd684cc1f`.
+Both scored Faithfulness `1.0000`, Answer Relevancy `0.9857`, Context
+Precision `0.8929`, and Overall `0.9595`; the Azure correction canary passed
+in both replicates. The provider-free reproducibility report passed all `8/8`
+gates with identical selector outputs, generation binding, and judge-context
+fingerprint. Reports are retained in the ignored `data/` directory; they are
+non-official evidence.
+
+The clean priority-2 V7 candidate then completed `30/30` generation and
+`30/30` judging with no skipped or parse-invalid records. It scores
+Faithfulness `0.9987`, Answer Relevancy `0.9883`, Context Precision `0.8463`,
+and Overall `0.9444`. Its provider-free admission report is
+`data/diagnostics/phase2_admission_answer_stability_v7.json` (SHA-256
+`9bc84fb32301dd014116703321db051f3ea845028acf527e4b6ac5a408d9e8ea`). The
+completion, target, integrity, Faithfulness, Context Precision, and Overall
+gates pass; the only failure is aggregate Answer Relevancy
+`0.9883 < 0.9917`. The completion validator was corrected to recognize new
+stability-applicable questions without changing candidate bytes or provider
+outputs. V7 remains non-official, the protected official remains unchanged,
+and the priority-3 shadow is still gated. No threshold relaxation or replay
+under this binding is justified.
+
 The remainder of this section preserves the pre-M2 state as historical
 context; the active status above is authoritative for current work.
 

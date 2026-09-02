@@ -5,7 +5,7 @@
 
 import React from "react";
 import ReactMarkdown from "react-markdown";
-import { User, Cpu, AlertCircle, Loader2, RefreshCw } from "lucide-react";
+import { User, Cpu, AlertCircle, Loader2, RefreshCw, ChevronDown } from "lucide-react";
 import { Message } from "../types";
 import { SourcesPanel } from "./SourcesPanel";
 import { SubQueriesPanel } from "./SubQueriesPanel";
@@ -147,36 +147,29 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
           className={`${isUser ? "flex-none w-fit max-w-[82%] md:max-w-2xl" : "flex-1"} space-y-3 overflow-hidden`}
         >
           <div className={`flex flex-wrap items-center gap-2 ${isUser ? "justify-end" : ""}`}>
-            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.14em] font-sans">
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 font-sans">
               {isUser ? "Your question" : "SEC Filing Research Assistant"}
             </span>
             {!isUser && message.model_used && (
-              <span className="text-[9px] font-mono font-semibold bg-slate-50 dark:bg-[#171D2B] border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded shadow-4xs">
+              <span className="text-xs font-mono font-medium bg-slate-50 dark:bg-[#171D2B] border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded shadow-4xs">
                 {message.model_used}
               </span>
             )}
           </div>
 
           {!isUser && message.rewritten_query && (
-            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-lg border border-brand-indigo/15 bg-brand-indigo/[0.035] px-3 py-2 text-[10px]">
-              <span className="font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                Interpreted query
-              </span>
-              <span className="font-mono italic text-brand-indigo">
+            <details className="group rounded-lg border border-brand-indigo/15 bg-brand-indigo/[0.035] text-xs">
+              <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 font-semibold text-slate-600 dark:text-slate-300 [&::-webkit-details-marker]:hidden">
+                <span>Interpreted query</span>
+                <ChevronDown className="h-4 w-4 text-brand-indigo transition-transform group-open:rotate-180" />
+              </summary>
+              <p className="ui-expand-enter border-t border-brand-indigo/10 px-3 py-2 font-mono text-xs italic leading-relaxed text-brand-indigo">
                 {message.rewritten_query}
-              </span>
-            </div>
+              </p>
+            </details>
           )}
 
-          {/* Collapsible Decomposed Sub-Queries Trace Log (SIGNATURE ELEMENT) */}
-          {!isUser && (message.subQueries || message.wasDecomposed) && (
-            <SubQueriesPanel
-              subQueries={message.subQueries || []}
-              isLatest={isLatest}
-            />
-          )}
-
-          {/* Render the answer as soon as it arrives; the trace remains visible alongside it. */}
+          {/* Keep the answer visually primary; execution details follow it. */}
           <div
             className={`ui-answer-enter prose prose-slate dark:prose-invert max-w-none text-[#26324A] dark:text-[#FCFBF8] text-sm md:text-base leading-relaxed font-sans ${
               isUser
@@ -286,14 +279,21 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                     ) : (
                       <div className="flex items-center gap-2 text-slate-400 py-1 font-mono">
                         <Loader2 className="w-4 h-4 animate-spin text-brand-indigo" />
-                        <span className="text-xs font-semibold uppercase tracking-wider">
-                          RETRIEVING DISCLOSURES & COMPILING RESPONSE...
+                        <span className="text-sm font-medium">
+                          Retrieving filing evidence and preparing an answer…
                         </span>
                       </div>
                     )}
                   </div>
                 )}
           </div>
+
+          {!isUser && (message.subQueries || message.wasDecomposed) && (
+            <SubQueriesPanel
+              subQueries={message.subQueries || []}
+              isLatest={isLatest}
+            />
+          )}
 
           {/* Streaming Blink Cursor */}
           {message.isStreaming && (

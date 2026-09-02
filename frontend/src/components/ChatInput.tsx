@@ -163,7 +163,7 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
             {charCount > 0 && (
               <Tooltip content="Maximum 500 characters per question.">
                 <span
-                  className={`text-[10px] font-mono font-bold select-none cursor-help ${
+                  className={`text-xs font-mono font-semibold select-none cursor-help ${
                     isTooShort || isTooLong
                       ? "text-rose-500"
                       : "text-slate-400 dark:text-slate-500"
@@ -191,13 +191,14 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
                 title="Ask"
                 aria-label="Send question"
                 disabled={!isValidLength || isDisabled}
-                className={`min-h-10 min-w-10 p-2.5 rounded-lg flex items-center justify-center transition-all ${
+                className={`min-h-10 min-w-10 sm:min-w-[4.5rem] px-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
                   isValidLength && !isDisabled
                     ? "bg-[#26324A] dark:bg-[#FCFBF8] text-[#FCFBF8] dark:text-[#26324A] hover:opacity-95 cursor-pointer shadow-3xs"
                     : "bg-slate-100 dark:bg-slate-900/50 text-slate-400 dark:text-slate-650 cursor-not-allowed border border-slate-200/50 dark:border-slate-800/50"
                 }`}
               >
                 <Send className="w-4 h-4" />
+                <span className="hidden sm:inline text-xs font-semibold">Ask</span>
               </button>
             )}
           </div>
@@ -205,7 +206,7 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
 
         {/* Char count warnings */}
         {charCount > 0 && (
-          <div className="flex justify-between text-[10px] font-sans font-bold text-slate-400 dark:text-slate-500 px-1 uppercase tracking-wider" role="status" aria-live="polite">
+          <div className="flex justify-between text-xs font-sans font-medium text-slate-400 dark:text-slate-500 px-1" role="status" aria-live="polite">
             {isTooShort && (
               <span className="text-rose-500 font-bold">
                 Query must be at least 5 characters.

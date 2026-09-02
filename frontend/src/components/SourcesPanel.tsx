@@ -152,22 +152,22 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({ sources }) => {
         aria-controls={panelId}
         aria-label={`${isOpen ? "Hide" : "Show"} ${sources.length} retrieved filing evidence excerpts`}
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between gap-3 p-3.5 text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+        className="w-full min-h-12 flex items-center justify-between gap-3 p-3.5 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
       >
         <div className="flex items-start gap-2 min-w-0">
           <FileText className="w-4 h-4 mt-0.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
           <span className="min-w-0">
             <span className="block font-sans uppercase tracking-wider">
-              Retrieved Filing Evidence · {sources.length} excerpts
+              Retrieved filing evidence · {sources.length} excerpts
             </span>
-            <span className="block mt-1 text-[10px] font-normal text-slate-500 dark:text-slate-400 normal-case tracking-normal truncate">
+            <span className="block mt-1 text-xs font-normal text-slate-500 dark:text-slate-400 normal-case tracking-normal truncate">
               {companySummary}
               {remainingCompanies > 0 ? ` · +${remainingCompanies} more` : ""}
               {" · "}{isOpen ? "Hide source text" : "Open source text and ranking details"}
             </span>
           </span>
         </div>
-        <span className="flex items-center gap-1.5 flex-shrink-0 text-[10px] uppercase tracking-wider text-brand-indigo">
+        <span className="flex items-center gap-1.5 flex-shrink-0 text-xs font-semibold text-brand-indigo">
           {isOpen ? "Hide" : "View"}
           {isOpen ? (
             <ChevronUp className="w-4 h-4" />
@@ -182,12 +182,12 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({ sources }) => {
             id={panelId}
             className="ui-expand-enter overflow-hidden border-t border-slate-200/60 dark:border-slate-800/80"
           >
-            <div className="px-3.5 py-2.5 bg-brand-indigo/[0.03] border-b border-slate-200/60 dark:border-slate-800/80 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+            <div className="px-3.5 py-3 bg-brand-indigo/[0.03] border-b border-slate-200/60 dark:border-slate-800/80 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
               These are the filing excerpts used to ground the answer. Rank score
               orders excerpts within this result set; it is not a probability or
               confidence percentage.
             </div>
-            <div className="p-3.5 divide-y divide-slate-200/50 dark:divide-slate-800/40 max-h-[min(28rem,55vh)] overflow-y-auto bg-slate-50/30 dark:bg-slate-950/20">
+            <div className="p-3.5 divide-y divide-slate-200/50 dark:divide-slate-800/40 md:max-h-[min(28rem,55vh)] md:overflow-y-auto bg-slate-50/30 dark:bg-slate-950/20">
               {sources.map((source, index) => {
                 const { section, ticker, year } = getSectionDisplay(
                   source.citation,
@@ -216,7 +216,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({ sources }) => {
                       </div>
 
                       <div className="flex items-center gap-1.5 font-mono">
-                        <span className="text-[9px] text-slate-400 dark:text-slate-500 uppercase tracking-wider font-bold">
+                        <span className="text-xs text-slate-400 dark:text-slate-500 font-semibold">
                           Rank score
                         </span>
                         <span className="text-xs font-bold text-brand-indigo bg-brand-indigo/5 border border-brand-indigo/20 px-1.5 py-0.5 rounded shadow-3xs">
@@ -224,7 +224,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({ sources }) => {
                         </span>
                       </div>
                     </div>
-                    <p className="text-xs text-slate-650 dark:text-slate-350 leading-relaxed bg-white dark:bg-slate-900/50 p-3 rounded-lg border border-slate-200/50 dark:border-slate-800/40 whitespace-pre-wrap select-all font-mono shadow-4xs">
+                    <p className="text-sm text-slate-650 dark:text-slate-350 leading-relaxed bg-white dark:bg-slate-900/50 p-3.5 rounded-lg border border-slate-200/50 dark:border-slate-800/40 whitespace-pre-wrap select-all font-sans shadow-4xs">
                       {source.text_preview}
                     </p>
                   </div>

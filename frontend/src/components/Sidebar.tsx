@@ -6,8 +6,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   SlidersHorizontal,
-  RefreshCw,
-  TrendingUp,
   FileSpreadsheet,
   X,
   Compass,
@@ -21,6 +19,8 @@ import {
 import { SampleQuestionChips, SampleQuestion } from "./SampleQuestionChips";
 import { HealthResponse } from "../types";
 import { Tooltip } from "./Tooltip";
+import { BrandMark } from "./BrandMark";
+import { SidebarFooter } from "./SidebarFooter";
 import {
   ALL_SECTIONS_DESCRIPTION,
   COMPANY_NAMES,
@@ -231,9 +231,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
         {/* Header */}
         <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-[#26324A]/10">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded bg-[#26324A] dark:bg-[#FCFBF8]/10 flex items-center justify-center border border-slate-300 dark:border-slate-700">
-              <TrendingUp className="w-4 h-4 text-[#FCFBF8] dark:text-slate-300" />
-            </div>
+            <BrandMark size="md" />
             <div>
               <h1 className="text-xs font-black tracking-tight text-[#26324A] dark:text-[#FCFBF8] uppercase font-serif">
                 SEC RAG Engine
@@ -552,60 +550,11 @@ const SidebarBase: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        {/* Footer with Pipeline Status / Session Actions */}
-        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#171D2B] space-y-3 relative overflow-hidden">
-          {/* Health metrics stay secondary to the search controls. */}
-          <div className="space-y-2.5 text-xs relative z-10" role="status" aria-live="polite">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500 dark:text-slate-400 font-semibold text-xs">
-                System metrics
-              </span>
-            </div>
-
-            {healthData?.memory && (
-              <div className="grid grid-cols-2 gap-2 text-xs border-t border-slate-200 dark:border-slate-800/80 pt-2.5">
-                <div className="bg-[#FCFBF8] dark:bg-[#26324A]/30 p-2 rounded border border-slate-200 dark:border-slate-800">
-                  <div className="text-slate-500 dark:text-slate-450 font-sans font-bold">
-                    Active Sessions
-                  </div>
-                  <div className="text-[#26324A] dark:text-[#FCFBF8] font-bold mt-1 text-xs font-mono">
-                    {healthData.memory.active_sessions}
-                  </div>
-                  <div className="mt-1 text-xs leading-tight text-slate-400 dark:text-slate-500 font-sans">
-                    In-memory conversations
-                  </div>
-                </div>
-                <div className="bg-[#FCFBF8] dark:bg-[#26324A]/30 p-2 rounded border border-slate-200 dark:border-slate-800">
-                  <div className="text-slate-500 dark:text-slate-450 font-sans font-bold">
-                    Total Turns
-                  </div>
-                  <div className="text-[#26324A] dark:text-[#FCFBF8] font-bold mt-1 text-xs font-mono">
-                    {healthData.memory.total_turns}
-                  </div>
-                  <div className="mt-1 text-xs leading-tight text-slate-400 dark:text-slate-500 font-sans">
-                    Retained messages
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* New Conversation Button */}
-          <button
-            type="button"
-            id="new-convo-btn"
-            disabled={isClearingSession}
-            onClick={onNewConversation}
-            className="w-full min-h-11 flex items-center justify-center gap-2 py-2 px-4 bg-[#26324A] dark:bg-[#FCFBF8] text-[#FCFBF8] dark:text-[#26324A] hover:opacity-90 disabled:opacity-50 rounded-lg text-sm font-semibold transition-all cursor-pointer font-sans"
-          >
-            <RefreshCw
-              className={`w-3.5 h-3.5 ${isClearingSession ? "animate-spin" : "animate-none"}`}
-            />
-            <span>
-              {isClearingSession ? "Resetting..." : "New conversation"}
-            </span>
-          </button>
-        </div>
+        <SidebarFooter
+          healthData={healthData}
+          isClearingSession={isClearingSession}
+          onNewConversation={onNewConversation}
+        />
       </aside>
     </>
   );

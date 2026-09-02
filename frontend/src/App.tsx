@@ -12,27 +12,12 @@ import {
   useCallback,
   useMemo,
 } from "react";
-import {
-  Menu,
-  Sun,
-  Moon,
-  TrendingUp,
-  Database,
-  GitFork,
-  CheckCircle2,
-  HelpCircle,
-  RefreshCw,
-  BookOpen,
-  MessageSquare,
-  ChevronDown,
-  AlertTriangle,
-  X,
-} from "lucide-react";
+import { AlertTriangle, ChevronDown, X } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { ChatInput } from "./components/ChatInput";
-import { ConnectionStatus } from "./components/ConnectionStatus";
-import { Tooltip } from "./components/Tooltip";
 import { SampleQuestion } from "./components/SampleQuestionChips";
+import { OverviewPanel } from "./components/OverviewPanel";
+import { WorkspaceHeader } from "./components/WorkspaceHeader";
 import { Message, HealthResponse } from "./types";
 import {
   checkHealth,
@@ -694,13 +679,34 @@ export default function App() {
     setIsSidebarOpen(false);
   }, []);
 
+  const handleToggleSidebar = useCallback(() => {
+    setIsSidebarOpen((open) => !open);
+  }, []);
+
+  const handleToggleTheme = useCallback(() => {
+    setTheme((current) => (current === "dark" ? "light" : "dark"));
+  }, []);
+
+  const handleReturnToConversation = useCallback(() => {
+    setActiveView("conversation");
+  }, []);
+
+  const handleRetryConnection = useCallback(async () => {
+    try {
+      await refreshHealth(true);
+    } catch {
+      setIsBackendConnected(false);
+      setIsPipelineReady(false);
+    }
+  }, [refreshHealth]);
+
   const isStreaming = useMemo(
     () => messages.some((message) => message.isStreaming),
     [messages],
   );
 
   return (
-    <div className="flex w-screen max-w-full h-dvh bg-[#FCFBF8] dark:bg-[#171D2B] font-sans text-slate-800 dark:text-slate-100 overflow-hidden bg-grid-pattern">
+    <div className="app-shell flex w-screen max-w-full h-dvh bg-[#FCFBF8] dark:bg-[#171D2B] font-sans text-slate-800 dark:text-slate-100 overflow-hidden bg-grid-pattern">
       {/* Collapsible Sidebar */}
       <Sidebar
         tickers={tickers}
@@ -724,243 +730,35 @@ export default function App() {
       {/* Main chat window area */}
       <div className="w-0 flex-1 min-w-0 max-w-full flex flex-col h-full overflow-hidden">
         {/* Header toolbar */}
-        <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white/85 dark:bg-[#171D2B]/85 backdrop-blur-md px-4 md:px-6 flex items-center justify-between flex-shrink-0 z-20 shadow-xs">
-          <div className="flex items-center gap-3 min-w-0">
-            <button
-              type="button"
-              id="sidebar-toggle"
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              aria-controls="control-sidebar"
-              aria-expanded={isSidebarOpen}
-              aria-label={
-                isSidebarOpen ? "Close search controls" : "Open search controls"
-              }
-              className="min-h-9 min-w-9 p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden text-slate-600 dark:text-slate-300 transition-colors"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-            <div className="flex items-center gap-2 min-w-0">
-              <TrendingUp className="w-5 h-5 text-indigo-600 dark:text-indigo-400 hidden lg:block" />
-              <span className="font-semibold text-sm md:text-base text-slate-900 dark:text-white truncate">
-                Enterprise Document QA
-              </span>
-            </div>
-            {messages.length > 0 && activeView === "conversation" && (
-              <button
-                type="button"
-                onClick={() => setActiveView("overview")}
-                aria-label="Show overview"
-                className="lg:hidden min-h-9 inline-flex items-center gap-1.5 px-2 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                <BookOpen className="w-4 h-4" />
-                <span className="hidden sm:inline">Overview</span>
-              </button>
-            )}
-            <nav
-              className="hidden lg:flex items-center gap-1 ml-2 pl-3 border-l border-slate-200 dark:border-slate-700"
-              aria-label="Workspace views"
-            >
-              <button
-                type="button"
-                onClick={() => setActiveView("overview")}
-                aria-pressed={activeView === "overview"}
-                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-                  activeView === "overview"
-                    ? "bg-brand-indigo/10 text-brand-indigo"
-                    : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                }`}
-              >
-                <BookOpen className="w-3.5 h-3.5" />
-                Overview
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveView("conversation")}
-                disabled={messages.length === 0}
-                aria-pressed={activeView === "conversation"}
-                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
-                  activeView === "conversation"
-                    ? "bg-brand-indigo/10 text-brand-indigo"
-                    : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                } disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer`}
-              >
-                <MessageSquare className="w-3.5 h-3.5" />
-                Conversation
-              </button>
-            </nav>
-          </div>
-
-          <div className="flex items-center gap-2 md:gap-3">
-            <ConnectionStatus
-              isBackendConnected={isBackendConnected}
-              isPipelineReady={isPipelineReady}
-              companyCount={tickers.length || undefined}
-            />
-
-            {/* Dark mode switcher */}
-            <button
-              type="button"
-              id="theme-switcher-btn"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              aria-pressed={theme === "dark"}
-              className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
-              title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
-              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            >
-              {theme === "dark" ? (
-                <Sun className="w-4 h-4" />
-              ) : (
-                <Moon className="w-4 h-4" />
-              )}
-            </button>
-
-            {/* Quick clean chat */}
-            <button
-              type="button"
-              id="quick-reset-btn"
-              disabled={isClearingSession || messages.length === 0}
-              aria-busy={isClearingSession}
-              onClick={requestNewConversation}
-              className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-rose-500 text-slate-400 dark:text-slate-500 disabled:opacity-50 transition-colors cursor-pointer"
-              title="Start a new conversation"
-              aria-label="Start a new conversation"
-            >
-              <RefreshCw
-                className={`w-4 h-4 ${isClearingSession ? "animate-spin" : ""}`}
-              />
-            </button>
-          </div>
-        </header>
-
+        <WorkspaceHeader
+          isSidebarOpen={isSidebarOpen}
+          onToggleSidebar={handleToggleSidebar}
+          activeView={activeView}
+          onSelectView={setActiveView}
+          hasMessages={messages.length > 0}
+          isBackendConnected={isBackendConnected}
+          isPipelineReady={isPipelineReady}
+          companyCount={tickers.length || undefined}
+          theme={theme}
+          onToggleTheme={handleToggleTheme}
+          isClearingSession={isClearingSession}
+          onReset={requestNewConversation}
+        />
         {/* Content stream area */}
         <main
           aria-label="Research workspace"
           ref={scrollContainerRef}
-          className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 bg-[#FCFBF8] dark:bg-[#171D2B] relative z-10"
+          className="workspace-scroll flex-1 overflow-y-auto overflow-x-hidden min-h-0 bg-[#FCFBF8] dark:bg-[#171D2B] relative z-10"
         >
           {activeView === "overview" ? (
-            /* Lightweight onboarding splash screen */
-            <div
-              className="w-full max-w-3xl mx-auto px-5 py-8 md:py-12 space-y-7 relative z-10 font-sans animate-fade-in"
-              id="onboarding-panel"
-            >
-              <div className="space-y-3 text-center">
-                {messages.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setActiveView("conversation")}
-                    className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-indigo hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors cursor-pointer"
-                  >
-                    <MessageSquare className="w-3.5 h-3.5" />
-                    Return to conversation
-                  </button>
-                )}
-                <p className="mx-auto max-w-lg text-xs font-medium text-slate-500 dark:text-slate-400">
-                  Choose an optional company or filing section in the sidebar,
-                  then ask your question below. The workspace keeps the source
-                  excerpts beside every grounded answer.
-                </p>
-                <h2 className="max-w-full text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-[#26324A] dark:text-[#FCFBF8] py-1 font-serif break-words">
-                  Ask questions. Verify every answer.
-                </h2>
-                <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 max-w-xl mx-auto leading-relaxed font-sans">
-                  Research SEC 10-K filings across {tickers.length || 44} searchable
-                  companies with cited evidence and a clear retrieval trail.
-                </p>
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 rounded-xl border border-brand-indigo/15 bg-white/80 dark:bg-[#26324A]/20 p-3.5 shadow-3xs">
-                <span className="text-sm font-semibold text-[#26324A] dark:text-[#FCFBF8]">
-                  Start with a natural-language question
-                </span>
-                <span className="hidden sm:inline text-slate-300 dark:text-slate-600">·</span>
-                <span className="text-xs text-slate-500 dark:text-slate-400">
-                  Press Enter to search, Shift+Enter for a new line
-                </span>
-              </div>
-
-              {/* Specification parameters info grid */}
-              <div
-                className="grid grid-cols-1 md:grid-cols-3 gap-4"
-                id="features-cards"
-              >
-                <article className="group p-5 bg-white dark:bg-[#26324A]/20 border border-slate-300 dark:border-slate-800 rounded-lg space-y-2.5 hover:border-brand-indigo/50 dark:hover:border-brand-indigo/50 hover:bg-indigo-500/[0.01] dark:hover:bg-brand-indigo/[0.02] hover:-translate-y-1 hover:shadow-[0_4px_20px_rgba(91,99,211,0.08)] transition-all duration-300 cursor-default shadow-3xs">
-                  <Tooltip content="Scans individual 10-K blocks in business descriptions, risk matrices, and financial statements.">
-                    <div className="w-8 h-8 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 group-hover:text-brand-indigo group-hover:bg-brand-indigo/15 group-hover:scale-105 transition-all duration-300 cursor-help">
-                      <Database className="w-4 h-4" />
-                    </div>
-                  </Tooltip>
-                  <h3 className="text-sm font-bold text-[#26324A] dark:text-[#FCFBF8] font-sans group-hover:text-brand-indigo transition-colors duration-300">
-                    Granular Chunk Scan
-                  </h3>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300 leading-relaxed font-sans transition-colors duration-300">
-                    Scans individual 10-K blocks in business descriptions, risk
-                    matrices, and financial statements.
-                  </p>
-                </article>
-
-                <article className="group p-5 bg-white dark:bg-[#26324A]/20 border border-slate-300 dark:border-slate-800 rounded-lg space-y-2.5 hover:border-brand-indigo/50 dark:hover:border-brand-indigo/50 hover:bg-indigo-500/[0.01] dark:hover:bg-brand-indigo/[0.02] hover:-translate-y-1 hover:shadow-[0_4px_20px_rgba(91,99,211,0.08)] transition-all duration-300 cursor-default shadow-3xs">
-                  <Tooltip content="Decomposes comparative requests into focused retrievals and presents the completed execution summary.">
-                    <div className="w-8 h-8 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 group-hover:text-brand-indigo group-hover:bg-brand-indigo/15 group-hover:scale-105 transition-all duration-300 cursor-help">
-                      <GitFork className="w-4 h-4" />
-                    </div>
-                  </Tooltip>
-                  <h3 className="text-sm font-bold text-[#26324A] dark:text-[#FCFBF8] font-sans group-hover:text-brand-indigo transition-colors duration-300">
-                    Multi-Hop Querying
-                  </h3>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300 leading-relaxed font-sans transition-colors duration-300">
-                    Decomposes comparative requests into focused retrievals and
-                    presents a grounded execution summary.
-                  </p>
-                </article>
-
-                <article className="group p-5 bg-white dark:bg-[#26324A]/20 border border-slate-300 dark:border-slate-800 rounded-lg space-y-2.5 hover:border-brand-indigo/50 dark:hover:border-brand-indigo/50 hover:bg-indigo-500/[0.01] dark:hover:bg-brand-indigo/[0.02] hover:-translate-y-1 hover:shadow-[0_4px_20px_rgba(91,99,211,0.08)] transition-all duration-300 cursor-default shadow-3xs">
-                  <Tooltip content="All extracted disclosures are verified with alignment margins, item tags, and exact document indexes.">
-                    <div className="w-8 h-8 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 group-hover:text-brand-indigo group-hover:bg-brand-indigo/15 group-hover:scale-105 transition-all duration-300 cursor-help">
-                      <CheckCircle2 className="w-4 h-4" />
-                    </div>
-                  </Tooltip>
-                  <h3 className="text-sm font-bold text-[#26324A] dark:text-[#FCFBF8] font-sans group-hover:text-brand-indigo transition-colors duration-300">
-                    Verifiable Sources
-                  </h3>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300 leading-relaxed font-sans transition-colors duration-300">
-                    Every answer keeps the retrieved filing excerpts visible so
-                    you can inspect the source text behind each claim.
-                  </p>
-                </article>
-              </div>
-
-              <details className="group rounded-xl border border-brand-indigo/20 bg-brand-indigo/[0.035] dark:bg-brand-indigo/[0.06] p-4 md:p-5">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-brand-indigo [&::-webkit-details-marker]:hidden">
-                  <span className="flex items-center gap-2">
-                    <HelpCircle className="w-4 h-4" />
-                    How to read the workspace
-                  </span>
-                  <ChevronDown className="w-4 h-4 transition-transform group-open:rotate-180" />
-                </summary>
-                <div className="ui-expand-enter grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-350">
-                  <p>
-                    <strong className="block text-slate-800 dark:text-slate-100">1. Choose scope</strong>
-                    Select a company and 10-K section, or leave both on All for
-                    discovery and comparisons.
-                  </p>
-                  <p>
-                    <strong className="block text-slate-800 dark:text-slate-100">2. Ask naturally</strong>
-                    Comparisons can be decomposed into focused sub-queries before
-                    a grounded summary is produced.
-                  </p>
-                  <p>
-                    <strong className="block text-slate-800 dark:text-slate-100">3. Verify evidence</strong>
-                    Open the evidence panel to read source excerpts. Rank scores
-                    order results; they are not confidence percentages.
-                  </p>
-                </div>
-                <p className="md:col-span-3 text-xs text-slate-500 dark:text-slate-400 border-t border-brand-indigo/10 pt-3">
-                  Research demo only · Answers may be incomplete and are not
-                  financial advice.
-                </p>
-              </details>
-            </div>
+            <OverviewPanel
+              hasMessages={messages.length > 0}
+              companyCount={tickers.length}
+              onReturnToConversation={handleReturnToConversation}
+              isBackendConnected={isBackendConnected}
+              isPipelineReady={isPipelineReady}
+              onRetryConnection={handleRetryConnection}
+            />
           ) : (
             /* Active Chat Stream */
             <div className="flex flex-col w-full min-h-full py-4 md:py-5 pb-6 relative">
@@ -999,7 +797,7 @@ export default function App() {
         </main>
 
         {/* The composer is a flex sibling, so it never overlays response evidence. */}
-        <div className="flex-shrink-0 bg-[#FCFBF8] dark:bg-[#171D2B] z-10">
+        <div className="composer-shell flex-shrink-0 bg-[#FCFBF8] dark:bg-[#171D2B] z-10">
           <ChatInput
             inputText={inputText}
             setInputText={setInputText}

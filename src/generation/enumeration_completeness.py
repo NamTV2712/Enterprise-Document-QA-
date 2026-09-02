@@ -21,7 +21,7 @@ from src.generation.period_value_completeness import (
 
 
 ENUMERATION_COMPLETENESS_FINGERPRINT = "sha256:" + hashlib.sha256(
-    b"enumeration-answer-completeness-v1-bulleted-generic-label-boundary-grouped-home-alias-one-correction-revenue-top-level-dedup"
+    b"enumeration-answer-completeness-v2-bulleted-generic-label-boundary-grouped-home-alias-one-correction-revenue-top-level-dedup-risk-prose-category-alias-safe-compaction"
 ).hexdigest()
 
 _EXHAUSTIVE_RE = re.compile(
@@ -80,6 +80,37 @@ _RISK_HEADING_RE = re.compile(
 _AI_RISK_HEADING_RE = re.compile(
     r"^\s*Issues in the development, deployment, and use of AI\b[^\n]*$",
     re.IGNORECASE | re.MULTILINE,
+)
+_RISK_PROSE_PATTERNS = (
+    (
+        "Threats to security",
+        re.compile(r"^\s*Threats to security\b", re.IGNORECASE | re.MULTILINE),
+        ("threat actors",),
+    ),
+    (
+        "Occurrence of regional epidemics or a global pandemic",
+        re.compile(
+            r"^\s*The occurrence of regional epidemics or a global pandemic\b",
+            re.IGNORECASE | re.MULTILINE,
+        ),
+        ("regional epidemics", "global pandemic", "pandemic"),
+    ),
+    (
+        "Long-term effects of climate change",
+        re.compile(
+            r"^\s*The long-term effects of climate change\b",
+            re.IGNORECASE | re.MULTILINE,
+        ),
+        ("climate change",),
+    ),
+    (
+        "Global business operational and economic risks",
+        re.compile(
+            r"^\s*Our global business exposes us to operational and economic risks\b",
+            re.IGNORECASE | re.MULTILINE,
+        ),
+        ("global business", "economic risks", "geopolitical risks"),
+    ),
 )
 
 _HEADING_EXCLUSIONS = {
@@ -203,7 +234,7 @@ def compact_enumeration_answer(
     """Compact bullets to one evidence item while preserving their content."""
     if (
         not assessment.applicable
-        or assessment.kind not in {"product", "revenue"}
+        or assessment.kind not in {"product", "revenue", "risk"}
         or not assessment.evidence_items
     ):
         return answer, False
@@ -214,6 +245,11 @@ def compact_enumeration_answer(
         if re.match(r"^\s*(?:[-*•]|\d+[.)])\s+", line)
     ]
     unclassified_indexes = set(_unclassified_bullet_indexes(answer, assessment))
+    # Risk prose is intentionally conservative.  Never discard an unclassified
+    # risk bullet until the extractor has proven that all filing-native risk
+    # categories in the rendered evidence are represented.
+    if assessment.kind == "risk" and unclassified_indexes:
+        return answer, False
     item_matches = _bullet_item_matches(answer, assessment)
     grouped_indexes: dict[int, list[int]] = {}
     for index, item_index in item_matches.items():
@@ -242,6 +278,12 @@ def compact_enumeration_answer(
             continue
         item_index = item_matches.get(index)
         if item_index is None:
+            compacted_lines.append(line)
+            continue
+        if assessment.kind == "risk":
+            # For risk categories, the first evidence-backed top-level bullet
+            # is the canonical one.  Merging sub-risk prose would retain the
+            # very over-expansion this compactor is meant to remove.
             compacted_lines.append(line)
             continue
         merged = line
@@ -587,6 +629,22 @@ def _risk_items(source: EvidenceSource, items: list[EnumerationItem]) -> None:
             items,
             "AI",
             ("artificial intelligence",),
+            source.number,
+            "heading",
+        )
+    for label, pattern, aliases in _RISK_PROSE_PATTERNS:
+        if pattern.search(source.text):
+            _add_item(items, label, aliases, source.number, "risk_prose")
+    # The filing introduces supply/quality problems as part of the broader
+    # operational-risk category.  Add only an alias so compaction preserves
+    # the filing's top-level granularity.
+    if any(
+        _normalize(item.label).startswith("operational") for item in items
+    ) and re.search(r"\bsupply or quality problems\b", source.text, re.I):
+        _add_item(
+            items,
+            "Operational Risks",
+            ("supply or quality problems", "supply or quality"),
             source.number,
             "heading",
         )

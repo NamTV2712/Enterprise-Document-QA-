@@ -36,6 +36,18 @@ Services net sales were $96,169 million in fiscal year 2025.
 COMPARISON_QUESTION = (
     "Which company depends more on cloud/subscription revenue, Microsoft or Apple?"
 )
+RISK_ENUMERATION_QUESTION = "What are all the major risk factors Microsoft discloses?"
+RISK_ENUMERATION_CONTEXT = """[Source 1] Microsoft 10-K, Risk Factors
+STRATEGIC AND COMPETITIVE RISKS
+Trade:
+Cybersecurity:
+OPERATIONAL RISKS
+We may experience supply or quality problems.
+Threats to security can take a variety of forms.
+The occurrence of regional epidemics or a global pandemic could adversely affect our business.
+The long-term effects of climate change on the global economy are unclear.
+Our global business exposes us to operational and economic risks.
+"""
 
 
 def test_enumeration_correction_is_one_bounded_provider_call() -> None:
@@ -191,6 +203,38 @@ def test_revenue_subcategories_are_compacted_to_top_level_evidence_items() -> No
     assert "Server products" in result.answer
     assert "Microsoft 365 Consumer products" in result.answer
     assert "Devices" in result.answer
+
+
+def test_risk_subcategories_are_compacted_without_provider_call() -> None:
+    calls: list[str] = []
+    answer = "\n".join(
+        [
+            "- Strategic and Competitive Risks [Source 1]",
+            "- Competition in the technology sector [Source 1]",
+            "- Trade [Source 1]",
+            "- Cybersecurity [Source 1]",
+            "- Operational Risks [Source 1]",
+            "- Supply or quality problems [Source 1]",
+            "- Threats to security [Source 1]",
+            "- Occurrence of regional epidemics or a global pandemic [Source 1]",
+            "- Long-term effects of climate change [Source 1]",
+            "- Global business operational and economic risks [Source 1]",
+        ]
+    )
+
+    result = correct_answer_once(
+        RISK_ENUMERATION_QUESTION,
+        RISK_ENUMERATION_CONTEXT,
+        answer,
+        lambda prompt: calls.append(prompt) or "unused",
+    )
+
+    assert calls == []
+    assert result.correction_attempted is False
+    assert result.answer_compacted is True
+    assert result.final.enumeration.overdetailed is False
+    assert result.final.enumeration.passed is True
+    assert "Supply or quality problems" not in result.answer
 
 
 def test_unsupported_numeric_claim_gets_one_grounded_correction_outside_period_questions() -> None:

@@ -1,9 +1,9 @@
-"""Run one quota-gated seven-case Answer Stability sentinel.
+"""Run one quota-gated eight-case Answer Focus sentinel.
 
-The sentinel mixes the three known non-fact Answer Relevancy regressions with
-the four fact-selector targets.  It uses the shared Phase 2 path, writes only
-non-official artifacts, and accepts no checkpoint from the old completion
-binding.
+The sentinel mixes the two known Answer Relevancy regressions with scoped-risk
+controls, an enumeration control, and two numeric canaries.  It uses the
+shared Phase 2 path, writes only v2 non-official artifacts, and accepts no
+checkpoint from the old completion binding.
 """
 
 from __future__ import annotations
@@ -48,20 +48,32 @@ from src.generation.fact_context import (
     select_fact_context,
 )
 from src.generation.answer_stability import ANSWER_STABILITY_FINGERPRINT
+from src.generation.enumeration_completeness import (
+    ENUMERATION_COMPLETENESS_FINGERPRINT,
+)
+from src.generation.prompt_contracts import RISK_FOCUS_CONTRACT_FINGERPRINT
 from src.generation.generator import Generator
 
 
 SENTINEL_QUESTIONS = (
     "What quality and manufacturing risks does Apple mention?",
-    "How does Microsoft describe its Azure and cloud services growth?",
+    "What are all the major risk factors Microsoft discloses?",
+    "Summarize the key risk factors related to competition for Apple.",
+    "What does Microsoft say about cybersecurity risks?",
+    "What risks does Amazon face related to its international operations?",
     "What are the main sources of revenue for Microsoft?",
-    "What was Microsoft's total assets as of fiscal year 2025?",
-    "What was Amazon's AWS net sales in 2025?",
-    "Who audited Apple's financial statements and when was the report signed?",
-    "Who audited Microsoft's financial statements?",
+    "How does Microsoft describe its Azure and cloud services growth?",
+    "How does Amazon's AWS segment compare to Microsoft's cloud business in terms of growth?",
 )
-FACT_QUESTIONS = frozenset(SENTINEL_QUESTIONS[3:])
-REGRESSION_QUESTIONS = frozenset(SENTINEL_QUESTIONS[:3])
+APPLE_QUALITY_QUESTION = SENTINEL_QUESTIONS[0]
+MICROSOFT_RISK_QUESTION = SENTINEL_QUESTIONS[1]
+FACT_QUESTIONS = frozenset()
+RISK_TARGET_QUESTIONS = frozenset(SENTINEL_QUESTIONS[:2])
+RISK_CONTROL_QUESTIONS = frozenset(SENTINEL_QUESTIONS[2:5])
+ENUMERATION_CONTROL_QUESTIONS = frozenset((SENTINEL_QUESTIONS[5],))
+NUMERIC_CANARY_QUESTIONS = frozenset(SENTINEL_QUESTIONS[6:])
+CROSS_DOCUMENT_COMPARISON_QUESTIONS = frozenset({SENTINEL_QUESTIONS[7]})
+REGRESSION_QUESTIONS = frozenset(SENTINEL_QUESTIONS)
 REFERENCE_RESULTS_PATH = Path(
     "data/eval_artifacts/phase2_results_packed_selective_v2.json"
 )
@@ -98,7 +110,7 @@ def sentinel_artifact_paths(replicate_id: str) -> tuple[Path, Path, Path]:
         raise ValueError(
             "replicate_id must contain only letters, digits, '-' or '_'"
         )
-    base = "data/eval_artifacts/answer_stability_v1_sentinel"
+    base = "data/eval_artifacts/answer_focus_v2_sentinel"
     return (
         Path(f"{base}_gen_{replicate_id}.jsonl"),
         Path(f"{base}_judge_{replicate_id}.jsonl"),
@@ -112,7 +124,10 @@ def sentinel_cases() -> list[TestCase]:
     if missing:
         raise RuntimeError(f"Answer stability sentinel contract drift: {missing}")
     cases = [by_question[question] for question in SENTINEL_QUESTIONS]
-    if any(case.category not in {"summary", "enumeration", "fact_lookup"} for case in cases):
+    if any(
+        case.category not in {"summary", "enumeration", "comparative"}
+        for case in cases
+    ):
         raise RuntimeError("Answer stability sentinel contains an unsupported category")
     return cases
 
@@ -229,9 +244,8 @@ def build_report(
         answer_audit = audit_answer(answer, source_texts)
         faithfulness = scores.get("faithfulness")
         answer_relevancy = scores.get("answer_relevancy")
-        stability_required = question == (
-            "How does Microsoft describe its Azure and cloud services growth?"
-        )
+        stability_required = question in NUMERIC_CANARY_QUESTIONS
+        comparison_numeric_required = question in CROSS_DOCUMENT_COMPARISON_QUESTIONS
         case_gates[question] = {
             "generation_ok": case.get("generation_status") == "OK",
             "judge_ok": case.get("judge_status") == "OK",
@@ -243,8 +257,9 @@ def build_report(
                 isinstance(answer_relevancy, (int, float))
                 and (
                     answer_relevancy >= 0.95
-                    if question in FACT_QUESTIONS
-                    else answer_relevancy >= reference[question]["answer_relevancy"] - 0.10
+                    if question in RISK_TARGET_QUESTIONS
+                    else answer_relevancy
+                    >= reference[question]["answer_relevancy"] - 0.05
                 )
             ),
             "semantic_drop_bounded": all(
@@ -272,19 +287,32 @@ def build_report(
                     and completion.get("final_grounding_passed") is True
                 )
             ),
+            "risk_granularity": (
+                question != MICROSOFT_RISK_QUESTION
+                or (
+                    completion.get("enumeration_applicable") is True
+                    and completion.get("final_missing_items") == []
+                    and completion.get("final_overdetailed") is False
+                )
+            ),
             "stability_canary": (
-                not stability_required
+                (not stability_required or comparison_numeric_required)
                 or (
                     completion.get("stability_applicable") is True
                     and completion.get("final_stability_passed") is True
                     and completion.get("final_stability_missing_facts") == []
                 )
             ),
-            "context_identity": (
-                question in REGRESSION_QUESTIONS
-                and selector.get("v5_v6_context_identical") is True
-            )
-            or question in FACT_QUESTIONS,
+            "numeric_comparison_canary": (
+                not comparison_numeric_required
+                or (
+                    completion.get("period_value_applicable") is True
+                    and completion.get("final_passed") is True
+                    and completion.get("final_grounding_passed") is True
+                    and not completion.get("final_unsupported_numeric_claims")
+                )
+            ),
+            "context_identity": selector.get("v5_v6_context_identical") is True,
             "selector_safe": selector.get("selector_safe") is True,
             "selector_one_source": selector.get("selector_one_source") is True,
             "selector_tier": selector.get("selector_tier"),
@@ -305,11 +333,17 @@ def build_report(
         and gate["judge_ok"]
         and gate["score_shape"]
         and gate["citation_correctness"] == 1.0
-        and gate["recall_proxy"] == 1.0
+        and (
+            gate["recall_proxy"] == 1.0
+            or (
+                question in CROSS_DOCUMENT_COMPARISON_QUESTIONS
+                and gate["recall_proxy"] is None
+            )
+        )
         and gate["fallback_correct"] is True
         and gate["answer_integrity"]
         and not gate["unsupported_numeric_claims"]
-        for gate in case_gates.values()
+        for question, gate in case_gates.items()
     )
     semantic_passed = len(case_gates) == len(SENTINEL_QUESTIONS) and all(
         gate["faithfulness_exact_one"]
@@ -318,7 +352,10 @@ def build_report(
         for gate in case_gates.values()
     )
     completion_passed = len(case_gates) == len(SENTINEL_QUESTIONS) and all(
-        gate["completion_policy"] and gate["stability_canary"]
+        gate["completion_policy"]
+        and gate["risk_granularity"]
+        and gate["stability_canary"]
+        and gate["numeric_comparison_canary"]
         for gate in case_gates.values()
     )
     selector_passed = len(case_gates) == len(SENTINEL_QUESTIONS) and all(
@@ -363,10 +400,12 @@ def build_report(
     }
     return {
         **summary,
-        "audit": "answer_stability_sentinel_v1",
+        "audit": "answer_focus_sentinel_v2",
         "official": False,
         "replicate_id": replicate_id,
         "answer_stability_fingerprint": ANSWER_STABILITY_FINGERPRINT,
+        "risk_focus_contract_fingerprint": RISK_FOCUS_CONTRACT_FINGERPRINT,
+        "enumeration_completeness_fingerprint": ENUMERATION_COMPLETENESS_FINGERPRINT,
         "selector_fingerprint": FACT_CONTEXT_SELECTOR_FINGERPRINT,
         "sentinel_questions": list(SENTINEL_QUESTIONS),
         "reference_scores": reference,
@@ -375,14 +414,16 @@ def build_report(
         "selector_rows": selector_rows,
         "case_gates": case_gates,
         "pre_registered_gates": {
-            "seven_cases_complete": True,
+            "eight_cases_complete": True,
             "regression_contexts_byte_identical": True,
-            "fact_targets_safe_single_source": True,
+            "answer_focus_targets_passed": True,
             "faithfulness_exactly_1_0": True,
             "fact_answer_relevancy_at_least_0_95_and_regression_drop_bounded": True,
             "semantic_drop_no_more_than_0_10": True,
             "deterministic_grounding_contracts": True,
             "azure_numeric_stability_canary": True,
+            "aws_numeric_comparison_canary": True,
+            "risk_granularity_contract": True,
         },
         "gates": gates,
         "passed": all(gates.values()),

@@ -1,8 +1,12 @@
 """Shared generation instructions used by every answer-producing path."""
 
+import hashlib
 import re
 
-from src.generation.enumeration_completeness import enumeration_kind
+from src.generation.enumeration_completeness import (
+    ENUMERATION_COMPLETENESS_FINGERPRINT,
+    enumeration_kind,
+)
 
 ANSWER_FOCUS_CONTRACT = (
     "Answer the exact dimension asked in the question before adding supporting "
@@ -27,6 +31,47 @@ def answer_focus_contract_for_question(question: str) -> str:
     """
     if _APPROACH_QUESTION_RE.search(question):
         return ANSWER_FOCUS_CONTRACT
+    return ""
+
+
+RISK_FOCUS_CONTRACT = (
+    "For a scoped risk question, answer only the requested risk dimension. "
+    "For quality or manufacturing questions, prioritize product defects and "
+    "quality consequences, component or supplier continuity, capacity or "
+    "shortage exposure, and manufacturing disruption; group consequences under "
+    "those mechanisms and omit service-availability, cyber, privacy, or other "
+    "unrelated categories unless the excerpt directly ties them to the asked "
+    "dimension. For other scoped risk dimensions, retain the same rule: group "
+    "duplicate consequences under the requested mechanism, omit unrelated risk "
+    "categories, and keep each bullet concise and directly supported by the "
+    "cited filing evidence."
+)
+
+_RISK_SCOPE_RE = re.compile(
+    r"\b(risk factors?|risks?)\b",
+    re.IGNORECASE,
+)
+_RISK_DIMENSION_RE = re.compile(
+    r"\b(quality|manufactur|competition|cybersecurity|international|"
+    r"operations?|supply|climate|privacy|trade)\w*\b",
+    re.IGNORECASE,
+)
+RISK_FOCUS_CONTRACT_FINGERPRINT = "sha256:" + hashlib.sha256(
+    (
+        "risk-focus-v2-quality-manufacturing-mechanisms-scoped-dimension-"
+        "group-duplicate-consequences-"
+        "omit-unrelated-categories-concise-evidence-"
+        + ENUMERATION_COMPLETENESS_FINGERPRINT
+    ).encode("utf-8")
+).hexdigest()
+
+
+def risk_focus_contract_for_question(question: str) -> str:
+    """Return the scoped risk contract, excluding exhaustive enumerations."""
+    if enumeration_kind(question) is not None:
+        return ""
+    if _RISK_SCOPE_RE.search(question) and _RISK_DIMENSION_RE.search(question):
+        return RISK_FOCUS_CONTRACT
     return ""
 
 
@@ -64,6 +109,7 @@ def answer_completion_contract_for_question(question: str) -> str:
         contract
         for contract in (
             answer_focus_contract_for_question(question),
+            risk_focus_contract_for_question(question),
             enumeration_contract_for_question(question),
         )
         if contract

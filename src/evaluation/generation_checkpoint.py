@@ -146,11 +146,15 @@ class GenerationCheckpointStore:
         if not self.path.exists():
             return {}
         compatible: dict[str, dict] = {}
+        stored_bindings: set[str] = set()
         with self.path.open(encoding="utf-8") as file:
             for line in file:
                 if not line.strip():
                     continue
                 record = json.loads(line)
+                binding = record.get("binding")
+                if isinstance(binding, str):
+                    stored_bindings.add(binding)
                 if record.get("status") != GEN_STATUS_OK:
                     continue
                 if record.get("binding") != upstream.binding:
@@ -158,6 +162,12 @@ class GenerationCheckpointStore:
                 question = record.get("question")
                 if isinstance(question, str):
                     compatible[question] = record
+        unexpected = stored_bindings - {upstream.binding}
+        if unexpected:
+            raise RuntimeError(
+                "Generation checkpoint contains records from another binding; "
+                f"start a fresh run instead of appending: {sorted(unexpected)}"
+            )
         return compatible
 
 

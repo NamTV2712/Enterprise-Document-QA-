@@ -349,6 +349,21 @@ def test_generation_phase_uses_injected_evidence_context(upstream) -> None:
     assert "context_builder_fingerprint" in records[0]
 
 
+def test_generation_checkpoint_rejects_mixed_bindings(tmp_path: Path) -> None:
+    store = GenerationCheckpointStore(tmp_path / "mixed.jsonl")
+    store.append({"status": GEN_STATUS_OK, "binding": "sha256:old", "question": "q"})
+    upstream = GenerationUpstream(
+        artifact_path=tmp_path / "missing.json",
+        artifact_sha256="sha256:new-artifact",
+        artifact_schema_version=1,
+        model="m",
+        system_prompt_sha256=sha256_text("system"),
+    )
+
+    with pytest.raises(RuntimeError, match="another binding"):
+        store.load_compatible(upstream)
+
+
 def test_generation_phase_applies_postprocessor_to_exact_rendered_context(upstream) -> None:
     gen_upstream, store_path = upstream
     store = GenerationCheckpointStore(store_path)
@@ -462,21 +477,15 @@ def test_resume_refuses_mismatched_upstream(upstream) -> None:
         model=gen_upstream.model,
         system_prompt_sha256=gen_upstream.system_prompt_sha256,
     )
-    calls: list[str] = []
-
-    records = run_generation_phase(
-        [question],
-        {question: {"queries": []}},
-        tampered,
-        lambda prompt: calls.append(prompt) or "second",
-        store,
-        sleep_fn=lambda s: None,
-    )
-
-    # Binding mismatch means the stored OK record is invisible: regenerated.
-    assert calls == [calls[0]]
-    assert len(records) == 1
-    assert records[0]["answer"] == "second"
+    with pytest.raises(RuntimeError, match="another binding"):
+        run_generation_phase(
+            [question],
+            {question: {"queries": []}},
+            tampered,
+            lambda _prompt: "second",
+            store,
+            sleep_fn=lambda _seconds: None,
+        )
 
 
 def test_resume_refuses_mismatched_context_builder(upstream) -> None:
@@ -501,19 +510,15 @@ def test_resume_refuses_mismatched_context_builder(upstream) -> None:
         system_prompt_sha256=gen_upstream.system_prompt_sha256,
         context_builder_fingerprint="sha256:changed-renderer",
     )
-    calls: list[str] = []
-
-    records = run_generation_phase(
-        [question],
-        payload,
-        changed_renderer,
-        lambda prompt: calls.append(prompt) or "second",
-        store,
-        sleep_fn=lambda _seconds: None,
-    )
-
-    assert len(calls) == 1
-    assert records[0]["answer"] == "second"
+    with pytest.raises(RuntimeError, match="another binding"):
+        run_generation_phase(
+            [question],
+            payload,
+            changed_renderer,
+            lambda _prompt: "second",
+            store,
+            sleep_fn=lambda _seconds: None,
+        )
 
 
 def test_resume_refuses_mismatched_answer_completion_policy(upstream) -> None:
@@ -538,18 +543,15 @@ def test_resume_refuses_mismatched_answer_completion_policy(upstream) -> None:
         system_prompt_sha256=gen_upstream.system_prompt_sha256,
         answer_completion_fingerprint="sha256:changed-completion",
     )
-    calls: list[str] = []
-    records = run_generation_phase(
-        [question],
-        payload,
-        changed_completion,
-        lambda prompt: calls.append(prompt) or "second",
-        store,
-        sleep_fn=lambda _seconds: None,
-    )
-
-    assert len(calls) == 1
-    assert records[0]["answer"] == "second"
+    with pytest.raises(RuntimeError, match="another binding"):
+        run_generation_phase(
+            [question],
+            payload,
+            changed_completion,
+            lambda _prompt: "second",
+            store,
+            sleep_fn=lambda _seconds: None,
+        )
 
 
 def test_resume_refuses_mismatched_system_prompt(upstream) -> None:
@@ -575,18 +577,15 @@ def test_resume_refuses_mismatched_system_prompt(upstream) -> None:
         model=gen_upstream.model,
         system_prompt_sha256=sha256_text("changed-system-prompt"),
     )
-    calls: list[str] = []
-    records = run_generation_phase(
-        [question],
-        payload,
-        changed_prompt,
-        lambda prompt: calls.append(prompt) or "second",
-        store,
-        sleep_fn=lambda _seconds: None,
-    )
-
-    assert len(calls) == 1
-    assert records[0]["answer"] == "second"
+    with pytest.raises(RuntimeError, match="another binding"):
+        run_generation_phase(
+            [question],
+            payload,
+            changed_prompt,
+            lambda _prompt: "second",
+            store,
+            sleep_fn=lambda _seconds: None,
+        )
 
 
 def test_quota_skip_is_excluded_from_official_aggregate(upstream) -> None:

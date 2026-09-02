@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from src.generation.enumeration_completeness import (
+    ENUMERATION_COMPLETENESS_FINGERPRINT,
     EnumerationCompleteness,
     assess_enumeration_completeness,
     append_missing_enumeration_items,
@@ -26,6 +27,7 @@ from src.generation.answer_stability import (
     AnswerStabilityAssessment,
     assess_answer_stability,
 )
+from src.generation.prompt_contracts import RISK_FOCUS_CONTRACT_FINGERPRINT
 
 
 ANSWER_COMPLETION_FINGERPRINT = "sha256:" + hashlib.sha256(
@@ -34,6 +36,11 @@ ANSWER_COMPLETION_FINGERPRINT = "sha256:" + hashlib.sha256(
         b"scoped-bullet-compaction-grouped-home-alias-evidence-label-repair-"
         b"revenue-top-level-dedup-generic-numeric-grounding-repair-period-value-"
         b"one-correction-answer-stability-"
+        b"enumeration-fingerprint-"
+        + ENUMERATION_COMPLETENESS_FINGERPRINT.encode()
+        + b"-risk-focus-fingerprint-"
+        + RISK_FOCUS_CONTRACT_FINGERPRINT.encode()
+        + b"-"
         + ANSWER_STABILITY_FINGERPRINT.encode()
     )
 ).hexdigest()

@@ -116,6 +116,103 @@ def test_overdetailed_list_is_flagged_without_losing_grounded_completeness() -> 
     assert result.passed is True
 
 
+def test_risk_prose_categories_are_extracted_and_grouped() -> None:
+    context = """[Source 1] MSFT 10-K, Risk Factors
+STRATEGIC AND COMPETITIVE RISKS
+OPERATIONAL RISKS
+We may experience supply or quality problems.
+Threats to security can take a variety of forms.
+The occurrence of regional epidemics or a global pandemic could adversely affect our business.
+The long-term effects of climate change on the global economy are unclear.
+Our global business exposes us to operational and economic risks.
+"""
+    result = assess_enumeration_completeness(
+        "What are all the major risk factors Microsoft discloses?",
+        context,
+        "\n".join(
+            [
+                "- Strategic and Competitive Risks [Source 1]",
+                "- Threats to security [Source 1]",
+                "- Occurrence of regional epidemics or a global pandemic [Source 1]",
+                "- Long-term effects of climate change [Source 1]",
+                "- Global business operational and economic risks [Source 1]",
+                "- Operational Risks [Source 1]",
+            ]
+        ),
+    )
+
+    labels = {item.label for item in result.evidence_items}
+    assert "Operational Risks" in labels
+    assert "Threats to security" in labels
+    assert "Occurrence of regional epidemics or a global pandemic" in labels
+    assert "Long-term effects of climate change" in labels
+    assert "Global business operational and economic risks" in labels
+
+
+def test_risk_compaction_preserves_unknown_bullet_until_taxonomy_is_complete() -> None:
+    context = """[Source 1] MSFT 10-K, Risk Factors
+STRATEGIC AND COMPETITIVE RISKS
+Trade:
+Cybersecurity:
+"""
+    result = assess_enumeration_completeness(
+        "What are all the major risk factors Microsoft discloses?",
+        context,
+        "- Strategic and Competitive Risks [Source 1]\n"
+        "- Unknown filing risk [Source 1]\n"
+        "- Trade [Source 1]\n",
+    )
+
+    assert result.overdetailed is True
+
+
+def test_real_microsoft_risk_taxonomy_covers_all_rendered_top_level_items() -> None:
+    import json
+    from pathlib import Path
+
+    from src.evaluation.context_packing import (
+        CONTEXT_STRATEGY_SELECTIVE_V6,
+        render_case_context,
+    )
+    from src.evaluation.test_set import TEST_SET
+
+    question = "What are all the major risk factors Microsoft discloses?"
+    test_case = next(case for case in TEST_SET if case.question == question)
+    artifact = json.loads(
+        Path("data/eval_artifacts/phase1_priority2.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    artifact_case = next(
+        case for case in artifact["cases"] if case["question"] == question
+    )
+    context = render_case_context(
+        artifact_case,
+        required_keywords=test_case.required_keywords,
+        strategy=CONTEXT_STRATEGY_SELECTIVE_V6,
+    )
+    answer = "\n".join(
+        f"- {label} [Source 1]"
+        for label in (
+            "Strategic and Competitive Risks",
+            "Trade",
+            "Cybersecurity",
+            "Handling of personal data",
+            "Issues in the development, deployment, and use of AI",
+            "Operational Risks",
+            "Legal, regulatory, and litigation risks",
+            "Threats to security",
+            "Occurrence of regional epidemics or a global pandemic",
+            "Long-term effects of climate change",
+            "Global business operational and economic risks",
+        )
+    )
+    result = assess_enumeration_completeness(question, context, answer)
+
+    assert len(result.evidence_items) == 11
+    assert result.missing_items == ()
+
+
 def test_non_exhaustive_question_is_a_noop() -> None:
     result = assess_enumeration_completeness(
         "Summarize Apple's key risk factors related to competition.",

@@ -2,7 +2,11 @@ from src.evaluation.generation_checkpoint import (
     DEFAULT_GENERATION_PROMPT_TEMPLATE,
 )
 from src.generation.generator import SYSTEM_PROMPT, _build_user_message
-from src.generation.prompt_contracts import ANSWER_FOCUS_CONTRACT
+from src.generation.prompt_contracts import (
+    ANSWER_FOCUS_CONTRACT,
+    RISK_FOCUS_CONTRACT,
+    answer_completion_contract_for_question,
+)
 from src.generation.query_decomposer import SYNTHESIS_SYSTEM_PROMPT
 
 
@@ -39,6 +43,18 @@ def test_answer_focus_contract_is_scoped_to_approach_questions() -> None:
         answer_focus_contract=ANSWER_FOCUS_CONTRACT,
     )
     _assert_answer_focus_contract(approach_prompt)
+
+
+def test_risk_focus_contract_is_scoped_and_excludes_exhaustive_enumerations() -> None:
+    scoped = answer_completion_contract_for_question(
+        "What quality and manufacturing risks does Apple mention?"
+    )
+    exhaustive = answer_completion_contract_for_question(
+        "What are all the major risk factors Microsoft discloses?"
+    )
+
+    assert RISK_FOCUS_CONTRACT in scoped
+    assert RISK_FOCUS_CONTRACT not in exhaustive
 
 
 def test_system_prompt_requires_all_exact_period_value_pairs() -> None:

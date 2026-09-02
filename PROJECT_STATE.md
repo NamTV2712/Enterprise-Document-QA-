@@ -34,7 +34,14 @@ after these commits measured mobile `88` (FCP `3.08s`, LCP `3.12s`, CLS
 the Vercel domain still serves a cached pre-change deployment (`Age` over 8h,
 `X-Vercel-Cache: HIT`) and the linked Vercel project rejects CLI deployment
 with `Not authorized`. Re-run the production Lighthouse matrix after an
-authorized Vercel redeploy and a reachable backend are available.
+  authorized Vercel redeploy and a reachable backend are available.
+
+The follow-up polish commit `39b3909` adds CSS-only theme motion: the brand
+mark breathes subtly, the overview headline uses an indigo/teal gradient,
+ready/loading connection dots pulse, and the app grid keeps its ambient glow
+in both light and dark modes. Reduced-motion users receive no animation or
+transition. The 16-test frontend suite, TypeScript lint, and production build
+remain green; no API, UX flow, or dependency changed.
 
 ### Frontend performance checkpoint (2026-09-02)
 

@@ -5,7 +5,6 @@
 
 import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "motion/react";
 
 interface TooltipProps {
   content: string;
@@ -109,25 +108,11 @@ export const Tooltip: React.FC<TooltipProps> = ({
     };
   }, [align, isVisible, placement]);
 
-  const tooltip = (
-    <AnimatePresence>
-      {isVisible && (
-        <motion.div
+  const tooltip = isVisible ? (
+        <div
           ref={tooltipRef}
           role="tooltip"
-          initial={{
-            opacity: 0,
-            scale: 0.95,
-            y: position.placement === "top" ? 4 : -4,
-          }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{
-            opacity: 0,
-            scale: 0.95,
-            y: position.placement === "top" ? 4 : -4,
-          }}
-          transition={{ duration: 0.15, ease: "easeOut" }}
-          className="fixed z-[9999] pointer-events-none"
+          className="ui-popover-enter fixed z-[9999] pointer-events-none"
           style={{
             top: position.top,
             left: position.left,
@@ -135,21 +120,19 @@ export const Tooltip: React.FC<TooltipProps> = ({
             maxWidth: `min(${maxWidth}, calc(100vw - 16px))`,
           }}
         >
-          <div className="bg-[#1B2430] dark:bg-slate-900 border border-slate-700/55 text-[#F7F7F5] text-[10px] md:text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-xl leading-normal break-words font-sans text-center">
+          <div className="bg-[#26324A] dark:bg-slate-900 border border-slate-700/55 text-[#FCFBF8] text-[10px] md:text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-xl leading-normal break-words font-sans text-center">
             {content}
           </div>
           <div
             className={`absolute -translate-x-1/2 border-4 border-transparent ${
               position.placement === "top"
-                ? "top-full border-t-[#1B2430] dark:border-t-slate-900"
-                : "bottom-full border-b-[#1B2430] dark:border-b-slate-900"
+                ? "top-full border-t-[#26324A] dark:border-t-slate-900"
+                : "bottom-full border-b-[#26324A] dark:border-b-slate-900"
             }`}
             style={{ left: position.arrowLeft }}
           />
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
+        </div>
+      ) : null;
 
   return (
     <div

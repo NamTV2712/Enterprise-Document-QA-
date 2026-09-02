@@ -4,7 +4,6 @@
  */
 
 import React from 'react';
-import { motion } from 'motion/react';
 import { HelpCircle } from 'lucide-react';
 
 export interface SampleQuestion {
@@ -54,18 +53,16 @@ export const SampleQuestionChips: React.FC<SampleQuestionChipsProps> = ({ onSele
       </div>
       <div className="flex flex-col gap-1.5">
         {SAMPLE_QUESTIONS.map((q, index) => (
-          <motion.button
+          <button
             key={index}
-            whileHover={{ scale: 1.01, x: 4 }}
-            whileTap={{ scale: 0.99 }}
             type="button"
             id={`sample-question-chip-${index}`}
             onClick={() => onSelect(q)}
-            className="group text-xs font-semibold text-slate-700 dark:text-slate-300 bg-white hover:bg-brand-indigo/[0.02] dark:bg-[#1B2430]/20 dark:hover:bg-brand-indigo/[0.04] border border-slate-200 dark:border-slate-800 hover:border-brand-indigo/40 dark:hover:border-brand-indigo/40 px-3.5 py-2.5 rounded text-left cursor-pointer transition-all duration-300 shadow-4xs font-mono flex items-center gap-2"
+            className="group text-xs font-semibold text-slate-700 dark:text-slate-300 bg-white hover:bg-brand-indigo/[0.02] dark:bg-[#26324A]/20 dark:hover:bg-brand-indigo/[0.04] border border-slate-200 dark:border-slate-800 hover:border-brand-indigo/40 dark:hover:border-brand-indigo/40 px-3.5 py-2.5 rounded text-left cursor-pointer transition-all duration-300 shadow-4xs font-sans flex items-center gap-2"
           >
             <span className="text-slate-400 dark:text-slate-600 group-hover:text-brand-indigo transition-all duration-300 transform group-hover:translate-x-0.5">▸</span>
-            <span className="group-hover:text-[#1B2430] dark:group-hover:text-[#F7F7F5] transition-colors duration-300">{q.label}</span>
-          </motion.button>
+            <span className="group-hover:text-[#26324A] dark:group-hover:text-[#FCFBF8] transition-colors duration-300">{q.label}</span>
+          </button>
         ))}
       </div>
     </div>

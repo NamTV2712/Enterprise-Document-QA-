@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   SlidersHorizontal,
   RefreshCw,
@@ -12,7 +11,6 @@ import {
   FileSpreadsheet,
   X,
   Compass,
-  Cpu,
   ChevronDown,
   Check,
   Building2,
@@ -49,7 +47,7 @@ interface SidebarProps {
   isClearingSession: boolean;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({
+const SidebarBase: React.FC<SidebarProps> = ({
   tickers,
   sections,
   selectedTicker,
@@ -90,17 +88,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const tickerRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
-  const availableSections = Object.entries(SECTION_METADATA).filter(
-    ([value]) => sections.length === 0 || sections.includes(value),
+  const availableSections = useMemo(
+    () =>
+      Object.entries(SECTION_METADATA).filter(
+        ([value]) => sections.length === 0 || sections.includes(value),
+      ),
+    [sections],
   );
   const normalizedSearch = searchQuery.trim().toLowerCase();
-  const filteredTickers = [...tickers]
-    .sort((a, b) => (COMPANY_NAMES[a] || a).localeCompare(COMPANY_NAMES[b] || b))
-    .filter((ticker) =>
-      `${ticker} ${COMPANY_NAMES[ticker] || ""}`
-        .toLowerCase()
-        .includes(normalizedSearch),
-    );
+  const filteredTickers = useMemo(
+    () =>
+      [...tickers]
+        .sort((a, b) =>
+          (COMPANY_NAMES[a] || a).localeCompare(COMPANY_NAMES[b] || b),
+        )
+        .filter((ticker) =>
+          `${ticker} ${COMPANY_NAMES[ticker] || ""}`
+            .toLowerCase()
+            .includes(normalizedSearch),
+        ),
+    [normalizedSearch, tickers],
+  );
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -171,14 +179,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {isOpen && (
         <div
           onClick={onClose}
-          className="fixed inset-0 bg-[#1B2430]/20 dark:bg-[#12161C]/50 backdrop-blur-xs z-40 lg:hidden transition-opacity"
+          className="fixed inset-0 bg-[#26324A]/20 dark:bg-[#171D2B]/50 backdrop-blur-xs z-40 lg:hidden transition-opacity"
         />
       )}
 
       <aside
         ref={sidebarRef}
         id="control-sidebar"
-        className={`fixed inset-y-0 left-0 bg-[#F7F7F5] dark:bg-[#12161C] text-[#1B2430] dark:text-[#F7F7F5] flex flex-col border-r border-slate-200 dark:border-slate-800 z-45 lg:static lg:translate-x-0 ${
+        aria-labelledby="search-controls-heading"
+        className={`fixed inset-y-0 left-0 bg-[#FCFBF8] dark:bg-[#171D2B] text-[#26324A] dark:text-[#FCFBF8] flex flex-col border-r border-slate-200 dark:border-slate-800 z-45 lg:static lg:translate-x-0 ${
           isResizing ? "transition-none" : "transition-transform duration-300"
         } ${
           isOpen ? "translate-x-0" : "-translate-x-full"
@@ -200,13 +209,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <span className="h-12 w-0.5 rounded-full bg-slate-300 dark:bg-slate-700 opacity-0 group-hover:opacity-100 group-focus:opacity-100 group-active:opacity-100 transition-opacity" />
         </div>
         {/* Header */}
-        <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-[#1B2430]/10">
+        <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-[#26324A]/10">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded bg-[#1B2430] dark:bg-[#F7F7F5]/10 flex items-center justify-center border border-slate-300 dark:border-slate-700">
-              <TrendingUp className="w-4 h-4 text-[#F7F7F5] dark:text-slate-300" />
+            <div className="w-7 h-7 rounded bg-[#26324A] dark:bg-[#FCFBF8]/10 flex items-center justify-center border border-slate-300 dark:border-slate-700">
+              <TrendingUp className="w-4 h-4 text-[#FCFBF8] dark:text-slate-300" />
             </div>
             <div>
-              <h1 className="text-xs font-black tracking-tight text-[#1B2430] dark:text-[#F7F7F5] uppercase font-serif">
+              <h1 className="text-xs font-black tracking-tight text-[#26324A] dark:text-[#FCFBF8] uppercase font-serif">
                 SEC RAG Engine
               </h1>
               <span className="text-[9px] text-slate-500 dark:text-slate-450 font-mono font-bold uppercase tracking-wider">
@@ -218,19 +227,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
             type="button"
             onClick={onClose}
             aria-label="Close search controls"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden transition-colors cursor-pointer"
+            className="min-h-9 min-w-9 p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Filters and Configs Area */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 md:p-5 space-y-5">
           {/* Controls Title */}
-          <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider pb-1 border-b border-slate-200 dark:border-slate-800">
+          <h2 id="search-controls-heading" className="flex items-center gap-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pb-2 border-b border-slate-200 dark:border-slate-800">
             <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
             <span>Search Parameters</span>
-          </div>
+          </h2>
 
           {/* Ticker Filter */}
           <div className="space-y-2 relative" ref={tickerRef}>
@@ -244,12 +253,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               type="button"
               id="ticker-select-btn"
+              aria-haspopup="listbox"
+              aria-expanded={tickerDropdownOpen}
               disabled={tickers.length === 0}
               onClick={() => {
                 setTickerDropdownOpen(!tickerDropdownOpen);
                 setSectionDropdownOpen(false);
               }}
-              className={`w-full flex items-center justify-between bg-white dark:bg-[#1B2430]/30 border border-slate-300 dark:border-slate-800 rounded-lg text-xs md:text-sm text-[#1B2430] dark:text-[#F7F7F5] py-2 px-3 outline-none transition-all font-semibold shadow-3xs group ${
+              className={`w-full min-h-10 flex items-center justify-between bg-white dark:bg-[#26324A]/30 border border-slate-300 dark:border-slate-800 rounded-lg text-xs md:text-sm text-[#26324A] dark:text-[#FCFBF8] py-2 px-3 outline-none transition-all font-semibold shadow-3xs group ${
                 tickers.length === 0
                   ? "opacity-65 cursor-not-allowed bg-slate-50 dark:bg-slate-900/10"
                   : "hover:border-slate-400 dark:hover:border-slate-600 cursor-pointer"
@@ -270,24 +281,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
               />
             </button>
 
-            <AnimatePresence>
-              {tickerDropdownOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: 4, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 4, scale: 0.98 }}
-                  transition={{ duration: 0.15, ease: "easeOut" }}
-                  className="absolute z-55 left-0 right-0 mt-1 bg-white dark:bg-[#12161C] border border-slate-200 dark:border-slate-800 rounded-lg shadow-lg flex flex-col overflow-hidden max-h-64"
-                >
+            {tickerDropdownOpen && (
+                <div className="ui-popover-enter absolute z-55 left-0 right-0 mt-1 bg-white dark:bg-[#171D2B] border border-slate-200 dark:border-slate-800 rounded-lg shadow-lg flex flex-col overflow-hidden max-h-64">
                   <div className="p-2 border-b border-slate-100 dark:border-slate-800/40 bg-slate-50/50 dark:bg-slate-900/30 sticky top-0 z-10 flex items-center gap-2">
                     <Search className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
                     <input
                       type="text"
+                      aria-label="Search company or ticker"
                       placeholder="Search company or ticker..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       onClick={(e) => e.stopPropagation()}
-                      className="w-full text-xs font-mono bg-white dark:bg-[#1B2430]/30 border border-slate-200 dark:border-slate-800 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-indigo focus:border-brand-indigo transition-all text-[#1B2430] dark:text-[#F7F7F5]"
+                      className="w-full text-xs font-mono bg-white dark:bg-[#26324A]/30 border border-slate-200 dark:border-slate-800 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-indigo focus:border-brand-indigo transition-all text-[#26324A] dark:text-[#FCFBF8]"
                       autoFocus
                     />
                   </div>
@@ -344,9 +349,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         </div>
                       )}
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                </div>
+            )}
           </div>
 
           {/* Section Filter */}
@@ -368,11 +372,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               type="button"
               id="section-select-btn"
+              aria-haspopup="listbox"
+              aria-expanded={sectionDropdownOpen}
               onClick={() => {
                 setSectionDropdownOpen(!sectionDropdownOpen);
                 setTickerDropdownOpen(false);
               }}
-              className="w-full flex items-center justify-between bg-white dark:bg-[#1B2430]/30 border border-slate-300 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 rounded-lg text-xs md:text-sm text-[#1B2430] dark:text-[#F7F7F5] py-2 px-3 outline-none transition-all cursor-pointer font-semibold shadow-3xs group"
+              className="w-full min-h-10 flex items-center justify-between bg-white dark:bg-[#26324A]/30 border border-slate-300 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 rounded-lg text-xs md:text-sm text-[#26324A] dark:text-[#FCFBF8] py-2 px-3 outline-none transition-all cursor-pointer font-semibold shadow-3xs group"
             >
               <div className="flex items-center gap-2 min-w-0">
                 <FileSpreadsheet className="w-4 h-4 text-slate-400 dark:text-slate-500 transition-colors flex-shrink-0" />
@@ -387,15 +393,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               />
             </button>
 
-            <AnimatePresence>
-              {sectionDropdownOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: 4, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 4, scale: 0.98 }}
-                  transition={{ duration: 0.15, ease: "easeOut" }}
-                  className="absolute z-55 left-0 right-0 mt-1 bg-white dark:bg-[#12161C] border border-slate-200 dark:border-slate-800 rounded-lg shadow-lg divide-y divide-slate-100 dark:divide-slate-800/40 overflow-y-auto max-h-96"
-                >
+            {sectionDropdownOpen && (
+                <div className="ui-popover-enter absolute z-55 left-0 right-0 mt-1 bg-white dark:bg-[#171D2B] border border-slate-200 dark:border-slate-800 rounded-lg shadow-lg divide-y divide-slate-100 dark:divide-slate-800/40 overflow-y-auto max-h-96">
                   <button
                     type="button"
                     onClick={() => {
@@ -438,9 +437,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </button>
                     );
                   })}
-                </motion.div>
-              )}
-            </AnimatePresence>
+                </div>
+            )}
           </div>
 
           {/* Top_K Slider */}
@@ -454,18 +452,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </button>
                 </Tooltip>
               </span>
-              <span className="font-mono text-slate-950 dark:text-[#F7F7F5] bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 px-1.5 py-0.5 rounded text-[11px] font-bold">
+              <span className="font-mono text-slate-950 dark:text-[#FCFBF8] bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 px-1.5 py-0.5 rounded text-[11px] font-bold">
                 {topK}
               </span>
             </div>
             <input
               id="top-k-slider"
+              aria-label="Context breadth"
+              aria-valuetext={`${topK} filing excerpts`}
               type="range"
               min={1}
               max={10}
               value={topK}
               onChange={(e) => onChangeTopK(parseInt(e.target.value, 10))}
-              className="w-full accent-[#1B2430] dark:accent-[#F7F7F5] bg-slate-250 dark:bg-slate-850 h-1.5 rounded-lg cursor-pointer"
+              className="w-full accent-[#26324A] dark:accent-[#FCFBF8] bg-slate-250 dark:bg-slate-850 h-1.5 rounded-lg cursor-pointer"
             />
             <div className="flex justify-between text-[10px] text-slate-400 dark:text-slate-500 font-mono font-semibold">
               <Tooltip
@@ -484,7 +484,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           {/* Comparative Analysis Toggle */}
-          <div className="space-y-2.5 bg-white dark:bg-[#1B2430]/20 p-3.5 rounded-lg border border-slate-200 dark:border-slate-800">
+          <div className="space-y-2.5 bg-white dark:bg-[#26324A]/20 p-3.5 rounded-lg border border-slate-200 dark:border-slate-800">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
                 Query Decomposition
@@ -492,12 +492,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
                   id="comparative-toggle"
+                  aria-label="Enable query decomposition"
                   type="checkbox"
                   checked={enableComparative}
                   onChange={(e) => onToggleComparative(e.target.checked)}
                   className="sr-only peer"
                 />
-                <div className="w-9 h-5 bg-slate-200 dark:bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 dark:after:border-slate-600 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#1B2430] dark:peer-checked:bg-[#F7F7F5] dark:peer-checked:after:bg-[#1B2430]" />
+                <div className="w-9 h-5 bg-slate-200 dark:bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 dark:after:border-slate-600 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#26324A] dark:peer-checked:bg-[#FCFBF8] dark:peer-checked:after:bg-[#26324A]" />
               </label>
             </div>
             <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-relaxed font-semibold">
@@ -517,9 +518,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Footer with Pipeline Status / Session Actions */}
-        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#12161C] space-y-3 relative overflow-hidden">
+        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#171D2B] space-y-3 relative overflow-hidden">
           {/* Health Metrics Dashboard */}
-          <div className="space-y-2.5 text-xs relative z-10">
+          <div className="space-y-2.5 text-xs relative z-10" role="status" aria-live="polite">
             <div className="flex items-center justify-between">
               <span className="text-slate-450 dark:text-slate-500 font-bold tracking-wider text-[10px] uppercase">
                 SYSTEM STATS
@@ -533,7 +534,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     : isBackendConnected === false
                       ? "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-950/30"
                       : healthData?.pipeline_ready
-                        ? "bg-verified-green/5 dark:bg-[#1f5d4c]/10 text-verified-green dark:text-[#38a385] border border-verified-green/20 dark:border-[#1f5d4c]/30"
+                        ? "bg-verified-green/5 dark:bg-[#287A68]/10 text-verified-green dark:text-[#53B89A] border border-verified-green/20 dark:border-[#287A68]/30"
                         : "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-950/30"
                 }`}
               >
@@ -544,7 +545,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       : isBackendConnected === false
                         ? "bg-rose-400"
                         : healthData?.pipeline_ready
-                          ? "bg-verified-green dark:bg-[#38a385]"
+                          ? "bg-verified-green dark:bg-[#53B89A]"
                           : "bg-amber-400"
                   }`}
                 />
@@ -560,22 +561,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             {healthData?.memory && (
               <div className="grid grid-cols-2 gap-2 text-[10px] font-mono border-t border-slate-200 dark:border-slate-800/80 pt-2.5">
-                <div className="bg-[#F7F7F5] dark:bg-[#1B2430]/30 p-2 rounded border border-slate-200 dark:border-slate-800">
+                <div className="bg-[#FCFBF8] dark:bg-[#26324A]/30 p-2 rounded border border-slate-200 dark:border-slate-800">
                   <div className="text-slate-500 dark:text-slate-450 font-sans font-bold">
                     Active Sessions
                   </div>
-                  <div className="text-[#1B2430] dark:text-[#F7F7F5] font-bold mt-1 text-xs font-mono">
+                  <div className="text-[#26324A] dark:text-[#FCFBF8] font-bold mt-1 text-xs font-mono">
                     {healthData.memory.active_sessions}
                   </div>
                   <div className="mt-1 text-[9px] leading-tight text-slate-400 dark:text-slate-500 font-sans">
                     In-memory conversations
                   </div>
                 </div>
-                <div className="bg-[#F7F7F5] dark:bg-[#1B2430]/30 p-2 rounded border border-slate-200 dark:border-slate-800">
+                <div className="bg-[#FCFBF8] dark:bg-[#26324A]/30 p-2 rounded border border-slate-200 dark:border-slate-800">
                   <div className="text-slate-500 dark:text-slate-450 font-sans font-bold">
                     Total Turns
                   </div>
-                  <div className="text-[#1B2430] dark:text-[#F7F7F5] font-bold mt-1 text-xs font-mono">
+                  <div className="text-[#26324A] dark:text-[#FCFBF8] font-bold mt-1 text-xs font-mono">
                     {healthData.memory.total_turns}
                   </div>
                   <div className="mt-1 text-[9px] leading-tight text-slate-400 dark:text-slate-500 font-sans">
@@ -592,7 +593,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             id="new-convo-btn"
             disabled={isClearingSession}
             onClick={onNewConversation}
-            className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-[#1B2430] dark:bg-[#F7F7F5] text-[#F7F7F5] dark:text-[#1B2430] hover:opacity-90 disabled:opacity-50 rounded text-xs font-bold transition-all cursor-pointer font-sans uppercase tracking-wider"
+            className="w-full min-h-10 flex items-center justify-center gap-2 py-2 px-4 bg-[#26324A] dark:bg-[#FCFBF8] text-[#FCFBF8] dark:text-[#26324A] hover:opacity-90 disabled:opacity-50 rounded text-xs font-bold transition-all cursor-pointer font-sans uppercase tracking-wider"
           >
             <RefreshCw
               className={`w-3.5 h-3.5 ${isClearingSession ? "animate-spin" : "animate-none"}`}
@@ -606,3 +607,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </>
   );
 };
+
+export const Sidebar = React.memo(SidebarBase);
+Sidebar.displayName = "Sidebar";

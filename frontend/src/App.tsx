@@ -3,29 +3,30 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import {
+  lazy,
+  Suspense,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import {
   Menu,
   Sun,
   Moon,
   TrendingUp,
   Database,
-  Layers,
-  Sparkles,
-  ChevronRight,
   GitFork,
   CheckCircle2,
-  AlertCircle,
   HelpCircle,
   RefreshCw,
-  Square,
   BookOpen,
   MessageSquare,
   ChevronDown,
 } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
-import { ChatMessage } from "./components/ChatMessage";
 import { ChatInput, ConnectionBanner } from "./components/ChatInput";
 import { Tooltip } from "./components/Tooltip";
 import { SampleQuestion } from "./components/SampleQuestionChips";
@@ -40,6 +41,28 @@ import {
 } from "./lib/api";
 
 const STREAM_FLUSH_INTERVAL_MS = 80;
+const MAX_PERSISTED_MESSAGES = 50;
+const MESSAGE_PERSIST_DEBOUNCE_MS = 180;
+const HEALTH_REFRESH_INTERVAL_MS = 15_000;
+const COMPARATIVE_KEYWORDS = [
+  "compare",
+  "vs",
+  "versus",
+  "both",
+  "which company",
+  "between",
+];
+
+const ChatMessage = lazy(() =>
+  import("./components/ChatMessage").then(({ ChatMessage }) => ({
+    default: ChatMessage,
+  })),
+);
+
+function isComparativeQuery(question: string): boolean {
+  const lower = question.toLowerCase();
+  return COMPARATIVE_KEYWORDS.some((keyword) => lower.includes(keyword));
+}
 
 // localStorage can throw in private browsing or when quota is exceeded;
 // persistence failures must never crash the UI.
@@ -48,6 +71,23 @@ function safeSetItem(key: string, value: string): void {
     localStorage.setItem(key, value);
   } catch (e) {
     console.warn(`Could not persist "${key}" to localStorage:`, e);
+  }
+}
+
+function safeGetItem(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch (e) {
+    console.warn(`Could not read "${key}" from localStorage:`, e);
+    return null;
+  }
+}
+
+function safeRemoveItem(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch (e) {
+    console.warn(`Could not remove "${key}" from localStorage:`, e);
   }
 }
 
@@ -62,15 +102,15 @@ export default function App() {
 
   const [inputText, setInputText] = useState<string>("");
   const [messages, setMessages] = useState<Message[]>(() => {
-    const saved = localStorage.getItem("sec_qa_messages");
+    const saved = safeGetItem("sec_qa_messages");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return parsed.slice(-MAX_PERSISTED_MESSAGES);
         }
       } catch {
-        localStorage.removeItem("sec_qa_messages");
+        safeRemoveItem("sec_qa_messages");
       }
     }
     return [];
@@ -89,7 +129,7 @@ export default function App() {
 
   // Theme state
   const [theme, setTheme] = useState<"light" | "dark">(() => {
-    const saved = localStorage.getItem("theme");
+    const saved = safeGetItem("theme");
     if (saved === "light" || saved === "dark") return saved;
     return window.matchMedia("(prefers-color-scheme: dark)").matches
       ? "dark"
@@ -99,7 +139,43 @@ export default function App() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const requestAbortRef = useRef<AbortController | null>(null);
+  const healthRequestRef = useRef<Promise<HealthResponse> | null>(null);
+  const lastHealthRefreshRef = useRef(0);
   const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
+
+  const applyHealth = useCallback((health: HealthResponse) => {
+    lastHealthRefreshRef.current = Date.now();
+    setHealthData(health);
+    setIsBackendConnected(true);
+    setIsPipelineReady(health.pipeline_ready);
+  }, []);
+
+  const refreshHealth = useCallback(
+    async (force = false, signal?: AbortSignal): Promise<HealthResponse | null> => {
+      const now = Date.now();
+      if (
+        !force &&
+        lastHealthRefreshRef.current > 0 &&
+        now - lastHealthRefreshRef.current < HEALTH_REFRESH_INTERVAL_MS
+      ) {
+        return null;
+      }
+
+      if (healthRequestRef.current) return healthRequestRef.current;
+
+      const request = checkHealth(signal)
+        .then((health) => {
+          applyHealth(health);
+          return health;
+        })
+        .finally(() => {
+          healthRequestRef.current = null;
+        });
+      healthRequestRef.current = request;
+      return request;
+    },
+    [applyHealth],
+  );
 
   // Apply theme class
   useEffect(() => {
@@ -113,20 +189,26 @@ export default function App() {
 
   // Persist messages to localStorage with size limit and cleanup
   useEffect(() => {
-    if (messages.length === 0) {
-      localStorage.removeItem("sec_qa_messages");
-      return;
-    }
-    // Keep only last 50 messages to avoid storage bloat
-    const MAX_MESSAGES = 50;
-    const messagesToSave = messages.slice(-MAX_MESSAGES);
-    try {
-      localStorage.setItem("sec_qa_messages", JSON.stringify(messagesToSave));
-    } catch (e) {
-      console.warn("Failed to save messages to localStorage:", e);
-      // If storage full, clear old messages
-      localStorage.removeItem("sec_qa_messages");
-    }
+    // Streaming updates arrive every 80ms. Persist once the response finishes
+    // (or is stopped) instead of serializing the full history for every flush.
+    if (messages.some((message) => message.isStreaming)) return;
+
+    const timeoutId = window.setTimeout(() => {
+      if (messages.length === 0) {
+        safeRemoveItem("sec_qa_messages");
+        return;
+      }
+      const messagesToSave = messages.slice(-MAX_PERSISTED_MESSAGES);
+      try {
+        localStorage.setItem("sec_qa_messages", JSON.stringify(messagesToSave));
+      } catch (e) {
+        console.warn("Failed to save messages to localStorage:", e);
+        // If storage full, clear old messages
+        safeRemoveItem("sec_qa_messages");
+      }
+    }, MESSAGE_PERSIST_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timeoutId);
   }, [messages]);
 
   // Handle initialization on first load
@@ -134,7 +216,7 @@ export default function App() {
     const controller = new AbortController();
 
     // 1. Session ID creation/restoration
-    let sid = localStorage.getItem("sec_qa_session_id");
+    let sid = safeGetItem("sec_qa_session_id");
     if (!sid) {
       sid = crypto.randomUUID();
       safeSetItem("sec_qa_session_id", sid);
@@ -144,44 +226,49 @@ export default function App() {
     const initData = async () => {
       try {
         const health = await checkHealth(controller.signal);
-        setHealthData(health);
-        setIsBackendConnected(true);
-        setIsPipelineReady(health.pipeline_ready);
+        applyHealth(health);
 
-        const support = await getSupportedTickers(controller.signal);
-        setTickers(support.tickers || []);
-        setSections(support.sections || []);
+        // Supported metadata and history are independent after readiness is
+        // known, so avoid paying for their network latency serially.
+        const [supportResult, historyResult] = await Promise.allSettled([
+          getSupportedTickers(controller.signal),
+          getSessionHistory(sid, controller.signal),
+        ]);
 
-        // 3. Load historical chat turns if session exists
-        if (sid) {
-          try {
-            const history = await getSessionHistory(sid, controller.signal);
-            if (history && history.turns && history.turns.length > 0) {
-              const loadedMessages: Message[] = [];
-              history.turns.forEach((turn, idx) => {
-                loadedMessages.push({
-                  id: `u-${idx}-${Date.now()}`,
-                  sender: "user",
-                  text: turn.user,
-                });
-                loadedMessages.push({
-                  id: `a-${idx}-${Date.now()}`,
-                  sender: "assistant",
-                  text: turn.assistant,
-                  rewritten_query: turn.rewritten_query,
-                });
+        if (supportResult.status === "rejected") {
+          throw supportResult.reason;
+        }
+        setTickers(supportResult.value.tickers || []);
+        setSections(supportResult.value.sections || []);
+
+        if (historyResult.status === "rejected") {
+          const histError = historyResult.reason;
+          if (
+            histError instanceof DOMException &&
+            histError.name === "AbortError"
+          ) {
+            return;
+          }
+          console.warn("Could not retrieve session history. Starting fresh.");
+        } else {
+          const history = historyResult.value;
+          if (history?.turns?.length > 0) {
+            const loadedMessages: Message[] = [];
+            history.turns.forEach((turn, idx) => {
+              loadedMessages.push({
+                id: `u-${idx}-${Date.now()}`,
+                sender: "user",
+                text: turn.user,
               });
-              setMessages(loadedMessages);
-              setActiveView("conversation");
-            }
-          } catch (histError) {
-            if (
-              histError instanceof DOMException &&
-              histError.name === "AbortError"
-            ) {
-              return;
-            }
-            console.warn("Could not retrieve session history. Starting fresh.");
+              loadedMessages.push({
+                id: `a-${idx}-${Date.now()}`,
+                sender: "assistant",
+                text: turn.assistant,
+                rewritten_query: turn.rewritten_query,
+              });
+            });
+            setMessages(loadedMessages);
+            setActiveView("conversation");
           }
         }
       } catch (err) {
@@ -196,7 +283,7 @@ export default function App() {
 
     initData();
     return () => controller.abort();
-  }, []);
+  }, [applyHealth]);
 
   useEffect(() => {
     return () => {
@@ -212,8 +299,27 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (activeView === "conversation") scrollToBottom();
-  }, [activeView, messages, scrollToBottom]);
+    if (activeView !== "conversation") return;
+
+    // Repeated smooth-scroll animations overlap while tokens arrive every
+    // 80ms. Batch the layout read/write to the next animation frame.
+    const scroll = () => {
+      messagesEndRef.current?.scrollIntoView({
+        behavior: isLoading ? "auto" : "smooth",
+      });
+    };
+    const frame =
+      typeof requestAnimationFrame === "function"
+        ? requestAnimationFrame(scroll)
+        : window.setTimeout(scroll, 0);
+    return () => {
+      if (typeof cancelAnimationFrame === "function") {
+        cancelAnimationFrame(frame);
+      } else {
+        window.clearTimeout(frame);
+      }
+    };
+  }, [activeView, isLoading, messages]);
 
   // Detect scroll position to show/hide scroll-to-bottom button
   useEffect(() => {
@@ -230,21 +336,7 @@ export default function App() {
     return () => scrollContainer.removeEventListener("scroll", handleScroll);
   }, [activeView, messages.length]);
 
-  // Helper to determine if query is comparative
-  const isComparativeQuery = (question: string): boolean => {
-    const keywords = [
-      "compare",
-      "vs",
-      "versus",
-      "both",
-      "which company",
-      "between",
-    ];
-    const lower = question.toLowerCase();
-    return keywords.some((keyword) => lower.includes(keyword));
-  };
-
-  const handleSendMessage = async (text: string) => {
+  const handleSendMessage = useCallback(async (text: string) => {
     if (!isBackendConnected || !isPipelineReady) return;
 
     setActiveView("conversation");
@@ -284,6 +376,7 @@ export default function App() {
         text: "",
         subQueries: [],
         wasDecomposed: true,
+        isStreaming: true,
       };
       setMessages((prev) => [...prev, placeholder]);
 
@@ -301,6 +394,7 @@ export default function App() {
                   subQueries: response.sub_queries,
                   wasDecomposed: response.was_decomposed,
                   numChunks: response.num_total_chunks,
+                  isStreaming: false,
                 }
               : m,
           ),
@@ -314,6 +408,7 @@ export default function App() {
                   ...m,
                   text: `Failed to complete comparative query analysis: ${err?.message || err}`,
                   error: true,
+                  isStreaming: false,
                 }
               : m,
           ),
@@ -463,12 +558,22 @@ export default function App() {
 
     // Refresh health details to get updated total turn counters, active sessions, etc.
     try {
-      const health = await checkHealth();
-      setHealthData(health);
+      await refreshHealth(false, controller.signal);
     } catch (e) {
-      console.warn("Could not refresh health data:", e);
+      if (!controller.signal.aborted) {
+        console.warn("Could not refresh health data:", e);
+      }
     }
-  };
+  }, [
+    enableComparative,
+    isBackendConnected,
+    isPipelineReady,
+    selectedSection,
+    selectedTicker,
+    sessionId,
+    topK,
+    refreshHealth,
+  ]);
 
   // Stable retry callback so memoized ChatMessage items skip re-renders;
   // the ref indirection keeps access to the latest send handler.
@@ -479,7 +584,7 @@ export default function App() {
     handleSendMessageRef.current(text);
   }, []);
 
-  const handleNewConversation = async () => {
+  const handleNewConversation = useCallback(async () => {
     requestAbortRef.current?.abort();
     requestAbortRef.current = null;
     setIsLoading(false);
@@ -497,25 +602,24 @@ export default function App() {
       safeSetItem("sec_qa_session_id", newSid);
       setSessionId(newSid);
       setMessages([]);
-      localStorage.removeItem("sec_qa_messages");
+      safeRemoveItem("sec_qa_messages");
       setActiveView("overview");
       setIsClearingSession(false);
       setSelectedTicker(null);
       setSelectedSection(null);
 
-      // Refresh health
+      // Refresh health, sharing any in-flight request and avoiding duplicate
+      // checks during rapid resets.
       try {
-        const health = await checkHealth();
-        setHealthData(health);
-        setIsBackendConnected(true);
-        setIsPipelineReady(health.pipeline_ready);
+        await refreshHealth(true);
       } catch (e) {
         setIsBackendConnected(false);
+        setIsPipelineReady(false);
       }
     }
-  };
+  }, [refreshHealth, sessionId]);
 
-  const handleStopGenerating = () => {
+  const handleStopGenerating = useCallback(() => {
     const controller = requestAbortRef.current;
     if (!controller) return;
 
@@ -533,9 +637,9 @@ export default function App() {
           : message,
       ),
     );
-  };
+  }, []);
 
-  const handleSelectSample = (sample: SampleQuestion) => {
+  const handleSelectSample = useCallback((sample: SampleQuestion) => {
     if (sample.ticker !== undefined) {
       setSelectedTicker(sample.ticker || null);
     }
@@ -544,10 +648,19 @@ export default function App() {
     }
     setInputText(sample.text);
     setIsSidebarOpen(false); // Close sidebar on mobile if clicked
-  };
+  }, []);
+
+  const handleCloseSidebar = useCallback(() => {
+    setIsSidebarOpen(false);
+  }, []);
+
+  const isStreaming = useMemo(
+    () => messages.some((message) => message.isStreaming),
+    [messages],
+  );
 
   return (
-    <div className="flex w-screen max-w-full h-dvh bg-slate-50 dark:bg-slate-950 font-sans text-slate-800 dark:text-slate-100 overflow-hidden bg-grid-pattern">
+    <div className="flex w-screen max-w-full h-dvh bg-[#FCFBF8] dark:bg-[#171D2B] font-sans text-slate-800 dark:text-slate-100 overflow-hidden bg-grid-pattern">
       {/* Collapsible Sidebar */}
       <Sidebar
         tickers={tickers}
@@ -565,23 +678,25 @@ export default function App() {
         healthData={healthData}
         isBackendConnected={isBackendConnected}
         isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
+        onClose={handleCloseSidebar}
         isClearingSession={isClearingSession}
       />
 
       {/* Main chat window area */}
       <div className="w-0 flex-1 min-w-0 max-w-full flex flex-col h-full overflow-hidden">
         {/* Header toolbar */}
-        <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white/85 dark:bg-[#12161C]/85 backdrop-blur-md px-4 md:px-6 flex items-center justify-between flex-shrink-0 z-20 shadow-xs">
+        <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white/85 dark:bg-[#171D2B]/85 backdrop-blur-md px-4 md:px-6 flex items-center justify-between flex-shrink-0 z-20 shadow-xs">
           <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
               id="sidebar-toggle"
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              aria-controls="control-sidebar"
+              aria-expanded={isSidebarOpen}
               aria-label={
                 isSidebarOpen ? "Close search controls" : "Open search controls"
               }
-              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden text-slate-600 dark:text-slate-300 transition-colors"
+              className="min-h-9 min-w-9 p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden text-slate-600 dark:text-slate-300 transition-colors"
             >
               <Menu className="w-5 h-5" />
             </button>
@@ -637,7 +752,12 @@ export default function App() {
 
           <div className="flex items-center gap-2 md:gap-3">
             {/* Connection badge */}
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono font-medium">
+            <div
+              role="status"
+              aria-live="polite"
+              aria-label="Backend connection status"
+              className="flex items-center gap-1.5 px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono font-medium"
+            >
               <span
                 className={`w-2 h-2 rounded-full ${
                   isBackendConnected === null || isPipelineReady === null
@@ -665,6 +785,7 @@ export default function App() {
               type="button"
               id="theme-switcher-btn"
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              aria-pressed={theme === "dark"}
               className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
               title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
               aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
@@ -681,6 +802,7 @@ export default function App() {
               type="button"
               id="quick-reset-btn"
               disabled={isClearingSession || messages.length === 0}
+              aria-busy={isClearingSession}
               onClick={handleNewConversation}
               className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-rose-500 text-slate-400 dark:text-slate-500 disabled:opacity-50 transition-colors cursor-pointer"
               title="Reset Conversation"
@@ -694,14 +816,15 @@ export default function App() {
         </header>
 
         {/* Content stream area */}
-        <div
+        <main
+          aria-label="Research workspace"
           ref={scrollContainerRef}
-          className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 bg-[#F7F7F5] dark:bg-[#12161C] relative z-10"
+          className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 bg-[#FCFBF8] dark:bg-[#171D2B] relative z-10"
         >
           {activeView === "overview" ? (
-            /* Onboarding splash screen with Framer Motion animations */
+            /* Lightweight onboarding splash screen */
             <div
-              className="w-full max-w-3xl mx-auto px-5 py-10 md:py-14 space-y-8 relative z-10 font-sans animate-fade-in"
+              className="w-full max-w-3xl mx-auto px-5 py-8 md:py-12 space-y-7 relative z-10 font-sans animate-fade-in"
               id="onboarding-panel"
             >
               <div className="space-y-3 text-center">
@@ -733,16 +856,16 @@ export default function App() {
                     <span>[STATUS: PIPELINE INITIALIZING]</span>
                   </div>
                 ) : (
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded border border-verified-green/20 dark:border-[#1f5d4c]/30 bg-verified-green/5 dark:bg-[#1f5d4c]/10 text-verified-green dark:text-[#38a385] font-mono text-[10px] font-bold uppercase tracking-wider">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded border border-verified-green/20 dark:border-[#287A68]/30 bg-verified-green/5 dark:bg-[#287A68]/10 text-verified-green dark:text-[#53B89A] font-mono text-[10px] font-bold uppercase tracking-wider">
                     <span>
                       [STATUS: LIVE — {tickers.length} COMPANIES INDEXED]
                     </span>
                   </div>
                 )}
-                <h2 className="max-w-full text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-[#1B2430] dark:text-[#F7F7F5] py-1 font-serif break-words">
+                <h2 className="max-w-full text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-[#26324A] dark:text-[#FCFBF8] py-1 font-serif break-words">
                   Research SEC 10-K filings with cited evidence
                 </h2>
-                <p className="text-xs md:text-sm text-slate-550 dark:text-slate-400 max-w-xl mx-auto leading-relaxed font-mono">
+                <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 max-w-xl mx-auto leading-relaxed font-sans">
                   Ask a financial or business question across {tickers.length || 44}{" "}
                   searchable companies. The system retrieves filing excerpts,
                   reranks them, and asks Groq-hosted Llama to answer only from
@@ -755,50 +878,50 @@ export default function App() {
                 className="grid grid-cols-1 md:grid-cols-3 gap-4"
                 id="features-cards"
               >
-                <div className="group p-5 bg-white dark:bg-[#1B2430]/20 border border-slate-300 dark:border-slate-800 rounded-lg space-y-2.5 hover:border-brand-indigo/50 dark:hover:border-brand-indigo/50 hover:bg-indigo-500/[0.01] dark:hover:bg-brand-indigo/[0.02] hover:-translate-y-1 hover:shadow-[0_4px_20px_rgba(99,102,241,0.08)] transition-all duration-300 cursor-default shadow-3xs">
+                <article className="group p-5 bg-white dark:bg-[#26324A]/20 border border-slate-300 dark:border-slate-800 rounded-lg space-y-2.5 hover:border-brand-indigo/50 dark:hover:border-brand-indigo/50 hover:bg-indigo-500/[0.01] dark:hover:bg-brand-indigo/[0.02] hover:-translate-y-1 hover:shadow-[0_4px_20px_rgba(91,99,211,0.08)] transition-all duration-300 cursor-default shadow-3xs">
                   <Tooltip content="Scans individual 10-K blocks in business descriptions, risk matrices, and financial statements.">
                     <div className="w-8 h-8 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 group-hover:text-brand-indigo group-hover:bg-brand-indigo/15 group-hover:scale-105 transition-all duration-300 cursor-help">
                       <Database className="w-4 h-4" />
                     </div>
                   </Tooltip>
-                  <h3 className="text-xs font-bold text-[#1B2430] dark:text-[#F7F7F5] uppercase tracking-wider font-sans group-hover:text-brand-indigo transition-colors duration-300">
+                  <h3 className="text-xs font-bold text-[#26324A] dark:text-[#FCFBF8] uppercase tracking-wider font-sans group-hover:text-brand-indigo transition-colors duration-300">
                     Granular Chunk Scan
                   </h3>
-                  <p className="text-[11px] text-slate-550 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300 leading-relaxed font-mono transition-colors duration-300">
+                  <p className="text-xs text-slate-600 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300 leading-relaxed font-sans transition-colors duration-300">
                     Scans individual 10-K blocks in business descriptions, risk
                     matrices, and financial statements.
                   </p>
-                </div>
+                </article>
 
-                <div className="group p-5 bg-white dark:bg-[#1B2430]/20 border border-slate-300 dark:border-slate-800 rounded-lg space-y-2.5 hover:border-brand-indigo/50 dark:hover:border-brand-indigo/50 hover:bg-indigo-500/[0.01] dark:hover:bg-brand-indigo/[0.02] hover:-translate-y-1 hover:shadow-[0_4px_20px_rgba(99,102,241,0.08)] transition-all duration-300 cursor-default shadow-3xs">
+                <article className="group p-5 bg-white dark:bg-[#26324A]/20 border border-slate-300 dark:border-slate-800 rounded-lg space-y-2.5 hover:border-brand-indigo/50 dark:hover:border-brand-indigo/50 hover:bg-indigo-500/[0.01] dark:hover:bg-brand-indigo/[0.02] hover:-translate-y-1 hover:shadow-[0_4px_20px_rgba(91,99,211,0.08)] transition-all duration-300 cursor-default shadow-3xs">
                   <Tooltip content="Decomposes comparative requests into focused retrievals and presents the completed execution summary.">
                     <div className="w-8 h-8 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 group-hover:text-brand-indigo group-hover:bg-brand-indigo/15 group-hover:scale-105 transition-all duration-300 cursor-help">
                       <GitFork className="w-4 h-4" />
                     </div>
                   </Tooltip>
-                  <h3 className="text-xs font-bold text-[#1B2430] dark:text-[#F7F7F5] uppercase tracking-wider font-sans group-hover:text-brand-indigo transition-colors duration-300">
+                  <h3 className="text-xs font-bold text-[#26324A] dark:text-[#FCFBF8] uppercase tracking-wider font-sans group-hover:text-brand-indigo transition-colors duration-300">
                     Multi-Hop Querying
                   </h3>
-                  <p className="text-[11px] text-slate-550 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300 leading-relaxed font-mono transition-colors duration-300">
+                  <p className="text-xs text-slate-600 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300 leading-relaxed font-sans transition-colors duration-300">
                     Decomposes comparative requests into focused retrievals and
                     presents a grounded execution summary.
                   </p>
-                </div>
+                </article>
 
-                <div className="group p-5 bg-white dark:bg-[#1B2430]/20 border border-slate-300 dark:border-slate-800 rounded-lg space-y-2.5 hover:border-brand-indigo/50 dark:hover:border-brand-indigo/50 hover:bg-indigo-500/[0.01] dark:hover:bg-brand-indigo/[0.02] hover:-translate-y-1 hover:shadow-[0_4px_20px_rgba(99,102,241,0.08)] transition-all duration-300 cursor-default shadow-3xs">
+                <article className="group p-5 bg-white dark:bg-[#26324A]/20 border border-slate-300 dark:border-slate-800 rounded-lg space-y-2.5 hover:border-brand-indigo/50 dark:hover:border-brand-indigo/50 hover:bg-indigo-500/[0.01] dark:hover:bg-brand-indigo/[0.02] hover:-translate-y-1 hover:shadow-[0_4px_20px_rgba(91,99,211,0.08)] transition-all duration-300 cursor-default shadow-3xs">
                   <Tooltip content="All extracted disclosures are verified with alignment margins, item tags, and exact document indexes.">
                     <div className="w-8 h-8 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 group-hover:text-brand-indigo group-hover:bg-brand-indigo/15 group-hover:scale-105 transition-all duration-300 cursor-help">
                       <CheckCircle2 className="w-4 h-4" />
                     </div>
                   </Tooltip>
-                  <h3 className="text-xs font-bold text-[#1B2430] dark:text-[#F7F7F5] uppercase tracking-wider font-sans group-hover:text-brand-indigo transition-colors duration-300">
+                  <h3 className="text-xs font-bold text-[#26324A] dark:text-[#FCFBF8] uppercase tracking-wider font-sans group-hover:text-brand-indigo transition-colors duration-300">
                     Verifiable Sources
                   </h3>
-                  <p className="text-[11px] text-slate-550 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300 leading-relaxed font-mono transition-colors duration-300">
+                  <p className="text-xs text-slate-600 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300 leading-relaxed font-sans transition-colors duration-300">
                     Every answer keeps the retrieved filing excerpts visible so
                     you can inspect the source text behind each claim.
                   </p>
-                </div>
+                </article>
               </div>
 
               <div className="rounded-xl border border-brand-indigo/20 bg-brand-indigo/[0.035] dark:bg-brand-indigo/[0.06] p-4 md:p-5 space-y-3">
@@ -840,45 +963,49 @@ export default function App() {
           ) : (
             /* Active Chat Stream */
             <div className="flex flex-col w-full min-h-full py-4 md:py-5 pb-6 relative">
-              {messages.map((msg, index) => (
-                <ChatMessage
-                  key={msg.id}
-                  message={msg}
-                  isLatest={index === messages.length - 1}
-                  onRetry={handleRetry}
-                />
-              ))}
+              <Suspense
+                fallback={
+                  <div className="flex items-center gap-2 max-w-4xl mx-auto w-full px-3 py-4 text-sm text-slate-500 dark:text-slate-400" role="status">
+                    <span className="w-2 h-2 rounded-full bg-brand-indigo animate-pulse" />
+                    Loading response renderer…
+                  </div>
+                }
+              >
+                {messages.map((msg, index) => (
+                  <ChatMessage
+                    key={msg.id}
+                    message={msg}
+                    isLatest={index === messages.length - 1}
+                    onRetry={handleRetry}
+                  />
+                ))}
+              </Suspense>
               <div ref={messagesEndRef} />
 
               {/* Scroll to bottom button */}
-              <AnimatePresence>
-                {showScrollButton && (
-                  <motion.button
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    type="button"
-                    onClick={scrollToBottom}
-                    className="fixed bottom-32 right-6 md:right-8 p-2.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer z-30"
-                    aria-label="Scroll to bottom"
-                  >
-                    <ChevronDown className="w-5 h-5" />
-                  </motion.button>
-                )}
-              </AnimatePresence>
+              {showScrollButton && (
+                <button
+                  type="button"
+                  onClick={scrollToBottom}
+                  className="ui-message-enter fixed bottom-32 right-6 md:right-8 min-h-10 min-w-10 p-2.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer z-30"
+                  aria-label="Scroll to bottom"
+                >
+                  <ChevronDown className="w-5 h-5" />
+                </button>
+              )}
             </div>
           )}
-        </div>
+        </main>
 
         {/* The composer is a flex sibling, so it never overlays response evidence. */}
-        <div className="flex-shrink-0 bg-[#F7F7F5] dark:bg-[#12161C] z-10">
+        <div className="flex-shrink-0 bg-[#FCFBF8] dark:bg-[#171D2B] z-10">
           <ChatInput
             inputText={inputText}
             setInputText={setInputText}
             onSendMessage={handleSendMessage}
             onStopGenerating={handleStopGenerating}
             isLoading={isLoading}
-            isStreaming={messages.some((message) => message.isStreaming)}
+            isStreaming={isStreaming}
             isBackendConnected={isBackendConnected}
             isPipelineReady={isPipelineReady}
             showBanner={activeView === "conversation" && messages.length > 0}

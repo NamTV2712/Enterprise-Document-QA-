@@ -2,6 +2,58 @@
 
 ## Current Milestone
 
+### Frontend performance checkpoint (2026-09-02)
+
+The Vite client now uses `LazyMotion` with the DOM animation feature set,
+lazy-loads the conversation/Markdown renderer, and separates stable React and
+Motion vendor chunks. Initial JavaScript fell from `527.83 kB` (`162.58 kB`
+gzip) in one chunk to `341.27 kB` (`107.16 kB` gzip) across cacheable initial
+chunks; the optional conversation chunk is `139.45 kB` (`42.47 kB` gzip).
+Vercel now gives content-hashed `/assets/*` a one-year immutable browser cache
+while leaving `index.html` revalidated. Google Fonts are discovered directly
+from HTML with preconnect hints instead of through a CSS `@import`.
+
+Streaming no longer serializes chat history into local storage every 80 ms,
+and memoized sidebar/composer trees receive stable callbacks so token updates
+do not re-render them. Repeated auto-scrolls no longer queue overlapping smooth
+animations. After the readiness check, supported metadata and session history
+load concurrently with the same abort signal. The frontend type-check, all
+`14` Vitest tests, production build, and local browser smoke check pass. No UI,
+UX, API contract, or feature behavior was intentionally changed.
+
+### Frontend UX/UI color checkpoint (2026-09-02)
+
+The first visual improvement pass keeps the existing layout and interaction
+model while refreshing the color system for a warmer, calmer research
+workspace. Light mode now uses warm paper `#FCFBF8` with soft navy ink
+`#26324A`; dark mode uses `#171D2B` with a slightly lighter card surface
+`#1E2738`. Action accents moved from bright indigo to `#5B63D3`, while
+verification states use the more welcoming teal pair `#287A68` / `#53B89A`.
+Panels, overlays, scrollbar tones, selection highlights, and inline literals
+were updated together so light and dark themes remain coherent. Desktop and
+390px mobile visual smoke checks passed after the palette change; type-check,
+all `15` tests, and the production build remain green.
+
+### Frontend optimization completion checkpoint (2026-09-02)
+
+The full frontend pass removed the runtime `motion` dependency and replaced
+its small transitions with CSS keyframes plus a global reduced-motion policy.
+This removed the initial `motion-vendor` chunk: initial JavaScript is now
+`261.16 kB` raw / `78.89 kB` gzip versus `341.11 kB` / `107.02 kB` before
+this pass (about `23%` raw and `26%` gzip smaller). The lazy conversation
+renderer remains isolated at `138.83 kB` raw / `42.26 kB` gzip. Streaming
+responses render plain text until completion to avoid reparsing Markdown every
+token; answers and evidence no longer wait for the decomposition animation.
+
+Health refreshes are request-deduped with a 15-second freshness window,
+supported ticker metadata opts into browser caching, and local storage writes
+are debounced and guarded. Comparative requests can be stopped consistently
+with streamed requests. Semantic landmarks, status announcements, labelled
+controls, 40px touch targets, focus-visible styles, and mobile/dark-mode
+smoke checks were added without changing the API contract or visual layout
+structure. Type-check, all `15` Vitest tests, production build, and final
+browser smoke checks pass.
+
 ### Active post-admission status
 
 The admitted Answer Completion v1 / enumeration candidate was promoted to the

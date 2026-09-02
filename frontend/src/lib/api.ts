@@ -52,6 +52,7 @@ export async function checkHealth(signal?: AbortSignal): Promise<HealthResponse>
     headers: {
       Accept: "application/json",
     },
+    cache: "no-store",
     signal,
   });
   if (!response.ok) {
@@ -69,6 +70,10 @@ export async function getSupportedTickers(
     headers: {
       Accept: "application/json",
     },
+    // The indexed company/section catalog changes infrequently. Allow the
+    // browser/edge cache to reuse it across reloads while the health/session
+    // endpoints remain request-fresh.
+    cache: "force-cache",
     signal,
   });
   if (!response.ok) {
@@ -123,6 +128,7 @@ export async function getSessionHistory(
     headers: {
       Accept: "application/json",
     },
+    cache: "no-store",
     signal,
   });
   if (!response.ok) {

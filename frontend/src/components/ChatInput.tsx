@@ -4,7 +4,6 @@
  */
 
 import React, { useRef, useEffect, memo } from "react";
-import { motion } from "motion/react";
 import { Send, AlertTriangle, Loader2, Square } from "lucide-react";
 import { Tooltip } from "./Tooltip";
 
@@ -30,7 +29,7 @@ export const ConnectionBanner = memo(
   }) => {
     if (isBackendConnected === null || isPipelineReady === null) {
       return (
-        <div className="flex items-center gap-2 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/20 text-slate-600 dark:text-slate-400 text-xs font-semibold font-mono">
+        <div className="flex items-center gap-2 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/20 text-slate-600 dark:text-slate-400 text-xs font-semibold font-sans" role="status" aria-live="polite">
           <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin" />
           <span>Connecting to the FastAPI backend...</span>
         </div>
@@ -39,7 +38,7 @@ export const ConnectionBanner = memo(
 
     if (isBackendConnected === false) {
       return (
-        <div className="flex items-center gap-2 p-2.5 rounded-lg border border-red-200 dark:border-red-950/40 bg-red-50 dark:bg-red-950/20 text-red-750 dark:text-red-400 text-xs font-semibold font-mono">
+        <div className="flex items-center gap-2 p-2.5 rounded-lg border border-red-200 dark:border-red-950/40 bg-red-50 dark:bg-red-950/20 text-red-750 dark:text-red-400 text-xs font-semibold font-sans" role="alert">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           <span>
             Connection error: FastAPI service at [API] is unreachable. Verify
@@ -51,7 +50,7 @@ export const ConnectionBanner = memo(
 
     if (isPipelineReady === false) {
       return (
-        <div className="flex items-center gap-2 p-2.5 rounded-lg border border-amber-200 dark:border-amber-950/40 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 text-xs font-semibold font-mono">
+        <div className="flex items-center gap-2 p-2.5 rounded-lg border border-amber-200 dark:border-amber-950/40 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 text-xs font-semibold font-sans" role="status" aria-live="polite">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           <span>
             System status: FastAPI pipeline state is re-loading index vectors.
@@ -67,7 +66,7 @@ export const ConnectionBanner = memo(
 
 ConnectionBanner.displayName = "ConnectionBanner";
 
-export const ChatInput: React.FC<ChatInputProps> = ({
+const ChatInputBase: React.FC<ChatInputProps> = ({
   inputText,
   setInputText,
   onSendMessage,
@@ -116,7 +115,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [inputText]);
 
   return (
-    <div className="w-full max-w-full min-w-0 bg-[#F7F7F5] dark:bg-[#12161C] border-t border-slate-200 dark:border-slate-800 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))] md:pb-4 px-4">
+    <div className="w-full max-w-full min-w-0 bg-[#FCFBF8] dark:bg-[#171D2B] border-t border-slate-200 dark:border-slate-800 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))] md:pb-4 px-4">
       <div className="w-full max-w-4xl mx-auto space-y-3 min-w-0">
         {/* Banner Alert for Pipeline Not Ready or Disconnected */}
         {showBanner && (
@@ -127,8 +126,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         )}
 
         <form
+          aria-label="Ask a research question"
           onSubmit={handleSubmit}
-          className="relative flex items-end gap-2 bg-white dark:bg-[#1B2430]/30 border border-slate-300 dark:border-slate-800 rounded-xl shadow-xs focus-within:ring-2 focus-within:ring-[#1B2430]/10 dark:focus-within:ring-[#F7F7F5]/10 focus-within:border-[#1B2430] dark:focus-within:border-[#F7F7F5] transition-all duration-200 p-2 pl-4 overflow-hidden"
+          className="relative flex items-end gap-2 bg-white dark:bg-[#26324A]/30 border border-slate-300 dark:border-slate-800 rounded-xl shadow-xs focus-within:ring-2 focus-within:ring-[#26324A]/10 dark:focus-within:ring-[#FCFBF8]/10 focus-within:border-[#26324A] dark:focus-within:border-[#FCFBF8] transition-all duration-200 p-2 pl-4 overflow-hidden"
         >
           {/* Subtle loading shimmer bar along the top edge of the input area */}
           {isLoading && (
@@ -141,6 +141,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             ref={textareaRef}
             id="chat-textarea"
             rows={1}
+            aria-label="Research question"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -154,7 +155,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     : "Ask a question about 10-K filings (e.g. Compare risk factors...)"
             }
             disabled={isDisabled}
-            className="flex-1 resize-none bg-transparent border-0 outline-none focus:ring-0 text-sm md:text-base text-slate-850 dark:text-[#F7F7F5] py-2.5 max-h-40 min-h-[40px] pr-12 scrollbar-none font-sans"
+            className="flex-1 resize-none bg-transparent border-0 outline-none focus:ring-0 text-sm md:text-base text-slate-850 dark:text-[#FCFBF8] py-2.5 max-h-40 min-h-[40px] pr-12 scrollbar-none font-sans"
           />
 
           <div className="flex items-center gap-3 pr-1.5 pb-1">
@@ -173,44 +174,38 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               </Tooltip>
             )}
 
-            {isStreaming ? (
-              <motion.button
-                whileHover={{ scale: 1.02, y: -0.5 }}
-                whileTap={{ scale: 0.98 }}
+            {isStreaming || isLoading ? (
+              <button
                 type="button"
                 onClick={onStopGenerating}
                 aria-label="Stop generating response"
-                className="h-10 px-3 rounded-lg flex items-center justify-center gap-2 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
+                className="min-h-10 px-3 rounded-lg flex items-center justify-center gap-2 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
               >
                 <Square className="w-3 h-3 fill-current" />
                 <span className="text-xs font-semibold">Stop</span>
-              </motion.button>
+              </button>
             ) : (
-              <motion.button
-                whileHover={
-                  isValidLength && !isDisabled ? { scale: 1.02, y: -0.5 } : {}
-                }
-                whileTap={isValidLength && !isDisabled ? { scale: 0.98 } : {}}
+              <button
                 type="submit"
                 id="send-message-btn"
                 title="Ask"
                 aria-label="Send question"
                 disabled={!isValidLength || isDisabled}
-                className={`p-2.5 rounded-lg flex items-center justify-center transition-all ${
+                className={`min-h-10 min-w-10 p-2.5 rounded-lg flex items-center justify-center transition-all ${
                   isValidLength && !isDisabled
-                    ? "bg-[#1B2430] dark:bg-[#F7F7F5] text-[#F7F7F5] dark:text-[#1B2430] hover:opacity-95 cursor-pointer shadow-3xs"
+                    ? "bg-[#26324A] dark:bg-[#FCFBF8] text-[#FCFBF8] dark:text-[#26324A] hover:opacity-95 cursor-pointer shadow-3xs"
                     : "bg-slate-100 dark:bg-slate-900/50 text-slate-400 dark:text-slate-650 cursor-not-allowed border border-slate-200/50 dark:border-slate-800/50"
                 }`}
               >
                 <Send className="w-4 h-4" />
-              </motion.button>
+              </button>
             )}
           </div>
         </form>
 
         {/* Char count warnings */}
         {charCount > 0 && (
-          <div className="flex justify-between text-[10px] font-mono font-bold text-slate-400 dark:text-slate-500 px-1 uppercase tracking-wider">
+          <div className="flex justify-between text-[10px] font-sans font-bold text-slate-400 dark:text-slate-500 px-1 uppercase tracking-wider" role="status" aria-live="polite">
             {isTooShort && (
               <span className="text-rose-500 font-bold">
                 Query must be at least 5 characters.
@@ -232,3 +227,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     </div>
   );
 };
+
+export const ChatInput = memo(ChatInputBase);
+ChatInput.displayName = "ChatInput";

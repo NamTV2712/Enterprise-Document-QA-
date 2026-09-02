@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import React from "react";
 import ReactMarkdown from "react-markdown";
 import { User, Cpu, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { Message } from "../types";
@@ -52,7 +51,7 @@ const formatMonospaceInline = (text: any): React.ReactNode => {
             return (
               <span
                 key={idx}
-                className="font-mono font-bold px-1 py-0.5 bg-slate-100 dark:bg-slate-800 text-[#1B2430] dark:text-[#F7F7F5] rounded text-xs select-all border border-slate-200/50 dark:border-slate-700/50"
+                className="font-mono font-bold px-1 py-0.5 bg-slate-100 dark:bg-slate-800 text-[#26324A] dark:text-[#FCFBF8] rounded text-xs select-all border border-slate-200/50 dark:border-slate-700/50"
               >
                 {token}
               </span>
@@ -69,7 +68,7 @@ const formatMonospaceInline = (text: any): React.ReactNode => {
           return (
             <span
               key={idx}
-              className="font-mono font-semibold text-[#1B2430] dark:text-[#F7F7F5] bg-[#F7F7F5] dark:bg-[#12161C] border border-slate-200/40 dark:border-slate-800/60 px-1 py-0.5 rounded text-xs"
+              className="font-mono font-semibold text-[#26324A] dark:text-[#FCFBF8] bg-[#FCFBF8] dark:bg-[#171D2B] border border-slate-200/40 dark:border-slate-800/60 px-1 py-0.5 rounded text-xs"
             >
               {token}
             </span>
@@ -110,33 +109,9 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
 }) => {
   const isUser = message.sender === "user";
 
-  // Manage sequential trace state for decomposed queries
-  const [traceComplete, setTraceComplete] = useState<boolean>(() => {
-    if (!isLatest) return true;
-    if (message.wasDecomposed) return false;
-    return !message.subQueries || message.subQueries.length === 0;
-  });
-
-  useEffect(() => {
-    if (!isLatest) {
-      setTraceComplete(true);
-      return;
-    }
-    // If it was not decomposed, we are complete immediately
-    if (
-      !message.wasDecomposed &&
-      (!message.subQueries || message.subQueries.length === 0)
-    ) {
-      setTraceComplete(true);
-    }
-  }, [isLatest, message.subQueries, message.wasDecomposed]);
-
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: "spring", stiffness: 140, damping: 20 }}
-      className="w-full px-3 py-2 md:px-5 md:py-2.5"
+    <div
+      className="ui-message-enter w-full px-3 py-2 md:px-5 md:py-2.5"
       id={`message-${message.id}`}
       role="article"
       aria-label={isUser ? "Your question" : "Research assistant response"}
@@ -145,7 +120,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
         className={`max-w-4xl mx-auto w-full flex gap-3 md:gap-4 ${
           isUser
             ? "flex-row-reverse items-start py-2"
-            : "items-start rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-[#171D25] p-4 md:p-5 shadow-3xs"
+            : "items-start rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-[#1E2738] p-4 md:p-5 shadow-3xs"
         }`}
       >
         <div className="flex-shrink-0">
@@ -176,7 +151,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
               {isUser ? "Your question" : "SEC Filing Research Assistant"}
             </span>
             {!isUser && message.model_used && (
-              <span className="text-[9px] font-mono font-semibold bg-slate-50 dark:bg-[#12161C] border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded shadow-4xs">
+              <span className="text-[9px] font-mono font-semibold bg-slate-50 dark:bg-[#171D2B] border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded shadow-4xs">
                 {message.model_used}
               </span>
             )}
@@ -198,23 +173,17 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
             <SubQueriesPanel
               subQueries={message.subQueries || []}
               isLatest={isLatest}
-              onTraceComplete={() => setTraceComplete(true)}
             />
           )}
 
-          {/* Message body (only shows after trace completes to provide authentic experience) */}
-          <AnimatePresence mode="wait">
-            {traceComplete && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, ease: "easeOut" }}
-                className={`prose prose-slate dark:prose-invert max-w-none text-[#1B2430] dark:text-[#F7F7F5] text-sm md:text-base leading-relaxed font-sans ${
-                  isUser
-                    ? "rounded-2xl rounded-tr-md border border-brand-indigo/20 bg-brand-indigo/[0.06] dark:bg-brand-indigo/[0.10] px-4 py-3 shadow-3xs"
-                    : ""
-                }`}
-              >
+          {/* Render the answer as soon as it arrives; the trace remains visible alongside it. */}
+          <div
+            className={`ui-answer-enter prose prose-slate dark:prose-invert max-w-none text-[#26324A] dark:text-[#FCFBF8] text-sm md:text-base leading-relaxed font-sans ${
+              isUser
+                ? "rounded-2xl rounded-tr-md border border-brand-indigo/20 bg-brand-indigo/[0.06] dark:bg-brand-indigo/[0.10] px-4 py-3 shadow-3xs"
+                : ""
+            }`}
+          >
                 {isUser ? (
                   <p className="!m-0 whitespace-pre-wrap select-text font-sans text-slate-850 dark:text-slate-100">
                     {message.text}
@@ -241,8 +210,13 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                 ) : (
                   <div className="markdown-body select-text">
                     {message.text ? (
-                      <ReactMarkdown
-                        components={{
+                      message.isStreaming ? (
+                        <p className="whitespace-pre-wrap text-sm md:text-base leading-relaxed text-slate-800 dark:text-slate-200">
+                          {message.text}
+                        </p>
+                      ) : (
+                        <ReactMarkdown
+                          components={{
                           table: ({ ...props }) => (
                             <div className="overflow-x-auto my-4 border border-slate-200 dark:border-slate-800 rounded-xl shadow-4xs">
                               <table
@@ -253,7 +227,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                           ),
                           thead: ({ ...props }) => (
                             <thead
-                              className="bg-[#F7F7F5] dark:bg-[#12161C] text-[#1B2430] dark:text-[#F7F7F5] border-b border-slate-200 dark:border-slate-800"
+                              className="bg-[#FCFBF8] dark:bg-[#171D2B] text-[#26324A] dark:text-[#FCFBF8] border-b border-slate-200 dark:border-slate-800"
                               {...props}
                             />
                           ),
@@ -271,7 +245,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                           ),
                           td: ({ ...props }) => (
                             <td
-                              className="p-2.5 font-mono text-xs text-[#1B2430] dark:text-[#F7F7F5]"
+                              className="p-2.5 font-mono text-xs text-[#26324A] dark:text-[#FCFBF8]"
                               {...props}
                             />
                           ),
@@ -297,17 +271,18 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                           ),
                           strong: ({ ...props }) => (
                             <strong
-                              className="font-bold text-[#1B2430] dark:text-[#F7F7F5] font-sans"
+                              className="font-bold text-[#26324A] dark:text-[#FCFBF8] font-sans"
                               {...props}
                             />
                           ),
                           em: ({ ...props }) => (
                             <em className="italic" {...props} />
                           ),
-                        }}
-                      >
-                        {message.text}
-                      </ReactMarkdown>
+                          }}
+                        >
+                          {message.text}
+                        </ReactMarkdown>
+                      )
                     ) : (
                       <div className="flex items-center gap-2 text-slate-400 py-1 font-mono">
                         <Loader2 className="w-4 h-4 animate-spin text-brand-indigo" />
@@ -318,9 +293,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                     )}
                   </div>
                 )}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          </div>
 
           {/* Streaming Blink Cursor */}
           {message.isStreaming && (
@@ -329,16 +302,15 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
             </div>
           )}
 
-          {/* Collapsible Sources (only shows after trace completes) */}
-          {traceComplete &&
-            !isUser &&
+          {/* Collapsible Sources */}
+          {!isUser &&
             message.sources &&
             message.sources.length > 0 && (
               <SourcesPanel sources={message.sources} />
             )}
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 };
 

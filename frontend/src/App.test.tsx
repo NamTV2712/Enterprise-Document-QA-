@@ -81,6 +81,27 @@ describe("App request cancellation", () => {
     expect(healthSignal.aborted).toBe(true);
   });
 
+  test("loads supported metadata and session history in parallel", async () => {
+    let resolveSupportedTickers: ((value: {
+      tickers: string[];
+      sections: string[];
+    }) => void) | undefined;
+    apiMocks.getSupportedTickers.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSupportedTickers = resolve;
+        }),
+    );
+
+    render(<App />);
+
+    await waitFor(() => expect(apiMocks.getSessionHistory).toHaveBeenCalled());
+    expect(resolveSupportedTickers).toBeDefined();
+
+    resolveSupportedTickers?.({ tickers: ["AAPL"], sections: ["business"] });
+    expect(await screen.findByText("Pipeline: Ready")).toBeInTheDocument();
+  });
+
   test("session history can switch between conversation and overview", async () => {
     const longAnswer = "Full historical answer ".repeat(30).trim();
     apiMocks.getSessionHistory.mockResolvedValue({
@@ -193,6 +214,7 @@ describe("App request cancellation", () => {
 
   test("stop generating aborts the stream and preserves partial text", async () => {
     let streamSignal: AbortSignal | undefined;
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem");
     apiMocks.streamQuery.mockImplementation(
       async (_payload, onEvent, _onError, signal?: AbortSignal) => {
         streamSignal = signal;
@@ -209,6 +231,7 @@ describe("App request cancellation", () => {
 
     render(<App />);
     await screen.findByText("Pipeline: Ready");
+    setItemSpy.mockClear();
 
     const input = screen.getByRole("textbox");
     fireEvent.change(input, {
@@ -217,6 +240,9 @@ describe("App request cancellation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send question" }));
 
     await screen.findByText("Partial answer");
+    expect(
+      setItemSpy.mock.calls.filter(([key]) => key === "sec_qa_messages"),
+    ).toHaveLength(0);
     fireEvent.click(
       screen.getByRole("button", { name: "Stop generating response" }),
     );
@@ -227,5 +253,55 @@ describe("App request cancellation", () => {
       screen.queryByRole("button", { name: "Stop generating response" }),
     ).not.toBeInTheDocument();
     expect(input).toBeEnabled();
+    await waitFor(() =>
+      expect(
+        setItemSpy.mock.calls.filter(([key]) => key === "sec_qa_messages"),
+      ).toHaveLength(1),
+    );
+    setItemSpy.mockRestore();
+  });
+
+  test("comparative analysis can be stopped while the request is pending", async () => {
+    let querySignal: AbortSignal | undefined;
+    apiMocks.queryDecomposed.mockImplementation(
+      async (_payload, signal?: AbortSignal) => {
+        querySignal = signal;
+        await new Promise<void>((resolve) => {
+          if (signal?.aborted) {
+            resolve();
+            return;
+          }
+          signal?.addEventListener("abort", () => resolve(), { once: true });
+        });
+        return {
+          answer: "",
+          model_used: "test-model",
+          was_decomposed: true,
+          sub_queries: [],
+          sources: [],
+          num_total_chunks: 0,
+        };
+      },
+    );
+
+    render(<App />);
+    await screen.findByText("Pipeline: Ready");
+
+    const input = screen.getByRole("textbox");
+    fireEvent.change(input, {
+      target: { value: "Compare Apple and Microsoft risk factors" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send question" }));
+
+    const stopButton = await screen.findByRole("button", {
+      name: "Stop generating response",
+    });
+    fireEvent.click(stopButton);
+
+    expect(querySignal?.aborted).toBe(true);
+    expect(await screen.findByText("Generation stopped.")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Stop generating response" }),
+    ).not.toBeInTheDocument();
   });
 });

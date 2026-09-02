@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import React, { useId, useState, useEffect } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -20,7 +19,6 @@ import { formatCompanyLabel } from "../lib/displayMetadata";
 interface SubQueriesPanelProps {
   subQueries: SubQuery[];
   isLatest?: boolean;
-  onTraceComplete?: () => void;
 }
 
 const sectionMap: Record<string, string> = {
@@ -51,11 +49,11 @@ const sectionMap: Record<string, string> = {
 export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
   subQueries = [],
   isLatest = false,
-  onTraceComplete,
 }) => {
   const [isOpen, setIsOpen] = useState(true);
   const [visibleCount, setVisibleCount] = useState<number>(0);
   const [hasAnimated, setHasAnimated] = useState<boolean>(false);
+  const panelId = `subqueries-panel-${useId().replace(/:/g, "")}`;
 
   // Check if user prefers reduced motion
   const prefersReduced =
@@ -73,14 +71,12 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
     // If it's not the latest message or user prefers reduced motion or has already animated, show all immediately
     if (!isLatest || prefersReduced || hasAnimated) {
       setVisibleCount(subQueries.length);
-      if (onTraceComplete) onTraceComplete();
       return;
     }
 
     // Reset and begin sequential stagger
     setVisibleCount(0);
     let count = 0;
-    let completeTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const interval = setInterval(() => {
       count += 1;
@@ -89,16 +85,11 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
       } else {
         clearInterval(interval);
         setHasAnimated(true);
-        // Call complete after a tiny delay to let the last item fade-in/slide-up
-        completeTimeout = setTimeout(() => {
-          if (onTraceComplete) onTraceComplete();
-        }, 150);
       }
-    }, 200); // 200ms stagger interval
+    }, 120); // Keep the trace readable without delaying the answer.
 
     return () => {
       clearInterval(interval);
-      if (completeTimeout !== null) clearTimeout(completeTimeout);
     };
   }, [subQueries, isLatest, prefersReduced, hasAnimated]);
 
@@ -106,10 +97,12 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
     subQueries.length > 0 && visibleCount >= subQueries.length;
 
   return (
-    <div className="border border-slate-200 dark:border-slate-800 rounded-xl bg-[#F7F7F5] dark:bg-[#12161C] overflow-hidden my-4 shadow-3xs transition-all font-sans">
+    <div className="border border-slate-200 dark:border-slate-800 rounded-xl bg-[#FCFBF8] dark:bg-[#171D2B] overflow-hidden my-4 shadow-3xs transition-all font-sans">
       <button
         type="button"
-        id="subqueries-toggle-btn"
+        id={`${panelId}-toggle`}
+        aria-expanded={isOpen}
+        aria-controls={panelId}
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between p-3.5 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100/50 dark:hover:bg-slate-850/50 transition-colors cursor-pointer uppercase tracking-wider"
       >
@@ -134,17 +127,10 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
         </div>
       </button>
 
-      <AnimatePresence initial={false}>
-        {isOpen && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22, ease: "easeInOut" }}
-            className="overflow-hidden border-t border-slate-200 dark:border-slate-800 bg-[#F1F1EF] dark:bg-[#0E1116]"
-          >
+      {isOpen && (
+          <div id={panelId} className="ui-expand-enter overflow-hidden border-t border-slate-200 dark:border-slate-800 bg-[#F3F5FA] dark:bg-[#101625]">
             <div className="p-3.5 space-y-3 font-mono text-[11px] md:text-xs">
-              <div className="text-slate-400 dark:text-slate-500 uppercase font-bold border-b border-slate-250 dark:border-slate-800 pb-1 flex items-center justify-between">
+              <div className="text-slate-400 dark:text-slate-500 uppercase font-bold border-b border-slate-250 dark:border-slate-800 pb-1 flex items-center justify-between" role="status" aria-live="polite">
                 <span>
                   [EXECUTION SUMMARY] STATUS:{" "}
                   {subQueries.length > 0
@@ -156,7 +142,7 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
 
               <div className="space-y-3">
                 {subQueries.length === 0 ? (
-                  <div className="p-3.5 rounded-lg border border-slate-200 dark:border-slate-800/60 bg-white/50 dark:bg-[#12161C]/30 text-slate-450 dark:text-slate-550 flex items-center gap-2.5 font-mono animate-pulse">
+                  <div className="p-3.5 rounded-lg border border-slate-200 dark:border-slate-800/60 bg-white/50 dark:bg-[#171D2B]/30 text-slate-450 dark:text-slate-550 flex items-center gap-2.5 font-mono animate-pulse">
                     <RefreshCw className="w-3.5 h-3.5 animate-spin text-brand-indigo flex-shrink-0" />
                     <span>Preparing query decomposition summary...</span>
                   </div>
@@ -176,15 +162,12 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
                         : "General Document");
 
                     return (
-                      <motion.div
+                      <div
                         key={index}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.15, ease: "easeOut" }}
-                        className={`p-3 rounded-lg border transition-all ${
+                        className={`ui-stagger-enter p-3 rounded-lg border transition-all ${
                           isLastRow && !isFullyDone
                             ? "border-brand-indigo/40 bg-brand-indigo/5 text-slate-900 dark:text-white shadow-3xs"
-                            : "border-slate-200 dark:border-slate-800 bg-white dark:bg-[#12161C]/60 text-slate-700 dark:text-slate-300"
+                            : "border-slate-200 dark:border-slate-800 bg-white dark:bg-[#171D2B]/60 text-slate-700 dark:text-slate-300"
                         }`}
                         id={`subquery-item-${index}`}
                       >
@@ -221,7 +204,7 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
                                 <span>revealing result...</span>
                               </span>
                             ) : (
-                              <span className="text-verified-green dark:text-[#38a385] flex items-center gap-1 font-bold">
+                              <span className="text-verified-green dark:text-[#53B89A] flex items-center gap-1 font-bold">
                                 <Check className="w-3.5 h-3.5" />
                                 <span>matched</span>
                               </span>
@@ -237,21 +220,20 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
                         {(index < visibleCount - 1 || isFullyDone) && (
                           <div className="mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800/50 flex items-center justify-between text-[10px] text-slate-400 font-mono">
                             <span>RETRIEVAL RESULT: COMPLETE</span>
-                            <span className="text-verified-green dark:text-[#38a385] font-bold flex items-center gap-0.5">
+                            <span className="text-verified-green dark:text-[#53B89A] font-bold flex items-center gap-0.5">
                               <Hash className="w-3 h-3" />
                               {sub.num_chunks} chunks indexed
                             </span>
                           </div>
                         )}
-                      </motion.div>
+                      </div>
                     );
                   })
                 )}
               </div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+      )}
     </div>
   );
 };

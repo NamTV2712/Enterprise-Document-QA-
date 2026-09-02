@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useId, useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import React, { useId, useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -132,14 +131,18 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({ sources }) => {
 
   if (!sources || sources.length === 0) return null;
 
-  const sourceTickers = Array.from(
-    new Set(sources.map((source) => getSectionDisplay(source.citation).ticker)),
-  );
-  const companySummary = sourceTickers
-    .slice(0, 2)
-    .map(formatCompanyLabel)
-    .join(" · ");
-  const remainingCompanies = Math.max(0, sourceTickers.length - 2);
+  const { companySummary, remainingCompanies } = useMemo(() => {
+    const sourceTickers = Array.from(
+      new Set(sources.map((source) => getSectionDisplay(source.citation).ticker)),
+    );
+    return {
+      companySummary: sourceTickers
+        .slice(0, 2)
+        .map(formatCompanyLabel)
+        .join(" · "),
+      remainingCompanies: Math.max(0, sourceTickers.length - 2),
+    };
+  }, [sources]);
 
   return (
     <div className="border border-slate-200/80 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-900/40 overflow-hidden my-4 shadow-3xs hover:shadow-2xs transition-all">
@@ -174,15 +177,10 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({ sources }) => {
         </span>
       </button>
 
-      <AnimatePresence initial={false}>
-        {isOpen && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22, ease: "easeInOut" }}
+      {isOpen && (
+          <div
             id={panelId}
-            className="overflow-hidden border-t border-slate-200/60 dark:border-slate-800/80"
+            className="ui-expand-enter overflow-hidden border-t border-slate-200/60 dark:border-slate-800/80"
           >
             <div className="px-3.5 py-2.5 bg-brand-indigo/[0.03] border-b border-slate-200/60 dark:border-slate-800/80 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
               These are the filing excerpts used to ground the answer. Rank score
@@ -233,9 +231,8 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({ sources }) => {
                 );
               })}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+      )}
     </div>
   );
 };

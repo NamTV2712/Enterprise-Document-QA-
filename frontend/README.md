@@ -2,6 +2,9 @@
 
 Vite + React + TypeScript client for the Enterprise Document QA FastAPI backend. The frontend displays streamed answers, source citations, supported ticker filters, session history, and decomposed sub-queries.
 
+The research workspace uses a warm paper/navy palette with calmer indigo action
+accents and teal verification states in both light and dark themes.
+
 ## Local Development
 
 Requirements: Node.js 18+ and Bun.
@@ -30,6 +33,11 @@ bun run build
 
 Production output is written to `dist/`.
 
+The production build keeps the Markdown conversation renderer in a lazy chunk,
+uses cacheable vendor chunks, and relies on lightweight CSS transitions for
+micro-interactions. The indexed ticker catalog is browser-cacheable; health
+and session history remain fresh requests.
+
 ## Vercel
 
 Production deployment: `https://frontend-one-gamma-f9jf11u8ec.vercel.app`
@@ -39,6 +47,10 @@ Set the Vercel project Root Directory to `frontend` and define:
 ```text
 VITE_API_BASE_URL=https://your-fastapi-backend.example.com
 ```
+
+`vercel.json` gives Vite's content-hashed `/assets/*` files a one-year
+immutable browser cache. Keep `index.html` revalidated so each deployment can
+point clients at the latest asset hashes.
 
 The backend URL must be reachable from the browser and must not be `localhost` in a hosted deployment. For the zero-cost demo, use the reserved ngrok URL while the local Docker backend and tunnel are running. Add the final Vercel origin to the backend's comma-separated `ALLOWED_ORIGINS` value.
 

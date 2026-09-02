@@ -193,7 +193,7 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
                 disabled={!isValidLength || isDisabled}
                 className={`min-h-10 min-w-10 sm:min-w-[4.5rem] px-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
                   isValidLength && !isDisabled
-                    ? "bg-[#26324A] dark:bg-[#FCFBF8] text-[#FCFBF8] dark:text-[#26324A] hover:opacity-95 cursor-pointer shadow-3xs"
+                    ? "primary-action-button cursor-pointer"
                     : "bg-slate-100 dark:bg-slate-900/50 text-slate-400 dark:text-slate-650 cursor-not-allowed border border-slate-200/50 dark:border-slate-800/50"
                 }`}
               >

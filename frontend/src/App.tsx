@@ -142,6 +142,7 @@ export default function App() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const requestAbortRef = useRef<AbortController | null>(null);
+  const resetCancelRef = useRef<HTMLButtonElement>(null);
   const healthRequestRef = useRef<Promise<HealthResponse> | null>(null);
   const lastHealthRefreshRef = useRef(0);
   const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
@@ -623,14 +624,27 @@ export default function App() {
   }, [refreshHealth, sessionId]);
 
   const requestNewConversation = useCallback(() => {
-    if (messages.length === 0) return;
+    if (messages.length === 0) {
+      void handleNewConversation();
+      return;
+    }
     setShowResetDialog(true);
-  }, [messages.length]);
+  }, [handleNewConversation, messages.length]);
 
   const confirmNewConversation = useCallback(async () => {
     setShowResetDialog(false);
     await handleNewConversation();
   }, [handleNewConversation]);
+
+  useEffect(() => {
+    if (!showResetDialog) return;
+    const handleDialogKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowResetDialog(false);
+    };
+    document.addEventListener("keydown", handleDialogKeyDown);
+    resetCancelRef.current?.focus();
+    return () => document.removeEventListener("keydown", handleDialogKeyDown);
+  }, [showResetDialog]);
 
   const handleStopGenerating = useCallback(() => {
     const controller = requestAbortRef.current;
@@ -1050,6 +1064,7 @@ export default function App() {
                 <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                   <button
                     type="button"
+                    ref={resetCancelRef}
                     onClick={() => setShowResetDialog(false)}
                     className="min-h-10 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
                   >

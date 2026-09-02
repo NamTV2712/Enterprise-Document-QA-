@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import App from "./App";
@@ -303,5 +303,35 @@ describe("App request cancellation", () => {
     expect(
       screen.queryByRole("button", { name: "Stop generating response" }),
     ).not.toBeInTheDocument();
+  });
+
+  test("confirms before clearing an existing conversation", async () => {
+    localStorage.setItem("sec_qa_session_id", "reset-test");
+    apiMocks.deleteSession.mockResolvedValue(undefined);
+    apiMocks.getSessionHistory.mockResolvedValue({
+      session_id: "reset-test",
+      turns: [{ user: "What was revenue?", assistant: "Full historical answer" }],
+    });
+
+    render(<App />);
+    expect(await screen.findByText("Full historical answer")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Start a new conversation" }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Start a new conversation?" }),
+    ).toBeInTheDocument();
+    expect(apiMocks.deleteSession).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Keep conversation" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Start a new conversation" }),
+    );
+    const dialog = screen.getByRole("dialog", { name: "Start a new conversation?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Start new conversation" }));
+    await waitFor(() => expect(apiMocks.deleteSession).toHaveBeenCalledWith("reset-test"));
   });
 });

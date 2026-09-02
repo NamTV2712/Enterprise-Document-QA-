@@ -24,7 +24,8 @@ def _report(binding: str, replicate_id: str) -> dict:
         "replicate_id": replicate_id,
         "replicate_provenance": {
             "one_generation_binding": True,
-            "one_judge_binding": True,
+            "one_judge_context_fingerprint": True,
+            "judge_context_fingerprint_values": ["sha256:judge-context"],
         },
         "selector_rows": rows,
     }
@@ -35,4 +36,5 @@ def test_reproducibility_requires_same_binding_and_selector_outputs() -> None:
 
     assert report["passed"] is True
     assert report["gates"]["same_generation_binding"] is True
+    assert report["gates"]["same_judge_context_fingerprint"] is True
     assert report["gates"]["same_selector_outputs"] is True

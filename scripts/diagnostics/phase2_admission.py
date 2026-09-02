@@ -199,9 +199,15 @@ def _completion_gate(
         if has_unified_metadata:
             expected_period = question == AWS_QUESTION
             expected_enumeration = question in ENUMERATION_QUESTIONS
+            expected_stability = row.get("stability_applicable") is True
             if (
                 row.get("period_value_applicable") is not expected_period
                 or row.get("enumeration_applicable") is not expected_enumeration
+            ):
+                valid_rows = False
+            if expected_stability and (
+                row.get("final_stability_passed", True) is not True
+                or row.get("final_stability_missing_facts", []) != []
             ):
                 valid_rows = False
             if row.get("correction_attempted") is True and not (
@@ -239,13 +245,23 @@ def _completion_gate(
         if has_unified_metadata
         else correction_count <= 1
     )
+    expected_applicable_questions = {
+        question
+        for question in expected_questions
+        if question == AWS_QUESTION
+        or question in ENUMERATION_QUESTIONS
+        or (
+            isinstance(rows.get(question), dict)
+            and rows[question].get("stability_applicable") is True
+        )
+    }
     passed = (
         complete
         and (
             set(applicable_questions) == {AWS_QUESTION}
             if not has_unified_metadata
             else set(applicable_questions)
-            == {AWS_QUESTION, *ENUMERATION_QUESTIONS}
+            == expected_applicable_questions
         )
         and valid_rows
         and max_one_correction

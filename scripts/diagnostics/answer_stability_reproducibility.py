@@ -71,11 +71,13 @@ def build_report(
             and first_provenance.get("one_generation_binding") is True
             and second_provenance.get("one_generation_binding") is True
         ),
-        "same_judge_binding": (
+        "same_judge_context_fingerprint": (
             first.get("binding")
             and first.get("binding") == second.get("binding")
-            and first_provenance.get("one_judge_binding") is True
-            and second_provenance.get("one_judge_binding") is True
+            and first_provenance.get("one_judge_context_fingerprint") is True
+            and second_provenance.get("one_judge_context_fingerprint") is True
+            and first_provenance.get("judge_context_fingerprint_values")
+            == second_provenance.get("judge_context_fingerprint_values")
         ),
         "same_selector_outputs": (
             _selector_signature(first) == _selector_signature(second)

@@ -122,6 +122,50 @@ def test_completion_gate_allows_grounding_false_for_safe_fallback_rows() -> None
     assert detail["final_grounding_scope"] == "applicable_answers_only"
 
 
+def test_completion_gate_accepts_new_stability_applicable_question() -> None:
+    questions = [AWS_QUESTION, "stability", "out-of-corpus"]
+    rows = {
+        AWS_QUESTION: {
+            "applicable": True,
+            "period_value_applicable": True,
+            "enumeration_applicable": False,
+            "stability_applicable": False,
+            "final_passed": True,
+            "final_grounding_passed": True,
+            "correction_attempts": 0,
+        },
+        "stability": {
+            "applicable": True,
+            "period_value_applicable": False,
+            "enumeration_applicable": False,
+            "stability_applicable": True,
+            "final_passed": True,
+            "final_grounding_passed": True,
+            "final_stability_passed": True,
+            "final_stability_missing_facts": [],
+            "correction_attempts": 1,
+            "correction_attempted": True,
+            "correction_accepted": True,
+        },
+        "out-of-corpus": {
+            "applicable": False,
+            "period_value_applicable": False,
+            "enumeration_applicable": False,
+            "stability_applicable": False,
+            "final_passed": True,
+            "final_grounding_passed": False,
+            "correction_attempts": 0,
+        },
+    }
+
+    passed, detail = _completion_gate(
+        {"period_value_corrections": rows}, questions
+    )
+
+    assert passed
+    assert detail["applicable_questions"] == [AWS_QUESTION, "stability"]
+
+
 def test_structural_gate_accepts_complete_non_official_candidate() -> None:
     candidate = {
         "official": False,

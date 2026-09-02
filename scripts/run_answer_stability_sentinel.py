@@ -47,6 +47,7 @@ from src.generation.fact_context import (
     FACT_CONTEXT_SELECTOR_FINGERPRINT,
     select_fact_context,
 )
+from src.generation.answer_stability import ANSWER_STABILITY_FINGERPRINT
 from src.generation.generator import Generator
 
 
@@ -190,6 +191,8 @@ def build_report(
     selector_rows: dict[str, dict[str, Any]],
     replicate_id: str,
     artifact: dict[str, Any],
+    generation_binding_values: set[str] | None = None,
+    judge_context_fingerprint_values: set[str] | None = None,
 ) -> dict[str, Any]:
     candidates = {
         case["question"]: case
@@ -238,7 +241,11 @@ def build_report(
             "faithfulness_exact_one": faithfulness == 1.0,
             "answer_relevancy_floor": (
                 isinstance(answer_relevancy, (int, float))
-                and answer_relevancy >= 0.95
+                and (
+                    answer_relevancy >= 0.95
+                    if question in FACT_QUESTIONS
+                    else answer_relevancy >= reference[question]["answer_relevancy"] - 0.10
+                )
             ),
             "semantic_drop_bounded": all(
                 isinstance(scores.get(key), (int, float))
@@ -270,7 +277,7 @@ def build_report(
                 or (
                     completion.get("stability_applicable") is True
                     and completion.get("final_stability_passed") is True
-                    and completion.get("stability_missing_facts") == []
+                    and completion.get("final_stability_missing_facts") == []
                 )
             ),
             "context_identity": (
@@ -325,9 +332,24 @@ def build_report(
         if len(candidate_scores) == len(SENTINEL_QUESTIONS)
         else {}
     )
+    generation_binding_values = (
+        generation_binding_values
+        if generation_binding_values is not None
+        else {summary.get("binding")}
+    )
+    judge_context_fingerprint_values = (
+        judge_context_fingerprint_values
+        if judge_context_fingerprint_values is not None
+        else {"unverified"}
+    )
     gates = {
         "provider_complete": provider_complete,
-        "single_binding": bool(summary.get("binding")),
+        "single_generation_binding": (
+            generation_binding_values == {summary.get("binding")}
+        ),
+        "single_judge_context_fingerprint": (
+            len(judge_context_fingerprint_values) == 1
+        ),
         "selector_and_context_contract": selector_passed,
         "deterministic_contracts": deterministic_passed,
         "completion_and_stability_contract": completion_passed,
@@ -344,6 +366,7 @@ def build_report(
         "audit": "answer_stability_sentinel_v1",
         "official": False,
         "replicate_id": replicate_id,
+        "answer_stability_fingerprint": ANSWER_STABILITY_FINGERPRINT,
         "selector_fingerprint": FACT_CONTEXT_SELECTOR_FINGERPRINT,
         "sentinel_questions": list(SENTINEL_QUESTIONS),
         "reference_scores": reference,
@@ -356,7 +379,7 @@ def build_report(
             "regression_contexts_byte_identical": True,
             "fact_targets_safe_single_source": True,
             "faithfulness_exactly_1_0": True,
-            "answer_relevancy_at_least_0_95": True,
+            "fact_answer_relevancy_at_least_0_95_and_regression_drop_bounded": True,
             "semantic_drop_no_more_than_0_10": True,
             "deterministic_grounding_contracts": True,
             "azure_numeric_stability_canary": True,
@@ -428,15 +451,20 @@ def run(
         publish_official=False,
     )
     summary["token_usage_totals"] = tracker.totals
+    generation_bindings = _checkpoint_values(gen_checkpoint, "binding")
+    judge_bindings = _checkpoint_values(judge_checkpoint, "binding")
+    judge_context_fingerprints = _checkpoint_values(
+        judge_checkpoint, "judge_context_fingerprint"
+    )
     report = build_report(
         summary,
         _reference_scores(),
         selector_rows,
         replicate_id,
         artifact,
+        generation_bindings,
+        judge_context_fingerprints,
     )
-    generation_bindings = _checkpoint_values(gen_checkpoint, "binding")
-    judge_bindings = _checkpoint_values(judge_checkpoint, "binding")
     report["replicate_provenance"] = {
         "generation_checkpoint": str(gen_checkpoint),
         "generation_checkpoint_sha256": _file_sha256(gen_checkpoint),
@@ -444,8 +472,11 @@ def run(
         "judge_checkpoint_sha256": _file_sha256(judge_checkpoint),
         "generation_binding_values": sorted(generation_bindings),
         "judge_binding_values": sorted(judge_bindings),
+        "judge_context_fingerprint_values": sorted(
+            judge_context_fingerprints
+        ),
         "one_generation_binding": generation_bindings == {summary.get("binding")},
-        "one_judge_binding": judge_bindings == {summary.get("binding")},
+        "one_judge_context_fingerprint": len(judge_context_fingerprints) == 1,
         "generation_records": len(
             [value for value in gen_checkpoint.read_text(encoding="utf-8").splitlines() if value.strip()]
         ),

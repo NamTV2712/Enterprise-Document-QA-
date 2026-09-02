@@ -16,6 +16,7 @@ import {
   Building2,
   Search,
   HelpCircle,
+  Settings2,
 } from "lucide-react";
 import { SampleQuestionChips, SampleQuestion } from "./SampleQuestionChips";
 import { HealthResponse } from "../types";
@@ -218,7 +219,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
               <h1 className="text-xs font-black tracking-tight text-[#26324A] dark:text-[#FCFBF8] uppercase font-serif">
                 SEC RAG Engine
               </h1>
-              <span className="text-[9px] text-slate-500 dark:text-slate-450 font-mono font-bold uppercase tracking-wider">
+              <span className="text-xs text-slate-500 dark:text-slate-450 font-medium">
                 SEC 10-K Research
               </span>
             </div>
@@ -236,17 +237,17 @@ const SidebarBase: React.FC<SidebarProps> = ({
         {/* Filters and Configs Area */}
         <div className="flex-1 overflow-y-auto p-4 md:p-5 space-y-5">
           {/* Controls Title */}
-          <h2 id="search-controls-heading" className="flex items-center gap-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pb-2 border-b border-slate-200 dark:border-slate-800">
+          <h2 id="search-controls-heading" className="flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300 pb-2 border-b border-slate-200 dark:border-slate-800">
             <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
             <span>Search Parameters</span>
           </h2>
 
           {/* Ticker Filter */}
           <div className="space-y-2 relative" ref={tickerRef}>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
-              <span>Limit to Ticker</span>
-              <span className="text-[10px] font-mono font-bold text-slate-400 dark:text-slate-500">
-                FastAPI Lookup
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+              <span>Company or ticker</span>
+              <span className="text-xs font-medium text-slate-400 dark:text-slate-500">
+                Optional
               </span>
             </label>
 
@@ -355,7 +356,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
 
           {/* Section Filter */}
           <div className="space-y-2 relative" ref={sectionRef}>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between gap-2">
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-between gap-2">
               <span className="flex items-center gap-1.5">
                 10-K Section
                 <Tooltip content="Limit retrieval to one filing section. Leave this on All sections when you are unsure where the answer appears." align="left" placement="bottom">
@@ -365,7 +366,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
                 </Tooltip>
               </span>
               <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500">
-                Retrieval scope
+                Optional scope
               </span>
             </label>
 
@@ -441,9 +442,22 @@ const SidebarBase: React.FC<SidebarProps> = ({
             )}
           </div>
 
-          {/* Top_K Slider */}
-          <div className="space-y-2">
-            <div className="flex justify-between items-center text-xs font-bold text-slate-700 dark:text-slate-300">
+          {/* Advanced retrieval settings stay collapsed until they are needed. */}
+          <details className="group rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-[#26324A]/15">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 [&::-webkit-details-marker]:hidden">
+              <span className="flex items-center gap-2">
+                <Settings2 className="h-4 w-4 text-brand-indigo" />
+                Advanced retrieval settings
+              </span>
+              <span className="flex items-center gap-2 text-xs font-normal text-slate-500 dark:text-slate-400">
+                Top-K {topK} · {enableComparative ? "decomposition on" : "decomposition off"}
+                <ChevronDown className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180" />
+              </span>
+            </summary>
+            <div className="ui-expand-enter space-y-4 border-t border-slate-200 px-3.5 pb-3.5 pt-3 dark:border-slate-800">
+              {/* Top_K Slider */}
+              <div className="space-y-2">
+            <div className="flex justify-between items-center text-sm font-semibold text-slate-700 dark:text-slate-300">
               <span className="flex items-center gap-1.5">
                 Context Breadth (Top-K)
                 <Tooltip content="Maximum number of filing excerpts retained after retrieval and re-ranking. More context is not always better." align="left">
@@ -467,7 +481,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
               onChange={(e) => onChangeTopK(parseInt(e.target.value, 10))}
               className="w-full accent-[#26324A] dark:accent-[#FCFBF8] bg-slate-250 dark:bg-slate-850 h-1.5 rounded-lg cursor-pointer"
             />
-            <div className="flex justify-between text-[10px] text-slate-400 dark:text-slate-500 font-mono font-semibold">
+            <div className="flex justify-between text-xs text-slate-400 dark:text-slate-500 font-medium">
               <Tooltip
                 content="Returns fewer, more targeted chunks — best for precise fact lookups (e.g. a specific revenue figure)."
                 align="left"
@@ -481,12 +495,12 @@ const SidebarBase: React.FC<SidebarProps> = ({
                 <span className="cursor-help">10 (Broad Context)</span>
               </Tooltip>
             </div>
-          </div>
+              </div>
 
           {/* Comparative Analysis Toggle */}
-          <div className="space-y-2.5 bg-white dark:bg-[#26324A]/20 p-3.5 rounded-lg border border-slate-200 dark:border-slate-800">
+              <div className="space-y-2 bg-slate-50 dark:bg-[#171D2B]/30 p-3.5 rounded-lg border border-slate-200/80 dark:border-slate-800">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                 Query Decomposition
               </span>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -501,15 +515,17 @@ const SidebarBase: React.FC<SidebarProps> = ({
                 <div className="w-9 h-5 bg-slate-200 dark:bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 dark:after:border-slate-600 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#26324A] dark:peer-checked:bg-[#FCFBF8] dark:peer-checked:after:bg-[#26324A]" />
               </label>
             </div>
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-relaxed font-semibold">
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
               When enabled, complex comparative questions (e.g. vs, compare) are
               automatically decomposed into multiple targeted sub-queries.
             </p>
-          </div>
+              </div>
+            </div>
+          </details>
 
           {/* Sample Chips */}
           <div className="space-y-2 pt-2">
-            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider pb-1 border-b border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400 pb-1 border-b border-slate-200 dark:border-slate-800">
               <Compass className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
               <span>Reference Queries</span>
             </div>
@@ -522,13 +538,13 @@ const SidebarBase: React.FC<SidebarProps> = ({
           {/* Health Metrics Dashboard */}
           <div className="space-y-2.5 text-xs relative z-10" role="status" aria-live="polite">
             <div className="flex items-center justify-between">
-              <span className="text-slate-450 dark:text-slate-500 font-bold tracking-wider text-[10px] uppercase">
+              <span className="text-slate-500 dark:text-slate-400 font-semibold text-xs">
                 SYSTEM STATS
               </span>
 
               {/* Verified Green dot for pipeline_ready */}
               <span
-                className={`inline-flex items-center gap-1.5 text-[9px] font-extrabold px-2 py-0.5 rounded uppercase tracking-wider ${
+                className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded ${
                   isBackendConnected === null
                     ? "bg-slate-100 dark:bg-slate-900/30 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-800"
                     : isBackendConnected === false
@@ -560,7 +576,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
             </div>
 
             {healthData?.memory && (
-              <div className="grid grid-cols-2 gap-2 text-[10px] font-mono border-t border-slate-200 dark:border-slate-800/80 pt-2.5">
+              <div className="grid grid-cols-2 gap-2 text-xs border-t border-slate-200 dark:border-slate-800/80 pt-2.5">
                 <div className="bg-[#FCFBF8] dark:bg-[#26324A]/30 p-2 rounded border border-slate-200 dark:border-slate-800">
                   <div className="text-slate-500 dark:text-slate-450 font-sans font-bold">
                     Active Sessions
@@ -568,7 +584,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
                   <div className="text-[#26324A] dark:text-[#FCFBF8] font-bold mt-1 text-xs font-mono">
                     {healthData.memory.active_sessions}
                   </div>
-                  <div className="mt-1 text-[9px] leading-tight text-slate-400 dark:text-slate-500 font-sans">
+                  <div className="mt-1 text-xs leading-tight text-slate-400 dark:text-slate-500 font-sans">
                     In-memory conversations
                   </div>
                 </div>
@@ -579,7 +595,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
                   <div className="text-[#26324A] dark:text-[#FCFBF8] font-bold mt-1 text-xs font-mono">
                     {healthData.memory.total_turns}
                   </div>
-                  <div className="mt-1 text-[9px] leading-tight text-slate-400 dark:text-slate-500 font-sans">
+                  <div className="mt-1 text-xs leading-tight text-slate-400 dark:text-slate-500 font-sans">
                     Retained messages
                   </div>
                 </div>
@@ -593,7 +609,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
             id="new-convo-btn"
             disabled={isClearingSession}
             onClick={onNewConversation}
-            className="w-full min-h-10 flex items-center justify-center gap-2 py-2 px-4 bg-[#26324A] dark:bg-[#FCFBF8] text-[#FCFBF8] dark:text-[#26324A] hover:opacity-90 disabled:opacity-50 rounded text-xs font-bold transition-all cursor-pointer font-sans uppercase tracking-wider"
+            className="w-full min-h-11 flex items-center justify-center gap-2 py-2 px-4 bg-[#26324A] dark:bg-[#FCFBF8] text-[#FCFBF8] dark:text-[#26324A] hover:opacity-90 disabled:opacity-50 rounded-lg text-sm font-semibold transition-all cursor-pointer font-sans"
           >
             <RefreshCw
               className={`w-3.5 h-3.5 ${isClearingSession ? "animate-spin" : "animate-none"}`}

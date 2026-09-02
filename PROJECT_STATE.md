@@ -2,6 +2,18 @@
 
 ## Current Milestone
 
+### Frontend UX/UI improvement pass (2026-09-02)
+
+The frontend now prioritizes the question-and-answer journey: the overview is
+shorter, optional retrieval settings are progressively disclosed, and answer
+content appears before query traces and evidence details. Typography and touch
+targets were increased for readability, source previews avoid nested scrolling
+on small screens, and connection status is consolidated into one header surface
+with actionable banners only when the backend is unavailable. Starting a new
+conversation requires confirmation when messages exist. These changes preserve
+the existing API contract, visual theme, and query behavior; frontend checks
+remain green after each UX/UI commit.
+
 ### Frontend performance checkpoint (2026-09-02)
 
 The Vite client now uses `LazyMotion` with the DOM animation feature set,

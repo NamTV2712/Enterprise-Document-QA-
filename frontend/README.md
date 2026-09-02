@@ -5,6 +5,12 @@ Vite + React + TypeScript client for the Enterprise Document QA FastAPI backend.
 The research workspace uses a warm paper/navy palette with calmer indigo action
 accents and teal verification states in both light and dark themes.
 
+The workspace keeps the primary question flow compact: advanced retrieval
+settings, interpreted queries, decomposition traces, and filing evidence are
+progressively disclosed so the answer remains the visual focus. The layout is
+responsive for mobile drawers, keyboard navigation, dark mode, and reduced
+motion preferences.
+
 ## Local Development
 
 Requirements: Node.js 18+ and Bun.

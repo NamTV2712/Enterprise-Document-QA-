@@ -27,21 +27,46 @@ from src.generation.answer_stability import (
     AnswerStabilityAssessment,
     assess_answer_stability,
 )
-from src.generation.prompt_contracts import RISK_FOCUS_CONTRACT_FINGERPRINT
+from src.generation.prompt_contracts import (
+    RISK_COMPARISON_CONTRACT_FINGERPRINT,
+    RISK_FOCUS_CONTRACT_FINGERPRINT,
+)
+from src.generation.risk_answer_shape import (
+    RISK_ANSWER_SHAPE_FINGERPRINT,
+    render_deterministic_risk_answer,
+)
+from src.generation.evidence_fact_renderer import (
+    EVIDENCE_FACT_RENDERER_FINGERPRINT,
+    render_deterministic_fact,
+)
+from src.generation.enumeration_answer_renderer import (
+    ENUMERATION_ANSWER_RENDERER_FINGERPRINT,
+    render_deterministic_revenue_answer,
+)
 
 
 ANSWER_COMPLETION_FINGERPRINT = "sha256:" + hashlib.sha256(
     (
-        b"answer-completion-v1-generic-enumeration-boundary-revenue-granularity-"
+        b"answer-completion-v12-generic-enumeration-boundary-revenue-granularity-"
         b"scoped-bullet-compaction-grouped-home-alias-evidence-label-repair-"
         b"revenue-top-level-dedup-generic-numeric-grounding-repair-period-value-"
         b"one-correction-answer-stability-"
+        b"risk-evidence-roles-primary-supporting-"
         b"enumeration-fingerprint-"
         + ENUMERATION_COMPLETENESS_FINGERPRINT.encode()
         + b"-risk-focus-fingerprint-"
         + RISK_FOCUS_CONTRACT_FINGERPRINT.encode()
         + b"-"
         + ANSWER_STABILITY_FINGERPRINT.encode()
+        + b"-risk-answer-shape-fingerprint-"
+        + RISK_ANSWER_SHAPE_FINGERPRINT.encode()
+        + b"-evidence-fact-renderer-fingerprint-"
+        + EVIDENCE_FACT_RENDERER_FINGERPRINT.encode()
+        + b"-enumeration-answer-renderer-fingerprint-"
+        + ENUMERATION_ANSWER_RENDERER_FINGERPRINT.encode()
+        + b"-risk-comparison-contract-fingerprint-"
+        + RISK_COMPARISON_CONTRACT_FINGERPRINT.encode()
+        + b"-revenue-main-vs-exhaustive-scope"
     )
 ).hexdigest()
 
@@ -73,6 +98,7 @@ class AnswerCompletion:
     correction_accepted: bool
     correction_reason: str = ""
     answer_compacted: bool = False
+    answer_rendered_deterministically: bool = False
 
 
 def _answer_contract_audit(
@@ -165,7 +191,7 @@ def _build_correction_prompt(
         sections.append(period_prompt.split("\n\nQuestion:", 1)[0])
     if assessment.enumeration.applicable and assessment.enumeration.missing_items:
         missing = "\n".join(
-            f"- Source {item.source_number}: {item.label}"
+            f"- Source {item.source_number} ({item.evidence_role}): {item.label}"
             for item in assessment.enumeration.missing_items
         )
         sections.append(
@@ -175,9 +201,11 @@ def _build_correction_prompt(
     if assessment.enumeration.applicable and assessment.enumeration.overdetailed:
         sections.append(
             "The draft is over-detailed for the requested enumeration. Keep "
-            "one concise bullet per evidence item and remove examples, "
-            "sub-products, features, and sub-risks that are not separate "
-            "evidence items."
+            "one concise bullet per canonical filing category with a brief "
+            "source-backed descriptor. Preserve every "
+            "supporting/cross-cutting evidence item in one compact grouped "
+            "section, but do not make consequences, examples, sub-products, "
+            "features, or sub-risks into separate peer bullets."
         )
     if (
         assessment.enumeration.applicable
@@ -205,8 +233,11 @@ def _build_correction_prompt(
     return (
         "Correct the draft using only the same SEC evidence below. Return one "
         "concise final answer only. Preserve canonical [Source N] citations, "
-        "include every explicit evidence-backed enumeration item exactly once, "
-        "and do not add items from general knowledge. Quote values exactly as "
+        "include every required enumeration item exactly once, "
+        "present canonical categories first with brief source-backed descriptors "
+        "and include supporting/cross-cutting items as a compact grouped "
+        "section only for exhaustive enumeration questions. Do not add items from "
+        "general knowledge. Quote values exactly as "
         "printed; do not calculate, round, convert, or invent values.\n\n"
         f"{details}\n\nQuestion: {question}\n\nEvidence:\n"
         f"{evidence_context}\n\nDraft answer:\n{draft_answer}"
@@ -219,12 +250,80 @@ def correct_answer_once(
     draft_answer: str,
     generate_fn: Callable[[str], str],
     validate_answer: Callable[[str], bool] | None = None,
+    deterministic_risk_renderer: bool = False,
+    deterministic_fact_renderer: bool = False,
+    deterministic_revenue_renderer: bool = False,
 ) -> AnswerCompletion:
     """Apply at most one provider correction for the scoped contracts."""
     initial = assess_answer_completion(question, evidence_context, draft_answer)
+    if deterministic_fact_renderer:
+        rendered = render_deterministic_fact(question, evidence_context)
+        if rendered:
+            final = assess_answer_completion(question, evidence_context, rendered)
+            valid = (
+                validate_answer(rendered)
+                if validate_answer is not None
+                else validate_grounded_answer(rendered, evidence_context)
+            )
+            if valid and not final.correction_required:
+                return AnswerCompletion(
+                    answer=rendered,
+                    initial=initial,
+                    final=final,
+                    correction_attempted=False,
+                    correction_accepted=True,
+                    correction_reason="deterministic_fact_renderer",
+                    answer_compacted=True,
+                    answer_rendered_deterministically=True,
+                )
+    if deterministic_revenue_renderer:
+        rendered = render_deterministic_revenue_answer(question, evidence_context)
+        if rendered:
+            final = assess_answer_completion(question, evidence_context, rendered)
+            valid = (
+                validate_answer(rendered)
+                if validate_answer is not None
+                else validate_grounded_answer(rendered, evidence_context)
+            )
+            if valid and not final.correction_required:
+                return AnswerCompletion(
+                    answer=rendered,
+                    initial=initial,
+                    final=final,
+                    correction_attempted=False,
+                    correction_accepted=True,
+                    correction_reason="deterministic_revenue_renderer",
+                    answer_compacted=True,
+                    answer_rendered_deterministically=True,
+                )
+    if deterministic_risk_renderer and initial.enumeration.applicable:
+        rendered = render_deterministic_risk_answer(
+            question, evidence_context
+        )
+        if rendered:
+            final = assess_answer_completion(question, evidence_context, rendered)
+            valid = (
+                validate_answer(rendered)
+                if validate_answer is not None
+                else validate_grounded_answer(rendered, evidence_context)
+            )
+            if valid and not final.correction_required:
+                return AnswerCompletion(
+                    answer=rendered,
+                    initial=initial,
+                    final=final,
+                    correction_attempted=False,
+                    correction_accepted=True,
+                    correction_reason="deterministic_risk_renderer",
+                    answer_compacted=True,
+                    answer_rendered_deterministically=True,
+                )
     if not initial.correction_required:
         answer, compacted = compact_enumeration_answer(
-            draft_answer, initial.enumeration
+            draft_answer,
+            initial.enumeration,
+            evidence_context,
+            apply_revenue_scope=deterministic_revenue_renderer,
         )
         final = (
             assess_answer_completion(question, evidence_context, answer)
@@ -269,7 +368,10 @@ def correct_answer_once(
         question, evidence_context, corrected
     )
     answer, compacted = compact_enumeration_answer(
-        corrected, corrected_assessment.enumeration
+        corrected,
+        corrected_assessment.enumeration,
+        evidence_context,
+        apply_revenue_scope=deterministic_revenue_renderer,
     )
     final = assess_answer_completion(question, evidence_context, answer)
     if final.enumeration.applicable and final.enumeration.missing_items:
@@ -342,6 +444,7 @@ def completion_metadata(outcome: AnswerCompletion) -> dict[str, Any]:
                 "aliases": list(item.aliases),
                 "source_number": item.source_number,
                 "evidence_kind": item.evidence_kind,
+                "evidence_role": item.evidence_role,
             }
             for item in outcome.initial.enumeration.evidence_items
         ],
@@ -399,6 +502,9 @@ def completion_metadata(outcome: AnswerCompletion) -> dict[str, Any]:
             outcome.final.unsupported_numeric_claims
         ),
         "correction_reason": outcome.correction_reason,
+        "answer_rendered_deterministically": (
+            outcome.answer_rendered_deterministically
+        ),
         "initial_missing_pairs": [
             {
                 "label": pair.label,

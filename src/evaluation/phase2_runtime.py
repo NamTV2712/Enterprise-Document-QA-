@@ -192,8 +192,16 @@ def make_period_value_postprocessor(
 def make_answer_completion_postprocessor(
     generate_fn: Callable[[str], str],
     metadata: dict[str, dict[str, Any]] | None = None,
+    deterministic_risk_renderer: bool = False,
+    deterministic_fact_renderer: bool = False,
+    deterministic_revenue_renderer: bool = False,
 ) -> Callable[[str, str, str], str]:
-    """Apply one shared period/value or enumeration correction."""
+    """Apply one shared completion policy.
+
+    The deterministic risk renderer is opt-in for candidate evaluation.  The
+    default production path continues to use the provider draft plus the
+    bounded completion policy.
+    """
 
     def postprocess(
         question: str,
@@ -208,6 +216,9 @@ def make_answer_completion_postprocessor(
             validate_answer=lambda answer: validate_grounded_answer(
                 answer, evidence_context
             ),
+            deterministic_risk_renderer=deterministic_risk_renderer,
+            deterministic_fact_renderer=deterministic_fact_renderer,
+            deterministic_revenue_renderer=deterministic_revenue_renderer,
         )
         if outcome.correction_attempted:
             logger.info(

@@ -6,6 +6,7 @@ from src.generation.answer_completion import (
     completion_metadata,
     correct_answer_once,
 )
+from src.generation.period_value_completeness import validate_grounded_answer
 
 
 ENUMERATION_CONTEXT = """[Source 1] AAPL 10-K, Business
@@ -205,6 +206,26 @@ def test_revenue_subcategories_are_compacted_to_top_level_evidence_items() -> No
     assert "Devices" in result.answer
 
 
+def test_deterministic_revenue_renderer_avoids_provider_rewrite() -> None:
+    result = correct_answer_once(
+        REVENUE_QUESTION,
+        REVENUE_CONTEXT,
+        "- Azure [Source 1]",
+        lambda _prompt: (_ for _ in ()).throw(
+            AssertionError("deterministic revenue renderer should run first")
+        ),
+        validate_answer=lambda answer: validate_grounded_answer(
+            answer, REVENUE_CONTEXT
+        ),
+        deterministic_revenue_renderer=True,
+    )
+
+    assert result.answer_rendered_deterministically is True
+    assert result.correction_accepted is True
+    assert result.final.enumeration.passed is True
+    assert result.answer.count("\n") == 5
+
+
 def test_risk_subcategories_are_compacted_without_provider_call() -> None:
     calls: list[str] = []
     answer = "\n".join(
@@ -235,6 +256,64 @@ def test_risk_subcategories_are_compacted_without_provider_call() -> None:
     assert result.final.enumeration.overdetailed is False
     assert result.final.enumeration.passed is True
     assert "Supply or quality problems" not in result.answer
+
+
+def test_risk_prose_is_grouped_after_canonical_categories() -> None:
+    calls: list[str] = []
+    answer = "\n".join(
+        [
+            "- Strategic and Competitive Risks [Source 1]",
+            "- Trade [Source 1]",
+            "- Cybersecurity [Source 1]",
+            "- Operational Risks [Source 1]",
+            "- Threats to security [Source 1]",
+            "- Occurrence of regional epidemics or a global pandemic [Source 1]",
+            "- Long-term effects of climate change [Source 1]",
+            "- Global business operational and economic risks [Source 1]",
+        ]
+    )
+
+    result = correct_answer_once(
+        RISK_ENUMERATION_QUESTION,
+        RISK_ENUMERATION_CONTEXT,
+        answer,
+        lambda prompt: calls.append(prompt) or "unused",
+    )
+
+    assert calls == []
+    assert result.answer_compacted is True
+    assert result.answer.count("Additional cross-cutting risks") == 1
+    assert result.answer.count("Threats to security") >= 1
+    assert result.answer.count("global pandemic") >= 1
+    assert result.final.enumeration.missing_items == ()
+
+
+def test_risk_compaction_drops_unproven_provider_descriptors() -> None:
+    answer = "\n".join(
+        [
+            "- Strategic and Competitive Risks – intense competition [Source 1]",
+            "- Trade – trade restrictions [Source 1]",
+            "- Cybersecurity – cyber threats [Source 1]",
+            "- Operational Risks – outages and supply problems [Source 1]",
+            "- Threats to security – attacks [Source 1]",
+            "- Occurrence of regional epidemics or a global pandemic – outbreaks [Source 1]",
+            "- Long-term effects of climate change – costs [Source 1]",
+            "- Global business operational and economic risks – exposure [Source 1]",
+        ]
+    )
+
+    result = correct_answer_once(
+        RISK_ENUMERATION_QUESTION,
+        RISK_ENUMERATION_CONTEXT,
+        answer,
+        lambda _prompt: "unused",
+    )
+
+    assert result.answer_compacted is True
+    assert "intense competition" not in result.answer
+    assert "Strategic And Competitive Risks" in result.answer
+    assert "Additional cross-cutting risks" in result.answer
+    assert result.final.enumeration.passed is True
 
 
 def test_unsupported_numeric_claim_gets_one_grounded_correction_outside_period_questions() -> None:

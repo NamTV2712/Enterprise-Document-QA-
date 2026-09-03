@@ -52,6 +52,7 @@ from src.generation.enumeration_completeness import (
     ENUMERATION_COMPLETENESS_FINGERPRINT,
 )
 from src.generation.prompt_contracts import RISK_FOCUS_CONTRACT_FINGERPRINT
+from src.generation.risk_answer_shape import RISK_ANSWER_SHAPE_FINGERPRINT
 from src.generation.generator import Generator
 
 
@@ -125,7 +126,8 @@ def sentinel_cases() -> list[TestCase]:
         raise RuntimeError(f"Answer stability sentinel contract drift: {missing}")
     cases = [by_question[question] for question in SENTINEL_QUESTIONS]
     if any(
-        case.category not in {"summary", "enumeration", "comparative"}
+        case.category
+        not in {"fact_lookup", "summary", "enumeration", "comparative"}
         for case in cases
     ):
         raise RuntimeError("Answer stability sentinel contains an unsupported category")
@@ -440,6 +442,9 @@ def run(
     fresh: bool = False,
     max_gen_retries: int = 0,
     max_judge_retries: int = 0,
+    deterministic_risk_renderer: bool = False,
+    deterministic_fact_renderer: bool = False,
+    deterministic_revenue_renderer: bool = False,
 ) -> dict[str, Any]:
     assert_phase2_retrieval_hermeticity()
     default_gen, default_judge, default_output = sentinel_artifact_paths(replicate_id)
@@ -486,7 +491,11 @@ def run(
         max_judge_retries=max_judge_retries,
         evidence_context_fn=render,
         answer_postprocessor=make_answer_completion_postprocessor(
-            generation_call, completion_rows
+            generation_call,
+            completion_rows,
+            deterministic_risk_renderer=deterministic_risk_renderer,
+            deterministic_fact_renderer=deterministic_fact_renderer,
+            deterministic_revenue_renderer=deterministic_revenue_renderer,
         ),
         answer_completion_metadata=completion_rows,
         publish_official=False,
@@ -524,7 +533,12 @@ def run(
         "judge_records": len(
             [value for value in judge_checkpoint.read_text(encoding="utf-8").splitlines() if value.strip()]
         ),
+        "deterministic_risk_renderer": deterministic_risk_renderer,
+        "deterministic_fact_renderer": deterministic_fact_renderer,
+        "deterministic_revenue_renderer": deterministic_revenue_renderer,
     }
+    report["risk_answer_shape_fingerprint"] = RISK_ANSWER_SHAPE_FINGERPRINT
+    report["deterministic_risk_renderer"] = deterministic_risk_renderer
     if output is None:
         raise RuntimeError("Sentinel output path is required")
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -547,6 +561,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fresh", action="store_true")
     parser.add_argument("--max-gen-retries", type=int, default=0)
     parser.add_argument("--max-judge-retries", type=int, default=0)
+    parser.add_argument(
+        "--deterministic-risk-renderer",
+        action="store_true",
+        help="Use the candidate-only provider-free exhaustive-risk renderer.",
+    )
+    parser.add_argument(
+        "--deterministic-fact-renderer",
+        action="store_true",
+        help="Use the candidate-only provider-free auditor fact renderer.",
+    )
+    parser.add_argument(
+        "--deterministic-revenue-renderer",
+        action="store_true",
+        help="Use the candidate-only provider-free revenue renderer.",
+    )
     args = parser.parse_args(argv)
     report = run(
         replicate_id=args.replicate_id,
@@ -557,6 +586,9 @@ def main(argv: list[str] | None = None) -> int:
         fresh=args.fresh,
         max_gen_retries=args.max_gen_retries,
         max_judge_retries=args.max_judge_retries,
+        deterministic_risk_renderer=args.deterministic_risk_renderer,
+        deterministic_fact_renderer=args.deterministic_fact_renderer,
+        deterministic_revenue_renderer=args.deterministic_revenue_renderer,
     )
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0 if report["passed"] else 1

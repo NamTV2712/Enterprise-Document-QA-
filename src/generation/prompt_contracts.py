@@ -36,15 +36,34 @@ def answer_focus_contract_for_question(question: str) -> str:
 
 RISK_FOCUS_CONTRACT = (
     "For a scoped risk question, answer only the requested risk dimension. "
-    "For quality or manufacturing questions, prioritize product defects and "
-    "quality consequences, component or supplier continuity, capacity or "
-    "shortage exposure, and manufacturing disruption; group consequences under "
-    "those mechanisms and omit service-availability, cyber, privacy, or other "
-    "unrelated categories unless the excerpt directly ties them to the asked "
-    "dimension. For other scoped risk dimensions, retain the same rule: group "
-    "duplicate consequences under the requested mechanism, omit unrelated risk "
-    "categories, and keep each bullet concise and directly supported by the "
-    "cited filing evidence."
+    "For quality or manufacturing questions, lead with the two direct "
+    "evidence-backed mechanisms: design or manufacturing defects and defects "
+    "in third-party components or products. Keep product liability, recalls, "
+    "warranty costs, injuries, reputation, demand, and lost-sales effects "
+    "under the defect mechanism that causes them instead of creating separate "
+    "risk bullets. Do not broaden this focused answer into generic supplier "
+    "continuity, capacity, shortage, industrial-accident, pandemic, natural-"
+    "disaster, or other supply-chain risks unless the question explicitly asks "
+    "about those dimensions or the excerpt directly makes them the requested "
+    "manufacturing mechanism. For other scoped risk dimensions, group duplicate "
+    "consequences under the requested mechanism, omit unrelated categories, "
+    "and keep each bullet concise and directly supported by the cited filing "
+    "evidence."
+)
+
+RISK_COMPARISON_CONTRACT = (
+    "For a comparison of companies' approaches to international or other "
+    "operational risk, compare the shared dimensions requested by the user "
+    "in one concise bullet per company, followed by one short comparison. "
+    "Prefer the common dimensions such as currency, regulation, and "
+    "geopolitical exposure. Do not enumerate every disclosure, example, "
+    "sub-risk, or consequence when the question asks about approach; keep "
+    "those details implicit under the shared dimension they support."
+)
+_RISK_COMPARISON_RE = re.compile(
+    r"\b(approach|compare|comparison)\w*\b.*\b(risk|risks|operations?)\b"
+    r"|\b(risk|risks|operations?)\b.*\b(approach|compare|comparison)\w*\b",
+    re.IGNORECASE,
 )
 
 _RISK_SCOPE_RE = re.compile(
@@ -58,9 +77,9 @@ _RISK_DIMENSION_RE = re.compile(
 )
 RISK_FOCUS_CONTRACT_FINGERPRINT = "sha256:" + hashlib.sha256(
     (
-        "risk-focus-v2-quality-manufacturing-mechanisms-scoped-dimension-"
-        "group-duplicate-consequences-"
-        "omit-unrelated-categories-concise-evidence-"
+        "risk-focus-v3-direct-defect-third-party-component-scope-"
+        "group-consequences-exclude-generic-supply-chain-unless-requested-"
+        "scoped-dimension-concise-evidence-"
         + ENUMERATION_COMPLETENESS_FINGERPRINT
     ).encode("utf-8")
 ).hexdigest()
@@ -73,6 +92,20 @@ def risk_focus_contract_for_question(question: str) -> str:
     if _RISK_SCOPE_RE.search(question) and _RISK_DIMENSION_RE.search(question):
         return RISK_FOCUS_CONTRACT
     return ""
+
+
+def risk_comparison_contract_for_question(question: str) -> str:
+    """Return the concise comparison contract for approach-risk questions."""
+    return (
+        RISK_COMPARISON_CONTRACT
+        if _RISK_COMPARISON_RE.search(question)
+        else ""
+    )
+
+
+RISK_COMPARISON_CONTRACT_FINGERPRINT = "sha256:" + hashlib.sha256(
+    RISK_COMPARISON_CONTRACT.encode("utf-8")
+).hexdigest()
 
 
 ENUMERATION_COMPLETENESS_CONTRACT = (
@@ -90,7 +123,15 @@ ENUMERATION_COMPLETENESS_CONTRACT = (
     "details that are not themselves requested categories."
     " For revenue-source questions, omit reporting-segment or container "
     "labels and list only the revenue-bearing product or service headings "
-    "explicitly described in the excerpts."
+    "explicitly described in the excerpts. For risk-factor questions, present "
+    "filing headings and labeled categories as the primary list, then preserve "
+    "prose-only or cross-cutting risk disclosures in one compact additional "
+    "section. Include a short source-backed descriptor after each canonical risk "
+    "label when the excerpt supports one, using no more than a brief phrase. "
+    "Supporting risks may appear as short sub-bullets under that additional "
+    "section, with one sub-bullet per explicitly disclosed supporting item. "
+    "Do not make consequences, examples, or a child risk a separate peer "
+    "category when the evidence identifies a parent category."
 )
 
 
@@ -110,6 +151,7 @@ def answer_completion_contract_for_question(question: str) -> str:
         for contract in (
             answer_focus_contract_for_question(question),
             risk_focus_contract_for_question(question),
+            risk_comparison_contract_for_question(question),
             enumeration_contract_for_question(question),
         )
         if contract

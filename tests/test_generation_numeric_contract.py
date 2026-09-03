@@ -57,6 +57,16 @@ def test_risk_focus_contract_is_scoped_and_excludes_exhaustive_enumerations() ->
     assert RISK_FOCUS_CONTRACT not in exhaustive
 
 
+def test_risk_focus_contract_prioritizes_direct_quality_mechanisms() -> None:
+    normalized = " ".join(RISK_FOCUS_CONTRACT.split()).casefold()
+
+    assert "design or manufacturing defects" in normalized
+    assert "third-party components or products" in normalized
+    assert "do not broaden" in normalized
+    assert "pandemic" in normalized
+    assert "generic supplier continuity" in normalized
+
+
 def test_system_prompt_requires_all_exact_period_value_pairs() -> None:
     normalized = " ".join(SYSTEM_PROMPT.split()).casefold()
 

@@ -21,7 +21,7 @@ from src.generation.period_value_completeness import (
 
 
 ENUMERATION_COMPLETENESS_FINGERPRINT = "sha256:" + hashlib.sha256(
-    b"enumeration-answer-completeness-v2-bulleted-generic-label-boundary-grouped-home-alias-one-correction-revenue-top-level-dedup-risk-prose-category-alias-safe-compaction"
+    b"enumeration-answer-completeness-v14-bulleted-generic-label-boundary-grouped-home-alias-one-correction-revenue-top-level-dedup-risk-evidence-roles-primary-supporting-stable-evidence-sentence-major-risk-canonical-scope-revenue-main-supporting-scope"
 ).hexdigest()
 
 _EXHAUSTIVE_RE = re.compile(
@@ -112,6 +112,18 @@ _RISK_PROSE_PATTERNS = (
         ("global business", "economic risks", "geopolitical risks"),
     ),
 )
+_MAJOR_RISK_SCOPE_RE = re.compile(
+    r"\b(main|major|primary|key)\b",
+    re.IGNORECASE,
+)
+_GROUPED_SUPPORT_BULLET_RE = re.compile(
+    r"^\s*(?:\*+)?\s*(?:additional cross-cutting risks|supporting items)\b",
+    re.IGNORECASE,
+)
+_SOURCE_CITATION_RE = re.compile(
+    r"(?:\[\s*Source\s+\d+\s*\]|【\s*Source\s*\d+\s*】)",
+    re.IGNORECASE,
+)
 
 _HEADING_EXCLUSIONS = {
     "business",
@@ -138,6 +150,9 @@ _REVENUE_HEADING_TERMS = {
     "services",
     "windows",
 }
+_REVENUE_SUPPORTING_LABELS = {
+    "search and news advertising",
+}
 
 
 @dataclass(frozen=True)
@@ -148,6 +163,7 @@ class EnumerationItem:
     aliases: tuple[str, ...]
     source_number: int
     evidence_kind: str
+    evidence_role: str = "canonical"
 
 
 @dataclass(frozen=True)
@@ -163,6 +179,7 @@ class EnumerationCompleteness:
     ambiguous_items: tuple[str, ...]
     passed: bool
     overdetailed: bool = False
+    required_items: tuple[EnumerationItem, ...] = ()
 
 
 def _bullet_count(answer: str) -> int:
@@ -191,6 +208,8 @@ def _unclassified_bullet_indexes(
         if not re.match(r"^\s*(?:[-*•]|\d+[.)])\s+", line):
             continue
         content = re.sub(r"^\*+|\*+$", "", _bullet_content(line)).strip()
+        if _GROUPED_SUPPORT_BULLET_RE.match(content):
+            continue
         label = re.split(r"\s+[—–-]\s+|\s*[:(]", content, maxsplit=1)[0]
         if not any(_contains_alias(label, alias) for alias in aliases):
             indexes.append(index)
@@ -227,9 +246,102 @@ def _bullet_item_matches(
     return matches
 
 
+def _compact_risk_canonical_line(
+    line: str,
+    item: EnumerationItem,
+    evidence_context: str | None = None,
+) -> str:
+    """Keep a short evidence descriptor while normalizing its risk label."""
+    descriptor = _risk_evidence_descriptor(item, evidence_context)
+    content = re.sub(r"\*+", "", _bullet_content(line)).strip()
+    content = _SOURCE_CITATION_RE.sub("", content).strip()
+    parts = re.split(r"\s+[—–-]\s+|\s*:\s*", content, maxsplit=1)
+    if not descriptor and evidence_context is None and len(parts) > 1:
+        descriptor = re.sub(r"\s+", " ", parts[1]).strip(" .;,:-—–")
+    words = descriptor.split()
+    if len(words) > 24:
+        sentence = re.split(r"(?<=[.!?])\s+", descriptor, maxsplit=1)[0]
+        if len(sentence.split()) <= 24:
+            descriptor = sentence.strip(" .;,:-—–")
+        else:
+            descriptor = " ".join(words[:24]).rstrip(" .,;:") + "…"
+    if descriptor:
+        return f"- {item.label} — {descriptor} [Source {item.source_number}]"
+    return f"- {item.label} [Source {item.source_number}]"
+
+
+def _risk_evidence_descriptor(
+    item: EnumerationItem,
+    evidence_context: str | None,
+) -> str:
+    """Extract a stable first-sentence descriptor from the rendered evidence."""
+    if not evidence_context:
+        return ""
+    sources = parse_evidence_sources(evidence_context)
+    source = next(
+        (source for source in sources if source.number == item.source_number),
+        None,
+    )
+    if source is None:
+        return ""
+    target = _normalize(item.label)
+    aliases = tuple(_normalize(alias) for alias in item.aliases)
+    lines = [line.strip() for line in source.text.splitlines() if line.strip()]
+    for index, line in enumerate(lines):
+        normalized = _normalize(line.rstrip(":"))
+        is_target = normalized == target
+        if item.label == "AI" and normalized.startswith(
+            "issues in the development deployment and use of ai"
+        ):
+            is_target = True
+        if not is_target and item.evidence_role == "supporting":
+            is_target = any(
+                normalized.startswith(alias)
+                or normalized.startswith(f"the {alias}")
+                or normalized.startswith(f"our {alias}")
+                for alias in aliases
+                if len(alias.split()) >= 2
+            )
+        if not is_target:
+            continue
+        candidate = line
+        if line.endswith(":") or normalized == target:
+            following = next(
+                (next_line for next_line in lines[index + 1 :] if next_line),
+                "",
+            )
+            # Adjacent filing labels/headings do not provide a descriptor for
+            # the preceding item. Do not scan past them into another risk's
+            # paragraph, especially in compact synthetic test evidence.
+            if not following or _risk_structural_line(following):
+                return ""
+            candidate = following
+        sentence = re.split(r"(?<=[.!?])\s+", candidate, maxsplit=1)[0]
+        sentence = re.sub(r"\s+", " ", sentence).strip(" .;,:-—–")
+        words = sentence.split()
+        if len(words) > 24:
+            sentence = " ".join(words[:24]).rstrip(" .,;:") + "…"
+        if sentence and _normalize(sentence) != target:
+            return sentence
+    return ""
+
+
+def _risk_structural_line(line: str) -> bool:
+    """Identify headings/labels that are not risk descriptions."""
+    normalized = _normalize(line.rstrip(":"))
+    return (
+        line.endswith(":")
+        or bool(_RISK_LABEL_RE.match(line))
+        or bool(_RISK_HEADING_RE.match(line))
+        or normalized in {"part i", "part ii", "item 1a risk factors"}
+    )
+
+
 def compact_enumeration_answer(
     answer: str,
     assessment: "EnumerationCompleteness",
+    evidence_context: str | None = None,
+    apply_revenue_scope: bool = False,
 ) -> tuple[str, bool]:
     """Compact bullets to one evidence item while preserving their content."""
     if (
@@ -251,6 +363,26 @@ def compact_enumeration_answer(
     if assessment.kind == "risk" and unclassified_indexes:
         return answer, False
     item_matches = _bullet_item_matches(answer, assessment)
+    required_keys = {
+        (item.label.casefold(), item.source_number)
+        for item in assessment.required_items
+    }
+    optional_revenue_indexes = {
+        index
+        for index, item_index in item_matches.items()
+        if apply_revenue_scope
+        and assessment.kind == "revenue"
+        and (
+            assessment.evidence_items[item_index].label.casefold(),
+            assessment.evidence_items[item_index].source_number,
+        )
+        not in required_keys
+    }
+    # Treat optional supporting revenue bullets like removable over-detail for
+    # a focused main-source answer.  They stay in evidence_items and remain
+    # available to exhaustive questions, but do not short-circuit canonical
+    # duplicate compaction below.
+    unclassified_indexes.update(optional_revenue_indexes)
     grouped_indexes: dict[int, list[int]] = {}
     for index, item_index in item_matches.items():
         grouped_indexes.setdefault(item_index, []).append(index)
@@ -260,8 +392,114 @@ def compact_enumeration_answer(
         if len(indexes) > 1
         for index in indexes[1:]
     }
+    if assessment.kind == "risk":
+        supporting_indexes = {
+            index
+            for index, item_index in item_matches.items()
+            if assessment.evidence_items[item_index].evidence_role == "supporting"
+            and index not in duplicate_indexes
+        }
+        grouped_support_indexes = {
+            index
+            for index, line in enumerate(lines)
+            if index in bullet_indexes
+            and _GROUPED_SUPPORT_BULLET_RE.match(_bullet_content(line))
+        }
+        if supporting_indexes or grouped_support_indexes:
+            support_contents = [
+                f"{assessment.evidence_items[item_index].label} [Source "
+                f"{assessment.evidence_items[item_index].source_number}]"
+                for index, item_index in sorted(item_matches.items())
+                if index in supporting_indexes
+            ]
+            if not support_contents:
+                support_contents = [
+                    re.split(
+                        r"\s*:\s*",
+                        _bullet_content(lines[index]),
+                        maxsplit=1,
+                    )[-1].strip()
+                    for index in sorted(grouped_support_indexes)
+                    if re.split(
+                        r"\s*:\s*",
+                        _bullet_content(lines[index]),
+                        maxsplit=1,
+                    )[-1].strip()
+                ]
+            canonical_line_by_item: dict[int, str] = {}
+            for index, item_index in sorted(item_matches.items()):
+                if index in duplicate_indexes:
+                    continue
+                if assessment.evidence_items[item_index].evidence_role != "canonical":
+                    continue
+                canonical_line_by_item.setdefault(item_index, lines[index])
+            canonical_lines = [
+                _compact_risk_canonical_line(line, item, evidence_context)
+                for item_index, item in enumerate(assessment.evidence_items)
+                if item.evidence_role == "canonical"
+                and (line := canonical_line_by_item.get(item_index)) is not None
+            ]
+            compacted_lines = list(canonical_lines)
+            if support_contents:
+                compacted_lines.append("Additional cross-cutting risks:")
+                supporting_line_by_item: dict[int, str] = {}
+                for index, item_index in sorted(item_matches.items()):
+                    if index in duplicate_indexes:
+                        continue
+                    if assessment.evidence_items[item_index].evidence_role != "supporting":
+                        continue
+                    supporting_line_by_item.setdefault(item_index, lines[index])
+                if supporting_line_by_item:
+                    compacted_lines.extend(
+                        "  "
+                        + _compact_risk_canonical_line(
+                            line, item, evidence_context
+                        )
+                        for item_index, item in enumerate(assessment.evidence_items)
+                        if item.evidence_role == "supporting"
+                        and (line := supporting_line_by_item.get(item_index)) is not None
+                    )
+                else:
+                    compacted_lines.extend(
+                        "  - " + content for content in dict.fromkeys(support_contents)
+                    )
+            compacted = "\n".join(compacted_lines)
+            return compacted, compacted != answer
     if not unclassified_indexes and not duplicate_indexes:
-        return answer, False
+        if assessment.kind != "risk":
+            return answer, False
+        # Filing headings are the primary risk categories. Prose-only risk
+        # disclosures remain necessary for completeness, but presenting each
+        # one as a peer bullet caused the Microsoft risk answer to look like an
+        # over-broad list. Group those supporting disclosures into one compact
+        # evidence-cited bullet while preserving their original text.
+        supporting_indexes = {
+            index
+            for index, item_index in item_matches.items()
+            if assessment.evidence_items[item_index].evidence_role == "supporting"
+        }
+        if not supporting_indexes:
+            return answer, False
+        grouped_support = " ".join(
+            _bullet_content(lines[index]).strip()
+            for index in sorted(supporting_indexes)
+            if _bullet_content(lines[index]).strip()
+        )
+        if not grouped_support:
+            return answer, False
+        compacted_lines: list[str] = []
+        inserted = False
+        for index, line in enumerate(lines):
+            if index in supporting_indexes:
+                if not inserted:
+                    compacted_lines.append(
+                        f"- Additional cross-cutting risks: {grouped_support}"
+                    )
+                    inserted = True
+                continue
+            compacted_lines.append(line)
+        compacted = "\n".join(compacted_lines)
+        return compacted, compacted != answer
     keep_indexes = {
         index
         for index in bullet_indexes
@@ -385,6 +623,34 @@ def enumeration_kind(question: str) -> str | None:
     return None
 
 
+def required_enumeration_items(
+    question: str,
+    items: Iterable[EnumerationItem],
+) -> tuple[EnumerationItem, ...]:
+    """Return evidence items required by the wording of an enumeration query.
+
+    Filing-native headings are the document's canonical major risk factors.
+    Prose-only disclosures remain in ``evidence_items`` for audit and can be
+    requested by a broad ``all risks`` query, but they are not promoted into a
+    ``main/major/key risk factors`` answer.
+    """
+    values = tuple(items)
+    if (
+        enumeration_kind(question) == "risk"
+        and _MAJOR_RISK_SCOPE_RE.search(question)
+    ):
+        return tuple(item for item in values if item.evidence_role == "canonical")
+    if (
+        enumeration_kind(question) == "revenue"
+        and _MAIN_ENUMERATION_RE.search(question)
+    ):
+        # "Main sources" is a focused request, not an exhaustive request.
+        # Supporting filing headings remain in evidence_items for provenance
+        # and are required by an explicit all/every request instead.
+        return tuple(item for item in values if item.evidence_role == "canonical")
+    return values
+
+
 def is_exhaustive_enumeration_question(question: str) -> bool:
     """Return whether the question requests a broad enumeration."""
     return enumeration_kind(question) is not None
@@ -408,6 +674,7 @@ def _add_item(
     aliases: Iterable[str],
     source_number: int,
     evidence_kind: str,
+    evidence_role: str = "canonical",
 ) -> None:
     cleaned_label = re.sub(r"\s+", " ", label).strip(" ,;:-")
     normalized_label = _normalize(cleaned_label)
@@ -438,6 +705,9 @@ def _add_item(
             tuple(dict.fromkeys((*existing.aliases, *alias_values))),
             source_number,
             existing.evidence_kind,
+            "canonical"
+            if "canonical" in {existing.evidence_role, evidence_role}
+            else evidence_role,
         )
         return
     items.append(
@@ -446,6 +716,7 @@ def _add_item(
             alias_values,
             source_number,
             evidence_kind,
+            evidence_role,
         )
     )
 
@@ -551,6 +822,15 @@ def _revenue_aliases(label: str, source_text: str) -> tuple[str, ...]:
     return tuple(aliases)
 
 
+def _revenue_evidence_role(label: str) -> str:
+    """Classify a filing revenue heading without consulting evaluation data."""
+    return (
+        "supporting"
+        if _normalize(label) in _REVENUE_SUPPORTING_LABELS
+        else "canonical"
+    )
+
+
 def _revenue_items(source: EvidenceSource, items: list[EnumerationItem]) -> None:
     lines = _short_lines(source)
     # Microsoft states the More Personal Computing categories as
@@ -569,6 +849,7 @@ def _revenue_items(source: EvidenceSource, items: list[EnumerationItem]) -> None
                 _revenue_aliases(label, source.text),
                 source.number,
                 "revenue",
+                _revenue_evidence_role(label),
             )
 
     for index, line in lines:
@@ -606,6 +887,7 @@ def _revenue_items(source: EvidenceSource, items: list[EnumerationItem]) -> None
             _revenue_aliases(line, source.text),
             source.number,
             "revenue",
+            _revenue_evidence_role(line),
         )
 
 
@@ -634,7 +916,18 @@ def _risk_items(source: EvidenceSource, items: list[EnumerationItem]) -> None:
         )
     for label, pattern, aliases in _RISK_PROSE_PATTERNS:
         if pattern.search(source.text):
-            _add_item(items, label, aliases, source.number, "risk_prose")
+            # Prose-only disclosures remain completeness evidence, but they are
+            # supporting/cross-cutting risks rather than filing headings. This
+            # lets generation preserve coverage without making every prose
+            # sentence a peer of a top-level risk category.
+            _add_item(
+                items,
+                label,
+                aliases,
+                source.number,
+                "risk_prose",
+                "supporting",
+            )
     # The filing introduces supply/quality problems as part of the broader
     # operational-risk category.  Add only an alias so compaction preserves
     # the filing's top-level granularity.
@@ -680,6 +973,7 @@ def assess_enumeration_completeness(
 
     sources = parse_evidence_sources(evidence_context)
     items = extract_evidence_items(kind, sources)
+    required_items = required_enumeration_items(question, items)
     if len(items) < 2:
         return EnumerationCompleteness(
             False,
@@ -690,11 +984,12 @@ def assess_enumeration_completeness(
             (),
             ("insufficient_high_confidence_evidence_items",),
             True,
+            required_items,
         )
 
     covered: list[EnumerationItem] = []
     missing: list[EnumerationItem] = []
-    for item in items:
+    for item in required_items:
         if any(_contains_alias(answer, alias) for alias in item.aliases):
             covered.append(item)
         else:
@@ -725,6 +1020,7 @@ def assess_enumeration_completeness(
         (),
         not missing,
         overdetailed,
+        required_items,
     )
 
 
@@ -737,7 +1033,7 @@ def build_enumeration_correction_prompt(
 ) -> str:
     """Build one concise, evidence-bound correction request."""
     missing = "\n".join(
-        f"- Source {item.source_number}: {item.label}"
+        f"- Source {item.source_number} ({item.evidence_role}): {item.label}"
         for item in assessment.missing_items
     )
     numeric = tuple(dict.fromkeys(unsupported_numeric_claims))
@@ -755,9 +1051,14 @@ def build_enumeration_correction_prompt(
     details = "\n\n".join(violations)
     return (
         "Correct the draft using only the same SEC evidence below. Return one "
-        "concise final answer only. List every evidence-backed item exactly "
-        "once, preserve canonical [Source N] citations, and do not add items "
-        "from general knowledge. Do not calculate, round, convert, or invent "
+        "concise final answer only. List every required item exactly once, "
+        "present canonical categories first, and put supporting or "
+        "cross-cutting items in one compact grouped section only when the "
+        "question requests an exhaustive list. For a focused main-source "
+        "question, supporting evidence remains auditable but is not a peer "
+        "item in the main list. "
+        "Preserve canonical [Source N] citations and do not add items from "
+        "general knowledge. Do not calculate, round, convert, or invent "
         f"values.\n\n{details}\n\nQuestion: {question}\n\n"
         f"Evidence:\n{evidence_context}\n\nDraft answer:\n{draft_answer}"
     )

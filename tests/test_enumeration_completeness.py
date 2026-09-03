@@ -2,7 +2,10 @@ from src.generation.enumeration_completeness import (
     ENUMERATION_COMPLETENESS_FINGERPRINT,
     assess_enumeration_completeness,
     enumeration_kind,
+    extract_evidence_items,
 )
+from src.generation.period_value_completeness import parse_evidence_sources
+from src.evaluation.revenue_intent_contract import audit_revenue_intent_scope
 
 
 APPLE_CONTEXT = """[Source 1] AAPL 10-K, Business
@@ -12,6 +15,19 @@ Wearables, Home and Accessories
 
 AMAZON_CONTEXT = """[Source 1] AMZN 10-K, Business
 We have organized our operations into three segments: North America, International, and Amazon Web Services (\"AWS\").
+"""
+
+MICROSOFT_REVENUE_CONTEXT = """[Source 1] Microsoft 10-K, Business
+Server Products and Cloud Services
+Azure and server revenue.
+[Source 2] Microsoft 10-K, Business
+LinkedIn
+Dynamics Products and Cloud Services
+Microsoft 365 Commercial Products and Cloud Services
+[Source 3] Microsoft 10-K, Business
+Gaming, including Xbox hardware,
+Search and news advertising, including Bing and Copilot,
+Windows and Devices, including Windows OEM licensing and Devices.
 """
 
 
@@ -56,6 +72,56 @@ def test_amazon_segment_alias_covers_abbreviation() -> None:
         "North America",
         "International",
         "Amazon Web Services",
+    ]
+
+
+def test_main_revenue_scope_excludes_supporting_heading_from_required_items() -> None:
+    result = assess_enumeration_completeness(
+        "What are the main sources of revenue for Microsoft?",
+        MICROSOFT_REVENUE_CONTEXT,
+        "- Server Products and Cloud Services [Source 1]\n"
+        "- LinkedIn [Source 2]\n"
+        "- Dynamics Products and Cloud Services [Source 2]\n"
+        "- Microsoft 365 Commercial Products and Cloud Services [Source 2]\n"
+        "- Gaming [Source 3]\n"
+        "- Windows and Devices [Source 3]",
+    )
+
+    assert result.passed is True
+    assert "search and news advertising" in {
+        item.label.casefold() for item in result.evidence_items
+    }
+    assert "search and news advertising" not in {
+        item.label.casefold() for item in result.required_items
+    }
+    assert next(
+        item
+        for item in result.evidence_items
+        if item.label.casefold() == "search and news advertising"
+    ).evidence_role == "supporting"
+
+
+def test_revenue_intent_contract_is_evidence_bound_and_ground_truth_free() -> None:
+    answer = (
+        "- Server Products and Cloud Services [Source 1]\n"
+        "- Microsoft 365 Commercial Products and Cloud Services [Source 2]\n"
+        "- LinkedIn [Source 2]\n"
+        "- Dynamics Products and Cloud Services [Source 2]\n"
+        "- Gaming (Xbox) [Source 3]\n"
+        "- Windows and Devices (Windows OEM; Devices) [Source 3]"
+    )
+
+    result = audit_revenue_intent_scope(
+        "What are the main sources of revenue for Microsoft?",
+        MICROSOFT_REVENUE_CONTEXT,
+        answer,
+    )
+
+    assert result["passed"] is True
+    assert result["allowed_supporting_items_are_optional"] is True
+    assert result["generation_ground_truth_dependency"] is False
+    assert result["supporting_evidence_items"] == [
+        "Search and news advertising"
     ]
 
 
@@ -147,6 +213,28 @@ Our global business exposes us to operational and economic risks.
     assert "Occurrence of regional epidemics or a global pandemic" in labels
     assert "Long-term effects of climate change" in labels
     assert "Global business operational and economic risks" in labels
+
+
+def test_risk_evidence_roles_keep_prose_complete_but_secondary() -> None:
+    context = """[Source 1] MSFT 10-K, Risk Factors
+STRATEGIC AND COMPETITIVE RISKS
+Trade:
+OPERATIONAL RISKS
+Threats to security can take a variety of forms.
+The occurrence of regional epidemics or a global pandemic could adversely affect our business.
+"""
+
+    items = extract_evidence_items("risk", parse_evidence_sources(context))
+    roles = {item.label: item.evidence_role for item in items}
+
+    assert roles["Strategic And Competitive Risks"] == "canonical"
+    assert roles["Trade"] == "canonical"
+    assert roles["Operational Risks"] == "canonical"
+    assert roles["Threats to security"] == "supporting"
+    assert (
+        roles["Occurrence of regional epidemics or a global pandemic"]
+        == "supporting"
+    )
 
 
 def test_risk_compaction_preserves_unknown_bullet_until_taxonomy_is_complete() -> None:

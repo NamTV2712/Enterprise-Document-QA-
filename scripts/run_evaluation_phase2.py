@@ -113,6 +113,23 @@ REPRODUCIBILITY_AUDITS = {
     "enumeration_answer_completion_reproducibility",
     "grounded_completion_v3_reproducibility",
     "fact_evidence_sufficiency_reproducibility_v1",
+    "answer_scope_reproducibility_v3",
+    "answer_scope_reproducibility_v4",
+    "answer_scope_reproducibility_v5",
+    "answer_scope_reproducibility_v6",
+    "answer_scope_reproducibility_v7",
+    "answer_scope_reproducibility_v8",
+    "answer_scope_reproducibility_v9",
+    "answer_scope_reproducibility_v10",
+    "answer_scope_reproducibility_v11",
+    "answer_scope_reproducibility_v12",
+    "answer_scope_reproducibility_v13",
+    "answer_scope_reproducibility_v14",
+    "answer_scope_reproducibility_v15",
+    "answer_scope_reproducibility_v16",
+    "answer_scope_reproducibility_v17",
+    "answer_scope_reproducibility_v18",
+    "answer_scope_reproducibility_v19",
 }
 UNIFIED_COMPLETION_REPRODUCIBILITY_AUDITS = {
     "enumeration_answer_completion_reproducibility",
@@ -630,6 +647,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-gen-retries", type=int, default=2)
     parser.add_argument("--max-judge-retries", type=int, default=2)
     parser.add_argument(
+        "--deterministic-risk-renderer",
+        action="store_true",
+        help=(
+            "Use the provider-free evidence renderer for exhaustive risk "
+            "answers. Candidate-only; disabled by default."
+        ),
+    )
+    parser.add_argument(
+        "--deterministic-fact-renderer",
+        action="store_true",
+        help=(
+            "Use candidate-only evidence rendering for supported fact lookups."
+        ),
+    )
+    parser.add_argument(
+        "--deterministic-revenue-renderer",
+        action="store_true",
+        help=(
+            "Use candidate-only evidence rendering for revenue enumerations."
+        ),
+    )
+    parser.add_argument(
         "--allow-official-overwrite",
         action="store_true",
         help=(
@@ -769,7 +808,11 @@ def main(argv: list[str] | None = None) -> int:
         max_judge_retries=args.max_judge_retries,
         evidence_context_fn=evidence_context_fn,
         answer_postprocessor=make_answer_completion_postprocessor(
-            generation_call, correction_rows
+            generation_call,
+            correction_rows,
+            deterministic_risk_renderer=args.deterministic_risk_renderer,
+            deterministic_fact_renderer=args.deterministic_fact_renderer,
+            deterministic_revenue_renderer=args.deterministic_revenue_renderer,
         ),
         answer_completion_metadata=correction_rows,
         publish_official=output_is_official,

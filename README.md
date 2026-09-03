@@ -1189,21 +1189,28 @@ Secrets are loaded from `.env` and should never be committed.
 - Multi-turn query rewriting adds one LLM call for follow-up questions.
 - The API has no authentication. CORS allowlisting, per-IP rate limits, input validation, and generic error messages mitigate abuse but are not access control; any client that knows the URL can call the public routes (see `ARCHITECTURE.md`).
 - Groq free tier can return `429 Too Many Requests`; SDK retries can recover but increase latency.
+- Answer Scope Closure v1 is complete as a terminal non-official NO-GO. The
+  provider-free revenue-intent contract passed all 30 priority-2 contexts and
+  the full hermetic suite passed `600` tests. It distinguishes focused `main`
+  revenue families from exhaustive lists and keeps the evidence-backed Search
+  and News Advertising heading auditable as supporting evidence. R1 passed
+  `10/10` with F=`1.0000`, AR=`1.0000`, CP=`0.7430`, Overall=`0.9143`; R2
+  completed `10/10` but failed only the registered semantic target because the
+  Microsoft major-risk case scored AR=`0.9000` (the revenue case scored
+  AR=`1.0000`). No N=30 replay or promotion was performed; the protected
+  official benchmark is unchanged. The closure receipt is
+  `data/diagnostics/answer_scope_closure_v1.json`.
 - Docker runs CPU-only for portability. Local development on the Legion RTX 5060 can use CUDA for faster embedding generation.
 
 ## Roadmap
 
-1. Safely promote the admitted enumeration-completion candidate after adding
-   cross-strategy promotion validation, then align the default Phase 2 context
-   strategy and rerun the provider-free official self-check.
-2. Target the four answerable fact-lookup cases whose Context Precision is
-   `0.50` with an oracle-free evidence-sufficiency selector. Require offline
-   source-parity gates, two bounded provider replicates, and reproducibility
-   before a new N=30 candidate.
-3. Expand deterministic and provider-shadow evaluation to the existing 22
+1. Treat Answer Scope Closure v1 as closed `NO-GO`; preserve its reports and
+   do not create another V20/V21 variant without a new benchmark or provider
+   contract.
+2. Expand deterministic and provider-shadow evaluation to the existing 22
    priority-3 cases across 15 additional tickers without changing the official
    N=30 benchmark contract.
-4. Add production logging, quota monitoring, and error alerts before selecting
+3. Add production logging, quota monitoring, and error alerts before selecting
    a paid always-on backend; revisit permanent hosting only when always-on
    public availability is required.
 

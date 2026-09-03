@@ -2264,3 +2264,124 @@ The current-corpus evaluation closure is complete. Phase 1 was rebuilt against t
 - Production branch is `main`, and the Vercel Root Directory is configured as `frontend`.
 - Commit `25ad49a` triggered a production deployment successfully. The shared production domain now serves the refreshed frontend bundle and theme motion styles.
 - The production page currently reports `API offline` because the FastAPI backend is not reachable from the configured frontend environment. Configure a reachable `VITE_API_BASE_URL` in Vercel and add the production frontend origin to backend `ALLOWED_ORIGINS` before enabling live queries.
+
+## Answer Scope campaign (2026-09-03)
+
+The next improvement campaign focused on exhaustive risk-answer granularity and
+scope, without changing retrieval, chunking, embeddings, or the protected
+official benchmark. Risk enumeration evidence now distinguishes filing-native
+canonical headings from prose-only supporting disclosures. The completion layer
+keeps canonical categories first, groups supporting risks under an explicit
+section, preserves short evidence-backed descriptors, and applies the focused
+quality/manufacturing contract for Apple. The campaign runner is resumable and
+uses fresh single-binding artifacts for every semantic change.
+
+Provider-free V13 audit passed all 30 priority-2 cases, source-boundary parsing,
+deterministic rendering, Microsoft role extraction (`7 canonical / 4
+supporting`), and the Apple risk-scope contract. The hermetic suite passed
+`585` tests. The provider sentinel completed `10/10` generation and `10/10`
+judging, with citation correctness `1.0` and no unsupported numeric claims, but
+V13 remained NO-GO because the Microsoft exhaustive-risk case scored
+Answer Relevancy `0.90` and aggregate Faithfulness was `0.995`. Earlier V9 had
+one passing replicate but failed the required second-replicate stability gate,
+so it is not admissible either. No N=30 run or promotion was performed; the
+protected official result and its SHA-256 remain unchanged.
+
+The remaining bottleneck is semantic/judge robustness of exhaustive-risk
+formatting, not retrieval or grounding. The V13 artifacts are retained under
+`data/eval_artifacts/answer_scope_v13_*` and
+`data/diagnostics/answer_scope_v13_*` for audit. Do not relax the relevancy or
+faithfulness gates; a future attempt should first add a provider-free answer
+shape oracle or a pre-registered judge-stability design before spending another
+full sentinel quota.
+
+Current semantic fingerprints are enumeration
+`sha256:ef6a4c10676a11024dedc59bed9e9569aa09f621cd07c01e238ec01da7d6615d`,
+completion
+`sha256:d8a8884201ff0dc913554ee4278ed7b82b495bea730b351ec4d4e94daa681156`,
+and risk-focus
+`sha256:f1076a462c3e8d89d4fe5d5e5ff32a65a23f8e712bd1f095d6efc9adff71a5ba`.
+
+## Answer Scope follow-up V14–V19 (2026-09-03)
+
+The candidate work remained isolated from the protected official Phase 2
+result. The official artifact SHA-256 is still
+`sha256:a5b3c16e43c44ea79199c525e6345acf837172d956d8b659e5a234dc4692a7ba`,
+with F=`1.0000`, AR=`0.9917`, CP=`0.7613`, and Overall=`0.9177`.
+
+V14–V16 established the risk-scope progression. V14's deterministic full-risk
+prose renderer improved the offline contract but failed its 10-case provider
+sentinel (F=`1.0000`, AR=`0.9800`, CP=`0.8420`, Overall=`0.9407`) because the
+Microsoft risk answer remained overly exhaustive. V15's compact descriptor
+variant also failed on that same AR=`0.9000` risk case (aggregate F=`1.0000`,
+AR=`0.9900`, CP=`0.7920`, Overall=`0.9273`). V16 narrowed `main/major/key`
+risk questions to filing-native canonical categories while retaining supporting
+roles for audit. Both provider replicates and reproducibility passed; its clean
+N=30 candidate completed `30/30` generation and judging with F=`0.9967`,
+AR=`0.9850`, CP=`0.8017`, and Overall=`0.9278`. Admission was NO-GO only on
+aggregate AR (`0.9850 < 0.9917`); no promotion occurred.
+
+V17 added a provider-free auditor fact renderer that repairs SEC signature
+line-wraps such as `D`/`ELOITTE` and `T`/`OUCHE`, plus an approach-risk
+comparison contract. Offline gates and the full hermetic suite passed (`592`
+tests), but R1 was NO-GO (10/10 generation and judging; F=`1.0000`,
+AR=`0.9800`, CP=`0.7630`, Overall=`0.9143`). The registered fact-renderer
+check also exposed a sentinel-contract defect: the 10-case Answer Scope set
+does not contain the auditor question, so the gate must be satisfied by the
+separate provider-free fact audit rather than by claiming that R1 exercised it.
+
+V18 added a narrow evidence-bound single-period net-sales renderer and a
+provider-free revenue enumeration renderer. Offline gates passed and the full
+suite reached `597` tests. R1 passed; R2 completed 10/10 but failed only the
+semantic contract because the judge scored the revenue answer AR=`0.9000`
+after treating the evidence-supported `Search and News Advertising` heading as
+an extra source. V19 kept the numeric fact renderer and tested short filing
+aliases for the revenue headings; offline gates and the full suite still
+passed, but R1 reproduced the same revenue semantic failure (F=`1.0000`,
+AR=`0.9750`, CP=`0.7630`, Overall=`0.9127`).
+
+Decision: V14–V19 are all non-official and NO-GO for promotion. Grounding was
+not the bottleneck in V17–V19: citation correctness and recall proxy remained
+`1.0000`, source/context contracts passed, and no unsupported numeric claims
+were introduced. The remaining issue is stable judge alignment for the
+revenue-source scope, where the filing evidence and the evaluation ground
+truth disagree about whether the advertising heading is a main source. Do not
+relax the AR floor or silently omit an evidence-backed source. The next
+improvement should be a pre-registered revenue-intent scope contract evaluated
+against a human-reviewed expected-item set, followed by fresh R1/R2
+replicates; only then is a new N=30 replay justified.
+
+## Answer Scope Closure v1 (2026-09-03)
+
+The final bounded Answer Scope campaign is closed as `CLOSED_NO_GO`. The
+provider-free closure audit passed all 30 priority-2 contexts, confirmed stable
+source boundaries, and passed both focused-main and exhaustive revenue scope
+contracts. The Microsoft main-revenue renderer now requires the reviewed core
+families while retaining `Search and News Advertising` as evidence-backed
+supporting metadata; an exhaustive revenue question still requires that
+heading. The evaluation-only contract is fingerprinted as
+`sha256:f732e928718844e2aa69c2f7242ca2a9cb865548cc163d936634d5b9a268fa78`,
+and the full hermetic suite passed `600` tests.
+
+The fresh closure sentinel R1 passed 10/10 generation and judging with
+Faithfulness `1.0000`, Answer Relevancy `1.0000`, Context Precision `0.7430`,
+and Overall `0.9143`. R2 also completed 10/10 generation and judging with
+Faithfulness `1.0000`, Answer Relevancy `0.9900`, Context Precision `0.7630`,
+and Overall `0.9177`, but failed the registered semantic target floor because
+the Microsoft major-risk answer scored Answer Relevancy `0.9000`. The revenue
+case scored Answer Relevancy `1.0000` in both replicates. This is provider/judge
+variance outside the resolved revenue-scope contract; no N=30 replay or
+promotion is justified. The protected official remains
+`data/eval_artifacts/phase2_results_packed_selective_v2.json` with SHA-256
+`sha256:a5b3c16e43c44ea79199c525e6345acf837172d956d8b659e5a234dc4692a7ba`.
+
+The terminal closure receipt is
+`data/diagnostics/answer_scope_closure_v1.json` (SHA-256
+`sha256:fb245d9ef89d63d624ecbe8fc5b1de7c929ed4d9cf8d3ef1b4bf7379de2daf05`),
+with clean sentinel summaries retained at
+`data/eval_artifacts/answer_scope_closure_v1_sentinel_summary_r1.json` and
+`data/eval_artifacts/answer_scope_closure_v1_sentinel_summary_r2.json`.
+Answer Scope must not generate another renderer variant under the current
+benchmark. The next improvement is the separate priority-3 Phase 2
+generalization shadow over the existing 22 cases across 15 additional tickers;
+it must remain non-official and must not alter the priority-2 benchmark.

@@ -457,12 +457,49 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        start the priority-3 shadow. Clean evidence is in the two
        `answer_focus_v2_sentinel_summary_*_clean.json` reports and
        `data/diagnostics/answer_focus_reproducibility_v1.json`.
-64. [ ] Design the next risk-answer revision from the M14/M15 NO-GO evidence:
-       narrow Apple quality/manufacturing output to the defect and third-party
-       component dimension, and decide whether prose-only Microsoft risk
-       statements are supporting detail or canonical enumeration items. Add a
-       provider-free gate before any fresh sentinel; preserve the `0.95` target
-       floor and use new clean checkpoints only.
+64. [x] Design and implement the next risk-answer revision from the M14/M15
+       NO-GO evidence: narrow Apple quality/manufacturing output to the defect
+       and third-party component dimension, classify prose-only Microsoft risk
+       statements as supporting evidence, and add provider-free shape gates.
+65. [x] Run the V14 deterministic risk renderer campaign. Offline gates passed
+       and the provider sentinel completed `10/10`, but Microsoft risk AR stayed
+       at `0.9000`; keep V14 non-official.
+66. [x] Run the V15 compact-descriptor risk campaign. The provider sentinel
+       completed `10/10` with F=`1.0000`, AR=`0.9900`, CP=`0.7920`, and
+       Overall=`0.9273`, but the target Microsoft risk case remained AR=`0.9000`.
+       Keep V15 non-official.
+67. [x] Run V16 with canonical-only scope for `main/major/key` risk questions.
+       R1/R2 and reproducibility passed; N=30 completed `30/30 + 30/30` with
+       F=`0.9967`, AR=`0.9850`, CP=`0.8017`, Overall=`0.9278`. Admission is
+       NO-GO only on aggregate AR; preserve the official result.
+68. [x] Add the V17 provider-free auditor-fact renderer and approach-risk
+       comparison contract. Offline gates and `592` tests passed, but the
+       10-case sentinel was NO-GO on semantic AR; fix the audit so an absent
+       auditor case is not falsely reported as renderer failure.
+69. [x] Add V18 evidence-bound single-period net-sales and revenue renderers.
+       Offline gates and `597` tests passed; R1 passed but R2 was NO-GO because
+       the judge scored the revenue heading scope at AR=`0.9000`.
+70. [x] Run V19 with source-proven short revenue aliases. Offline gates and
+       `597` tests passed; R1 remained NO-GO with revenue AR=`0.9000` and no
+       grounding/citation regressions. Do not spend more provider quota until a
+       human-reviewed revenue-intent expected-item contract resolves the
+       Search and News Advertising scope disagreement.
+71. [x] Close the Answer Scope improvement with the human-reviewed revenue-intent
+       contract. The provider-free audit passed all 30 priority-2 contexts and
+       the full suite passed `600` tests. The contract now distinguishes focused
+       `main` revenue families from exhaustive lists, keeps Search and News
+       Advertising evidence-backed but supporting for the Microsoft main-source
+       question, and confirms renderers do not consume ground truth. Closure R1
+       passed 10/10 with F=`1.0000`, AR=`1.0000`, CP=`0.7430`, Overall=`0.9143`;
+       R2 completed 10/10 but was NO-GO because a Microsoft major-risk target
+       fell to AR=`0.9000` (revenue AR=`1.0000`). No N=30 replay or promotion was
+       authorized; the protected official remains unchanged. The terminal
+       campaign is `CLOSED_NO_GO` in
+       `data/diagnostics/answer_scope_closure_v1.json`.
+72. [ ] Run the separate priority-3 Phase 2 generalization shadow over the
+       existing 22 cases across 15 additional tickers. Keep it non-official,
+       require complete generation/judging and deterministic retrieval
+       provenance, and do not alter the priority-2 official benchmark.
 
 ## Always-On Deployment
 

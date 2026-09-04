@@ -31,10 +31,16 @@ from src.generation.answer_completion import (
     AnswerCompletionError,
 )
 from src.generation.enumeration_context import ENUMERATION_CONSENSUS_FINGERPRINT
-from src.generation.fact_context import FACT_CONTEXT_SELECTOR_FINGERPRINT
+from src.generation.fact_context import (
+    FACT_CONTEXT_SELECTOR_FINGERPRINT,
+    FACT_CONTEXT_SELECTOR_FINGERPRINT_V2,
+)
+from src.evaluation.answer_postprocessor_profile import (
+    ANSWER_POSTPROCESSOR_PROFILE_PROVIDER_DRAFT,
+)
 logger = logging.getLogger(__name__)
 
-GENERATION_SCHEMA_VERSION = 5
+GENERATION_SCHEMA_VERSION = 6
 GEN_STATUS_OK = "OK"
 GEN_STATUS_SKIPPED_QUOTA = "GEN_SKIPPED_QUOTA"
 GEN_STATUS_ERROR = "GEN_ERROR"
@@ -70,6 +76,8 @@ GENERATION_CONTEXT_BUILDER_FINGERPRINT = sha256_text(
     + ENUMERATION_CONSENSUS_FINGERPRINT
     + "-fact-selector-"
     + FACT_CONTEXT_SELECTOR_FINGERPRINT
+    + "-fact-selector-v2-"
+    + FACT_CONTEXT_SELECTOR_FINGERPRINT_V2
 )
 
 
@@ -82,6 +90,7 @@ def compute_generation_binding(
     context_builder_fingerprint: str,
     system_prompt_sha256: str,
     answer_completion_fingerprint: str = ANSWER_COMPLETION_FINGERPRINT,
+    answer_postprocessor_profile_sha256: str = ANSWER_POSTPROCESSOR_PROFILE_PROVIDER_DRAFT,
 ) -> str:
     """Stable identity of everything that must not drift across resume."""
     payload = {
@@ -94,6 +103,7 @@ def compute_generation_binding(
         "context_builder_fingerprint": context_builder_fingerprint,
         "system_prompt_sha256": system_prompt_sha256,
         "answer_completion_fingerprint": answer_completion_fingerprint,
+        "answer_postprocessor_profile_sha256": answer_postprocessor_profile_sha256,
     }
     return sha256_text(json.dumps(payload, sort_keys=True))
 
@@ -111,6 +121,7 @@ class GenerationUpstream:
     context_strategy: str = CONTEXT_STRATEGY_FULL_EVIDENCE
     context_builder_fingerprint: str = GENERATION_CONTEXT_BUILDER_FINGERPRINT
     answer_completion_fingerprint: str = ANSWER_COMPLETION_FINGERPRINT
+    answer_postprocessor_profile_sha256: str = ANSWER_POSTPROCESSOR_PROFILE_PROVIDER_DRAFT
 
     @property
     def prompt_template_sha256(self) -> str:
@@ -127,6 +138,7 @@ class GenerationUpstream:
             self.context_builder_fingerprint,
             self.system_prompt_sha256,
             self.answer_completion_fingerprint,
+            self.answer_postprocessor_profile_sha256,
         )
 
 
@@ -309,6 +321,7 @@ def run_generation_phase(
             "context_strategy": upstream.context_strategy,
             "context_builder_fingerprint": upstream.context_builder_fingerprint,
             "answer_completion_fingerprint": upstream.answer_completion_fingerprint,
+            "answer_postprocessor_profile_sha256": upstream.answer_postprocessor_profile_sha256,
             "system_prompt_sha256": upstream.system_prompt_sha256,
             "upstream_artifact_sha256": upstream.artifact_sha256,
         }

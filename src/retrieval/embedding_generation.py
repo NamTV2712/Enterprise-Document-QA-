@@ -365,6 +365,7 @@ def build_embedding_generation(
     embedder: Any,
     metadata: Mapping[str, Any],
     reuse_generation_dir: Path | None = None,
+    batch_size: int | None = None,
 ) -> tuple[Path, dict[str, Any]]:
     """Build a new generation and publish completion only after disk reload."""
     validate_generation_id(generation_id)
@@ -418,7 +419,11 @@ def build_embedding_generation(
                 embedded_records = candidates
 
         if embedded_records is None:
-            embeddings = embedder.embed_documents([record["text"] for record in records])
+            texts = [record["text"] for record in records]
+            if batch_size is None:
+                embeddings = embedder.embed_documents(texts)
+            else:
+                embeddings = embedder.embed_documents(texts, batch_size=batch_size)
             if len(embeddings) != len(records):
                 raise ValueError("Embedder output count does not match input records")
             embedded_records = []

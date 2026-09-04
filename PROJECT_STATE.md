@@ -97,6 +97,77 @@ browser smoke checks pass.
 
 ### Active post-admission status
 
+### Priority-3 Generalization Shadow v1 (2026-09-04) — COMPLETE
+
+The provider-free P3 shadow preflight is complete. The exact `priority == 3`
+scope contains `22` cases across `15` tickers with category distribution
+`fact_lookup=9`, `summary=6`, `multi_hop=5`, `enumeration=1`, and
+`comparative=1`. The static human-reviewed plan contract contains `22` plans:
+`21` direct plans plus the two-branch Visa/Mastercard risk comparison. The
+Phase 1 artifact passed all offline gates, including `21/21` keyword-bearing
+recall, source-boundary roundtrip, current local retrieval fingerprints, and
+byte-identical determinism. Its file SHA-256 is
+`9f2f1f785df2babdd48b4c1ee67657819155a1caa1760d280816de6daa186201`, and its
+embedded artifact fingerprint is
+`sha256:98cb84d80987642f1272f49fa7fd0040237cd34d4fc9b82a7409bb6a248fdf97`.
+The offline audit is `data/diagnostics/priority3_shadow_v1_offline.json`.
+
+The one authorized provider shadow initially stopped at `22/22` generation
+and `19/22` judge records when Groq returned `429 Too Many Requests`. It was
+resumed from the compatible checkpoints after quota returned and completed
+`22/22` generation plus `22/22` judging. The non-official result is
+`data/eval_artifacts/phase2_results_priority3_shadow_v1.json` (file SHA-256
+`60f371a5e915ea3777b18ab51337abed324caea23d394b83cd2c52d0781f4c71`) under
+binding
+`sha256:af2f20eb9c3599ab09b85ad00a3ebe43e90065588f12f2a6ce3e0cddd6db54eb`.
+Its metrics are Faithfulness `1.0000`, Answer Relevancy `0.9773`, Context
+Precision `0.6703`, and Overall `0.8825`. The complete audit is
+`data/diagnostics/priority3_shadow_v1_complete.json`; no partial metrics were
+used. The protected official N=30 result is unchanged at SHA-256
+`a5b3c16e43c44ea79199c525e6345acf837172d956d8b659e5a234dc4692a7ba`.
+
+### Fact Evidence Sufficiency v2 — P3 candidate COMPLETE; P2 compatibility NO-GO
+
+The provider-free Fact Evidence Sufficiency v2 audit passed before provider
+evaluation. It safely reduced all nine P3 fact contexts to one self-contained
+source, reduced fact-context text by `24.81%` (`27,888 -> 20,969` characters),
+and preserved all 13 non-fact contexts byte-for-byte. Two isolated nine-case
+P3 sentinels both passed: r1 scored F=`1.0000`, AR=`0.9944`, CP=`1.0000`,
+Overall=`0.9981`; r2 scored F=`1.0000`, AR=`1.0000`, CP=`1.0000`,
+Overall=`1.0000`. The reproducibility receipt is
+`data/diagnostics/priority3_fact_v2_reproducibility.json`.
+
+The clean full P3 candidate completed `22/22` generation and `22/22` judging
+under binding
+`sha256:fd86f359128f95cefc270b13970f63f45db643172127d681bce5102037e8ba47`.
+It passed the non-official admission audit with F=`1.0000`, AR=`0.9750`,
+CP=`0.8786`, Overall=`0.9512`; relative to the P3 baseline, AR drift was
+`-0.0023` within the registered `-0.0050` bound and CP improved by `+0.2083`.
+The candidate result SHA-256 is
+`809299b69820a9196f18539eaffae536993146658034f3939bde9fcf9cbfdec0`, and
+the admission receipt is `data/diagnostics/priority3_fact_v2_candidate.json`.
+Fact v2 remains non-official.
+
+The follow-up priority-2 compatibility sentinel r1 completed all eight fact
+cases with F=`1.0000`, AR=`0.9875`, CP=`1.0000`, but is `NO-GO` under its
+pre-registered per-case AR floor because the unchanged Apple FY2025 fact case
+scored AR=`0.9000` (the protected official has the same recorded score).
+All other structural, selector, deterministic, completion, and aggregate
+gates passed. The report is
+`data/diagnostics/priority2_fact_v2_compatibility_sentinel_r1.json` (SHA-256
+`7f35c6e406d401fba4c3dab9c52a6710a7dd31c0ca0f441bdf752280c0e5ca46`). Per the
+runbook, do not run r2 or N=30 under this compatibility contract; the
+protected official remains unchanged.
+
+The P3 category split originally identified the bounded fact candidate: fact lookup has
+Faithfulness `1.0000`, Answer Relevancy `1.0000`, and Context Precision
+`0.5556`, with nine cases carrying one unnecessary backup source each.
+Multi-hop, enumeration, and comparative contexts are not changed by the
+Fact Evidence Sufficiency v2 candidate. Summary remains a deferred risk area
+because prior summary/risk packing candidates regressed semantic gates; the
+single comparative case is tracked separately because its Answer Relevancy
+was `0.5000` despite Context Precision `1.0000`.
+
 The admitted Answer Completion v1 / enumeration candidate was promoted to the
 protected official result in M2. The official file remains
 `data/eval_artifacts/phase2_results_packed_selective_v2.json` and now has
@@ -2385,3 +2456,216 @@ Answer Scope must not generate another renderer variant under the current
 benchmark. The next improvement is the separate priority-3 Phase 2
 generalization shadow over the existing 22 cases across 15 additional tickers;
 it must remain non-official and must not alter the priority-2 benchmark.
+
+## Financial-table unit preservation v1 (2026-09-04) — staging validated
+
+The inherited priority-2 Apple FY2025 compatibility failure is now explained
+and resolved in a non-destructive staging candidate. The old table path
+truncated long captions at 150 characters and discarded standalone `$` cells,
+so explicit currency/scale metadata such as `(in millions)` never reached the
+retrieval evidence. The fix adds `extract_table_unit()` and a compact
+`Units:` line to newly built `financial_table` chunks, while preserving the
+legacy caption and row/value rendering. The generation context fingerprint now
+includes both fact-selector versions, and generation checkpoints bind the
+answer-postprocessor profile so renderer toggles cannot resume incompatible
+records.
+
+The provider-free corpus counterfactual scanned `1,824` table chunks across
+`50` chunk files: `1,371` have an explicit raw-table unit and would receive a
+unit line, while `453` remain unchanged because no explicit unit was found.
+The change is proven to be unit-line-only. The P2 and P3 staged artifacts are
+candidate-only; retrieval order, scores, chunk ids, citations, plans, and case
+membership are unchanged. The P2 candidate artifact fingerprint is
+`sha256:9c82e1fb9178007e3febbbf930439789dfbf9528637a20a7c26d20e08d3b96ed`
+and the P3 shadow candidate fingerprint is
+`sha256:1c7eeda262a8253fcd00815bfc32f8fba60d4f282070cd8f55077953d4b10e7f`.
+
+The provider-free P2 candidate contract passed: all eight fact contexts remain
+safe single-source contexts, and the deterministic Apple renderer changes
+`$416,161` to `$416,161 million` only when the staged unit evidence is present.
+Two fresh provider-only replicates then completed `8/8` generation and `8/8`
+judging under the same binding
+`sha256:d8a0a9d06559899019c79eec786c8d98c7dfb2c19991894a0687a5b9d0e357ab`.
+Both scored Faithfulness=`1.0000`, Answer Relevancy=`1.0000`, Context
+Precision=`1.0000`, and Overall=`1.0000`; the Apple FY2025 case passed the
+previously failing per-case AR floor. Reproducibility passed with one shared
+artifact, generation binding, and judge-context fingerprint at
+`data/diagnostics/priority2_fact_unit_provider_only_reproducibility_v1.json`.
+
+Validation completed with `618` hermetic tests, `compileall`, and
+`git diff --check`. The protected official result remains unchanged at
+SHA-256 `a5b3c16e43c44ea79199c525e6345acf837172d956d8b659e5a234dc4692a7ba`.
+This staging section records the pre-authorization state; the authorized
+canonical rebuild and its post-rebuild receipts are recorded below.
+
+## Financial-table unit preservation v1 — canonical rebuild complete (2026-09-04)
+
+The user explicitly authorized the canonical rebuild. A recoverable snapshot of
+the pre-rebuild chunk files and protected hashes is stored at
+`data/diagnostics/financial_table_unit_rebuild_backup_20260904`; the interrupted
+large-batch generation attempt is retained at
+`data/diagnostics/financial_table_unit_rebuild_interrupted_20260904`.
+Raw filings and extracted sections remained unchanged. The canonical table
+regeneration passed the rebuild guard across `50/50` chunk files: `1,824`
+financial-table chunks, `1,371` unit lines added, `453` tables left unchanged
+because no explicit unit was available, and exactly `1,371` table records
+changed. All non-table records matched the pre-rebuild snapshot and every
+financial-table record matched fresh extraction from the raw HTML/sections.
+The post-index guard is
+`data/diagnostics/financial_table_unit_rebuild_post_index_v1.json`.
+
+An immutable generation was built with the pinned Nomic revision
+`e9b6763023c676ca8431644204f50c2b100d9aab`, using CUDA and an explicit batch
+size of `8` after the default batch showed VRAM thrashing. The trusted
+generation is
+`data/embedding_generations/nomic-e9b6763-financial-table-units-20260904` with
+`10,053` points, corpus fingerprint
+`sha256:510ebe056e1faa2ef589ac922e77018556197171a95e3257229005d3710c8c15`,
+vector snapshot
+`sha256:1b5aafdff767414497fcf7a9e444c4ae5bac5430ffd8ebe556ac99620334e323`,
+generation fingerprint
+`sha256:1de8df69c98cf0a4c90d00165c71453c607afd541e4a046d79b12035d698d5dd`,
+and manifest SHA-256
+`sha256:2aeb5bc6fcef7aff2d65fb33a2d3637e151e3acf0b6e1229b99a491c7d96fc80`.
+The `--reuse-from` path reused one unchanged embedded file; the other `49`
+files were re-embedded because their canonical payloads changed.
+The old immutable generation remains untouched. `.env` now selects the new
+generation. Local Qdrant was rebuilt in one process and is green with exactly
+`10,053/10,053` points; the schema-v2 index manifest SHA-256 is
+`sha256:05ac6608f3114476341f58ddd35faab5fe7312c8bfdea87e1c07d144185d7e4b`.
+
+Canonical Phase 1 P2 was rebuilt with the offline socket guard and
+`--verify-determinism`: `30` cases, `61` non-empty queries, `0` empty queries,
+artifact fingerprint `sha256:f6d2cada527b6ded976570b2065ae6150d5868aaee4ecfc3201d7d46d0a41460`.
+Canonical exact-priority P3 also passed byte-identical determinism: `22` cases,
+`23` non-empty queries, `0` empty queries, artifact fingerprint
+`sha256:8cc91b5ab7cb39c52811b38241f0ee5eb86c56fe3ea500aea12480ca37dbb0da`.
+
+Two fresh provider-only, non-official P2 fact compatibility replicates against
+the canonical binding both passed all gates for `8/8` generation and `8/8`
+judging. Each scored Faithfulness=`1.0000`, Answer Relevancy=`1.0000`, and
+Context Precision=`1.0000`; the former Apple FY2025 relevancy failure now
+passes with explicit `USD in millions` evidence. The reproducibility receipt
+is `data/diagnostics/priority2_fact_unit_canonical_provider_only_reproducibility_v1.json`.
+No official Phase 2 result was promoted or overwritten: its SHA-256 remains
+`sha256:a5b3c16e43c44ea79199c525e6345acf837172d956d8b659e5a234dc4692a7ba`.
+
+## Canonical Fact v2 Phase 2 replay — NO-GO (2026-09-04)
+
+The first clean priority-2 Phase 2 candidate on the canonical unit-preserving
+artifact was executed after a fresh canonical V7 compatibility reproducibility
+receipt and a one-case quota probe. The probe completed successfully with one
+generation and one judge call, citation correctness `1.0000`, no unsupported
+numeric claims, and binding
+`sha256:1ed6473a70bd3049d373a2cfd72d9106235ba361a1be7ae1be0f9ca4eecf3457`.
+
+The clean candidate completed `30/30` generation and `30/30` judging with no
+skipped or parse-invalid records. Its result is
+`data/eval_artifacts/phase2_results_p2_canonical_units_v7_20260904.json`
+(SHA-256 `sha256:cbfb848e9cae104439292a96cd7dbfcab00d6b9b7ccb556f5ad7b905778dd3bc`).
+Metrics are Faithfulness=`0.9667`, Answer Relevancy=`0.9567`, Context
+Precision=`0.8390`, and Overall=`0.9208`.
+
+The provider-free admission report is
+`data/diagnostics/phase2_admission_p2_canonical_units_v7_20260904.json`
+(SHA-256
+`sha256:9774b0e6af403bc936bd67e9f7da22628de11d201a294d82fbce3957cb804429`)
+and is `NO-GO`. The canonical V7 fact contract itself passed: all eight fact
+cases were safe one-source contexts with Faithfulness/Answer Relevancy/Context
+Precision `1.0000`, fact Context Precision average `1.0000`, and all 22
+non-fact rendered contexts were byte-identical to V5. The failing gates are
+semantic stability outside that fact slice: aggregate Faithfulness and Answer
+Relevancy missed their official floors; the Microsoft exhaustive-risk answer
+scored AR=`0.8000` versus baseline `0.9500`; and the answerable Microsoft-vs-
+Apple cloud/subscription comparison returned an incorrect fallback with
+Faithfulness/Answer Relevancy `0.0000`.
+
+The canonical provider-only reproducibility receipt is
+`data/diagnostics/priority2_fact_v2_compatibility_reproducibility_canonical_units_v1.json`
+(SHA-256
+`sha256:c89da238d112bdc8af62b2d01351497b7f15fbc2f5a320f6b8993e25af46e31c`).
+The one-case quota-probe summary is
+`data/eval_artifacts/p2_quota_probe_canonical_units_v7_20260904_summary.json`
+(SHA-256
+`sha256:cc18f81d0c5ad0b73a38ff713ae97aa1bffd5d535e2f6c5fc9fa1075913380f3`).
+No promotion was attempted. The protected official result remains unchanged
+at SHA-256
+`sha256:a5b3c16e43c44ea79199c525e6345acf837172d956d8b659e5a234dc4692a7ba`.
+Do not rerun V7 to select a better provider sample; the next improvement must
+address the two reproducibility failures or introduce a pre-registered
+provider-free stability contract before another N=30 replay.
+
+## Comparative Answerability Guard v1 (2026-09-04) — NO-GO
+
+The next bounded improvement addressed the answerable Microsoft-vs-Apple
+cloud/subscription fallback without changing retrieval, the canonical index,
+or the V7 evidence renderer. The guard is provider-free: it detects at least
+two known company entities, requires an evidence branch for every entity,
+checks branch intent coverage, and requires numeric evidence for quantitative
+comparisons. It buffers streaming only when the evidence is sufficient, and
+retries at most once when a provider draft is an unsafe fallback. The shared
+entity aliases now live in `src/company_entities.py` so the Phase 2
+hermeticity guard does not import the retrieval query normalizer.
+
+The offline contract passed all priority-2 context checks, six comparative
+counterfactuals, one-sided evidence rejection, unknown-company rejection, and
+V5/V7 non-fact context identity. Its receipt is
+`data/diagnostics/answerability_stability_v1_offline.json` (SHA-256
+`sha256:3d6a51e42a83368d9563ebded5c174ac32b0a9f2f68fecbc03b9d80d7aaa0bfa`).
+The answerability fingerprint is
+`sha256:f77ae8b324583540f5f49c6f5d11f3737da6ad8014cc562f59939d85472bb5a1`.
+
+A one-case Groq quota probe passed with complete generation/judging,
+grounding and citation integrity, and target Faithfulness/Answer
+Relevancy/Context Precision `1.0000/1.0000/1.0000`. The final scoped
+unit/proxy prompt binding is
+`sha256:988f868d24ed561daf4636a706fa77c38b1f5ad12773b7af3cbc16a71748ff0b`;
+the probe receipt is
+`data/eval_artifacts/answerability_stability_v4_probe_summary.json` (SHA-256
+`sha256:343eeafd16934b9da236a0a90219d2d9872bae08c4ab72a3334b9ba44f3aa559`).
+The prompt contract keeps original units attached, avoids comparing bare digit
+strings, and labels related non-identical measures as proxies. Its completion
+fingerprint is `sha256:e46acae4060dec233101438925812bb562e075ed7275434c1b60c23e1875af55`.
+
+The first clean 30-case candidate on the guard binding completed `30/30`
+generation and `30/30` judging with no skips: Faithfulness=`0.9937`, Answer
+Relevancy=`0.9867`, Context Precision=`0.8113`, Overall=`0.9306`. Admission
+was `NO-GO`: aggregate Answer Relevancy missed the protected `0.9917` floor and
+the cloud-dependency target received Faithfulness=`0.9000` in that provider
+sample. The candidate and admission receipts are
+`data/eval_artifacts/phase2_results_answerability_stability_v1_candidate.json`
+(SHA-256 `sha256:b3339429766467f8ebcf21a96b46872ddec5ea395a2aa4e581b3adb7cbc75cc0`)
+and `data/diagnostics/phase2_admission_answerability_stability_v1.json` (SHA-256
+`sha256:9bc160e00475f427f1ddb6c330b8e0efdb6804d9444ea549acc70aa349a2e081`).
+
+After narrowing the unit guidance to multi-company numeric comparisons, final
+sentinels remained provider/judge-sensitive. R1 completed `6/6` generation
+and judging but failed the pre-registered target Faithfulness=`0.9000` and
+risk-control Answer Relevancy=`0.9000`; R2 passed all six case gates with
+Faithfulness/Answer Relevancy/Context Precision/Overall
+`1.0000/0.9833/0.7233/0.9022`. Both used one binding and identical contexts,
+but the reproducibility receipt is `passed=false` because the required
+pass-rate is `2/2`, not best-of selection. The final receipts are
+`data/eval_artifacts/answerability_stability_v4_sentinel_summary_r1.json`
+(SHA-256 `sha256:35d0b3dda45693085017b5f2e9732b7521809a7443c938b6744f23f706eae4f4`),
+`data/eval_artifacts/answerability_stability_v4_sentinel_summary_r2.json`
+(SHA-256 `sha256:9b19796afd8a36d2e2a924c29c99258ebd6153eba5c06e62a6f30274c48186fb`),
+and `data/diagnostics/answerability_stability_v1_reproducibility_final.json`
+(SHA-256 `sha256:288dd3fcf5ee87d6b6b46ebe891a5eef9142200016f5630dff5c104f862b5819`).
+
+No final-binding N=30 replay or promotion was attempted after the failed
+sentinel replicate. The protected official result remains unchanged at
+`sha256:a5b3c16e43c44ea79199c525e6345acf837172d956d8b659e5a234dc4692a7ba`.
+Do not rerun for a better sample. The next improvement must make the target
+comparison and risk-control evaluation stable under the registered provider
+protocol, or introduce a separately pre-registered provider-independent
+answer/evaluation contract before another N=30 replay.
+
+During this campaign, a separate exact-priority Phase 1 artifact was also
+rebuilt with byte-identical determinism (`12` cases; fingerprint
+`sha256:443df50844648615e37feba3b30b61f68b12b3c874b10ce5d1ef121eebd88c8a`,
+file SHA-256 `sha256:ee87b2f990ddba2fcfb326911de5dd48d0c2ec8e766bd207395dd46f1aee9fad`).
+It is retained as a non-official exact-selection artifact and was not used for
+the clean priority-2 N=30 result. The Phase 1 model was not fully cached, so
+the rebuild required the documented `--allow-network` model-loading escape
+hatch; raw filings and the canonical 30-case artifact were not altered.

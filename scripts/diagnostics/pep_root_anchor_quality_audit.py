@@ -81,6 +81,20 @@ def _canonical_table_records(chunks_path: Path) -> list[dict[str, str]]:
     return records
 
 
+def _without_unit_line(text: str) -> str:
+    """Compare legacy canonical chunks without pending unit metadata."""
+    return "\n".join(
+        line for line in text.splitlines() if not line.startswith("Units:")
+    )
+
+
+def _core_table_records(records: list[dict[str, str]]) -> list[dict[str, str]]:
+    return [
+        {**record, "text": _without_unit_line(record["text"])}
+        for record in records
+    ]
+
+
 def audit_pep_root_anchor_tables(
     html_path: Path,
     sections_path: Path,
@@ -119,6 +133,8 @@ def audit_pep_root_anchor_tables(
     candidate_fingerprint = _sha256_bytes(
         json.dumps(candidate_records, sort_keys=True, ensure_ascii=False).encode()
     )
+    candidate_core_records = _core_table_records(candidate_records)
+    canonical_core_records = _core_table_records(canonical_records)
     counts: dict[str, int] = {}
     for classification in classifications:
         key = classification["classification"]
@@ -130,6 +146,9 @@ def audit_pep_root_anchor_tables(
         "candidate_chunk_count": len(candidate_chunks),
         "canonical_table_chunk_count": len(canonical_records),
         "candidate_matches_canonical": candidate_records == canonical_records,
+        "candidate_matches_canonical_without_unit_metadata": (
+            candidate_core_records == canonical_core_records
+        ),
         "candidate_table_chunks_sha256": candidate_fingerprint,
         "canonical_table_chunks_sha256": canonical_fingerprint,
         "classification_counts": dict(sorted(counts.items())),

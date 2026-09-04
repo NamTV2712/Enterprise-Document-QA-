@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from src.generation.fact_context import (
+    FACT_CONTEXT_SELECTOR_FINGERPRINT,
+    FACT_CONTEXT_SELECTOR_FINGERPRINT_V2,
     select_fact_context,
+    select_fact_context_v2,
     selected_fact_entries,
 )
 
@@ -149,3 +152,100 @@ def test_entity_and_section_scope_are_required() -> None:
 
     assert selection.safe is False
     assert selection.kept_ids == selection.all_ids
+
+
+def test_v2_ignores_possessive_owner_and_plural_year_scaffolding() -> None:
+    case = _case(
+        "What were Chevron's total assets in fiscal years 2025 and 2024?",
+        [
+            _chunk(
+                "CVX_exact",
+                "| Assets - Total Assets | 324,012 | 256,938 | 2025 | 2024 |",
+                10.0,
+                section="financial_table",
+                ticker="CVX",
+            ),
+            _chunk(
+                "CVX_backup",
+                "Capital employed 2025 2024 2023",
+                4.0,
+                section="financial_table",
+                ticker="CVX",
+            ),
+        ],
+        section="financial_table",
+        ticker="CVX",
+    )
+
+    v1 = select_fact_context(case)
+    v2 = select_fact_context_v2(case)
+
+    assert v1.safe is False
+    assert v2.tier == "structured_exact"
+    assert v2.safe is True
+    assert v2.kept_ids == ("CVX_exact",)
+
+
+def test_v2_recognizes_compound_net_income_metric() -> None:
+    case = _case(
+        "What was IBM's net income in fiscal year 2025?",
+        [
+            _chunk(
+                "IBM_exact",
+                "| Net income | 13,011 | 2025 |",
+                10.0,
+                section="financial_table",
+                ticker="IBM",
+            ),
+            _chunk(
+                "IBM_backup",
+                "Net cash provided by operating activities 2025",
+                4.0,
+                section="financial_table",
+                ticker="IBM",
+            ),
+        ],
+        section="financial_table",
+        ticker="IBM",
+    )
+
+    selection = select_fact_context_v2(case)
+
+    assert selection.tier == "structured_exact"
+    assert selection.kept_ids == ("IBM_exact",)
+    assert selection.profile.metric_groups == (("net_income", ("net income",)),)
+
+
+def test_v2_preserves_aws_residual_metric_term() -> None:
+    case = _case(
+        "What was Amazon's AWS net sales in 2025?",
+        [
+            _chunk(
+                "AMZN_noise",
+                "AWS technology and infrastructure costs in 2025",
+                4.5,
+                section="mdna",
+                ticker="AMZN",
+            ),
+            _chunk(
+                "AMZN_donor",
+                "Year ended 2024 2025 Net Sales: AWS 107,556 128,725",
+                4.0,
+                section="mdna",
+                ticker="AMZN",
+            ),
+        ],
+        section="mdna",
+        ticker="AMZN",
+    )
+
+    selection = select_fact_context_v2(case)
+
+    assert selection.safe is True
+    assert selection.kept_ids == ("AMZN_donor",)
+
+
+def test_v2_selector_has_a_distinct_fingerprint() -> None:
+    assert FACT_CONTEXT_SELECTOR_FINGERPRINT.startswith("sha256:")
+    assert FACT_CONTEXT_SELECTOR_FINGERPRINT_V2.startswith("sha256:")
+    assert FACT_CONTEXT_SELECTOR_FINGERPRINT_V2 != FACT_CONTEXT_SELECTOR_FINGERPRINT

@@ -496,10 +496,92 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        authorized; the protected official remains unchanged. The terminal
        campaign is `CLOSED_NO_GO` in
        `data/diagnostics/answer_scope_closure_v1.json`.
-72. [ ] Run the separate priority-3 Phase 2 generalization shadow over the
+72. [x] Run the separate priority-3 Phase 2 generalization shadow over the
        existing 22 cases across 15 additional tickers. Keep it non-official,
        require complete generation/judging and deterministic retrieval
        provenance, and do not alter the priority-2 official benchmark.
+       Offline preflight passed. The provider shadow resumed after quota
+       recovery and completed 22/22 generation plus 22/22 judging. It remains
+       non-official with F=1.0000, AR=0.9773, CP=0.6703, Overall=0.8825.
+       The complete audit is data/diagnostics/priority3_shadow_v1_complete.json.
+73. [x] Build the provider-free P3 Fact Evidence Sufficiency v2 candidate.
+       Keep the V1 selector frozen, remove only safe possessive-owner and
+       plural-year profile false negatives, recognize compound net-income
+       metrics, reduce the nine P3 fact contexts to one self-contained source,
+       and preserve all 13 non-fact contexts byte-for-byte. Require the new
+       selector fingerprint, label-free behavior, source roundtrips, cited
+       support, and at least 20% fact-context reduction before any provider
+       call. The offline report passes with 24.81% reduction at
+       data/diagnostics/priority3_fact_evidence_sufficiency_v2.json.
+74. [x] Run two isolated nine-case P3 Fact v2 sentinels and the reproducibility
+       audit. Require complete generation/judging, Faithfulness=1.0000,
+       per-case Answer Relevancy >=0.95, per-case and aggregate Context
+       Precision >=0.90, aggregate CP improvement >=0.15 over the P3 fact
+       baseline, and complete deterministic provenance. Do not average failed
+       replicates or reuse a failed binding. Both passed; r1/r2 aggregate
+       scores were respectively F/AR/CP=`1.0000/0.9944/1.0000` and
+       `1.0000/1.0000/1.0000`, with the reproducibility receipt at
+       data/diagnostics/priority3_fact_v2_reproducibility.json.
+75. [x] Run one clean full P3 Fact v2 candidate after sentinel reproducibility;
+       require 22/22 coverage, no non-fact context changes, no integrity or
+       Faithfulness regressions, bounded Answer Relevancy drift, and keep the
+       candidate non-official. The candidate passed with
+       F/AR/CP/Overall=`1.0000/0.9750/0.8786/0.9512`; its admission receipt is
+       data/diagnostics/priority3_fact_v2_candidate.json. A separate priority-2
+       compatibility sentinel r1 completed but is `NO-GO` only because the
+       existing Apple FY2025 fact case scored AR=`0.9000 < 0.9500`; all other
+       gates passed. Do not run r2 or N=30 under this contract; never overwrite
+       the protected official during a candidate run.
+76. [x] Diagnose the priority-2 compatibility NO-GO from the protected
+        baseline before authorizing any new provider binding. The provider-free
+        attribution report traced Apple FY2025's AR=`0.9000` to lost explicit
+        table currency/scale metadata, not retrieval or Fact v2 regression.
+        The protected official result remains unchanged.
+77. [x] Authorize and execute the canonical financial-table unit-preservation
+        rebuild. Snapshot current processed-chunk, embedding-generation,
+        Qdrant-manifest, and official Phase 1 hashes first; regenerate only
+        financial_table chunks from the existing raw/sections inputs; build and
+        validate a fresh immutable embedding generation (reusing unchanged
+        vectors where the manifest permits); rebuild local Qdrant with one
+        worker; and verify point count, corpus/index provenance, and retrieval
+        determinism. Do not overwrite the protected official result.
+78. [x] After item 77, rebuild deterministic P2/P3 Phase 1 artifacts and run
+        isolated non-official provider-only compatibility sentinels against the
+        canonical binding. Require complete provenance, unchanged official SHA,
+        no unsupported numeric claims, Apple FY2025 per-case AR >= 0.95, and no
+        retrieval/grounding regression before considering a broader candidate
+        replay.
+79. [x] Run the first clean canonical P2 V7 N=30 replay after item 78. The
+        candidate completed 30/30 generation and 30/30 judging with no skipped
+        or parse-invalid records, but admission is NO-GO at
+        F/AR/CP/Overall=`0.9667/0.9567/0.8390/0.9208`. All eight V2 fact cases
+        passed the one-source fact contract and all non-fact contexts were
+        unchanged; failures are semantic stability outside the fact slice:
+        Microsoft exhaustive-risk AR=`0.80` and an incorrect answerable
+        cloud/subscription fallback. Candidate SHA is `cbfb848e...`, admission
+        SHA is `9774b0e6...`, and the protected official remains unchanged.
+        Do not rerun for best-of selection; address the two stability failures
+        under a new pre-registered contract before another N=30 replay.
+80. [x] Implement Comparative Answerability Guard v1 for the answerable
+        Microsoft-vs-Apple cloud/subscription comparison. Keep the guard
+        provider-free, require balanced company branches and intent/value
+        coverage, buffer streaming only when evidence is sufficient, and allow
+        no more than one correction. Preserve the risk answer as a control and
+        do not change retrieval, canonical evidence, or V7 rendering.
+81. [x] Execute the guard's offline audit, quota probe, two provider-only
+        sentinel replicates, reproducibility audit, targeted tests, and the
+        first clean N=30 candidate. The candidate was provider-complete at
+        `30/30` generation and judging with F/AR/CP/Overall=`0.9937/0.9867/
+        0.8113/0.9306`, but admission was NO-GO because aggregate AR missed
+        `0.9917` and the target received F=`0.9000`. A scoped unit/proxy prompt
+        refinement was then validated; final sentinels were `1/2` pass because
+        provider/judge variance produced target F=`0.9000` and risk AR=`0.9000`
+        in R1. The protected official result remains unchanged.
+82. [ ] Do not rerun N=30 or select a better provider sample for item 81.
+        Design a separately fingerprinted stability improvement: either a
+        provider-independent comparative answer contract/renderer or a
+        pre-registered judge-variance protocol that keeps the target and risk
+        gates auditable without relaxing the official floors.
 
 ## Always-On Deployment
 

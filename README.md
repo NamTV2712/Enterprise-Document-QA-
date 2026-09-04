@@ -301,6 +301,57 @@ protected official is unchanged. The failed relevancy gate is not a retrieval
 failure: the remaining no-op context answers are provider/judge-sensitive,
 so thresholds must not be relaxed and the priority-3 shadow remains gated.
 
+### Financial-table unit preservation — canonical rebuild complete
+
+The inherited Apple FY2025 fact-quality failure was traced to explicit table
+currency/scale metadata being lost during extraction. The extractor/chunker
+now preserves that metadata as a compact `Units:` line, with provider-free
+tests proving that only financial-table text changes. The explicitly authorized
+canonical rebuild added units to `1,371` of `1,824` table chunks across `50`
+filings, rebuilt the immutable Nomic embedding generation and local Qdrant
+index at `10,053` points, and passed corpus/index provenance validation. New
+P2/P3 Phase 1 artifacts are deterministic and remain non-official. Two fresh
+provider-only P2 replicates completed `8/8` generation and judging with
+Faithfulness/Answer Relevancy/Context Precision all `1.0000`, including Apple
+FY2025's former AR=`0.9000` case. The protected official Phase 2 result remains
+unchanged. Rebuild and reproducibility receipts are retained under
+`data/diagnostics/financial_table_unit_*`.
+
+The first canonical V7 priority-2 Phase 2 replay then completed `30/30`
+generation and `30/30` judging with no skipped or parse-invalid records, but
+admission returned `NO-GO`: F=`0.9667`, AR=`0.9567`, CP=`0.8390`, Overall=`0.9208`.
+The eight Fact v2 cases all passed their one-source contract at `1.0000` on all
+three judge metrics, while the remaining semantic instability was an AR=`0.80`
+Microsoft exhaustive-risk answer and an incorrect answerable fallback for the
+Microsoft-vs-Apple cloud/subscription comparison. The candidate and admission
+receipts are retained under
+`data/eval_artifacts/phase2_*p2_canonical_units_v7_20260904*` and
+`data/diagnostics/phase2_admission_p2_canonical_units_v7_20260904.json`.
+The protected official result was not changed.
+
+### Comparative Answerability Guard v1 — non-official NO-GO
+
+The next bounded improvement added a provider-free guard for multi-company
+comparisons. It verifies that every named company has an evidence branch with
+matching intent coverage and numeric evidence where required; it buffers
+streaming when evidence is sufficient and permits at most one correction when
+the draft incorrectly falls back. Retrieval, indexing, canonical evidence,
+and the V7 context renderer were unchanged. The offline audit and quota probe
+passed, with the final generation binding
+`sha256:988f868d24ed561daf4636a706fa77c38b1f5ad12773b7af3cbc16a71748ff0b`.
+
+A clean 30-case candidate completed `30/30` generation and `30/30` judging
+without skips, scoring F/AR/CP/Overall=`0.9937/0.9867/0.8113/0.9306`, but
+admission was `NO-GO`: AR was below the protected `0.9917` floor and the target
+cloud/subscription comparison received F=`0.9000` in that sample. A final
+scoped unit/proxy prompt was then checked with two six-case sentinels. R1
+failed the registered target F and risk-control AR gates at `0.9000`; R2 passed
+all six case gates with F/AR/CP/Overall=`1.0000/0.9833/0.7233/0.9022`. Contexts
+were identical, but reproducibility is `NO-GO` because the required pass-rate
+is `2/2`, and best-of selection is forbidden. No final-binding N=30 replay or
+official promotion was performed. See the detailed receipts and hashes in
+`PROJECT_STATE.md`.
+
 ### Historical evaluation log
 
 Admission audits are clean: the promoted-official self-check reports zero
@@ -1184,6 +1235,12 @@ Secrets are loaded from `.env` and should never be committed.
 - The corpus targets `50` companies and all `50` are searchable; extraction remediation plus the FY2026 recovery pass restored `10` previously incomplete filings, leaving `46` filings with all four target sections and `4` degraded but searchable (`CVX`, `IBM`, `JPM`, `XOM`).
 - Extraction quality remains uneven across large-company filing layouts: some annual-report cross-reference and non-standard Item 7/8 formats expose fewer than the four target sections.
 - Financial statements can become verticalized after HTML-to-text conversion; table extraction and structured lookup reduce this issue for common total-line financial questions.
+- The active canonical corpus now includes the explicitly authorized
+  financial-table unit metadata rebuild: `1,371` of `1,824` table chunks were
+  enriched, the immutable embedding generation and local Qdrant index were
+  rebuilt at `10,053` points, and canonical Phase 1 determinism passed. The
+  protected official Phase 2 benchmark remains bound to its prior result until
+  a candidate passes all admission gates.
 - Hybrid retrieval improves source quality but adds CPU latency due to cross-encoder re-ranking.
 - Semantic cache and conversation memory are currently in-memory and are lost on process restart.
 - Multi-turn query rewriting adds one LLM call for follow-up questions.
@@ -1207,9 +1264,15 @@ Secrets are loaded from `.env` and should never be committed.
 1. Treat Answer Scope Closure v1 as closed `NO-GO`; preserve its reports and
    do not create another V20/V21 variant without a new benchmark or provider
    contract.
-2. Expand deterministic and provider-shadow evaluation to the existing 22
-   priority-3 cases across 15 additional tickers without changing the official
-   N=30 benchmark contract.
+2. Keep the completed Priority-3 Shadow v1 as a non-official generalization
+   baseline and keep the canonical financial-table unit rebuild active. The
+   canonical V7 Fact v2 replay remains `NO-GO` outside its passing fact slice.
+   Comparative Answerability Guard v1 is implemented, but its final
+   provider-only stability receipt is also `NO-GO` at `1/2` replicates because
+   target/risk judge scores are stochastic. Do not rerun N=30 for best-of
+   selection; the next experiment must stabilize those gates or use a new
+   pre-registered provider-independent contract. The official benchmark remains
+   unchanged.
 3. Add production logging, quota monitoring, and error alerts before selecting
    a paid always-on backend; revisit permanent hosting only when always-on
    public availability is required.

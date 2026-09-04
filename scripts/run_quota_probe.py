@@ -1,4 +1,4 @@
-"""Quota probe: exercise Phase 2A/2B on three cases only.
+"""Quota probe: exercise Phase 2A/2B on a tiny subset only.
 
 NOT a benchmark. This runner verifies the two-phase plumbing end to end
 (parsing, checkpointing, binding, quota stop behavior) on a tiny subset
@@ -31,6 +31,7 @@ from pathlib import Path
 from src.evaluation.answer_contract import audit_answer
 from src.evaluation.context_packing import (
     CONTEXT_STRATEGY_SELECTIVE_V2,
+    CONTEXT_STRATEGY_SELECTIVE_V7,
     render_case_context,
 )
 from src.evaluation.evaluator import (
@@ -78,9 +79,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-ARTIFACT_PATH = Path("data/eval_artifacts/phase1_priority2.json")
+ARTIFACT_PATH = Path(
+    "data/eval_artifacts/phase1_priority2_financial_table_units.json"
+)
 EXPECTED_ARTIFACT_FINGERPRINT = (
-    "sha256:1ad021ce72af2116f9b4f7ad780d5c6e809fd5a01e46d30d0ae4bfecd62599d9"
+    "sha256:f6d2cada527b6ded976570b2065ae6150d5868aaee4ecfc3201d7d46d0a41460"
 )
 GEN_CHECKPOINT_PATH = Path("data/eval_artifacts/probe_gen.jsonl")
 JUDGE_CHECKPOINT_PATH = Path("data/eval_artifacts/probe_judge.jsonl")
@@ -88,10 +91,13 @@ SUMMARY_PATH = Path("data/eval_artifacts/probe_summary.json")
 
 PROBE_MODEL = "openai/gpt-oss-120b"
 PROBE_CONTEXT_STRATEGY = CONTEXT_STRATEGY_SELECTIVE_V2
-PROBE_QUESTIONS = [
+DEFAULT_PROBE_QUESTIONS = [
     "What was Apple's total net sales in fiscal year 2024?",
     "Which company, Apple or Amazon, had higher total revenue in fiscal year 2024?",
     "How did Microsoft's total assets change year over year?",
+]
+PROBE_QUESTIONS = DEFAULT_PROBE_QUESTIONS + [
+    "Which company depends more on cloud/subscription revenue, Microsoft or Apple?",
 ]
 GROUND_TRUTHS = {
     PROBE_QUESTIONS[0]: (
@@ -105,9 +111,14 @@ GROUND_TRUTHS = {
     PROBE_QUESTIONS[2]: (
         "Microsoft's total assets grew from $512,163M to $619,003M."
     ),
+    PROBE_QUESTIONS[3]: (
+        "Microsoft depends more on cloud revenue as a core business driver than "
+        "Apple depends on Services."
+    ),
 }
 
 COMPARATIVE_ACCEPTANCE_VALUES = ("391,035", "637,959")
+ANSWERABILITY_ACCEPTANCE_QUESTION = PROBE_QUESTIONS[3]
 
 
 def build_probe_acceptance(
@@ -122,6 +133,20 @@ def build_probe_acceptance(
     construction; a latest-year answer is a contract violation instead of
     an ambiguous judgment call.
     """
+    if question == ANSWERABILITY_ACCEPTANCE_QUESTION:
+        lowered = answer.casefold()
+        return {
+            "non_fallback": "could not find sufficient information" not in lowered,
+            "mentions_cloud": "cloud" in lowered,
+            "mentions_services": "services" in lowered,
+            "citation_correctness_pass": citation_correctness == 1.0,
+            "passed": (
+                "could not find sufficient information" not in lowered
+                and "cloud" in lowered
+                and "services" in lowered
+                and citation_correctness == 1.0
+            ),
+        }
     if question != PROBE_QUESTIONS[1]:
         return None
     compact = "".join(answer.split())
@@ -147,6 +172,7 @@ class ProbeQuotaStop(Exception):
 def build_probe_contexts(
     case_by_question: dict[str, dict],
     selected_questions: list[str],
+    strategy: str = PROBE_CONTEXT_STRATEGY,
 ) -> dict[str, str]:
     """Render the exact default official context for each probe case."""
     metadata = {case.question: case for case in TEST_SET}
@@ -159,7 +185,7 @@ def build_probe_contexts(
         question: render_case_context(
             case_by_question[question],
             required_keywords=metadata[question].required_keywords,
-            strategy=PROBE_CONTEXT_STRATEGY,
+            strategy=strategy,
         )
         for question in selected_questions
     }
@@ -195,13 +221,17 @@ def audit_probe_answer(answer: str, evidence_context: str) -> dict:
     }
 
 
-def _load_artifact_and_binding() -> tuple[dict, GenerationUpstream]:
-    if not ARTIFACT_PATH.exists():
+def _load_artifact_and_binding(
+    artifact_path: Path,
+    expected_fingerprint: str,
+    context_strategy: str,
+) -> tuple[dict, GenerationUpstream]:
+    if not artifact_path.exists():
         raise FileNotFoundError(
-            f"Phase 1 artifact missing: {ARTIFACT_PATH}. Run "
+            f"Phase 1 artifact missing: {artifact_path}. Run "
             "scripts.run_evaluation_phase1 first."
         )
-    raw_bytes = ARTIFACT_PATH.read_bytes()
+    raw_bytes = artifact_path.read_bytes()
     artifact = json.loads(raw_bytes.decode("utf-8"))
     if artifact["fingerprints"].get("query_shaper") != QUERY_SHAPER_FINGERPRINT:
         raise RuntimeError(
@@ -214,19 +244,19 @@ def _load_artifact_and_binding() -> tuple[dict, GenerationUpstream]:
             "the probe."
         )
     embedded = artifact["fingerprints"]["artifact"]
-    if embedded != EXPECTED_ARTIFACT_FINGERPRINT:
+    if embedded != expected_fingerprint:
         raise RuntimeError(
-            f"Artifact fingerprint drift: expected {EXPECTED_ARTIFACT_FINGERPRINT}, "
+            f"Artifact fingerprint drift: expected {expected_fingerprint}, "
             f"found {embedded}. Refusing to bind the probe to unknown evidence."
         )
     file_sha = f"sha256:{hashlib.sha256(raw_bytes).hexdigest()}"
     upstream = GenerationUpstream(
-        artifact_path=ARTIFACT_PATH,
+        artifact_path=artifact_path,
         artifact_sha256=file_sha,
         artifact_schema_version=artifact["schema_version"],
         model=PROBE_MODEL,
         system_prompt_sha256=GENERATION_SYSTEM_PROMPT_FINGERPRINT,
-        context_strategy=PROBE_CONTEXT_STRATEGY,
+        context_strategy=context_strategy,
     )
     return artifact, upstream
 
@@ -271,21 +301,42 @@ def main(argv: list[str] | None = None) -> int:
         default=SUMMARY_PATH,
         help="Override the probe summary output path.",
     )
+    parser.add_argument(
+        "--artifact",
+        type=Path,
+        default=ARTIFACT_PATH,
+        help="Phase 1 artifact to probe.",
+    )
+    parser.add_argument(
+        "--expected-fingerprint",
+        default=EXPECTED_ARTIFACT_FINGERPRINT,
+        help="Embedded Phase 1 artifact fingerprint.",
+    )
+    parser.add_argument(
+        "--context-strategy",
+        choices=[CONTEXT_STRATEGY_SELECTIVE_V2, CONTEXT_STRATEGY_SELECTIVE_V7],
+        default=PROBE_CONTEXT_STRATEGY,
+        help="Context strategy used for the probe binding.",
+    )
     args = parser.parse_args(argv)
-    selected_questions = args.question or PROBE_QUESTIONS
+    selected_questions = args.question or DEFAULT_PROBE_QUESTIONS
 
     for path in (args.gen_checkpoint, args.judge_checkpoint):
         if args.fresh and path.exists():
             path.unlink()
             logger.info("Deleted stale probe checkpoint: %s", path)
 
-    artifact, upstream = _load_artifact_and_binding()
+    artifact, upstream = _load_artifact_and_binding(
+        args.artifact,
+        args.expected_fingerprint,
+        args.context_strategy,
+    )
     case_by_question = {case["question"]: case for case in artifact["cases"]}
     missing = [q for q in selected_questions if q not in case_by_question]
     if missing:
         raise RuntimeError(f"Probe questions absent from artifact: {missing}")
     evidence_contexts = build_probe_contexts(
-        case_by_question, selected_questions
+        case_by_question, selected_questions, args.context_strategy
     )
 
     def probe_context(case_payload: dict) -> str:
@@ -465,11 +516,11 @@ def main(argv: list[str] | None = None) -> int:
             "forced false: quota probe subset with self-judge bias; never a benchmark"
         ),
         "model": PROBE_MODEL,
-        "context_strategy": PROBE_CONTEXT_STRATEGY,
+        "context_strategy": args.context_strategy,
         "self_judge_bias": (
             "generation and judging share one model; scores are directional only"
         ),
-        "bound_artifact_fingerprint": EXPECTED_ARTIFACT_FINGERPRINT,
+        "bound_artifact_fingerprint": args.expected_fingerprint,
         "binding": upstream.binding,
         "selected_questions": selected_questions,
         "stopped_reason": stopped_reason,

@@ -5,22 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-
-COMPANY_ALIASES = {
-    "AAPL": ("apple",),
-    "MSFT": ("microsoft",),
-    "AMZN": ("amazon",),
-    "GOOGL": ("alphabet", "google"),
-    "META": ("meta", "facebook"),
-    "NVDA": ("nvidia",),
-    "TSLA": ("tesla",),
-    "MS": ("morgan stanley",),
-    "MCD": ("mcdonald's", "mcdonalds"),
-    "INTC": ("intel",),
-    "COST": ("costco",),
-    "GE": ("general electric", "ge aerospace"),
-    "HON": ("honeywell",),
-}
+from src.company_entities import COMPANY_ALIASES, detect_tickers
 VIETNAMESE_METRICS = {
     "doanh thu": "total revenue",
     "rủi ro": "risk factors",
@@ -39,15 +24,8 @@ class NormalizedQuery:
 
 def detect_ticker(question: str) -> str | None:
     """Return a single unambiguous ticker inferred from a query, if present."""
-    normalized = question.casefold()
-    matches = {
-        ticker
-        for ticker, aliases in COMPANY_ALIASES.items()
-        if any(re.search(rf"\b{re.escape(alias)}\b", normalized) for alias in aliases)
-    }
-    uppercase_tokens = set(re.findall(r"\b[A-Z]{1,5}(?:-[A-Z])?\b", question))
-    matches.update(ticker for ticker in COMPANY_ALIASES if ticker in uppercase_tokens)
-    return next(iter(matches)) if len(matches) == 1 else None
+    matches = detect_tickers(question)
+    return matches[0] if len(matches) == 1 else None
 
 
 def normalize_retrieval_question(question: str) -> NormalizedQuery:

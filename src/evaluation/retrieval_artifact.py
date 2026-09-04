@@ -160,6 +160,8 @@ def build_retrieval_artifact(
     all_chunks: list[dict],
     top_k: int,
     plan_provenance: dict[str, Any] | None = None,
+    selection_provenance: dict[str, Any] | None = None,
+    route_policy: str = "frozen_official_v2",
 ) -> dict[str, Any]:
     """Assemble the canonical Phase 1 artifact (no timestamps inside)."""
     plan_by_question = {plan.question: plan for plan in plans}
@@ -206,7 +208,7 @@ def build_retrieval_artifact(
         "lexical_ladder": LEXICAL_LADDER_FINGERPRINT,
         "retrieval_config": _sha256_text(
             json.dumps(
-                {"top_k": top_k, "route_policy": "frozen_official_v2"},
+                {"top_k": top_k, "route_policy": route_policy},
                 sort_keys=True,
             )
         ),
@@ -220,6 +222,8 @@ def build_retrieval_artifact(
     }
     if plan_provenance is not None:
         artifact_core["provenance"] = plan_provenance
+    if selection_provenance is not None:
+        artifact_core["selection"] = selection_provenance
     artifact_core["fingerprints"]["artifact"] = _sha256_text(
         canonical_json(artifact_core).decode("utf-8")
     )

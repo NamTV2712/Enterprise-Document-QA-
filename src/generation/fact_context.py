@@ -43,6 +43,34 @@ FACT_CONTEXT_SELECTOR_FINGERPRINT = "sha256:" + hashlib.sha256(
     ).encode("utf-8")
 ).hexdigest()
 
+# V1 remains frozen for historical artifacts. V2 only broadens safe profile
+# normalization for generalization cases; it is selected explicitly by a new
+# context strategy and therefore receives a new binding fingerprint.
+FACT_CONTEXT_SELECTOR_VERSION_V2 = 2
+FACT_CONTEXT_STRATEGY_V2 = "fact_evidence_sufficiency_v2"
+FACT_CONTEXT_SELECTOR_FINGERPRINT_V2 = "sha256:" + hashlib.sha256(
+    json.dumps(
+        {
+            "version": FACT_CONTEXT_SELECTOR_VERSION_V2,
+            "based_on": FACT_CONTEXT_SELECTOR_FINGERPRINT,
+            "owner_scope": "remove possessive owner terms after ticker/section scoping",
+            "scaffolding": "years is non-semantic question scaffolding",
+            "metric_precedence": ["net_income", "operating_income", "income"],
+            "tier_order": [
+                "structured_exact",
+                "exact_phrase",
+                "full_terms",
+                "partial_terms_support_only",
+                "fuzzy_diagnostic_only",
+            ],
+            "partial_authority": False,
+            "fuzzy_authority": False,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+).hexdigest()
+
 STRUCTURED_EXACT_SCORE = 10.0
 
 _YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
@@ -85,6 +113,7 @@ _QUESTION_STOPWORDS = {
     "who",
     "year",
 }
+_QUESTION_STOPWORDS_V2 = _QUESTION_STOPWORDS | {"years"}
 
 _ENTITY_ALIASES = {
     "aapl": {"aapl", "apple", "apples"},
@@ -98,6 +127,21 @@ _METRIC_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("net_sales", ("net sales", "sales")),
     ("total_assets", ("total assets", "assets")),
     ("operating_income", ("operating income",)),
+    ("auditor", ("auditor", "audited", "audit", "accounting firm")),
+    (
+        "financial_statements",
+        ("financial statements", "financial statement"),
+    ),
+    ("revenue", ("revenue", "net sales", "sales")),
+    ("segments", ("business segments", "segments")),
+    ("income", ("income",)),
+)
+
+_METRIC_GROUPS_V2: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("net_sales", ("net sales", "sales")),
+    ("total_assets", ("total assets", "assets")),
+    ("operating_income", ("operating income",)),
+    ("net_income", ("net income", "income")),
     ("auditor", ("auditor", "audited", "audit", "accounting firm")),
     (
         "financial_statements",
@@ -188,7 +232,39 @@ class FactQueryProfile:
         return self.partial_terms
 
 
-def _profile(case_payload: dict[str, Any]) -> FactQueryProfile:
+def _possessive_owner_tokens(text: str) -> set[str]:
+    """Return owner words already enforced by query ticker/section scope."""
+    match = re.search(
+        r"(?P<owner>[A-Za-z][A-Za-z .&-]*?)['’]s\b",
+        text,
+    )
+    if match is None:
+        return set()
+    scaffolding = {
+        "a",
+        "an",
+        "are",
+        "did",
+        "does",
+        "how",
+        "is",
+        "the",
+        "what",
+        "was",
+        "were",
+    }
+    return {
+        token
+        for token in _TOKEN_RE.findall(match.group("owner").casefold())
+        if token not in scaffolding
+    }
+
+
+def _profile(
+    case_payload: dict[str, Any],
+    *,
+    selector_version: int = FACT_CONTEXT_SELECTOR_VERSION,
+) -> FactQueryProfile:
     query_entry = _query_entry(case_payload)
     query = (query_entry or {}).get("query") or {}
     text = (
@@ -204,14 +280,20 @@ def _profile(case_payload: dict[str, Any]) -> FactQueryProfile:
     section = section if isinstance(section, str) and section else None
     periods = tuple(dict.fromkeys(_YEAR_RE.findall(normalised)))
     groups: list[tuple[str, tuple[str, ...]]] = []
-    for name, aliases in _METRIC_GROUPS:
+    metric_groups = (
+        _METRIC_GROUPS_V2
+        if selector_version >= FACT_CONTEXT_SELECTOR_VERSION_V2
+        else _METRIC_GROUPS
+    )
+    for name, aliases in metric_groups:
         if any(_normalise(alias) in normalised for alias in aliases):
             if name == "revenue" and any(
                 group_name == "net_sales" for group_name, _ in groups
             ):
                 continue
             if name == "income" and any(
-                group_name == "operating_income" for group_name, _ in groups
+                group_name in {"operating_income", "net_income"}
+                for group_name, _ in groups
             ):
                 continue
             selected_aliases = aliases
@@ -219,15 +301,24 @@ def _profile(case_payload: dict[str, Any]) -> FactQueryProfile:
                 selected_aliases = ("net sales",)
             elif name == "total_assets" and "total assets" in normalised:
                 selected_aliases = ("total assets",)
+            elif name == "net_income" and "net income" in normalised:
+                selected_aliases = ("net income",)
             groups.append((name, selected_aliases))
 
     # Preserve meaningful residual terms such as "AWS" that are not a
     # generic metric alias. Entity names and question scaffolding are excluded.
     entity_words = _ENTITY_ALIASES.get((ticker or "").casefold(), set())
+    if selector_version >= FACT_CONTEXT_SELECTOR_VERSION_V2:
+        entity_words = entity_words | _possessive_owner_tokens(text)
+    question_stopwords = (
+        _QUESTION_STOPWORDS_V2
+        if selector_version >= FACT_CONTEXT_SELECTOR_VERSION_V2
+        else _QUESTION_STOPWORDS
+    )
     residual_tokens = []
     for token in _TOKEN_RE.findall(normalised):
         if (
-            token in _QUESTION_STOPWORDS
+            token in question_stopwords
             or token in entity_words
             or token in periods
             or len(token) < 3
@@ -299,7 +390,14 @@ def _self_contained(entry: dict[str, Any], profile: FactQueryProfile) -> bool:
     for name, aliases in profile.metric_groups:
         if not _matches_group(text, aliases):
             return False
-        if name in {"net_sales", "total_assets", "operating_income", "revenue", "income"}:
+        if name in {
+            "net_sales",
+            "total_assets",
+            "operating_income",
+            "net_income",
+            "revenue",
+            "income",
+        }:
             if not _has_value_anchor(text, aliases):
                 return False
     return True
@@ -367,11 +465,15 @@ class FactContextSelection:
         return self.tier in {"structured_exact", "exact_phrase", "full_terms"}
 
 
-def select_fact_context(case_payload: dict[str, Any]) -> FactContextSelection:
+def _select_fact_context(
+    case_payload: dict[str, Any],
+    *,
+    selector_version: int,
+) -> FactContextSelection:
     """Select one self-contained fact chunk, or preserve all evidence."""
     entries = _dedupe_entries(case_payload)
     all_ids = tuple(entry.get("chunk_id") for entry in entries)
-    profile = _profile(case_payload)
+    profile = _profile(case_payload, selector_version=selector_version)
     if case_payload.get("category") != "fact_lookup" or not entries:
         return FactContextSelection("not_applicable", profile, all_ids, all_ids)
 
@@ -425,6 +527,22 @@ def select_fact_context(case_payload: dict[str, Any]) -> FactContextSelection:
     )
 
 
+def select_fact_context(case_payload: dict[str, Any]) -> FactContextSelection:
+    """Select one self-contained fact chunk using the frozen V1 profile."""
+    return _select_fact_context(
+        case_payload,
+        selector_version=FACT_CONTEXT_SELECTOR_VERSION,
+    )
+
+
+def select_fact_context_v2(case_payload: dict[str, Any]) -> FactContextSelection:
+    """Select one self-contained fact chunk using the explicit V2 profile."""
+    return _select_fact_context(
+        case_payload,
+        selector_version=FACT_CONTEXT_SELECTOR_VERSION_V2,
+    )
+
+
 def selected_fact_entries(
     case_payload: dict[str, Any],
     selection: FactContextSelection | None = None,
@@ -433,3 +551,8 @@ def selected_fact_entries(
     selection = selection or select_fact_context(case_payload)
     selected = set(selection.kept_ids)
     return [entry for entry in _dedupe_entries(case_payload) if entry.get("chunk_id") in selected]
+
+
+def selected_fact_entries_v2(case_payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return entries selected by the explicit V2 fact selector."""
+    return selected_fact_entries(case_payload, select_fact_context_v2(case_payload))

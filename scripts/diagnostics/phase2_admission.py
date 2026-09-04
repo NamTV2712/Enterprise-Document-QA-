@@ -35,16 +35,23 @@ from src.evaluation.context_packing import (
     CONTEXT_STRATEGY_SELECTIVE_V4,
     CONTEXT_STRATEGY_SELECTIVE_V5,
     CONTEXT_STRATEGY_SELECTIVE_V6,
+    CONTEXT_STRATEGY_SELECTIVE_V7,
     render_case_context,
 )
 from src.evaluation.generation_checkpoint import parse_evidence_context
 from src.evaluation.test_set import TEST_SET
+from src.generation.fact_context import select_fact_context_v2
+from src.generation.comparative_answerability import (
+    assess_comparative_answerability,
+)
 
 
 BASELINE_RESULTS = Path(
     "data/eval_artifacts/phase2_results_packed_selective_v2.json"
 )
-ARTIFACT_PATH = Path("data/eval_artifacts/phase1_priority2.json")
+ARTIFACT_PATH = Path(
+    "data/eval_artifacts/phase1_priority2_financial_table_units.json"
+)
 DEFAULT_OUTPUT = Path("data/diagnostics/phase2_admission.json")
 
 ADMISSION_METRIC_KEYS = (
@@ -66,6 +73,7 @@ SUPPORTED_CANDIDATE_STRATEGIES = {
     CONTEXT_STRATEGY_SELECTIVE_V4,
     CONTEXT_STRATEGY_SELECTIVE_V5,
     CONTEXT_STRATEGY_SELECTIVE_V6,
+    CONTEXT_STRATEGY_SELECTIVE_V7,
     CONTEXT_STRATEGY_COMPARATIVE_V3,
     CONTEXT_STRATEGY_COMPARATIVE_V4,
     CONTEXT_STRATEGY_COMPARATIVE_V5,
@@ -83,6 +91,16 @@ ENUMERATION_QUESTIONS = {
     case.question
     for case in TEST_SET
     if case.priority <= 2 and case.category == "enumeration"
+}
+ANSWERABILITY_QUESTIONS = {
+    case.question
+    for case in TEST_SET
+    if case.priority <= 2 and case.category == "comparative"
+}
+FACT_V2_QUESTIONS = {
+    case.question
+    for case in TEST_SET
+    if case.priority <= 2 and case.category == "fact_lookup"
 }
 
 
@@ -182,6 +200,10 @@ def _completion_gate(
         )
         for row in rows.values()
     )
+    has_answerability_metadata = any(
+        isinstance(row, dict) and "answerability_applicable" in row
+        for row in rows.values()
+    )
     valid_rows = True
     correction_limits_passed = True
     for question in expected_questions:
@@ -205,6 +227,15 @@ def _completion_gate(
                 or row.get("enumeration_applicable") is not expected_enumeration
             ):
                 valid_rows = False
+            if has_answerability_metadata:
+                expected_answerability = question in ANSWERABILITY_QUESTIONS
+                if row.get("answerability_applicable") is not expected_answerability:
+                    valid_rows = False
+                if (
+                    row.get("answerability_retry_required") is True
+                    and not (accepted and final_passed and final_grounding_passed)
+                ):
+                    valid_rows = False
             if expected_stability and (
                 row.get("final_stability_passed", True) is not True
                 or row.get("final_stability_missing_facts", []) != []
@@ -255,6 +286,8 @@ def _completion_gate(
             and rows[question].get("stability_applicable") is True
         )
     }
+    if has_answerability_metadata:
+        expected_applicable_questions.update(ANSWERABILITY_QUESTIONS)
     passed = (
         complete
         and (
@@ -270,6 +303,7 @@ def _completion_gate(
         "metadata_complete": complete,
         "applicable_questions": applicable_questions,
         "unified_metadata": has_unified_metadata,
+        "answerability_metadata": has_answerability_metadata,
         "rows_valid": valid_rows,
         "final_grounding_required": True,
         "final_grounding_scope": "applicable_answers_only",
@@ -280,9 +314,11 @@ def _completion_gate(
 
 def _target_gate(
     candidate_by_question: dict[str, dict[str, Any]],
+    completion_rows: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[bool, dict[str, Any]]:
     apple = candidate_by_question.get(APPLE_QUESTION, {})
     aws = candidate_by_question.get(AWS_QUESTION, {})
+    cloud = candidate_by_question.get(CLOUD_DEPENDENCY_QUESTION, {})
     apple_answer = (apple.get("answer") or "").casefold()
     aws_answer = aws.get("answer") or ""
     apple_passed = (
@@ -305,9 +341,190 @@ def _target_gate(
         and _score(aws, "answer_relevancy") is not None
         and _score(aws, "answer_relevancy") >= 0.90
     )
-    return apple_passed and aws_passed, {
+    cloud_completion = (completion_rows or {}).get(CLOUD_DEPENDENCY_QUESTION) or {}
+    # Old candidate fixtures predate the answerability guard. Keep their
+    # historical target contract intact; new candidates opt into this gate by
+    # persisting the unified answerability metadata.
+    answerability_enabled = "answerability_applicable" in cloud_completion
+    cloud_answer = (cloud.get("answer") or "").casefold()
+    cloud_passed = (
+        not answerability_enabled
+        or (
+            cloud_completion.get("answerability_applicable") is True
+            and cloud_completion.get("answerability_evidence_sufficient") is True
+            and cloud_completion.get("final_passed") is True
+            and cloud_completion.get("final_grounding_passed") is True
+            and "could not find sufficient information" not in cloud_answer
+            and "cloud" in cloud_answer
+            and "services" in cloud_answer
+            and _score(cloud, "faithfulness") == 1.0
+            and _score(cloud, "answer_relevancy") >= 0.95
+        )
+    )
+    return apple_passed and aws_passed and cloud_passed, {
         "apple_approach": apple_passed,
         "aws_period_value_pairs": aws_passed,
+        "cloud_dependency_answerability": cloud_passed,
+    }
+
+
+CLOUD_DEPENDENCY_QUESTION = (
+    "Which company depends more on cloud/subscription revenue, Microsoft or Apple?"
+)
+
+
+def _answerability_gate(
+    candidate_by_question: dict[str, dict[str, Any]],
+    artifact_by_question: dict[str, dict[str, Any]],
+    test_by_question: dict[str, Any],
+    candidate_strategy: str,
+    completion_rows: dict[str, dict[str, Any]],
+) -> tuple[bool, dict[str, Any]]:
+    """Recompute the comparative answerability contract provider-free."""
+    if not any(
+        isinstance(row, dict) and "answerability_applicable" in row
+        for row in completion_rows.values()
+    ):
+        return True, {"applicable": False, "reason": "legacy candidate metadata"}
+
+    rows: dict[str, dict[str, Any]] = {}
+    for question in sorted(ANSWERABILITY_QUESTIONS):
+        artifact_case = artifact_by_question[question]
+        test_case = test_by_question[question]
+        context = render_case_context(
+            artifact_case,
+            required_keywords=test_case.required_keywords,
+            strategy=candidate_strategy,
+        )
+        candidate_case = candidate_by_question.get(question, {})
+        completion = completion_rows.get(question) or {}
+        answer = candidate_case.get("answer") or ""
+        assessment = assess_comparative_answerability(question, context, answer)
+        metadata_matches = (
+            completion.get("answerability_applicable") is assessment.applicable
+            and completion.get("answerability_evidence_sufficient")
+            is assessment.evidence_sufficient
+            and tuple(completion.get("answerability_expected_tickers") or ())
+            == assessment.expected_tickers
+            and tuple(completion.get("answerability_missing_tickers") or ())
+            == assessment.missing_tickers
+        )
+        safe_final = not (
+            assessment.evidence_sufficient and assessment.draft_is_fallback
+        )
+        rows[question] = {
+            "metadata_matches": metadata_matches,
+            "evidence_sufficient": assessment.evidence_sufficient,
+            "final_fallback": assessment.draft_is_fallback,
+            "safe_final": safe_final,
+            "retry_required_recorded": completion.get(
+                "answerability_retry_required"
+            ),
+            "expected_tickers": list(assessment.expected_tickers),
+            "evidenced_tickers": list(assessment.evidenced_tickers),
+            "missing_tickers": list(assessment.missing_tickers),
+        }
+    passed = all(
+        row["metadata_matches"] and row["safe_final"]
+        for row in rows.values()
+    )
+    return passed, {
+        "applicable": True,
+        "strategy": candidate_strategy,
+        "case_count": len(rows),
+        "cases": rows,
+    }
+
+
+def _fact_v2_gate(
+    candidate_by_question: dict[str, dict[str, Any]],
+    artifact_by_question: dict[str, dict[str, Any]],
+    test_by_question: dict[str, Any],
+    candidate_strategy: str,
+) -> tuple[bool, dict[str, Any]]:
+    """Audit the additional V2 fact-context contract for a V7 candidate."""
+    if candidate_strategy != CONTEXT_STRATEGY_SELECTIVE_V7:
+        return True, {"applicable": False, "reason": "not a V7 candidate"}
+
+    fact_rows: dict[str, dict[str, Any]] = {}
+    selected_fact_questions = FACT_V2_QUESTIONS & set(artifact_by_question)
+    for question in sorted(selected_fact_questions):
+        artifact_case = artifact_by_question[question]
+        test_case = test_by_question[question]
+        selection = select_fact_context_v2(artifact_case)
+        v7_context = render_case_context(
+            artifact_case,
+            required_keywords=test_case.required_keywords,
+            strategy=CONTEXT_STRATEGY_SELECTIVE_V7,
+        )
+        candidate_case = candidate_by_question.get(question, {})
+        scores = candidate_case.get("scores") or {}
+        fact_rows[question] = {
+            "selector_safe": selection.safe,
+            "selector_tier": selection.tier,
+            "selector_one_source": len(parse_evidence_context(v7_context)) == 1,
+            "faithfulness_exact_one": scores.get("faithfulness") == 1.0,
+            "answer_relevancy_floor": (
+                isinstance(scores.get("answer_relevancy"), (int, float))
+                and scores["answer_relevancy"] >= 0.95
+            ),
+            "context_precision_target": (
+                isinstance(scores.get("context_precision"), (int, float))
+                and scores["context_precision"] >= 0.90
+            ),
+            "scores": scores,
+        }
+
+    non_fact_contexts_unchanged = True
+    non_fact_rows: dict[str, bool] = {}
+    for question in sorted(set(artifact_by_question) - FACT_V2_QUESTIONS):
+        artifact_case = artifact_by_question[question]
+        test_case = test_by_question[question]
+        v5_context = render_case_context(
+            artifact_case,
+            required_keywords=test_case.required_keywords,
+            strategy=CONTEXT_STRATEGY_SELECTIVE_V5,
+        )
+        v7_context = render_case_context(
+            artifact_case,
+            required_keywords=test_case.required_keywords,
+            strategy=CONTEXT_STRATEGY_SELECTIVE_V7,
+        )
+        unchanged = v5_context == v7_context
+        non_fact_rows[question] = unchanged
+        non_fact_contexts_unchanged = non_fact_contexts_unchanged and unchanged
+
+    fact_passed = all(
+        row["selector_safe"]
+        and row["selector_one_source"]
+        and row["faithfulness_exact_one"]
+        and row["answer_relevancy_floor"]
+        and row["context_precision_target"]
+        for row in fact_rows.values()
+    ) and len(fact_rows) == len(FACT_V2_QUESTIONS)
+    aggregate_cp = [
+        float(row["scores"]["context_precision"])
+        for row in fact_rows.values()
+        if isinstance(row["scores"].get("context_precision"), (int, float))
+    ]
+    aggregate_cp_value = (
+        round(sum(aggregate_cp) / len(aggregate_cp), 4)
+        if len(aggregate_cp) == len(fact_rows) and aggregate_cp
+        else None
+    )
+    passed = (
+        fact_passed
+        and aggregate_cp_value is not None
+        and aggregate_cp_value >= 0.90
+        and non_fact_contexts_unchanged
+    )
+    return passed, {
+        "applicable": True,
+        "fact_case_count": len(fact_rows),
+        "fact_cases": fact_rows,
+        "fact_context_precision_average": aggregate_cp_value,
+        "non_fact_contexts_unchanged": non_fact_contexts_unchanged,
+        "non_fact_context_rows": non_fact_rows,
     }
 
 
@@ -441,6 +658,20 @@ def run(
     metric_thresholds = _metric_thresholds(baseline_metrics)
     metric_gates = _aggregate_metric_gates(candidate, metric_thresholds)
     completion_passed, completion_detail = _completion_gate(candidate, expected)
+    completion_rows = candidate.get("period_value_corrections") or {}
+    answerability_passed, answerability_detail = _answerability_gate(
+        candidate_by_question,
+        artifact_by_question,
+        test_by_question,
+        candidate_strategy,
+        completion_rows,
+    )
+    fact_v2_passed, fact_v2_detail = _fact_v2_gate(
+        candidate_by_question,
+        artifact_by_question,
+        test_by_question,
+        candidate_strategy,
+    )
 
     integrity_rows = [
         _case_integrity(
@@ -470,7 +701,9 @@ def run(
             row["answerable_fallback"] for row in integrity_rows
         ) == 0,
     }
-    target_passed, target_detail = _target_gate(candidate_by_question)
+    target_passed, target_detail = _target_gate(
+        candidate_by_question, completion_rows
+    )
 
     baseline_cases = {
         case.get("question"): case for case in baseline.get("cases", [])
@@ -501,6 +734,8 @@ def run(
         **{f"aggregate_{key}": value for key, value in metric_gates.items()},
         **{f"integrity_{key}": value for key, value in integrity.items()},
         "completion_policy": completion_passed,
+        "answerability_contract": answerability_passed,
+        "fact_v2_contract": fact_v2_passed,
         "target_cases": target_passed,
         "non_target_regression": regression["no_non_target_semantic_regression"],
     }
@@ -525,6 +760,8 @@ def run(
         "structural": structural,
         "aggregate_metric_gates": metric_gates,
         "completion": completion_detail,
+        "answerability": answerability_detail,
+        "fact_v2": fact_v2_detail,
         "target": target_detail,
         "integrity": integrity,
         "integrity_cases": integrity_rows,

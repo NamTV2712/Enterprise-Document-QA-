@@ -45,6 +45,13 @@ from src.evaluation.retrieval_plan import (
     validate_plan_filters,
     validate_plans_cover,
 )
+from src.evaluation.p3_shadow_plan import (
+    P3_SHADOW_PRIORITY,
+    build_priority3_shadow_plans,
+    priority3_shadow_plan_provenance,
+    validate_priority3_shadow_plans,
+)
+from src.evaluation.test_case_selector import select_test_cases
 from src.evaluation.test_set import TEST_SET
 from src.memory.query_rewriter import needs_financial_expansion
 from src.retrieval.chunk_loader import load_retrieval_chunks
@@ -159,6 +166,11 @@ def _print_stats(artifact: dict) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--priority", type=int, default=2)
+    parser.add_argument(
+        "--exact-priority",
+        action="store_true",
+        help="Select only cases whose priority equals --priority.",
+    )
     parser.add_argument("--category", action="append", default=[])
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
@@ -178,26 +190,41 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    test_cases = [tc for tc in TEST_SET if tc.priority <= args.priority]
-    if args.category:
-        selected_categories = set(args.category)
-        test_cases = [tc for tc in test_cases if tc.category in selected_categories]
+    selection = select_test_cases(
+        TEST_SET,
+        priority=args.priority,
+        exact_priority=args.exact_priority,
+        categories=args.category,
+    )
+    test_cases = list(selection.cases)
     selected_questions = {tc.question for tc in test_cases}
     logger.info(
-        "Phase 1 over %d/%d test cases (priority <= %d)",
-        len(test_cases), len(TEST_SET), args.priority,
+        "Phase 1 over %d/%d test cases (%s)",
+        len(test_cases), len(TEST_SET), selection.scope,
     )
 
-    # Code-owned override questions have no legacy official-artifact
-    # record (e.g. after the FY2024 contract rename); their plans come
-    # entirely from the frozen planner snapshot.
-    plans = load_fixed_plans(
-        args.official_artifact, selected_questions - {OVERRIDE_QUESTION}
-    )
-    plans, plan_provenance = apply_frozen_plan_overrides(
-        plans, selected_questions
-    )
-    validate_plans_cover(plans, test_cases)
+    if args.exact_priority and args.priority == P3_SHADOW_PRIORITY:
+        # Priority-3 has no legacy official-artifact coverage. Its plans are
+        # code-owned and human-reviewed, so loading the legacy artifact here
+        # would incorrectly suggest provider/planner provenance.
+        all_p3_plans = build_priority3_shadow_plans()
+        plans = [plan for plan in all_p3_plans if plan.question in selected_questions]
+        validate_priority3_shadow_plans(plans, test_cases)
+        plan_provenance = priority3_shadow_plan_provenance()
+        plan_provenance["determinism_verified"] = bool(args.verify_determinism)
+        plan_provenance["provider_calls"] = 0
+        plan_provenance["offline_socket_guard"] = not args.allow_network
+    else:
+        # Code-owned override questions have no legacy official-artifact
+        # record (e.g. after the FY2024 contract rename); their plans come
+        # entirely from the frozen planner snapshot.
+        plans = load_fixed_plans(
+            args.official_artifact, selected_questions - {OVERRIDE_QUESTION}
+        )
+        plans, plan_provenance = apply_frozen_plan_overrides(
+            plans, selected_questions
+        )
+        validate_plans_cover(plans, test_cases)
 
     def build_once(retriever: HybridRetriever, all_chunks: list[dict]) -> dict:
         results: list[CaseRetrievalResult] = []
@@ -218,6 +245,12 @@ def main(argv: list[str] | None = None) -> int:
             all_chunks=all_chunks,
             top_k=5,
             plan_provenance=plan_provenance,
+            selection_provenance=(selection.provenance() if args.exact_priority else None),
+            route_policy=(
+                "frozen_priority3_shadow_v1"
+                if args.exact_priority and args.priority == P3_SHADOW_PRIORITY
+                else "frozen_official_v2"
+            ),
         )
 
     guard = None if args.allow_network else offline_socket_guard()

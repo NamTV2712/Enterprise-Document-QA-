@@ -7,8 +7,10 @@ from bs4 import BeautifulSoup
 
 from src.ingestion.table_extractor import (
     extract_table_rows,
+    extract_table_unit,
     find_table_containing_text,
     get_table_caption,
+    rows_to_markdown,
 )
 
 
@@ -64,6 +66,51 @@ def test_caption_uses_previous_text_window() -> None:
     assert get_table_caption(soup.find("table")).startswith("Property and equipment")
 
 
+def test_table_unit_recovers_marker_after_legacy_caption_limit() -> None:
+    html = """
+    <div>Apple net sales are reported for countries that individually
+      accounted for ten percent or more of the respective totals, as well as
+      aggregate amounts for the remaining countries (in millions):</div>
+    <table>
+      <tr><td>2025</td><td>2024</td></tr>
+      <tr><td>Total net sales</td><td>$416,161</td><td>$391,035</td></tr>
+    </table>
+    """
+    soup = BeautifulSoup(html, "lxml")
+    table = soup.find("table")
+
+    assert len(get_table_caption(table)) == 150
+    assert extract_table_unit(table) == "USD in millions"
+    assert "Units: USD in millions" in rows_to_markdown(
+        extract_table_rows(table), table_unit=extract_table_unit(table)
+    )
+
+
+def test_table_unit_preserves_share_exception_without_unit_guessing() -> None:
+    html = """
+    <table>
+      <tr><td>2025</td><td>2024</td></tr>
+      <tr><td>(in millions, except per share data)</td></tr>
+      <tr><td>Total assets</td><td>$100</td><td>$90</td></tr>
+    </table>
+    """
+    soup = BeautifulSoup(html, "lxml")
+
+    assert extract_table_unit(soup.find("table")) == "USD in millions"
+
+
+def test_table_unit_returns_none_when_scale_is_not_explicit() -> None:
+    html = """
+    <table>
+      <tr><td>2025</td><td>2024</td></tr>
+      <tr><td>Total assets</td><td>$100</td><td>$90</td></tr>
+    </table>
+    """
+    soup = BeautifulSoup(html, "lxml")
+
+    assert extract_table_unit(soup.find("table")) is None
+
+
 def test_segment_header_row_prefixes_following_metrics() -> None:
     """One-cell segment headers should prefix following metric rows."""
     html = """
@@ -115,6 +162,7 @@ def test_aapl_total_net_sales_table() -> None:
         "2024": "391,035",
         "2023": "383,285",
     }
+    assert extract_table_unit(table) == "USD in millions"
 
 
 def test_msft_total_revenue_table_self_consistency() -> None:

@@ -554,6 +554,39 @@ def test_resume_refuses_mismatched_answer_completion_policy(upstream) -> None:
         )
 
 
+def test_resume_refuses_mismatched_answer_postprocessor_profile(upstream) -> None:
+    gen_upstream, store_path = upstream
+    store = GenerationCheckpointStore(store_path)
+    question = _case().question
+    payload = {question: {"queries": []}}
+
+    run_generation_phase(
+        [question],
+        payload,
+        gen_upstream,
+        lambda _prompt: "first",
+        store,
+        sleep_fn=lambda _seconds: None,
+    )
+    changed_profile = GenerationUpstream(
+        artifact_path=gen_upstream.artifact_path,
+        artifact_sha256=gen_upstream.artifact_sha256,
+        artifact_schema_version=gen_upstream.artifact_schema_version,
+        model=gen_upstream.model,
+        system_prompt_sha256=gen_upstream.system_prompt_sha256,
+        answer_postprocessor_profile_sha256="sha256:changed-profile",
+    )
+    with pytest.raises(RuntimeError, match="another binding"):
+        run_generation_phase(
+            [question],
+            payload,
+            changed_profile,
+            lambda _prompt: "second",
+            store,
+            sleep_fn=lambda _seconds: None,
+        )
+
+
 def test_resume_refuses_mismatched_system_prompt(upstream) -> None:
     gen_upstream, store_path = upstream
     store = GenerationCheckpointStore(store_path)

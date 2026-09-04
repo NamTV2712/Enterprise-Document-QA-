@@ -315,11 +315,12 @@ class Generator:
         user_message = _build_user_message(query, chunks)
 
         evidence_context = render_chunk_evidence(chunks)
-        from src.generation.answer_completion import assess_answer_completion
+        from src.generation.answer_completion import (
+            assess_answer_completion,
+            answer_completion_requires_buffering,
+        )
 
-        applicable = assess_answer_completion(
-            query, evidence_context, ""
-        ).correction_required
+        applicable = answer_completion_requires_buffering(query, evidence_context)
         if not applicable:
             yield from self._call_groq_stream(
                 user_message,

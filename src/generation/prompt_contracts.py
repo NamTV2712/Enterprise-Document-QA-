@@ -3,6 +3,7 @@
 import hashlib
 import re
 
+from src.company_entities import detect_tickers
 from src.generation.enumeration_completeness import (
     ENUMERATION_COMPLETENESS_FINGERPRINT,
     enumeration_kind,
@@ -108,6 +109,36 @@ RISK_COMPARISON_CONTRACT_FINGERPRINT = "sha256:" + hashlib.sha256(
 ).hexdigest()
 
 
+COMPARATIVE_NUMERIC_UNIT_CONTRACT = (
+    "For a numeric comparison between multiple companies, answer in two to four "
+    "concise sentences: keep every reported figure and its original unit attached, "
+    "do not compare bare digit strings, and make the conclusion explicitly account "
+    "for differing units without emitting a converted number or derived ratio. "
+    "If the filings disclose related but non-identical measures (for example, "
+    "cloud revenue versus total services net sales), label them as proxies and "
+    "do not claim that they are the same metric or that both are the same share "
+    "of total revenue unless the evidence explicitly says so. Avoid meta-commentary "
+    "about the prompt or the comparison procedure."
+)
+COMPARATIVE_NUMERIC_UNIT_CONTRACT_FINGERPRINT = "sha256:" + hashlib.sha256(
+    COMPARATIVE_NUMERIC_UNIT_CONTRACT.encode("utf-8")
+).hexdigest()
+_COMPARATIVE_NUMERIC_RE = re.compile(
+    r"\b(depends?|higher|lower|more|less|revenue|sales|growth|value|amount)\b",
+    re.IGNORECASE,
+)
+
+
+def comparative_numeric_contract_for_question(question: str) -> str:
+    """Return unit-aware guidance only for multi-company numeric comparisons."""
+    return (
+        COMPARATIVE_NUMERIC_UNIT_CONTRACT
+        if len(detect_tickers(question)) >= 2
+        and _COMPARATIVE_NUMERIC_RE.search(question)
+        else ""
+    )
+
+
 ENUMERATION_COMPLETENESS_CONTRACT = (
     "For an exhaustive enumeration question, return a compact evidence-backed "
     "list. Include every distinct item explicitly exposed by the provided "
@@ -152,6 +183,7 @@ def answer_completion_contract_for_question(question: str) -> str:
             answer_focus_contract_for_question(question),
             risk_focus_contract_for_question(question),
             risk_comparison_contract_for_question(question),
+            comparative_numeric_contract_for_question(question),
             enumeration_contract_for_question(question),
         )
         if contract

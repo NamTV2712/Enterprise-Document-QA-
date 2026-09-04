@@ -11,7 +11,12 @@ from pathlib import Path
 import tiktoken
 from bs4 import Tag
 
-from src.ingestion.table_extractor import extract_table_rows, get_table_caption, rows_to_markdown
+from src.ingestion.table_extractor import (
+    extract_table_rows,
+    extract_table_unit,
+    get_table_caption,
+    rows_to_markdown,
+)
 
 logger = logging.getLogger(__name__)
 ENCODING = tiktoken.get_encoding("cl100k_base")
@@ -143,7 +148,11 @@ def build_table_chunks(
             continue
 
         caption = get_table_caption(table)
-        markdown = rows_to_markdown(rows, table_name=caption)
+        markdown = rows_to_markdown(
+            rows,
+            table_name=caption,
+            table_unit=extract_table_unit(table),
+        )
         token_count = count_tokens(markdown)
 
         if token_count > CHUNK_CONFIG["financial_statements"]["chunk_size"]:

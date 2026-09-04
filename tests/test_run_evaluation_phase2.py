@@ -22,6 +22,7 @@ from src.evaluation.context_packing import (
     CONTEXT_STRATEGY_COMPARATIVE_V5,
     CONTEXT_STRATEGY_SELECTIVE_V2,
     CONTEXT_STRATEGY_SELECTIVE_V4,
+    CONTEXT_STRATEGY_SELECTIVE_V7,
 )
 from src.evaluation.generation_checkpoint import (
     GenerationCheckpointStore,
@@ -400,7 +401,7 @@ def test_load_bound_artifact_refuses_missing_lexical_ladder_provenance(
 
 # The FY2026-corpus Phase 1 rebuild; both runners must bind to exactly this.
 CURRENT_ARTIFACT_FINGERPRINT = (
-    "sha256:1ad021ce72af2116f9b4f7ad780d5c6e809fd5a01e46d30d0ae4bfecd62599d9"
+    "sha256:f6d2cada527b6ded976570b2065ae6150d5868aaee4ecfc3201d7d46d0a41460"
 )
 SUPERSEDED_FINGERPRINTS = {
     # Pre-shaper schema-v1 artifact on the IBM companion corpus.
@@ -565,6 +566,24 @@ def test_candidate_priority_two_accepts_enumeration_reproducibility(
     require_reproducibility_report(
         report_path,
         CONTEXT_STRATEGY_SELECTIVE_V5,
+    )
+
+
+def test_candidate_priority_two_accepts_priority3_fact_v2_reproducibility(
+    tmp_path: Path,
+) -> None:
+    from src.evaluation.context_packing import (
+        CONTEXT_STRATEGY_SELECTIVE_V7,
+    )
+
+    report = _passing_reproducibility_report(CONTEXT_STRATEGY_SELECTIVE_V7)
+    report["audit"] = "priority3_fact_v2_reproducibility"
+    report_path = tmp_path / "priority3-fact-v2-repro.json"
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+
+    require_reproducibility_report(
+        report_path,
+        CONTEXT_STRATEGY_SELECTIVE_V7,
     )
 
 

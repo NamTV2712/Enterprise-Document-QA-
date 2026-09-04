@@ -32,6 +32,7 @@ class PlanQuery:
         "saved_subquery",
         "original_proxy_missing_rewrite",
         "planner_snapshot",
+        "human_reviewed_p3",
     ]
 
 

@@ -74,11 +74,17 @@ from src.evaluation.context_packing import (
     CONTEXT_STRATEGY_SELECTIVE_V4,
     CONTEXT_STRATEGY_SELECTIVE_V5,
     CONTEXT_STRATEGY_SELECTIVE_V6,
+    CONTEXT_STRATEGY_SELECTIVE_V7,
     render_case_context,
 )
 from src.evaluation.test_set import TEST_SET, TestCase
+from src.evaluation.test_case_selector import select_test_cases
 from src.generation.generator import Generator
 from src.generation.answer_completion import ANSWER_COMPLETION_FINGERPRINT
+from src.evaluation.answer_postprocessor_profile import (
+    ANSWER_POSTPROCESSOR_PROFILE_PROVIDER_DRAFT,
+    build_answer_postprocessor_profile,
+)
 from src.retrieval.lexical_ladder import LEXICAL_LADDER_FINGERPRINT
 from src.retrieval.query_shaper import QUERY_SHAPER_FINGERPRINT
 
@@ -89,11 +95,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 EVAL_MODEL = "openai/gpt-oss-120b"
-ARTIFACT_PATH = Path("data/eval_artifacts/phase1_priority2.json")
+ARTIFACT_PATH = Path(
+    "data/eval_artifacts/phase1_priority2_financial_table_units.json"
+)
+PRIORITY3_SHADOW_ARTIFACT_PATH = Path(
+    "data/eval_artifacts/phase1_priority3_shadow_v1.json"
+)
 # Must match scripts.run_quota_probe.EXPECTED_ARTIFACT_FINGERPRINT; both
 # runners refuse to bind to any other frozen evidence.
 EXPECTED_ARTIFACT_FINGERPRINT = (
-    "sha256:1ad021ce72af2116f9b4f7ad780d5c6e809fd5a01e46d30d0ae4bfecd62599d9"
+    "sha256:f6d2cada527b6ded976570b2065ae6150d5868aaee4ecfc3201d7d46d0a41460"
 )
 GEN_CHECKPOINT_PATH = Path("data/eval_artifacts/phase2_gen.jsonl")
 JUDGE_CHECKPOINT_PATH = Path("data/eval_artifacts/phase2_judge.jsonl")
@@ -130,6 +141,9 @@ REPRODUCIBILITY_AUDITS = {
     "answer_scope_reproducibility_v17",
     "answer_scope_reproducibility_v18",
     "answer_scope_reproducibility_v19",
+    "priority3_fact_v2_reproducibility",
+    "priority2_fact_v2_compatibility_reproducibility",
+    "comparative_answerability_stability_v1_reproducibility",
 }
 UNIFIED_COMPLETION_REPRODUCIBILITY_AUDITS = {
     "enumeration_answer_completion_reproducibility",
@@ -173,6 +187,7 @@ def load_bound_artifact(
     artifact_path: Path,
     expected_fingerprint: str,
     context_strategy: str = CONTEXT_STRATEGY_FULL_EVIDENCE,
+    answer_postprocessor_profile_sha256: str = ANSWER_POSTPROCESSOR_PROFILE_PROVIDER_DRAFT,
 ) -> tuple[dict[str, Any], GenerationUpstream]:
     """Load the artifact and refuse any fingerprint drift."""
     if not artifact_path.exists():
@@ -209,18 +224,25 @@ def load_bound_artifact(
         model=EVAL_MODEL,
         system_prompt_sha256=GENERATION_SYSTEM_PROMPT_FINGERPRINT,
         context_strategy=context_strategy,
+        answer_postprocessor_profile_sha256=answer_postprocessor_profile_sha256,
     )
     return artifact, upstream
 
 
 def select_questions(
-    artifact: dict[str, Any], priority: int
+    artifact: dict[str, Any], priority: int, exact_priority: bool = False
 ) -> list[TestCase]:
     """Selected test cases whose frozen evidence exists in the artifact."""
     case_by_question = {
         case["question"]: case for case in artifact["cases"]
     }
-    selected = [tc for tc in TEST_SET if tc.priority <= priority]
+    selected = list(
+        select_test_cases(
+            TEST_SET,
+            priority=priority,
+            exact_priority=exact_priority,
+        ).cases
+    )
     missing = [
         tc.question for tc in selected if tc.question not in case_by_question
     ]
@@ -409,6 +431,8 @@ def run_phase2(
     answer_postprocessor: Callable[[str, str, str], str] | None = None,
     answer_completion_metadata: dict[str, dict[str, Any]] | None = None,
     publish_official: bool = True,
+    selection_provenance: dict[str, Any] | None = None,
+    force_non_official: bool = False,
 ) -> dict[str, Any]:
     """Execute both phases sequentially and compose the results payload.
 
@@ -535,7 +559,7 @@ def run_phase2(
         and stopped_reason is None
     )
     benchmark_eligible = bool(aggregate.get("official")) and complete
-    official = benchmark_eligible and publish_official
+    official = benchmark_eligible and publish_official and not force_non_official
     if benchmark_eligible and not publish_official:
         reason = (
             "provider-complete candidate: not published as official; "
@@ -578,7 +602,7 @@ def run_phase2(
         }
         cases.append(case_entry)
 
-    return {
+    summary = {
         "schema_version": RESULTS_SCHEMA_VERSION,
         "official": official,
         "provider_complete": complete,
@@ -587,6 +611,9 @@ def run_phase2(
         "model": EVAL_MODEL,
         "judge_model": EVAL_MODEL,
         "context_strategy": upstream.context_strategy,
+        "answer_postprocessor_profile_sha256": (
+            upstream.answer_postprocessor_profile_sha256
+        ),
         "num_selected": len(selected),
         "num_generation_ok": sum(
             1 for r in generation_records if r["status"] == GEN_STATUS_OK
@@ -604,6 +631,10 @@ def run_phase2(
         "period_value_corrections": answer_completion_metadata or {},
         "cases": cases,
     }
+    if selection_provenance is not None:
+        summary["selection"] = selection_provenance
+        summary["promotion_eligible"] = False if force_non_official else official
+    return summary
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -611,10 +642,15 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--priority", type=int, default=2)
-    parser.add_argument("--artifact", type=Path, default=ARTIFACT_PATH)
+    parser.add_argument(
+        "--exact-priority",
+        action="store_true",
+        help="Select only cases whose priority equals --priority.",
+    )
+    parser.add_argument("--artifact", type=Path, default=None)
     parser.add_argument(
         "--expected-fingerprint",
-        default=EXPECTED_ARTIFACT_FINGERPRINT,
+        default=None,
         help="Embedded artifact fingerprint the run binds to.",
     )
     parser.add_argument(
@@ -688,6 +724,7 @@ def main(argv: list[str] | None = None) -> int:
             CONTEXT_STRATEGY_SELECTIVE_V4,
             CONTEXT_STRATEGY_SELECTIVE_V5,
             CONTEXT_STRATEGY_SELECTIVE_V6,
+            CONTEXT_STRATEGY_SELECTIVE_V7,
         ],
         default=CONTEXT_STRATEGY_SELECTIVE_V5,
         help=(
@@ -700,6 +737,26 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    if args.artifact is None:
+        args.artifact = (
+            PRIORITY3_SHADOW_ARTIFACT_PATH
+            if args.exact_priority and args.priority == 3
+            else ARTIFACT_PATH
+        )
+    if args.expected_fingerprint is None:
+        if args.exact_priority:
+            try:
+                args.expected_fingerprint = json.loads(
+                    args.artifact.read_text(encoding="utf-8")
+                )["fingerprints"]["artifact"]
+            except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
+                raise SystemExit(
+                    "Exact-priority runs require the Phase 1 artifact's "
+                    f"embedded fingerprint: {exc}"
+                ) from exc
+        else:
+            args.expected_fingerprint = EXPECTED_ARTIFACT_FINGERPRINT
+
     packed_mode = args.context_strategy != CONTEXT_STRATEGY_FULL_EVIDENCE
     suffix = {
         CONTEXT_STRATEGY_ROUTE_AWARE: "_packed",
@@ -710,6 +767,7 @@ def main(argv: list[str] | None = None) -> int:
             CONTEXT_STRATEGY_SELECTIVE_V4: "_packed_selective_v4",
             CONTEXT_STRATEGY_SELECTIVE_V5: "_packed_selective_v5_enumeration",
             CONTEXT_STRATEGY_SELECTIVE_V6: "_packed_selective_v6_fact",
+            CONTEXT_STRATEGY_SELECTIVE_V7: "_packed_selective_v7_fact_generalization",
     }.get(args.context_strategy, "")
     if args.gen_checkpoint is None:
         args.gen_checkpoint = Path(
@@ -720,7 +778,11 @@ def main(argv: list[str] | None = None) -> int:
             str(JUDGE_CHECKPOINT_PATH).replace(".jsonl", f"{suffix}.jsonl")
         )
     if args.output is None:
-        args.output = Path(str(RESULTS_PATH).replace(".json", f"{suffix}.json"))
+        args.output = (
+            Path("data/eval_artifacts/phase2_results_priority3_shadow_v1.json")
+            if args.exact_priority and args.priority == 3
+            else Path(str(RESULTS_PATH).replace(".json", f"{suffix}.json"))
+        )
 
     assert_phase2_retrieval_hermeticity()
 
@@ -731,11 +793,13 @@ def main(argv: list[str] | None = None) -> int:
         )
     except OSError:
         output_is_official = args.output == OFFICIAL_SELECTIVE_V2_RESULTS_PATH
-    if output_is_official and not args.allow_official_overwrite:
+    if output_is_official and (
+        args.exact_priority or not args.allow_official_overwrite
+    ):
         raise SystemExit(
-            "Refusing to write the protected official selective-v2 result. "
-            "Pass an explicit candidate --output path; the official result "
-            "is changed only after a separate admission audit."
+            "Refusing to write the protected official selective-v2 result. Exact-priority "
+            "shadow runs are permanently non-official; other runs require an "
+            "explicit candidate path unless official overwrite is authorized."
         )
 
     if (
@@ -754,10 +818,49 @@ def main(argv: list[str] | None = None) -> int:
             path.unlink()
             logger.info("Deleted stale evaluation file: %s", path)
 
-    artifact, upstream = load_bound_artifact(
-        args.artifact, args.expected_fingerprint, args.context_strategy
+    answer_postprocessor_profile = build_answer_postprocessor_profile(
+        deterministic_risk_renderer=args.deterministic_risk_renderer,
+        deterministic_fact_renderer=args.deterministic_fact_renderer,
+        deterministic_revenue_renderer=args.deterministic_revenue_renderer,
     )
-    selected = select_questions(artifact, args.priority)
+    artifact, upstream = load_bound_artifact(
+        args.artifact,
+        args.expected_fingerprint,
+        args.context_strategy,
+        answer_postprocessor_profile,
+    )
+    selected = select_questions(artifact, args.priority, args.exact_priority)
+    selection_provenance = None
+    force_non_official = False
+    if args.exact_priority:
+        selection_provenance = artifact.get("selection")
+        expected_selection = select_test_cases(
+            TEST_SET,
+            priority=args.priority,
+            exact_priority=True,
+        ).provenance()
+        if not isinstance(selection_provenance, dict):
+            raise SystemExit(
+                "Exact-priority artifact is missing selection provenance. "
+                "Rebuild Phase 1 with --exact-priority."
+            )
+        required_selection_keys = (
+            "selector",
+            "selection_scope",
+            "priority",
+            "exact_priority",
+            "selected_case_count",
+            "selected_questions_sha256",
+        )
+        if any(
+            selection_provenance.get(key) != expected_selection.get(key)
+            for key in required_selection_keys
+        ):
+            raise SystemExit(
+                "Exact-priority artifact selection provenance does not match "
+                "the current shared selector."
+            )
+        force_non_official = True
     case_by_question = {
         case["question"]: case for case in artifact["cases"]
     }
@@ -816,6 +919,8 @@ def main(argv: list[str] | None = None) -> int:
         ),
         answer_completion_metadata=correction_rows,
         publish_official=output_is_official,
+        selection_provenance=selection_provenance,
+        force_non_official=force_non_official,
     )
     summary["token_usage_totals"] = tracker.totals
 

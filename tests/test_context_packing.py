@@ -16,6 +16,7 @@ from src.evaluation.context_packing import (
     CONTEXT_STRATEGY_SELECTIVE_V4,
     CONTEXT_STRATEGY_SELECTIVE_V5,
     CONTEXT_STRATEGY_SELECTIVE_V6,
+    CONTEXT_STRATEGY_SELECTIVE_V7,
     CONTEXT_STRATEGY_ENUMERATION_V1,
     PackedContext,
     collect_entries,
@@ -296,6 +297,20 @@ def test_selective_v6_changes_only_fact_lookup_from_admitted_v5() -> None:
     ) == CONTEXT_STRATEGY_ENUMERATION_V1
     assert effective_case_context_strategy(
         CONTEXT_STRATEGY_SELECTIVE_V6, "summary"
+    ) == CONTEXT_STRATEGY_ROUTE_AWARE
+
+
+def test_selective_v7_changes_only_fact_lookup_from_admitted_v5() -> None:
+    from src.generation.fact_context import FACT_CONTEXT_STRATEGY_V2
+
+    assert effective_case_context_strategy(
+        CONTEXT_STRATEGY_SELECTIVE_V7, "fact_lookup"
+    ) == FACT_CONTEXT_STRATEGY_V2
+    assert effective_case_context_strategy(
+        CONTEXT_STRATEGY_SELECTIVE_V7, "enumeration"
+    ) == CONTEXT_STRATEGY_ENUMERATION_V1
+    assert effective_case_context_strategy(
+        CONTEXT_STRATEGY_SELECTIVE_V7, "summary"
     ) == CONTEXT_STRATEGY_ROUTE_AWARE
 
 

@@ -95,29 +95,29 @@ TEST_SET: list[TestCase] = [
         priority=2,
     ),
     TestCase(
-        question="What was Visa's total assets?",
+        question="What was Visa's total assets in fiscal year 2025?",
         category="fact_lookup",
         ticker="V",
         section=None,
-        ground_truth="Visa's total assets were $99,627 million.",
+        ground_truth="Visa's total assets were $99,627 million in fiscal year 2025.",
         required_keywords=["99,627"],
         priority=3,
     ),
     TestCase(
-        question="What was Mastercard's total assets?",
+        question="What was Mastercard's total assets in fiscal year 2025?",
         category="fact_lookup",
         ticker="MA",
         section=None,
-        ground_truth="Mastercard's total assets were $54,157 million.",
+        ground_truth="Mastercard's total assets were $54,157 million in fiscal year 2025.",
         required_keywords=["54,157"],
         priority=3,
     ),
     TestCase(
-        question="What was Eli Lilly's total assets?",
+        question="What was Eli Lilly's total assets in fiscal year 2025?",
         category="fact_lookup",
         ticker="LLY",
         section=None,
-        ground_truth="Eli Lilly's total assets were $112,476 million.",
+        ground_truth="Eli Lilly's total assets were $112,476 million in fiscal year 2025.",
         required_keywords=["112,476"],
         priority=3,
     ),
@@ -158,38 +158,37 @@ TEST_SET: list[TestCase] = [
         priority=3,
     ),
     TestCase(
-        question="How did Chevron's total assets change from 2024 to 2025?",
+        question="How did Chevron's total assets change from fiscal year 2024 to fiscal year 2025?",
         category="multi_hop",
         ticker="CVX",
         section="financial_table",
         ground_truth=(
             "Chevron's total assets increased from $256,938 million in 2024 "
-            "to $324,012 million in 2025, an increase of $67,074 million."
+            "to $324,012 million in 2025."
         ),
         required_keywords=["256,938", "324,012"],
         priority=3,
     ),
     TestCase(
-        question="How did JPMorgan Chase's total assets change from 2024 to 2025?",
+        question="How did JPMorgan Chase's total assets change from fiscal year 2024 to fiscal year 2025?",
         category="multi_hop",
         ticker="JPM",
         section="financial_table",
         ground_truth=(
             "JPMorgan Chase's total assets increased from $4,002,814 million "
-            "in 2024 to $4,424,900 million in 2025, an increase of "
-            "$422,086 million."
+            "in 2024 to $4,424,900 million in 2025."
         ),
         required_keywords=["4,002,814", "4,424,900"],
         priority=3,
     ),
     TestCase(
-        question="How did ExxonMobil's total assets change from 2024 to 2025?",
+        question="How did ExxonMobil's total assets change from fiscal year 2024 to fiscal year 2025?",
         category="multi_hop",
         ticker="XOM",
         section="financial_table",
         ground_truth=(
             "ExxonMobil's total assets decreased from $453,475 million in 2024 "
-            "to $448,980 million in 2025, a decrease of $4,495 million."
+            "to $448,980 million in 2025."
         ),
         required_keywords=["453,475", "448,980"],
         priority=3,
@@ -226,13 +225,13 @@ TEST_SET: list[TestCase] = [
         priority=3,
     ),
     TestCase(
-        question="How did IBM's total revenue change from 2024 to 2025?",
+        question="How did IBM's total revenue change from fiscal year 2024 to fiscal year 2025?",
         category="multi_hop",
         ticker="IBM",
         section="financial_table",
         ground_truth=(
             "IBM's total revenue increased from $62,753 million in 2024 "
-            "to $67,535 million in 2025, an increase of $4,782 million."
+            "to $67,535 million in 2025."
         ),
         required_keywords=["62,753", "67,535"],
         priority=3,
@@ -350,7 +349,12 @@ TEST_SET: list[TestCase] = [
         ticker="HON",
         section="business",
         ground_truth="Honeywell reports Aerospace Technologies, Industrial Automation, Building Automation, and Energy and Sustainability Solutions.",
-        required_keywords=["Aerospace Technologies", "Industrial Automation"],
+        required_keywords=[
+            "Aerospace Technologies",
+            "Industrial Automation",
+            "Building Automation",
+            "Energy and Sustainability Solutions",
+        ],
         priority=3,
     ),
 
@@ -490,12 +494,16 @@ TEST_SET: list[TestCase] = [
         required_keywords=["512,163", "619,003"],
     ),
     TestCase(
-        question="How did RTX's total net sales trend over recent years?",
+        question="How did RTX's total net sales trend across fiscal years 2023, 2024, and 2025?",
         category="multi_hop",
         ticker="RTX",
         section=None,
-        ground_truth="RTX's total net sales grew from $68,920M to $80,738M to $88,603M over the three years reported.",
-        required_keywords=["68,920", "88,603"],
+        ground_truth=(
+            "RTX's total net sales grew from $68,920 million in fiscal year "
+            "2023 to $80,738 million in fiscal year 2024 to $88,603 million "
+            "in fiscal year 2025."
+        ),
+        required_keywords=["68,920", "80,738", "88,603"],
         priority=3,
     ),
 

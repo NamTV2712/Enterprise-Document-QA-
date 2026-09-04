@@ -42,6 +42,7 @@ from src.evaluation.phase2_runtime import (
     make_generation_call,
     make_judge_call,
 )
+from src.evaluation.answer_postprocessor_profile import build_answer_postprocessor_profile
 from src.evaluation.test_set import TEST_SET, TestCase
 from src.generation.fact_context import (
     FACT_CONTEXT_SELECTOR_FINGERPRINT,
@@ -455,10 +456,16 @@ def run(
         for path in (gen_checkpoint, judge_checkpoint, output):
             path.unlink(missing_ok=True)
 
+    answer_postprocessor_profile = build_answer_postprocessor_profile(
+        deterministic_risk_renderer=deterministic_risk_renderer,
+        deterministic_fact_renderer=deterministic_fact_renderer,
+        deterministic_revenue_renderer=deterministic_revenue_renderer,
+    )
     artifact, upstream = load_bound_artifact(
         artifact_path,
         EXPECTED_ARTIFACT_FINGERPRINT,
         CONTEXT_STRATEGY_SELECTIVE_V6,
+        answer_postprocessor_profile,
     )
     selected = sentinel_cases()
     case_by_question = {case["question"]: case for case in artifact["cases"]}

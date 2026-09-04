@@ -23,6 +23,17 @@ YEAR_PATTERN = re.compile(r"(19|20)\d{2}")
 STANDALONE_YEAR_PATTERN = re.compile(r"^(19|20)\d{2}$")
 VALUE_PATTERN = re.compile(r"^\(?-?\d[\d,]*(?:\.\d+)?\)?$")
 PERCENT_VALUE_PATTERN = re.compile(r"^\(?-?\d[\d,]*(?:\.\d+)?\)?%$")
+TABLE_UNIT_PATTERN = re.compile(
+    r"\b(?:in\s+)?(?:thousands?|millions?|billions?)\b"
+    r"|\b(?:thousands?|millions?|billions?)\s+of\s+dollars\b",
+    re.IGNORECASE,
+)
+_UNIT_SCALE_RE = re.compile(
+    r"\b(?P<scale>thousands?|millions?|billions?)\b", re.IGNORECASE
+)
+_DOLLAR_RE = re.compile(r"(?:\$|\bUSD\b|\bdollars?\b)", re.IGNORECASE)
+_SHARES_RE = re.compile(r"\bshares?\b", re.IGNORECASE)
+_PER_SHARE_RE = re.compile(r"\bper[- ]share\b", re.IGNORECASE)
 
 
 @dataclass
@@ -181,6 +192,11 @@ def find_table_containing_text(soup: BeautifulSoup, anchor_text: str) -> Tag | N
 
 def get_table_caption(table: Tag, max_chars: int = 150) -> str:
     """Find a nearby caption by scanning meaningful text nodes before a table."""
+    return _get_full_table_caption(table)[:max_chars]
+
+
+def _get_full_table_caption(table: Tag) -> str:
+    """Return the untruncated nearby caption used for metadata extraction."""
     texts_found = []
     node = table.find_previous(string=True)
     steps = 0
@@ -196,11 +212,53 @@ def get_table_caption(table: Tag, max_chars: int = 150) -> str:
     if not texts_found:
         return "(no caption found)"
 
-    caption = " ".join(reversed(texts_found))
-    return caption[:max_chars]
+    return " ".join(reversed(texts_found))
 
 
-def rows_to_markdown(rows: list[TableRow], table_name: str = "") -> str:
+def extract_table_unit(table: Tag) -> str | None:
+    """Extract an explicit table-level monetary/share scale without guessing.
+
+    SEC tables commonly place the unit in a header cell or in a nearby caption.
+    The previous caption renderer truncated long captions before the unit, and
+    the row parser intentionally discards standalone ``$`` cells.  This helper
+    keeps the compact caption for retrieval while recovering only the explicit
+    unit metadata needed by downstream answer generation.
+    """
+    table_text = re.sub(r"\s+", " ", table.get_text(" ", strip=True)).strip()
+    caption_text = _get_full_table_caption(table)
+
+    # Prefer a unit marker in the table itself. A nearby caption is the
+    # fallback because many annual-report tables put the marker immediately
+    # before the HTML table rather than inside it.
+    unit_text = table_text if TABLE_UNIT_PATTERN.search(table_text) else caption_text
+    unit_match = TABLE_UNIT_PATTERN.search(unit_text)
+    if unit_match is None:
+        return None
+
+    scale_match = _UNIT_SCALE_RE.search(unit_match.group(0))
+    if scale_match is None:
+        return None
+    scale = scale_match.group("scale").casefold()
+    scale = scale.rstrip("s") if scale != "shares" else scale
+
+    explicit_dollars = bool(_DOLLAR_RE.search(table_text)) or bool(
+        re.search(r"\b(?:USD|dollars?)\b", unit_text, re.IGNORECASE)
+    )
+    has_shares = bool(_SHARES_RE.search(unit_text)) and not bool(
+        _PER_SHARE_RE.search(unit_text)
+    )
+    if explicit_dollars and has_shares:
+        return f"USD and shares in {scale}s"
+    if explicit_dollars:
+        return f"USD in {scale}s"
+    return f"in {scale}s"
+
+
+def rows_to_markdown(
+    rows: list[TableRow],
+    table_name: str = "",
+    table_unit: str | None = None,
+) -> str:
     """Convert structured table rows to markdown for readable embedding text."""
     if not rows:
         return ""
@@ -209,6 +267,8 @@ def rows_to_markdown(rows: list[TableRow], table_name: str = "") -> str:
     lines = []
     if table_name:
         lines.append(f"### {table_name}")
+    if table_unit:
+        lines.append(f"Units: {table_unit}")
     lines.append("| Metric | " + " | ".join(all_years) + " |")
     lines.append("|---" * (len(all_years) + 1) + "|")
     for row in rows:

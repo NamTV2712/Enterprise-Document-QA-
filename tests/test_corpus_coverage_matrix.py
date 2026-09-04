@@ -18,7 +18,8 @@ from scripts.corpus_coverage_matrix import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-# Baseline documented in PROJECT_STATE.md after the IBM companion recovery.
+# Baseline documented in PROJECT_STATE.md after the canonical financial-table
+# unit-preservation rebuild.
 EXPECTED_BASELINE = {
     "configured_tickers": 50,
     "searchable_tickers": 50,
@@ -29,7 +30,7 @@ EXPECTED_BASELINE = {
     "total_chunks": 10053,
 }
 EXPECTED_CORPUS_FINGERPRINT = (
-    "sha256:1d5b99ed962ab9dff88f268ea17da4efd5c7128900961a123bdfb5e49716c8f4"
+    "sha256:510ebe056e1faa2ef589ac922e77018556197171a95e3257229005d3710c8c15"
 )
 EXPECTED_DEGRADED = {"CVX", "IBM", "JPM", "XOM"}
 EXPECTED_NO_TABLE = set()

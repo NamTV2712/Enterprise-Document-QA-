@@ -40,6 +40,11 @@ def _parse_args() -> argparse.Namespace:
             "the model metadata and canonical payload match exactly"
         ),
     )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        help="Optional document embedding batch size; lower values reduce GPU memory pressure",
+    )
     return parser.parse_args()
 
 
@@ -73,6 +78,7 @@ def main() -> None:
             "builder_version": EMBEDDING_BUILDER_VERSION,
         },
         reuse_generation_dir=args.reuse_from,
+        batch_size=args.batch_size,
     )
     logger.info(
         "Completed immutable embedding generation %s (%d points)",

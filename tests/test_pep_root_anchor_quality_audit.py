@@ -100,7 +100,7 @@ def test_real_pep_root_anchor_set_matches_canonical_artifact():
     html, sections, chunks = _find_paths("PEP", root / "processed", root / "raw")
     report = audit_pep_root_anchor_tables(html, sections, chunks)
     assert report["root_anchor_table_count"] == 29
-    assert report["candidate_matches_canonical"] is True
+    assert report["candidate_matches_canonical_without_unit_metadata"] is True
     assert report["classification_counts"] == {
         "financial_note": 14,
         "primary_balance_sheet": 1,

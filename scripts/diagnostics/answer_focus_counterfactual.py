@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from scripts.run_evaluation_phase2 import ARTIFACT_PATH, load_bound_artifact
+from scripts.run_evaluation_phase2 import load_bound_artifact
 from src.evaluation.context_packing import (
     CONTEXT_STRATEGY_SELECTIVE_V6,
     render_case_context,
@@ -27,6 +27,9 @@ CANDIDATE_PATH = Path(
 )
 DEFAULT_OUTPUT = Path("data/diagnostics/answer_focus_counterfactual_v1.json")
 TARGET_QUESTION = "What are all the major risk factors Microsoft discloses?"
+# This diagnostic audits a retained pre-canonical V7 candidate and therefore
+# intentionally remains bound to the historical Phase 1 artifact.
+ARTIFACT_PATH = Path("data/eval_artifacts/phase1_priority2.json")
 
 
 def _sha256_text(value: str) -> str:

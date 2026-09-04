@@ -80,6 +80,7 @@ def test_system_prompt_requires_all_exact_period_value_pairs() -> None:
     assert "must first list every underlying" in normalized
     assert "numeric shorthand" in normalized
     assert "explicitly asks for a numeric trend, numeric comparison, or growth" in normalized
+    assert "do not compare bare digit strings" not in normalized
 
 
 def test_production_user_message_repeats_numeric_pair_contract_near_question() -> None:
@@ -93,6 +94,19 @@ def test_production_user_message_repeats_numeric_pair_contract_near_question() -
     assert "unit conversion" in normalized
     assert "only a percentage" in normalized
     assert "numeric range" in normalized
+
+
+def test_unit_guidance_is_scoped_to_multi_company_numeric_comparisons() -> None:
+    target = _build_user_message(
+        "Which company depends more on cloud/subscription revenue, Microsoft or Apple?",
+        [],
+    )
+    ordinary = _build_user_message(
+        "What are all the major risk factors Microsoft discloses?", []
+    )
+    assert "do not compare bare digit strings" in target.casefold()
+    assert "label them as proxies" in target.casefold()
+    assert "do not compare bare digit strings" not in ordinary.casefold()
 
 
 def test_phase2_template_has_the_same_numeric_pair_contract() -> None:

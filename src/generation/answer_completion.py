@@ -27,7 +27,14 @@ from src.generation.answer_stability import (
     AnswerStabilityAssessment,
     assess_answer_stability,
 )
+from src.generation.comparative_answerability import (
+    COMPARATIVE_ANSWERABILITY_FINGERPRINT,
+    ComparativeAnswerabilityAssessment,
+    assess_comparative_answerability,
+)
 from src.generation.prompt_contracts import (
+    COMPARATIVE_NUMERIC_UNIT_CONTRACT,
+    COMPARATIVE_NUMERIC_UNIT_CONTRACT_FINGERPRINT,
     RISK_COMPARISON_CONTRACT_FINGERPRINT,
     RISK_FOCUS_CONTRACT_FINGERPRINT,
 )
@@ -58,6 +65,10 @@ ANSWER_COMPLETION_FINGERPRINT = "sha256:" + hashlib.sha256(
         + RISK_FOCUS_CONTRACT_FINGERPRINT.encode()
         + b"-"
         + ANSWER_STABILITY_FINGERPRINT.encode()
+        + b"-comparative-answerability-fingerprint-"
+        + COMPARATIVE_ANSWERABILITY_FINGERPRINT.encode()
+        + b"-comparative-numeric-unit-contract-fingerprint-"
+        + COMPARATIVE_NUMERIC_UNIT_CONTRACT_FINGERPRINT.encode()
         + b"-risk-answer-shape-fingerprint-"
         + RISK_ANSWER_SHAPE_FINGERPRINT.encode()
         + b"-evidence-fact-renderer-fingerprint-"
@@ -82,6 +93,7 @@ class AnswerCompletionAssessment:
     period_value: GroundedCompletionAssessment
     enumeration: EnumerationCompleteness
     stability: AnswerStabilityAssessment
+    answerability: ComparativeAnswerabilityAssessment
     grounding_passed: bool
     unsupported_numeric_claims: tuple[str, ...]
     correction_required: bool
@@ -130,6 +142,9 @@ def assess_answer_completion(
         question, evidence_context, answer
     )
     stability = assess_answer_stability(question, evidence_context, answer)
+    answerability = assess_comparative_answerability(
+        question, evidence_context, answer
+    )
     # Table-shaped period/value evidence has its own stricter detector. Avoid
     # adding prose anchors from another source to the same correction request.
     if period_value.period_value.applicable:
@@ -145,12 +160,15 @@ def assess_answer_completion(
             not enumeration.passed
             or not grounding_passed
             or stability.correction_required
+            or answerability.retry_required
         )
     elif period_value.period_value.applicable:
         grounding_passed = period_value.grounding_passed
         unsupported_numeric_claims = period_value.unsupported_numeric_claims
         correction_required = (
-            period_value.correction_required or stability.correction_required
+            period_value.correction_required
+            or stability.correction_required
+            or answerability.retry_required
         )
     else:
         # Keep the unified postprocessor lightweight for ordinary qualitative
@@ -161,15 +179,30 @@ def assess_answer_completion(
             answer, evidence_context
         )
         correction_required = (
-            bool(unsupported_numeric_claims) or stability.correction_required
+            bool(unsupported_numeric_claims)
+            or stability.correction_required
+            or answerability.retry_required
         )
     return AnswerCompletionAssessment(
         period_value,
         enumeration,
         stability,
+        answerability,
         grounding_passed,
         unsupported_numeric_claims,
         correction_required,
+    )
+
+
+def answer_completion_requires_buffering(
+    question: str,
+    evidence_context: str,
+) -> bool:
+    """Return whether a generated stream must be buffered for completion."""
+    assessment = assess_answer_completion(question, evidence_context, "")
+    return (
+        assessment.correction_required
+        or assessment.answerability.requires_buffering
     )
 
 
@@ -229,6 +262,16 @@ def _build_correction_prompt(
             "Remove numeric claims not printed in the cited evidence: "
             + ", ".join(assessment.unsupported_numeric_claims)
         )
+    if assessment.answerability.retry_required:
+        branches = ", ".join(assessment.answerability.expected_tickers)
+        sections.append(
+            "The draft returned the fallback even though the rendered evidence "
+            f"contains balanced, intent-matched branches for {branches}. Answer "
+            "the comparison from those branches only, cite each factual claim, "
+            "and preserve every value exactly as printed."
+        )
+    if assessment.answerability.applicable:
+        sections.append(COMPARATIVE_NUMERIC_UNIT_CONTRACT)
     details = "\n\n".join(sections)
     return (
         "Correct the draft using only the same SEC evidence below. Return one "
@@ -355,6 +398,8 @@ def correct_answer_once(
         reasons.append("grounding_violation")
     if initial.stability.correction_required:
         reasons.append("missing_query_anchored_numeric_facts")
+    if initial.answerability.retry_required:
+        reasons.append("answerable_fallback")
     try:
         corrected = generate_fn(
             _build_correction_prompt(
@@ -419,10 +464,34 @@ def completion_metadata(outcome: AnswerCompletion) -> dict[str, Any]:
             period.applicable
             or outcome.initial.enumeration.applicable
             or outcome.initial.stability.applicable
+            or outcome.initial.answerability.applicable
         ),
         "period_value_applicable": period.applicable,
         "enumeration_applicable": outcome.initial.enumeration.applicable,
         "stability_applicable": outcome.initial.stability.applicable,
+        "answerability_applicable": outcome.initial.answerability.applicable,
+        "answerability_evidence_sufficient": (
+            outcome.initial.answerability.evidence_sufficient
+        ),
+        "answerability_retry_required": (
+            outcome.initial.answerability.retry_required
+        ),
+        "answerability_expected_tickers": list(
+            outcome.initial.answerability.expected_tickers
+        ),
+        "answerability_evidenced_tickers": list(
+            outcome.initial.answerability.evidenced_tickers
+        ),
+        "answerability_missing_tickers": list(
+            outcome.initial.answerability.missing_tickers
+        ),
+        "answerability_branch_intent_coverage": {
+            ticker: list(groups)
+            for ticker, groups in outcome.initial.answerability.branch_intent_coverage.items()
+        },
+        "answerability_numeric_evidence_by_ticker": dict(
+            outcome.initial.answerability.numeric_evidence_by_ticker
+        ),
         "stability_kind": outcome.initial.stability.kind,
         "stability_expected_facts": [
             {
@@ -469,6 +538,7 @@ def completion_metadata(outcome: AnswerCompletion) -> dict[str, Any]:
                 not outcome.initial.stability.applicable
                 or outcome.initial.stability.passed
             )
+            and outcome.initial.answerability.passed
         ),
         "final_passed": (
             final_period_passed
@@ -477,6 +547,7 @@ def completion_metadata(outcome: AnswerCompletion) -> dict[str, Any]:
                 not outcome.final.stability.applicable
                 or outcome.final.stability.passed
             )
+            and outcome.final.answerability.passed
         ),
         "initial_stability_passed": (
             not outcome.initial.stability.applicable

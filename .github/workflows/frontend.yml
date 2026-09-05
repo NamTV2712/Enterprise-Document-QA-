@@ -20,6 +20,10 @@ jobs:
     defaults:
       run:
         working-directory: frontend
+    env:
+      # Baked into the production bundle so Playwright route fixtures and the
+      # built app agree on the mocked API origin.
+      VITE_API_BASE_URL: http://127.0.0.1:8000
 
     steps:
       - uses: actions/checkout@v4
@@ -48,8 +52,6 @@ jobs:
 
       - name: Run browser tests
         run: bunx playwright test
-        env:
-          VITE_API_BASE_URL: http://127.0.0.1:8000
 
       - name: Upload browser test artifacts
         if: failure()

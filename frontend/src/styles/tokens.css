@@ -29,7 +29,7 @@
   --surface-raised: #ffffff;
   --text-primary: #172033;
   --text-muted: #526176;
-  --text-subtle: #718096;
+  --text-subtle: #5d6b80;
   --border-subtle: #d8e0ea;
   --border-strong: #b7c4d4;
   --primary: #4f46e5;
@@ -121,7 +121,7 @@
 
 :root.dark {
   --accent-text: #a5b4fc;
-  --accent-button-bg: #6366f1;
+  --accent-button-bg: #575af0;
   --accent-button-text: #ffffff;
   --state-success-surface: rgb(6 78 59 / 0.35);
   --state-success-border: rgb(134 239 172 / 0.4);

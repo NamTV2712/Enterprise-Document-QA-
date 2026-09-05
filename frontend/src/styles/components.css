@@ -998,8 +998,8 @@ body,
 .dark .primary-action-button,
 .sidebar-new-conversation,
 .dark .sidebar-new-conversation {
-  background: var(--primary);
-  color: #ffffff;
+  background: var(--accent-button-bg);
+  color: var(--accent-button-text);
   box-shadow: var(--shadow-sm);
 }
 
@@ -1101,8 +1101,8 @@ body,
   min-height: 2.25rem;
   border-radius: 0.55rem;
   padding: 0.45rem 0.7rem;
-  background: var(--primary);
-  color: #ffffff;
+  background: var(--accent-button-bg);
+  color: var(--accent-button-text);
   font-size: 0.7rem;
   font-weight: 800;
   cursor: pointer;

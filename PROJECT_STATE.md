@@ -2,6 +2,70 @@
 
 ## Current Milestone
 
+### Comparative Evidence Contract v2 — non-official NO-GO (2026-09-05)
+
+The next bounded QA improvement adds a provider-free Comparative Evidence
+Contract v2 for dependency comparisons. It extracts a company-scoped
+metric/value pair while preserving source number, period, and unit, rejects
+year-only metadata as numeric evidence, and only permits a dependency ranking
+when every branch exposes the same explicit share measure in the same period
+and unit. The Microsoft-vs-Apple case is intentionally rendered as a
+qualified, cited answer: Microsoft reports Microsoft Cloud revenue of
+`$168.9 billion` and Apple reports Services of `109,158 million USD`, but the
+filings do not disclose compatible revenue-share measures for a dependency
+ranking. The renderer is feature-flagged and remains disabled in production
+defaults until its evaluation contract is admitted.
+
+The provider-free v2 receipt passed the priority-2 context checks, six
+comparative counterfactuals, negative cases, V5/V7 non-fact identity, and the
+dependency renderer contract. Receipt:
+`data/diagnostics/comparative_evidence_v2_offline.json` (SHA-256
+`sha256:4eef5f7f8195cc10f2df084c3943a6fc89e712a3b6b71c05b069d62a70e3c4cb`).
+The evidence, renderer, answerability, and completion fingerprints are stored
+in that receipt; the answerability fingerprint is
+`sha256:20d7bb0a899849f61332e1b06ee882f6c6cb86d71d871fe5f978f0add85df924`.
+
+A pre-registered judge-variance probe consumed exactly `24/24` allowed calls
+on `12` frozen answer/context inputs with two repeats per input. It was
+provider-complete and passed all input/budget gates. Judge scores changed on
+the same frozen answer in `2/12` groups: the R1 international-risk answer
+changed Answer Relevancy by `0.05`, and the R2 dependency target changed
+Faithfulness by `0.05` and Context Precision by `0.33`. No averaging or
+best-of selection was used. Receipt:
+`data/diagnostics/comparative_judge_variance_v2.json` (SHA-256
+`sha256:32829d0c93707ff2ab225f550c9d134dfb1c3a88a59070c83d0bbb49296293c9`).
+
+Two fresh six-case sentinels each completed `6/6` generation and judging using
+`12` calls, fixed V7 contexts, distinct append-only checkpoints, and the new
+renderer. R1 scored F/AR/CP/Overall=`0.9583/0.8000/0.7783/0.8455`; R2 scored
+`0.9667/0.8083/0.7783/0.8511`. Both provider receipts are complete, but both
+fail the pre-registered target and Microsoft-risk semantic gates. The strict
+reproducibility audit passes all provenance/integrity gates but is correctly
+`passed=false` because the required semantic pass rate is `2/2`. Receipts:
+`data/eval_artifacts/comparative_evidence_v2_sentinel_summary_r1.json`
+(SHA-256 `sha256:d32cacbc1676f7bb19c945397194e6474f27d87cb2b6f8e9617fe97da07c7629`),
+`data/eval_artifacts/comparative_evidence_v2_sentinel_summary_r2.json`
+(SHA-256 `sha256:65e8cd0bc589a4e0772ec792d5aff9eff3d58d3011b4fb78778054b0a295eebc`),
+and `data/diagnostics/comparative_evidence_v2_reproducibility.json` (SHA-256
+`sha256:67b4599fbf355c29df0e14a9b797d470b05e9e3a0107ee76a2462d7c5e809200`).
+
+The failure mechanism is now explicit: both target judge records score
+Faithfulness=`0.8000` and Answer Relevancy=`0.0000` because the legacy ground
+truth requires a Microsoft-over-Apple winner, while the v2 contract correctly
+refuses to infer that winner from non-comparable absolute amounts. Both
+Microsoft-risk control records score Faithfulness=`1.0000`, Answer
+Relevancy=`0.9000`, and Context Precision=`1.0000`; the answer is grounded but
+provider/judge-sensitive on scope because it includes more detail than the
+registered concise ground truth. These are evaluation-contract and answer-
+shape issues to resolve in a new versioned slice, not reasons to relax the
+official benchmark floors.
+
+The official benchmark and canonical artifact were not changed. Do not run a
+new N=30 replay or choose a better provider sample. The next improvement must
+separate the qualified-dependency correctness contract from the legacy judge
+oracle, and must stabilize the Microsoft-risk control offline before another
+provider admission attempt.
+
 ### Frontend UX/UI improvement pass (2026-09-02)
 
 The frontend now prioritizes the question-and-answer journey: the overview is

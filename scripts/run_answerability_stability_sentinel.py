@@ -45,6 +45,9 @@ from src.generation.comparative_answerability import (
     COMPARATIVE_ANSWERABILITY_FINGERPRINT,
     assess_comparative_answerability,
 )
+from src.generation.comparative_answer_renderer import (
+    COMPARATIVE_ANSWER_RENDERER_FINGERPRINT,
+)
 from src.generation.period_value_completeness import FALLBACK_ANSWER
 from src.generation.generator import Generator
 
@@ -69,6 +72,31 @@ RISK_CONTROL_QUESTION = SENTINEL_QUESTIONS[1]
 OUT_OF_CORPUS_QUESTION = SENTINEL_QUESTIONS[5]
 COMPARATIVE_QUESTIONS = frozenset(SENTINEL_QUESTIONS[:5])
 SCORE_KEYS = ("faithfulness", "answer_relevancy", "context_precision")
+
+
+class ProviderCallBudgetExceeded(RuntimeError):
+    """The bounded campaign has no provider-call slot left."""
+
+
+class ProviderCallBudget:
+    """Count logical provider requests and fail before the next request."""
+
+    def __init__(self, limit: int | None):
+        if limit is not None and limit <= 0:
+            raise ValueError("provider-call budget must be positive")
+        self.limit = limit
+        self.used = 0
+
+    def wrap(self, call):
+        def bounded(*args, **kwargs):
+            if self.limit is not None and self.used >= self.limit:
+                raise ProviderCallBudgetExceeded(
+                    f"provider-call budget exhausted at {self.limit} calls"
+                )
+            self.used += 1
+            return call(*args, **kwargs)
+
+        return bounded
 
 
 def _file_sha256(path: Path) -> str:
@@ -151,6 +179,7 @@ def _case_gates(
     artifact: dict[str, Any],
     reference: dict[str, dict[str, float]],
     contexts: dict[str, dict[str, Any]],
+    deterministic_comparative_renderer: bool = False,
 ) -> dict[str, dict[str, Any]]:
     candidates = {case["question"]: case for case in summary.get("cases", [])}
     completions = summary.get("period_value_corrections") or {}
@@ -215,6 +244,10 @@ def _case_gates(
                             ) is True
                         )
                     ),
+                    "deterministic_comparative_renderer_applied": (
+                        not deterministic_comparative_renderer
+                        or completion.get("deterministic_comparative_renderer") is True
+                    ),
                 }
             )
         elif question == RISK_CONTROL_QUESTION:
@@ -267,9 +300,17 @@ def build_report(
     generation_checkpoint: Path,
     judge_checkpoint: Path,
     replicate_id: str,
+    deterministic_comparative_renderer: bool = False,
+    max_provider_calls: int | None = None,
 ) -> dict[str, Any]:
     contexts = _context_rows(artifact, _sentinel_cases())
-    case_gates = _case_gates(summary, artifact, reference, contexts)
+    case_gates = _case_gates(
+        summary,
+        artifact,
+        reference,
+        contexts,
+        deterministic_comparative_renderer,
+    )
     common_required = (
         "generation_ok",
         "judge_ok",
@@ -292,6 +333,7 @@ def build_report(
                 "answerability_applicable",
                 "answerability_evidence_sufficient",
                 "answerability_reason_recorded",
+                "deterministic_comparative_renderer_applied",
             ]
         elif question == RISK_CONTROL_QUESTION:
             required += [
@@ -343,12 +385,18 @@ def build_report(
     return {
         **summary,
         "schema_version": 1,
-        "audit": "comparative_answerability_stability_v1_sentinel",
+        "audit": (
+            "comparative_evidence_v2_sentinel"
+            if deterministic_comparative_renderer
+            else "comparative_answerability_stability_v1_sentinel"
+        ),
         "official": False,
         "replicate_id": replicate_id,
         "reference_sha256": EXPECTED_REFERENCE_SHA256,
         "answer_completion_fingerprint": ANSWER_COMPLETION_FINGERPRINT,
         "answerability_fingerprint": COMPARATIVE_ANSWERABILITY_FINGERPRINT,
+        "deterministic_comparative_renderer": deterministic_comparative_renderer,
+        "comparative_answer_renderer_fingerprint": COMPARATIVE_ANSWER_RENDERER_FINGERPRINT,
         "sentinel_questions": list(SENTINEL_QUESTIONS),
         "reference_scores": reference,
         "context_rows": {
@@ -366,6 +414,7 @@ def build_report(
             "judge_checkpoint": str(judge_checkpoint),
             "generation_bindings": sorted(generation_bindings),
             "judge_context_fingerprints": sorted(judge_contexts),
+            "judge_bindings": sorted(_checkpoint_bindings(judge_checkpoint, "binding")),
             "one_generation_binding": len(generation_bindings) == 1,
             "one_judge_context_fingerprint": len(judge_contexts) == 1,
         },
@@ -376,6 +425,7 @@ def build_report(
             "risk_control_answer_relevancy_at_least_0_95": True,
             "out_of_corpus_fallback_preserved": True,
             "correction_attempts_at_most_one": True,
+            "deterministic_comparative_renderer": deterministic_comparative_renderer,
         },
         "gates": gates,
         "passed": all(gates.values()),
@@ -390,6 +440,8 @@ def run(
     judge_checkpoint: Path,
     output: Path,
     fresh: bool = False,
+    deterministic_comparative_renderer: bool = False,
+    max_provider_calls: int | None = None,
 ) -> dict[str, Any]:
     assert_phase2_retrieval_hermeticity()
     if not replicate_id or not all(
@@ -405,16 +457,22 @@ def run(
         artifact_path,
         EXPECTED_ARTIFACT_FINGERPRINT,
         CONTEXT_STRATEGY_SELECTIVE_V7,
-        build_answer_postprocessor_profile(),
+        build_answer_postprocessor_profile(
+            deterministic_comparative_renderer=deterministic_comparative_renderer,
+        ),
     )
     case_by_question = {case["question"]: case for case in artifact["cases"]}
     tracker = UsageTracker()
+    budget = ProviderCallBudget(max_provider_calls)
     generation_generator = Generator(model=EVAL_MODEL, api_keys=generation_pool_keys())
     judge_generator = Generator(model=EVAL_MODEL, api_keys=judging_pool_keys())
-    generation_call = make_generation_call(generation_generator, tracker)
+    generation_call = budget.wrap(make_generation_call(generation_generator, tracker))
+    judge_call = budget.wrap(make_judge_call(judge_generator, tracker))
     completion_rows: dict[str, dict[str, Any]] = {}
     postprocessor = make_answer_completion_postprocessor(
-        generation_call, completion_rows
+        generation_call,
+        completion_rows,
+        deterministic_comparative_renderer=deterministic_comparative_renderer,
     )
     context_rows = _context_rows(artifact, cases)
 
@@ -427,7 +485,7 @@ def run(
         upstream=upstream,
         bound_fingerprint=EXPECTED_ARTIFACT_FINGERPRINT,
         generate_fn=generation_call,
-        judge_fn=make_judge_call(judge_generator, tracker),
+        judge_fn=judge_call,
         generation_store=GenerationCheckpointStore(generation_checkpoint),
         judge_store=JudgeCheckpointStore(judge_checkpoint),
         max_gen_retries=0,
@@ -439,6 +497,12 @@ def run(
         force_non_official=True,
     )
     summary["token_usage_totals"] = tracker.totals
+    summary["provider_calls_used"] = budget.used
+    summary["provider_call_budget"] = {
+        "max_provider_calls": max_provider_calls,
+        "used": budget.used,
+        "within_budget": max_provider_calls is None or budget.used <= max_provider_calls,
+    }
     report = build_report(
         summary,
         artifact,
@@ -446,6 +510,7 @@ def run(
         generation_checkpoint,
         judge_checkpoint,
         replicate_id,
+        deterministic_comparative_renderer,
     )
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -462,6 +527,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--judge-checkpoint", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--fresh", action="store_true")
+    parser.add_argument("--deterministic-comparative-renderer", action="store_true")
+    parser.add_argument("--max-provider-calls", type=int)
     args = parser.parse_args(argv)
     report = run(
         replicate_id=args.replicate_id,
@@ -470,6 +537,8 @@ def main(argv: list[str] | None = None) -> int:
         judge_checkpoint=args.judge_checkpoint,
         output=args.output,
         fresh=args.fresh,
+        deterministic_comparative_renderer=args.deterministic_comparative_renderer,
+        max_provider_calls=args.max_provider_calls,
     )
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0 if report["passed"] else 1

@@ -352,6 +352,30 @@ is `2/2`, and best-of selection is forbidden. No final-binding N=30 replay or
 official promotion was performed. See the detailed receipts and hashes in
 `PROJECT_STATE.md`.
 
+### Comparative Evidence Contract v2 — non-official NO-GO
+
+The follow-up improvement adds a provider-free metric/value/period/unit/source
+contract and a deterministic qualified renderer for dependency comparisons. It
+rejects year-only metadata as numeric evidence and never ranks companies from
+absolute revenue amounts when the filings expose different measures. For the
+Microsoft-vs-Apple target it reports Microsoft Cloud revenue of `$168.9 billion`
+and Apple Services of `109,158 million USD`, with citations, then states that
+the disclosures do not establish a dependency ranking. The renderer is
+feature-flagged and is not enabled by production defaults.
+
+The offline receipt passed all registered v2 gates. A bounded judge-variance
+probe used `24/24` calls on frozen inputs and found score changes on the same
+answer in `2/12` repeat groups. Two fresh six-case sentinels were
+provider-complete at `12` calls each, but scored
+`0.9583/0.8000/0.7783/0.8455` and `0.9667/0.8083/0.7783/0.8511` for
+Faithfulness/Answer Relevancy/Context Precision/Overall. Both failed the
+pre-registered target and Microsoft-risk semantic gates; strict provenance
+reproducibility passed, while overall reproducibility correctly remained
+`NO-GO` because semantic admission requires `2/2`. The official benchmark,
+canonical data, and official result remain unchanged. Detailed receipt paths
+and hashes are recorded in `PROJECT_STATE.md`; do not run N=30 or select a
+better sample for this binding.
+
 ### Historical evaluation log
 
 Admission audits are clean: the promoted-official self-check reports zero

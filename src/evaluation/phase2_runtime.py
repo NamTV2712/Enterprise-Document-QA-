@@ -195,6 +195,7 @@ def make_answer_completion_postprocessor(
     deterministic_risk_renderer: bool = False,
     deterministic_fact_renderer: bool = False,
     deterministic_revenue_renderer: bool = False,
+    deterministic_comparative_renderer: bool = False,
 ) -> Callable[[str, str, str], str]:
     """Apply one shared completion policy.
 
@@ -219,6 +220,7 @@ def make_answer_completion_postprocessor(
             deterministic_risk_renderer=deterministic_risk_renderer,
             deterministic_fact_renderer=deterministic_fact_renderer,
             deterministic_revenue_renderer=deterministic_revenue_renderer,
+            deterministic_comparative_renderer=deterministic_comparative_renderer,
         )
         if outcome.correction_attempted:
             logger.info(

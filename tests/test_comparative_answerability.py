@@ -6,6 +6,10 @@ from src.generation.comparative_answerability import (
     COMPARATIVE_ANSWERABILITY_FINGERPRINT,
     assess_comparative_answerability,
 )
+from src.generation.comparative_answer_renderer import (
+    render_dependency_comparison,
+)
+from src.generation.comparative_evidence import extract_comparative_facts
 from src.retrieval.query_normalizer import detect_ticker, detect_tickers
 
 
@@ -103,3 +107,70 @@ def test_answerable_fallback_with_invalid_correction_remains_fallback() -> None:
     assert result.correction_attempted is True
     assert result.correction_accepted is False
     assert result.answer == FALLBACK
+
+
+def test_dependency_requires_metric_value_evidence_not_year_metadata() -> None:
+    context = """[Source 1] MSFT 10-K, MD&A
+Microsoft Cloud discussion for fiscal year 2025.
+
+[Source 2] AAPL 10-K, MD&A
+Apple Services discussion for fiscal year 2025.
+"""
+
+    assessment = assess_comparative_answerability(QUESTION, context, FALLBACK)
+
+    assert assessment.evidence_sufficient is False
+    assert assessment.numeric_evidence_by_ticker == {"MSFT": False, "AAPL": False}
+    assert assessment.status == "insufficient"
+    assert assessment.retry_required is False
+
+
+def test_dependency_is_qualified_when_measures_are_not_comparable() -> None:
+    assessment = assess_comparative_answerability(QUESTION, CONTEXT, FALLBACK)
+
+    assert assessment.evidence_sufficient is True
+    assert assessment.qualified is True
+    assert assessment.status == "qualified"
+    assert assessment.reason_codes == ("dependency_measure_mismatch",)
+    assert assessment.share_evidence_by_ticker == {"MSFT": False, "AAPL": False}
+
+
+def test_dependency_renderer_reports_facts_without_absolute_value_inference() -> None:
+    answer = render_dependency_comparison(QUESTION, CONTEXT)
+
+    assert answer is not None
+    assert "$168.9 billion" in answer
+    assert "109,158 million" in answer
+    assert "do not establish which company depends more" in answer
+    assert "[Source 1]" in answer and "[Source 2]" in answer
+
+
+def test_dependency_fact_extractor_does_not_promote_year_only_values() -> None:
+    facts = extract_comparative_facts(
+        QUESTION,
+        """[Source 1] MSFT 10-K, MD&A
+Microsoft Cloud discussion for fiscal year 2025.
+
+[Source 2] AAPL 10-K, MD&A
+Apple Services discussion for fiscal year 2025.
+""",
+    )
+
+    assert facts == {"MSFT": (), "AAPL": ()}
+
+
+def test_dependency_renderer_allows_explicit_compatible_share_measure() -> None:
+    context = """[Source 1] MSFT 10-K, MD&A
+Cloud revenue was 30% of total revenue in fiscal year 2025.
+
+[Source 2] AAPL 10-K, MD&A
+Cloud revenue was 20% of total revenue in fiscal year 2025.
+"""
+
+    assessment = assess_comparative_answerability(QUESTION, context, FALLBACK)
+    answer = render_dependency_comparison(QUESTION, context)
+
+    assert assessment.status == "sufficient"
+    assert assessment.qualified is False
+    assert answer is not None
+    assert "directly comparable" in answer

@@ -17,7 +17,12 @@ def test_renderer_toggle_changes_postprocessor_profile() -> None:
     risk_renderer = build_answer_postprocessor_profile(
         deterministic_risk_renderer=True,
     )
+    comparative_renderer = build_answer_postprocessor_profile(
+        deterministic_comparative_renderer=True,
+    )
 
     assert provider_only != fact_renderer
     assert provider_only != risk_renderer
+    assert provider_only != comparative_renderer
     assert fact_renderer != risk_renderer
+    assert risk_renderer != comparative_renderer

@@ -32,6 +32,10 @@ from src.generation.comparative_answerability import (
     ComparativeAnswerabilityAssessment,
     assess_comparative_answerability,
 )
+from src.generation.comparative_answer_renderer import (
+    COMPARATIVE_ANSWER_RENDERER_FINGERPRINT,
+    render_deterministic_comparative_answer,
+)
 from src.generation.prompt_contracts import (
     COMPARATIVE_NUMERIC_UNIT_CONTRACT,
     COMPARATIVE_NUMERIC_UNIT_CONTRACT_FINGERPRINT,
@@ -67,6 +71,8 @@ ANSWER_COMPLETION_FINGERPRINT = "sha256:" + hashlib.sha256(
         + ANSWER_STABILITY_FINGERPRINT.encode()
         + b"-comparative-answerability-fingerprint-"
         + COMPARATIVE_ANSWERABILITY_FINGERPRINT.encode()
+        + b"-comparative-answer-renderer-fingerprint-"
+        + COMPARATIVE_ANSWER_RENDERER_FINGERPRINT.encode()
         + b"-comparative-numeric-unit-contract-fingerprint-"
         + COMPARATIVE_NUMERIC_UNIT_CONTRACT_FINGERPRINT.encode()
         + b"-risk-answer-shape-fingerprint-"
@@ -270,6 +276,15 @@ def _build_correction_prompt(
             "the comparison from those branches only, cite each factual claim, "
             "and preserve every value exactly as printed."
         )
+    if (
+        assessment.answerability.comparison_mode == "dependency"
+        and assessment.answerability.qualified
+    ):
+        sections.append(
+            "Do not infer dependency from absolute revenue amounts. Report the "
+            "company-specific measures and state that different measures or "
+            "missing disclosed shares do not support a dependency ranking."
+        )
     if assessment.answerability.applicable:
         sections.append(COMPARATIVE_NUMERIC_UNIT_CONTRACT)
     details = "\n\n".join(sections)
@@ -296,9 +311,32 @@ def correct_answer_once(
     deterministic_risk_renderer: bool = False,
     deterministic_fact_renderer: bool = False,
     deterministic_revenue_renderer: bool = False,
+    deterministic_comparative_renderer: bool = False,
 ) -> AnswerCompletion:
     """Apply at most one provider correction for the scoped contracts."""
     initial = assess_answer_completion(question, evidence_context, draft_answer)
+    if deterministic_comparative_renderer:
+        rendered = render_deterministic_comparative_answer(
+            question, evidence_context
+        )
+        if rendered:
+            final = assess_answer_completion(question, evidence_context, rendered)
+            valid = (
+                validate_answer(rendered)
+                if validate_answer is not None
+                else validate_grounded_answer(rendered, evidence_context)
+            )
+            if valid and not final.correction_required:
+                return AnswerCompletion(
+                    answer=rendered,
+                    initial=initial,
+                    final=final,
+                    correction_attempted=False,
+                    correction_accepted=True,
+                    correction_reason="deterministic_comparative_renderer",
+                    answer_compacted=True,
+                    answer_rendered_deterministically=True,
+                )
     if deterministic_fact_renderer:
         rendered = render_deterministic_fact(question, evidence_context)
         if rendered:
@@ -476,6 +514,13 @@ def completion_metadata(outcome: AnswerCompletion) -> dict[str, Any]:
         "answerability_retry_required": (
             outcome.initial.answerability.retry_required
         ),
+        "answerability_status": outcome.initial.answerability.status,
+        "answerability_comparison_mode": (
+            outcome.initial.answerability.comparison_mode
+        ),
+        "answerability_reason_codes": list(
+            outcome.initial.answerability.reason_codes
+        ),
         "answerability_expected_tickers": list(
             outcome.initial.answerability.expected_tickers
         ),
@@ -491,6 +536,28 @@ def completion_metadata(outcome: AnswerCompletion) -> dict[str, Any]:
         },
         "answerability_numeric_evidence_by_ticker": dict(
             outcome.initial.answerability.numeric_evidence_by_ticker
+        ),
+        "answerability_share_evidence_by_ticker": dict(
+            outcome.initial.answerability.share_evidence_by_ticker
+        ),
+        "answerability_facts_by_ticker": {
+            ticker: [
+                {
+                    "metric": fact.metric,
+                    "value": fact.value,
+                    "period": fact.period,
+                    "unit": fact.unit,
+                    "source_number": fact.source_number,
+                    "has_explicit_share": fact.has_explicit_share,
+                }
+                for fact in facts
+            ]
+            for ticker, facts in outcome.initial.answerability.facts_by_ticker.items()
+        },
+        "answerability_qualified": outcome.initial.answerability.qualified,
+        "deterministic_comparative_renderer": (
+            outcome.answer_rendered_deterministically
+            and outcome.correction_reason == "deterministic_comparative_renderer"
         ),
         "stability_kind": outcome.initial.stability.kind,
         "stability_expected_facts": [

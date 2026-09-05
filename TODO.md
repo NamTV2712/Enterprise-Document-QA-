@@ -577,11 +577,21 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
         refinement was then validated; final sentinels were `1/2` pass because
         provider/judge variance produced target F=`0.9000` and risk AR=`0.9000`
         in R1. The protected official result remains unchanged.
-82. [ ] Do not rerun N=30 or select a better provider sample for item 81.
-        Design a separately fingerprinted stability improvement: either a
-        provider-independent comparative answer contract/renderer or a
-        pre-registered judge-variance protocol that keeps the target and risk
-        gates auditable without relaxing the official floors.
+82. [x] Do not rerun N=30 or select a better provider sample for item 81.
+        Implement the separately fingerprinted Comparative Evidence Contract
+        v2, deterministic qualified dependency renderer, strict checkpoint
+        provenance verifier, 24-call judge-variance probe, two six-case
+        sentinels, reproducibility audit, and offline/targeted tests. The
+        provider-free contract passed; the 24-call probe passed its budget and
+        completeness gates; both 12-call sentinels were provider-complete but
+        semantic admission remained NO-GO. The protected official result is
+        unchanged. See `PROJECT_STATE.md` for receipt hashes.
+83. [ ] Do not run N=30 for Comparative Evidence Contract v2. First create a
+        versioned evaluation contract that accepts a correct qualified answer
+        when dependency shares are not comparable, and separately stabilize
+        the Microsoft exhaustive-risk control with provider-free answer-shape
+        checks. Keep the production renderer feature-flagged until both
+        contracts pass two fresh sentinels under the registered floors.
 
 ## Always-On Deployment
 

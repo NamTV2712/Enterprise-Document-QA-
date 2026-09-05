@@ -7,6 +7,13 @@ import re
 from dataclasses import dataclass
 
 from src.company_entities import detect_tickers
+from src.generation.comparative_evidence import (
+    COMPARATIVE_EVIDENCE_FINGERPRINT,
+    ComparativeFact,
+    classify_comparative_question,
+    extract_comparative_facts,
+    facts_match_intent,
+)
 from src.generation.period_value_completeness import (
     EvidenceSource,
     parse_evidence_sources,
@@ -14,7 +21,11 @@ from src.generation.period_value_completeness import (
 
 
 COMPARATIVE_ANSWERABILITY_FINGERPRINT = "sha256:" + hashlib.sha256(
-    b"comparative-answerability-v1-balanced-entity-branch-intent-and-value-evidence"
+    (
+        b"comparative-answerability-v2-balanced-entity-branch-intent-"
+        b"metric-value-period-unit-compatibility-"
+        + COMPARATIVE_EVIDENCE_FINGERPRINT.encode()
+    )
 ).hexdigest()
 
 _FALLBACK_PHRASE = "could not find sufficient information"
@@ -82,6 +93,11 @@ class ComparativeAnswerabilityAssessment:
     intent_groups: tuple[str, ...]
     branch_intent_coverage: dict[str, tuple[str, ...]]
     numeric_evidence_by_ticker: dict[str, bool]
+    facts_by_ticker: dict[str, tuple[ComparativeFact, ...]]
+    comparison_mode: str
+    share_evidence_by_ticker: dict[str, bool]
+    qualified: bool
+    reason_codes: tuple[str, ...]
     evidence_sufficient: bool
     draft_is_fallback: bool
     retry_required: bool
@@ -99,6 +115,17 @@ class ComparativeAnswerabilityAssessment:
     def requires_buffering(self) -> bool:
         """Return whether a stream must finish before emitting the draft."""
         return self.applicable and self.evidence_sufficient
+
+    @property
+    def status(self) -> str:
+        """Return the registered v2 status for audit metadata."""
+        if not self.applicable:
+            return "not_applicable"
+        if not self.evidence_sufficient:
+            return "insufficient"
+        if self.qualified:
+            return "qualified"
+        return "sufficient"
 
 
 def _normalize(value: str) -> str:
@@ -172,24 +199,43 @@ def assess_comparative_answerability(
         )
         for ticker in expected
     }
-    numeric_required = bool(_NUMERIC_COMPARISON_RE.search(question))
+    intent = classify_comparative_question(question)
+    facts = facts_match_intent(question, extract_comparative_facts(question, evidence_context))
+    numeric_required = bool(_NUMERIC_COMPARISON_RE.search(question)) or intent.requires_numeric_evidence
     numeric_evidence = {
-        ticker: bool(
-            _NUMERIC_EVIDENCE_RE.search(
-                "\n".join(source.text for source in by_ticker[ticker])
-            )
-        )
+        ticker: bool(facts.get(ticker))
+        for ticker in expected
+    }
+    share_evidence = {
+        ticker: any(fact.has_explicit_share for fact in facts.get(ticker, ()))
         for ticker in expected
     }
     intent_sufficient = bool(groups) and all(
         coverage[ticker] for ticker in expected
     )
-    evidence_sufficient = bool(
+    base_evidence_sufficient = bool(
         applicable
         and not missing
         and intent_sufficient
         and (not numeric_required or all(numeric_evidence.values()))
     )
+    if intent.mode == "dependency" and base_evidence_sufficient:
+        selected = [fact for ticker in expected for fact in facts.get(ticker, ())]
+        compatible = (
+            all(share_evidence.values())
+            and len({fact.normalized_metric for fact in selected}) == 1
+            and len({fact.unit for fact in selected}) == 1
+            and len({fact.period for fact in selected}) == 1
+        )
+        qualified = not compatible
+        reason_codes = (
+            ("dependency_measure_mismatch",) if qualified else ("compatible_share_measure",)
+        )
+        evidence_sufficient = True
+    else:
+        qualified = False
+        reason_codes = () if base_evidence_sufficient else ("missing_metric_value_evidence",)
+        evidence_sufficient = base_evidence_sufficient
     draft_is_fallback = _FALLBACK_PHRASE in answer.casefold()
     return ComparativeAnswerabilityAssessment(
         applicable=applicable,
@@ -199,6 +245,11 @@ def assess_comparative_answerability(
         intent_groups=groups,
         branch_intent_coverage=coverage,
         numeric_evidence_by_ticker=numeric_evidence,
+        facts_by_ticker=facts,
+        comparison_mode=intent.mode,
+        share_evidence_by_ticker=share_evidence,
+        qualified=qualified,
+        reason_codes=reason_codes,
         evidence_sufficient=evidence_sufficient,
         draft_is_fallback=draft_is_fallback,
         retry_required=draft_is_fallback and evidence_sufficient,

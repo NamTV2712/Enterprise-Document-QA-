@@ -226,6 +226,26 @@ def test_deterministic_revenue_renderer_avoids_provider_rewrite() -> None:
     assert result.answer.count("\n") == 5
 
 
+def test_deterministic_comparative_renderer_qualifies_dependency_claim() -> None:
+    result = correct_answer_once(
+        COMPARISON_QUESTION,
+        COMPARISON_CONTEXT,
+        "Microsoft depends more on cloud/subscription revenue. [Source 1]",
+        lambda _prompt: (_ for _ in ()).throw(
+            AssertionError("comparative renderer should run before provider rewrite")
+        ),
+        validate_answer=lambda answer: validate_grounded_answer(
+            answer, COMPARISON_CONTEXT
+        ),
+        deterministic_comparative_renderer=True,
+    )
+
+    assert result.answer_rendered_deterministically is True
+    assert result.correction_accepted is True
+    assert "do not establish which company depends more" in result.answer
+    assert result.final.answerability.status == "qualified"
+
+
 def test_risk_subcategories_are_compacted_without_provider_call() -> None:
     calls: list[str] = []
     answer = "\n".join(

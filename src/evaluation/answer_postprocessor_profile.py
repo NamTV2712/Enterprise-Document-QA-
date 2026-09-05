@@ -15,6 +15,9 @@ from src.generation.enumeration_answer_renderer import (
     ENUMERATION_ANSWER_RENDERER_FINGERPRINT,
 )
 from src.generation.evidence_fact_renderer import EVIDENCE_FACT_RENDERER_FINGERPRINT
+from src.generation.comparative_answer_renderer import (
+    COMPARATIVE_ANSWER_RENDERER_FINGERPRINT,
+)
 from src.generation.risk_answer_shape import RISK_ANSWER_SHAPE_FINGERPRINT
 
 
@@ -36,6 +39,7 @@ def build_answer_postprocessor_profile(
     deterministic_risk_renderer: bool = False,
     deterministic_fact_renderer: bool = False,
     deterministic_revenue_renderer: bool = False,
+    deterministic_comparative_renderer: bool = False,
 ) -> str:
     """Return a stable profile fingerprint for the enabled postprocessors."""
     return _sha256_payload(
@@ -45,9 +49,11 @@ def build_answer_postprocessor_profile(
             "risk_renderer": RISK_ANSWER_SHAPE_FINGERPRINT,
             "fact_renderer": EVIDENCE_FACT_RENDERER_FINGERPRINT,
             "revenue_renderer": ENUMERATION_ANSWER_RENDERER_FINGERPRINT,
+            "comparative_renderer": COMPARATIVE_ANSWER_RENDERER_FINGERPRINT,
             "deterministic_risk_renderer": deterministic_risk_renderer,
             "deterministic_fact_renderer": deterministic_fact_renderer,
             "deterministic_revenue_renderer": deterministic_revenue_renderer,
+            "deterministic_comparative_renderer": deterministic_comparative_renderer,
         }
     )
 

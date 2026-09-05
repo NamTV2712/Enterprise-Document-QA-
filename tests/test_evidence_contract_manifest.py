@@ -1,4 +1,5 @@
 import json
+from tests.conftest import skip_without_data
 
 from scripts.diagnostics.evidence_contract_v3_manifest import (
     CAMPAIGN_ID,
@@ -10,6 +11,9 @@ from scripts.diagnostics.evidence_contract_v3_manifest import (
 )
 
 
+@skip_without_data(
+    "data/eval_artifacts/phase1_priority2_financial_table_units.json",
+)
 def test_manifest_registers_frozen_protocol_and_distinct_outputs() -> None:
     manifest = build_manifest()
 
@@ -21,6 +25,9 @@ def test_manifest_registers_frozen_protocol_and_distinct_outputs() -> None:
     assert len({str(path) for path in NEW_OUTPUTS}) == len(NEW_OUTPUTS)
 
 
+@skip_without_data(
+    "data/eval_artifacts/phase1_priority2_financial_table_units.json",
+)
 def test_manifest_does_not_register_protected_or_legacy_output_paths() -> None:
     manifest = build_manifest()
     outputs = " ".join(manifest["registered_outputs"])
@@ -30,6 +37,9 @@ def test_manifest_does_not_register_protected_or_legacy_output_paths() -> None:
     assert "phase2_judge.jsonl" not in outputs
 
 
+@skip_without_data(
+    "data/eval_artifacts/phase1_priority2_financial_table_units.json",
+)
 def test_custom_campaign_identity_gets_distinct_outputs_and_run_ids(tmp_path) -> None:
     campaign_id = "evidence_contract_v3_test_window"
     paths = campaign_output_paths(campaign_id)

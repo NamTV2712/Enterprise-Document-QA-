@@ -9,7 +9,12 @@ from scripts.diagnostics.answerability_stability_v1_reproducibility import (
 )
 from src.evaluation.request_ledger import RequestLedger
 
+from tests.conftest import skip_without_data
 
+
+@skip_without_data(
+    "data/eval_artifacts/phase1_priority2_financial_table_units.json",
+)
 def test_fake_replicate_produces_a_receipt_the_verifier_can_recompute(tmp_path, monkeypatch) -> None:
     artifact = json.loads(campaign.ARTIFACT_PATH.read_text(encoding="utf-8"))
     config = {
@@ -43,6 +48,9 @@ def test_fake_replicate_produces_a_receipt_the_verifier_can_recompute(tmp_path, 
     assert ledger.used == 12
 
 
+@skip_without_data(
+    "data/eval_artifacts/phase1_priority2_financial_table_units.json",
+)
 def test_v3_verifier_rejects_tampered_answer_score_and_aggregate(tmp_path, monkeypatch) -> None:
     artifact = json.loads(campaign.ARTIFACT_PATH.read_text(encoding="utf-8"))
     config = {

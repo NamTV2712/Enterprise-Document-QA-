@@ -1,6 +1,15 @@
 from scripts.diagnostics.answer_focus_variance import build_report
 
+from tests.conftest import skip_without_data
 
+
+@skip_without_data(
+    "data/eval_artifacts/phase1_priority2.json",
+    "data/eval_artifacts/phase2_results_packed_selective_v2.json",
+    "data/eval_artifacts/phase2_results_answer_stability_v7_candidate.json",
+    "data/eval_artifacts/answer_stability_v1_sentinel_summary_r1.json",
+    "data/eval_artifacts/answer_stability_v1_sentinel_summary_r2.json",
+)
 def test_real_answer_focus_variance_pins_two_expected_regressions(tmp_path) -> None:
     import json
     from pathlib import Path

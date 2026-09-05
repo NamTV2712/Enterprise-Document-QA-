@@ -5,6 +5,20 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
 
 ## Active Quality Backlog
 
+0. [x] Library reliability and research UX round (branch
+       `codex/library-reliability-ux`): schema-v2 conversation repository with
+       dual-backend merge, tombstones, explicit persisted/volatile outcomes,
+       and non-destructive limits; `useConversationLibrary` lifecycle hook;
+       backend session-context metadata plus TTL-correct history reads;
+       read-only saved conversations; per-answer bookmarks; evidence search
+       and copy; help dialog and shortcuts; stylesheet split into four layers
+       with a WCAG token contrast gate; Playwright Chromium/Firefox suite
+       (`48/48`) with a reviewed Light/Dark x 390/768/1440 screenshot matrix
+       and an axe scan. Fixed a real bug: SSE streams that end without a
+       `done` event now flush and normalize the partial answer instead of
+       staying in the streaming state forever. Final gates: frontend `43/43`
+       unit tests, typecheck, build, contrast; backend `672 passed` and
+       compileall. Multi-tab concurrent editing remains out of scope.
 1. [x] Finish annual-report extraction adapters for MCD and INTC, which do not
        expose same-document TOC anchors. Keep the new anchor fallback for MS,
        COST, GE, and HON covered by fixture tests; do not overwrite generated

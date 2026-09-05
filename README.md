@@ -50,7 +50,7 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 | Memory | Multi-turn backend memory, query rewriting, and a searchable local conversation library with bookmarks and Markdown export |
 | Decomposition | Comparative and enumeration queries decomposed into focused sub-queries |
 | Evaluation | Fixed benchmark with faithfulness, relevancy, and context precision metrics |
-| Research workspace | Vite/React interface with searchable company and section controls, streaming answers, evidence inspection, and session history |
+| Research workspace | Vite/React interface with searchable company and section controls, streaming answers, evidence inspection with per-panel search and copy, per-answer bookmarks, a reliable local conversation Library, session context status, and a help dialog with shortcuts |
 | Conversation UX | Separate Overview and Conversation views, bounded answer cards, interpreted-query metadata, and a resizable desktop control sidebar |
 
 ## Architecture
@@ -1144,7 +1144,9 @@ frontend. The backend job uses Python 3.12 with CPU-only PyTorch, runs the full
 quota-free test suite, and compiles `src`, `scripts`, and `configs`. Hugging Face
 offline flags prevent accidental model downloads. The frontend job uses the
 project-pinned Bun `1.3.14`, installs from `bun.lock`, type-checks, runs Vitest,
-and builds the production bundle.
+builds the production bundle, runs the token contrast gate, and executes the
+Playwright browser suite (Chromium and Firefox) against fully mocked API
+routes, uploading traces and screenshots as artifacts on failure.
 
 Run the same checks locally:
 
@@ -1168,6 +1170,17 @@ bun run build
 
 Use `bun run test`, not `bun test`: the latter invokes Bun's native test runner
 instead of the repository's configured Vitest/jsdom environment.
+
+Browser verification is part of the frontend suite:
+
+```bash
+VITE_API_BASE_URL=http://127.0.0.1:8000 bun run test:e2e
+bun e2e/token-contrast.mjs
+```
+
+The Playwright run serves the production build with `vite preview` and mocks
+every backend route locally, so browser tests never reach a real API. The
+screenshot matrix covers Light and Dark themes at 390, 768, and 1440 pixels.
 
 ## Running With Docker
 

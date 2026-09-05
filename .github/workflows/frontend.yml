@@ -16,7 +16,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: frontend
@@ -34,8 +34,29 @@ jobs:
       - name: Type check
         run: bun run lint
 
-      - name: Run tests
+      - name: Run unit tests
         run: bun run test
 
       - name: Build
         run: bun run build
+
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium firefox
+
+      - name: Token contrast gate
+        run: bun e2e/token-contrast.mjs
+
+      - name: Run browser tests
+        run: bunx playwright test
+        env:
+          VITE_API_BASE_URL: http://127.0.0.1:8000
+
+      - name: Upload browser test artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            frontend/test-results/
+            frontend/playwright-report/
+          retention-days: 14

@@ -73,10 +73,20 @@ reduced motion with forced-finished animations. Final gates: frontend
 `43/43` unit tests, typecheck, production build, token contrast; backend
 `672 passed` (666 baseline + 6 new session-context tests) plus compileall.
 
+The push also exposed and fixed an inherited CI failure: the backend job had
+been red since before this branch because tests replaying git-ignored
+`data/` artifacts cannot run on a clean checkout. Those twelve tests now
+share a `skip_without_data` guard (verified by hiding `data/` locally:
+638 passed / 34 skipped / 0 failed; with the corpus: 672 passed), and the
+frontend workflow now bakes the mocked API origin into the browser-test
+build. Remote runs are green: Backend CI on `ddc94ce` and Frontend CI
+(browser tests included) on `86d969e`.
+
 Known limitations: multi-tab concurrent editing of the same Library is out of
 scope; the localStorage fallback copy is intentionally retained this cycle;
-CI has not yet run the new browser suite on a remote runner (verified locally
-on Chromium and Firefox); decorative borders remain below 3:1 by design.
+decorative borders remain below 3:1 by design; headless Chromium can freeze
+CSS animation clocks at small viewports, so the screenshot matrix captures
+settled reduced-motion states.
 
 ### Comparative Evidence Contract v2 — non-official NO-GO (2026-09-05)### Comparative Evidence Contract v2 — non-official NO-GO (2026-09-05)
 

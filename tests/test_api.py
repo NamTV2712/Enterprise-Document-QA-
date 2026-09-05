@@ -12,7 +12,7 @@ from configs.settings import Settings
 from src.api import app as app_module
 from src.api.telemetry import RequestTelemetry
 from src.generation.generator import RAGResponse
-from src.memory.conversation_memory import Turn
+from src.memory.conversation_memory import HistorySnapshot, Turn
 from src.retrieval.retriever import RetrievedChunk
 
 
@@ -341,13 +341,18 @@ def test_empty_session_id_is_rejected(client) -> None:
 def test_session_history_returns_full_assistant_message(client, mock_pipeline) -> None:
     """Historical answers must not be truncated when the UI reloads a session."""
     long_answer = "A" * 500
-    mock_pipeline.memory.get_history.return_value = [
-        Turn(
-            user_message="What are the main risks?",
-            assistant_message=long_answer,
-            rewritten_query="What are Apple's main risk factors?",
-        )
-    ]
+    mock_pipeline.memory.get_history_snapshot.return_value = HistorySnapshot(
+        turns=[
+            Turn(
+                user_message="What are the main risks?",
+                assistant_message=long_answer,
+                rewritten_query="What are Apple's main risk factors?",
+            )
+        ],
+        status="available",
+        retained_turns=1,
+        ttl_remaining_seconds=1200.0,
+    )
 
     response = client.get("/session/history-regression/history")
 

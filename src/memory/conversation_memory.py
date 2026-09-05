@@ -50,6 +50,16 @@ class ConversationSession:
         return messages
 
 
+@dataclass
+class HistorySnapshot:
+    """One consistent history read plus backend context metadata."""
+
+    turns: list["Turn"]
+    status: str  # "available" | "missing"
+    retained_turns: int
+    ttl_remaining_seconds: float
+
+
 class ConversationMemory:
     """In-memory session store with TTL-based cleanup.
 
@@ -79,9 +89,32 @@ class ConversationMemory:
         self, session_id: str, n: int = MAX_HISTORY_TURNS
     ) -> list[Turn]:
         with self._lock:
-            if session_id not in self._sessions:
-                return []
-            return list(self._sessions[session_id].get_recent_turns(n))
+            return self.get_history_snapshot(session_id, n).turns
+
+    def get_history_snapshot(
+        self, session_id: str, n: int = MAX_HISTORY_TURNS
+    ) -> HistorySnapshot:
+        """Read history and context metadata under one lock acquisition.
+
+        Reading history never creates a session and never extends its TTL.
+        An expired or unknown session reports ``missing``; after cleanup the
+        two cases are intentionally indistinguishable.
+        """
+        with self._lock:
+            self._cleanup_expired()
+            session = self._sessions.get(session_id)
+            if session is None:
+                return HistorySnapshot(
+                    turns=[], status="missing", retained_turns=0, ttl_remaining_seconds=0.0
+                )
+            remaining = max(0.0, self._ttl - (time.monotonic() - session.last_active))
+            turns = list(session.get_recent_turns(n))
+            return HistorySnapshot(
+                turns=turns,
+                status="available",
+                retained_turns=len(turns),
+                ttl_remaining_seconds=round(remaining, 3),
+            )
 
     def clear_session(self, session_id: str) -> None:
         with self._lock:

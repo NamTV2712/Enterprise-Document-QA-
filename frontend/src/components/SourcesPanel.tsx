@@ -7,8 +7,12 @@ import React, { useEffect, useId, useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
+  Copy,
+  Check,
   FileText,
   ArrowUpRight,
+  Search,
+  X,
 } from "lucide-react";
 import { Source } from "../types";
 import { formatCompanyLabel, SECTION_METADATA } from "../lib/displayMetadata";
@@ -137,6 +141,22 @@ function getSectionBadgeClass(sectionName: string): string {
   return "section-badge--business";
 }
 
+/** Escape user input so evidence search stays literal, never a regex. */
+function escapeLiteral(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildExcerptCopyText(source: Source, sourceNumber: number): string {
+  const lines = [`[Source ${sourceNumber}] ${source.citation}`];
+  if (source.ticker) lines.push(`Company: ${formatCompanyLabel(source.ticker)}`);
+  if (source.section) {
+    lines.push(`Section: ${SECTION_METADATA[source.section]?.label ?? source.section}`);
+  }
+  if (source.filing_date) lines.push(`Filed: ${source.filing_date}`);
+  lines.push("", source.text || source.text_preview);
+  return lines.join("\n");
+}
+
 export const SourcesPanel: React.FC<SourcesPanelProps> = ({
   sources,
   messageId = "message",
@@ -144,12 +164,14 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
   onFocusHandled,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [copyStateIndex, setCopyStateIndex] = useState<number | null>(null);
   const panelId = `sources-panel-${useId().replace(/:/g, "")}`;
   const safeMessageId = messageId.replace(/[^a-zA-Z0-9_-]/g, "-");
 
   const { companySummary, remainingCompanies } = useMemo(() => {
     const sourceTickers = Array.from(
-      new Set(sources.map((source) => getSectionDisplay(source.citation).ticker)),
+      new Set(sources.map((source) => source.ticker || getSectionDisplay(source.citation).ticker)),
     );
     return {
       companySummary: sourceTickers
@@ -160,8 +182,29 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
     };
   }, [sources]);
 
+  // Literal, case-insensitive filtering over the excerpt text. The source
+  // number always follows the original array order, so [Source N] labels
+  // stay stable while excerpts are filtered.
+  const visibleIndexes = useMemo(() => {
+    const needle = searchQuery.trim().toLowerCase();
+    if (!needle) return sources.map((_, index) => index);
+    return sources
+      .map((source, index) => ({ source, index }))
+      .filter(({ source }) =>
+        `${source.text || source.text_preview} ${source.citation}`
+          .toLowerCase()
+          .includes(needle),
+      )
+      .map(({ index }) => index);
+  }, [searchQuery, sources]);
+
   useEffect(() => {
     if (focusSourceIndex === null || focusSourceIndex < 0) return;
+    // A citation jump must always reveal its source: if the requested index
+    // is hidden by the active filter, clear the filter first.
+    if (!visibleIndexes.includes(focusSourceIndex)) {
+      setSearchQuery("");
+    }
     setIsOpen(true);
     const frame = window.requestAnimationFrame(() => {
       const source = document.getElementById(
@@ -172,9 +215,23 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
       onFocusHandled?.();
     });
     return () => window.cancelAnimationFrame(frame);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusSourceIndex, onFocusHandled, safeMessageId]);
 
+  const handleCopyExcerpt = async (index: number, source: Source) => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(buildExcerptCopyText(source, index + 1));
+      setCopyStateIndex(index);
+      window.setTimeout(() => setCopyStateIndex((current) => (current === index ? null : current)), 2000);
+    } catch {
+      setCopyStateIndex(null);
+    }
+  };
+
   if (!sources || sources.length === 0) return null;
+
+  const filterHidesResults = searchQuery.trim().length > 0 && visibleIndexes.length === 0;
 
   return (
     <div className="sources-panel overflow-hidden my-4">
@@ -219,10 +276,41 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
               orders excerpts within this result set; it is not a probability or
               confidence percentage.
             </div>
+            <div className="px-3.5 py-2.5 bg-[var(--surface-muted)] border-b border-[var(--border-subtle)]">
+              <div className="evidence-search flex items-center gap-2">
+                <Search className="w-3.5 h-3.5 flex-shrink-0 text-[var(--text-subtle)]" aria-hidden="true" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search within these excerpts"
+                  aria-label="Search within these evidence excerpts"
+                  className="evidence-search__input"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    aria-label="Clear evidence search"
+                    className="icon-button"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              <p className="mt-1.5 text-[11px] text-[var(--text-subtle)]">
+                {filterHidesResults
+                  ? "No excerpt matches this search. Clear it to see all sources."
+                  : `Showing ${visibleIndexes.length} of ${sources.length} excerpts. Source numbers follow the original order.`}
+              </p>
+            </div>
             <div className="p-3.5 divide-y divide-[var(--border-subtle)] md:max-h-[min(28rem,55vh)] md:overflow-y-auto bg-[var(--surface-muted)]">
-              {sources.map((source, index) => {
+              {visibleIndexes.map((index) => {
+                const source = sources[index];
+                const sectionField = source.section;
                 const { section, ticker, year } = getSectionDisplay(
                   source.citation,
+                  sectionField,
                 );
                 const evidenceText = source.text || source.text_preview;
                 const isPreviewOnly = !source.text;
@@ -230,6 +318,9 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
                   typeof source.score === "number"
                     ? source.score.toFixed(4)
                     : source.score;
+                // The filing date describes the document, not the fiscal
+                // period of any number inside the excerpt.
+                const filedLabel = source.filing_date || (year ? `20${year.slice(-2)} filing year` : "");
 
                 return (
                   <div
@@ -240,24 +331,43 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
                     data-source-index={index}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         {/* Section-colored badge tag */}
                         <span className={`section-badge ${getSectionBadgeClass(section)} shadow-4xs`}>
                           <ArrowUpRight className="w-3.5 h-3.5" />
                           <span>
-                            {formatCompanyLabel(ticker)} {year ? `'${year.slice(-2)}` : ""} ·{" "}
+                            {formatCompanyLabel(source.ticker || ticker)}
+                            {filedLabel ? ` · ${filedLabel}` : year ? ` '${year.slice(-2)}` : ""} ·{" "}
                             {section}
                           </span>
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-1.5 font-mono">
-                        <span className="text-xs text-slate-400 dark:text-slate-500 font-semibold">
-                          Rank score
-                        </span>
-                        <span className="text-xs font-bold text-brand-indigo bg-brand-indigo/10 dark:bg-brand-indigo/20 border border-brand-indigo/30 px-2 py-0.5 rounded shadow-4xs">
-                          {displayScore}
-                        </span>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 font-mono">
+                          <span className="text-xs text-slate-400 dark:text-slate-500 font-semibold">
+                            Rank score
+                          </span>
+                          <span className="text-xs font-bold text-brand-indigo bg-brand-indigo/10 dark:bg-brand-indigo/20 border border-brand-indigo/30 px-2 py-0.5 rounded shadow-4xs">
+                            {displayScore}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void handleCopyExcerpt(index, source)}
+                          aria-label={
+                            copyStateIndex === index
+                              ? `Copied excerpt ${index + 1}`
+                              : `Copy excerpt ${index + 1} with citation`
+                          }
+                          className="icon-button evidence-copy-button"
+                        >
+                          {copyStateIndex === index ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-500" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
                       </div>
                     </div>
                     <p
@@ -273,6 +383,19 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
                   </div>
                 );
               })}
+              {filterHidesResults && (
+                <div className="py-6 text-center text-xs text-[var(--text-subtle)]">
+                  No excerpt matches this search.{" "}
+                  <button
+                    type="button"
+                    className="text-brand-indigo font-semibold"
+                    onClick={() => setSearchQuery("")}
+                  >
+                    Clear the search
+                  </button>{" "}
+                  to see all {sources.length} sources.
+                </div>
+              )}
             </div>
           </div>
       )}

@@ -510,13 +510,18 @@ async def clear_session(session_id: str) -> dict:
 
 @app.get("/session/{session_id}/history")
 async def get_session_history(session_id: str) -> dict:
-    """Return conversation history for debugging and UI rendering."""
+    """Return conversation history for debugging and UI rendering.
+
+    The optional ``context`` block reports backend session state without
+    creating or refreshing the session: ``available`` with the TTL budget
+    that remains, or ``missing`` when the session expired or never existed.
+    """
     _validate_session_id(session_id)
     pipeline: RAGPipeline = _state.get("pipeline")
     if pipeline is None:
         raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
 
-    turns = pipeline.memory.get_history(session_id)
+    snapshot = pipeline.memory.get_history_snapshot(session_id)
     return {
         "session_id": session_id,
         "turns": [
@@ -525,8 +530,13 @@ async def get_session_history(session_id: str) -> dict:
                 "assistant": turn.assistant_message,
                 "rewritten_query": turn.rewritten_query,
             }
-            for turn in turns
+            for turn in snapshot.turns
         ],
+        "context": {
+            "status": snapshot.status,
+            "retained_turns": snapshot.retained_turns,
+            "ttl_remaining_seconds": snapshot.ttl_remaining_seconds,
+        },
     }
 
 

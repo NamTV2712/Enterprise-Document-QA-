@@ -73,9 +73,16 @@ export interface DecomposedResponse {
   num_total_chunks: number;
 }
 
+export interface SessionContextInfo {
+  status: "available" | "missing";
+  retained_turns: number;
+  ttl_remaining_seconds: number;
+}
+
 export interface SessionHistoryResponse {
   session_id: string;
   turns: HistoryTurn[];
+  context?: SessionContextInfo;
 }
 
 export interface HistoryTurn {

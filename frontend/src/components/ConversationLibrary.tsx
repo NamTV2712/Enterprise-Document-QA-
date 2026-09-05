@@ -13,18 +13,28 @@ import {
   ConversationRecord,
   ConversationStorageMode,
 } from "../lib/conversationStore";
+import { SaveIndicator } from "../hooks/useConversationLibrary";
 
 interface ConversationLibraryProps {
   conversations: ConversationRecord[];
   activeConversationId: string;
   storageMode: ConversationStorageMode;
   storageWarning: string | null;
+  saveIndicator?: SaveIndicator;
   onSelect: (conversation: ConversationRecord) => void;
   onRename: (conversationId: string, title: string) => void;
   onToggleBookmark: (conversationId: string, messageId: string) => void;
   onDelete: (conversationId: string) => void;
   onExport: (conversation: ConversationRecord) => void;
+  /** Open a conversation and focus one bookmarked answer. */
+  onOpenMessage?: (conversationId: string, messageId: string) => void;
   onClose: () => void;
+}
+
+interface BookmarkedAnswer {
+  conversation: ConversationRecord;
+  messageId: string;
+  excerpt: string;
 }
 
 function relativeTime(timestamp: number): string {
@@ -38,10 +48,39 @@ function relativeTime(timestamp: number): string {
   return `${days}d ago`;
 }
 
-function storageLabel(mode: ConversationStorageMode): string {
-  if (mode === "indexeddb") return "Saved on this device";
+function storageLabel(mode: ConversationStorageMode, saveIndicator?: SaveIndicator): string {
+  if (mode === "memory") return "Only kept in this tab";
+  if (saveIndicator === "volatile") return "Only kept in this tab";
+  if (saveIndicator === "saved") return "Saved on this device";
   if (mode === "localstorage") return "Browser storage fallback";
-  return "In-memory for this tab";
+  return "Saved on this device";
+}
+
+function collectBookmarkedAnswers(
+  conversations: ConversationRecord[],
+  normalizedSearch: string,
+): BookmarkedAnswer[] {
+  const answers: BookmarkedAnswer[] = [];
+  for (const conversation of conversations) {
+    for (const messageId of conversation.bookmarkedMessageIds) {
+      const message = conversation.messages.find(
+        (item) => item.id === messageId && item.sender === "assistant" && item.text,
+      );
+      if (!message) continue;
+      if (
+        normalizedSearch &&
+        !`${conversation.title} ${message.text}`.toLowerCase().includes(normalizedSearch)
+      ) {
+        continue;
+      }
+      answers.push({
+        conversation,
+        messageId,
+        excerpt: message.text.trim().replace(/\s+/g, " ").slice(0, 160),
+      });
+    }
+  }
+  return answers;
 }
 
 export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
@@ -49,11 +88,13 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
   activeConversationId,
   storageMode,
   storageWarning,
+  saveIndicator,
   onSelect,
   onRename,
   onToggleBookmark,
   onDelete,
   onExport,
+  onOpenMessage,
   onClose,
 }) => {
   const [search, setSearch] = useState("");
@@ -78,6 +119,11 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
           : true;
         return matchesSearch && matchesBookmark;
       }),
+    [bookmarkedOnly, conversations, normalizedSearch],
+  );
+
+  const bookmarkedAnswers = useMemo(
+    () => (bookmarkedOnly ? collectBookmarkedAnswers(conversations, normalizedSearch) : []),
     [bookmarkedOnly, conversations, normalizedSearch],
   );
 
@@ -106,14 +152,21 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
 
       <div className="library-storage-status" role="status" aria-live="polite">
         <span className="library-status-dot" aria-hidden="true" />
-        <span>{storageLabel(storageMode)}</span>
+        <span>{storageLabel(storageMode, saveIndicator)}</span>
       </div>
+      {storageMode === "memory" && (
+        <p className="library-warning">
+          Only kept in this tab: browser storage is unavailable, so conversations
+          disappear when the tab closes.
+        </p>
+      )}
       {storageWarning && <p className="library-warning">{storageWarning}</p>}
 
       <label className="library-search">
         <Search className="h-4 w-4" aria-hidden="true" />
         <span className="sr-only">Search saved conversations</span>
         <input
+          id="library-search-input"
           type="search"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
@@ -133,7 +186,58 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
       </button>
 
       <div className="library-list" aria-live="polite">
-        {filteredConversations.length === 0 ? (
+        {bookmarkedOnly ? (
+          bookmarkedAnswers.length === 0 ? (
+            <div className="library-empty">
+              <Bookmark className="h-7 w-7" aria-hidden="true" />
+              <p>
+                {conversations.some((conversation) => conversation.bookmarkedMessageIds.length > 0)
+                  ? "No bookmarked answers match this search."
+                  : "Bookmark an answer to find it quickly here."}
+              </p>
+            </div>
+          ) : (
+            bookmarkedAnswers.map(({ conversation, messageId, excerpt }) => (
+              <article className="library-item" key={`${conversation.id}-${messageId}`}>
+                <button
+                  type="button"
+                  className="library-item-main"
+                  onClick={() =>
+                    onOpenMessage
+                      ? onOpenMessage(conversation.id, messageId)
+                      : onSelect(conversation)
+                  }
+                >
+                  <span className="library-item-title">{conversation.title}</span>
+                  <span className="library-item-excerpt">{excerpt}</span>
+                  <span className="library-item-meta">
+                    {relativeTime(conversation.updatedAt)}
+                  </span>
+                </button>
+                <div className="library-item-actions">
+                  <button
+                    type="button"
+                    className="icon-button is-bookmarked"
+                    onClick={() => onToggleBookmark(conversation.id, messageId)}
+                    aria-label="Remove answer bookmark"
+                    title="Remove bookmark"
+                  >
+                    <BookmarkCheck className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    onClick={() => onExport(conversation)}
+                    aria-label="Export conversation"
+                    title="Export Markdown"
+                  >
+                    <Download className="h-4 w-4" />
+                  </button>
+                </div>
+              </article>
+            ))
+          )
+        ) : filteredConversations.length === 0 ? (
           <div className="library-empty">
             <MessageSquare className="h-7 w-7" aria-hidden="true" />
             <p>{conversations.length === 0 ? "Your saved conversations will appear here." : "No conversations match this search."}</p>

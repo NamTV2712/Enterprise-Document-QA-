@@ -5,7 +5,9 @@ import { ConversationRecord } from "./conversationStore";
 describe("conversation export", () => {
   test("exports readable evidence without session identifiers or technical details", () => {
     const conversation: ConversationRecord = {
-      schemaVersion: 1,
+      schemaVersion: 2,
+  titleMode: "auto",
+  revision: 1,
       id: "conversation-secret-id",
       sessionId: "session-secret-id",
       title: "Revenue review",

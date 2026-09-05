@@ -18,6 +18,9 @@ interface ChatInputProps {
   isPipelineReady: boolean | null;
   showBanner?: boolean;
   scopeLabel?: string;
+  /** Read-only saved conversations accept drafts but never send. */
+  isReadOnly?: boolean;
+  readOnlyMessage?: string;
 }
 
 export const ConnectionBanner = memo(
@@ -78,6 +81,8 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
   isPipelineReady,
   showBanner = true,
   scopeLabel,
+  isReadOnly = false,
+  readOnlyMessage,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composingRef = useRef(false);
@@ -88,7 +93,11 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
   const isTooLong = charCount > 500;
   const isValidLength = trimmedLength >= 5 && charCount <= 500;
 
-  const isDisabled = isLoading || !isBackendConnected || !isPipelineReady;
+  const isDisabled =
+    isLoading || !isBackendConnected || !isPipelineReady || isReadOnly;
+  // Drafts stay editable in read-only conversations so the user can carry
+  // them into a new conversation; only sending is locked.
+  const isTextareaDisabled = isLoading || !isBackendConnected || !isPipelineReady;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -142,6 +151,18 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
           />
         )}
 
+        {/* Read-only notice for saved conversations without backend context */}
+        {isReadOnly && readOnlyMessage && (
+          <div
+            className="flex items-center gap-2 p-2.5 rounded-lg border state-warning-border state-warning-surface state-warning-text text-xs font-semibold font-sans"
+            role="status"
+            aria-live="polite"
+          >
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <span>{readOnlyMessage}</span>
+          </div>
+        )}
+
         <form
           aria-label="Ask a research question"
           onSubmit={handleSubmit}
@@ -169,7 +190,9 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
             }}
             onKeyDown={handleKeyDown}
             placeholder={
-              isBackendConnected === null || isPipelineReady === null
+              isReadOnly
+                ? "This saved conversation is read-only; ask follow-ups in a new conversation"
+                : isBackendConnected === null || isPipelineReady === null
                 ? "Connecting to the FastAPI backend..."
                 : !isBackendConnected
                   ? "Connect the FastAPI backend to start asking questions"
@@ -177,7 +200,7 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
                     ? "Pipeline index loading..."
                     : "Ask a question about 10-K filings (e.g. Compare risk factors...)"
             }
-            disabled={isDisabled}
+            disabled={isTextareaDisabled}
             aria-describedby="chat-input-hint"
             className="flex-1 resize-none bg-transparent border-0 outline-none focus:ring-0 text-sm md:text-base text-[var(--text-primary)] py-2.5 max-h-40 min-h-[40px] pr-12 scrollbar-none font-sans"
           />

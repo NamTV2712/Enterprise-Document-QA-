@@ -5,7 +5,9 @@ import { ConversationLibrary } from "./ConversationLibrary";
 import { ConversationRecord } from "../lib/conversationStore";
 
 const record: ConversationRecord = {
-  schemaVersion: 1,
+  schemaVersion: 2,
+  titleMode: "auto",
+  revision: 1,
   id: "conversation-1",
   sessionId: "session-1",
   title: "Revenue review",

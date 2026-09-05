@@ -65,23 +65,24 @@ describe("App request cancellation", () => {
     warnSpy.mockRestore();
   });
 
-  test("initialization shares one abort signal across all requests", async () => {
+  test("initialization shares one abort signal across health and metadata requests", async () => {
     const { unmount } = render(<App />);
 
-    await waitFor(() => expect(apiMocks.getSessionHistory).toHaveBeenCalled());
+    await waitFor(() => expect(apiMocks.getSupportedTickers).toHaveBeenCalled());
     const healthSignal = apiMocks.checkHealth.mock.calls[0][0];
     const tickerSignal = apiMocks.getSupportedTickers.mock.calls[0][0];
-    const historySignal = apiMocks.getSessionHistory.mock.calls[0][1];
 
     expect(tickerSignal).toBe(healthSignal);
-    expect(historySignal).toBe(healthSignal);
     expect(healthSignal.aborted).toBe(false);
+    // Session history is consulted only after local hydration completes;
+    // it is not part of the abort-shared initialization pair.
+    expect(apiMocks.getSessionHistory.mock.calls.length).toBeLessThanOrEqual(1);
 
     unmount();
     expect(healthSignal.aborted).toBe(true);
   });
 
-  test("loads supported metadata and session history in parallel", async () => {
+  test("loads supported metadata after readiness without blocking on history", async () => {
     let resolveSupportedTickers: ((value: {
       tickers: string[];
       sections: string[];
@@ -95,7 +96,7 @@ describe("App request cancellation", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(apiMocks.getSessionHistory).toHaveBeenCalled());
+    await waitFor(() => expect(apiMocks.checkHealth).toHaveBeenCalled());
     expect(resolveSupportedTickers).toBeDefined();
 
     resolveSupportedTickers?.({ tickers: ["AAPL"], sections: ["business"] });
@@ -136,7 +137,7 @@ describe("App request cancellation", () => {
     localStorage.setItem("sec_qa_session_id", "expired-session");
     localStorage.setItem("sec_qa_active_conversation_id", "conversation-expired-session");
     localStorage.setItem(
-      "sec_qa_conversations_v1",
+      "sec_qa_conversations_v2",
       JSON.stringify([
         {
           schemaVersion: 1,
@@ -154,15 +155,58 @@ describe("App request cancellation", () => {
         },
       ]),
     );
-    apiMocks.getSessionHistory.mockRejectedValue(new Error("session expired"));
+    apiMocks.getSessionHistory.mockResolvedValue({
+      session_id: "expired-session",
+      turns: [],
+      context: { status: "missing", retained_turns: 0, ttl_remaining_seconds: 0 },
+    });
 
     render(<App />);
 
     expect(await screen.findByText("Saved answer with evidence.")).toBeInTheDocument();
     expect(
-      await screen.findByText(/saved local copy.*backend context is unavailable or expired/i),
-    ).toBeInTheDocument();
+      (await screen.findAllByText(/backend session for this saved conversation has expired/i)).length,
+    ).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Start new conversation" })).toBeInTheDocument();
+    // The composer must not offer sending follow-ups in read-only mode.
+    expect(screen.getByRole("button", { name: "Send question" })).toBeDisabled();
+  });
+
+  test("keeps an expired saved conversation readable and does not resend it as context", async () => {
+    localStorage.setItem("sec_qa_session_id", "expired-session-2");
+    localStorage.setItem("sec_qa_active_conversation_id", "conversation-expired-session-2");
+    localStorage.setItem(
+      "sec_qa_conversations_v2",
+      JSON.stringify([
+        {
+          schemaVersion: 1,
+          id: "conversation-expired-session-2",
+          sessionId: "expired-session-2",
+          title: "Read-only copy",
+          createdAt: 1,
+          updatedAt: 2,
+          draft: "",
+          bookmarkedMessageIds: ["a-1"],
+          messages: [
+            { id: "u-1", sender: "user", text: "What are the risks?" },
+            { id: "a-1", sender: "assistant", text: "Saved answer kept for reading." },
+          ],
+        },
+      ]),
+    );
+    apiMocks.getSessionHistory.mockResolvedValue({
+      session_id: "expired-session-2",
+      turns: [],
+      context: { status: "missing", retained_turns: 0, ttl_remaining_seconds: 0 },
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText("Saved answer kept for reading.")).toBeInTheDocument();
+    // No retry affordance while the conversation is read-only.
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: /Retry/i })).not.toBeInTheDocument();
+    });
   });
 
   test("onboarding explains scope and how to verify results", async () => {
@@ -313,7 +357,7 @@ describe("App request cancellation", () => {
     expect(input).toBeEnabled();
     await waitFor(() =>
       expect(
-        setItemSpy.mock.calls.filter(([key]) => key === "sec_qa_conversations_v1"),
+        setItemSpy.mock.calls.filter(([key]) => key === "sec_qa_conversations_v2"),
       ).toHaveLength(1),
     );
     setItemSpy.mockRestore();
@@ -391,7 +435,7 @@ describe("App request cancellation", () => {
     const dialog = screen.getByRole("dialog", { name: "Start a new conversation?" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Start new conversation" }));
     await waitFor(() => {
-      const raw = localStorage.getItem("sec_qa_conversations_v1");
+      const raw = localStorage.getItem("sec_qa_conversations_v2");
       expect(raw).toContain("Full historical answer");
     });
     expect(apiMocks.deleteSession).not.toHaveBeenCalled();

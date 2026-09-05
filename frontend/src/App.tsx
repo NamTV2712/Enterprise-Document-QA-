@@ -12,14 +12,14 @@ import {
   useCallback,
   useMemo,
 } from "react";
-import { AlertTriangle, ChevronDown, X } from "lucide-react";
+import { AlertTriangle, BookMarked, ChevronDown, RefreshCw, X } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { ChatInput } from "./components/ChatInput";
 import { SampleQuestion } from "./components/SampleQuestionChips";
 import { OverviewPanel } from "./components/OverviewPanel";
 import { WorkspaceHeader } from "./components/WorkspaceHeader";
+import { HelpDialog } from "./components/HelpDialog";
 import {
-  Message,
   HealthResponse,
   RequestSnapshot,
   ThemePreference,
@@ -28,23 +28,15 @@ import {
   checkHealth,
   getSupportedTickers,
   queryDecomposed,
-  getSessionHistory,
   streamQuery,
 } from "./lib/api";
 import { formatCompanyLabel, SECTION_METADATA } from "./lib/displayMetadata";
-import {
-  ConversationRecord,
-  ConversationStorageMode,
-  createConversationRecord,
-  deleteConversationRecord,
-  loadConversationLibrary,
-  saveConversationRecord,
-} from "./lib/conversationStore";
+import { ConversationRecord } from "./lib/conversationStore";
+import { saveConversationRecord } from "./lib/conversationStore";
 import { downloadConversationMarkdown } from "./lib/conversationExport";
+import { useConversationLibrary, SessionContextStatus } from "./hooks/useConversationLibrary";
 
 const STREAM_FLUSH_INTERVAL_MS = 80;
-const MAX_PERSISTED_MESSAGES = 50;
-const MESSAGE_PERSIST_DEBOUNCE_MS = 1000;
 const HEALTH_REFRESH_INTERVAL_MS = 15_000;
 const COMPARATIVE_KEYWORDS = [
   "compare",
@@ -64,49 +56,6 @@ const ChatMessage = lazy(() =>
 function isComparativeQuery(question: string): boolean {
   const lower = question.toLowerCase();
   return COMPARATIVE_KEYWORDS.some((keyword) => lower.includes(keyword));
-}
-
-// localStorage can throw in private browsing or when quota is exceeded;
-// persistence failures must never crash the UI.
-function safeSetItem(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value);
-  } catch (e) {
-    console.warn(`Could not persist "${key}" to localStorage:`, e);
-  }
-}
-
-function safeGetItem(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch (e) {
-    console.warn(`Could not read "${key}" from localStorage:`, e);
-    return null;
-  }
-}
-
-function safeRemoveItem(key: string): void {
-  try {
-    localStorage.removeItem(key);
-  } catch (e) {
-    console.warn(`Could not remove "${key}" from localStorage:`, e);
-  }
-}
-
-function createSessionId(): string {
-  if (typeof globalThis.crypto?.randomUUID === "function") {
-    return globalThis.crypto.randomUUID();
-  }
-
-  // Some embedded browsers and non-secure LAN previews do not expose
-  // crypto.randomUUID. Keep session creation resilient without adding a
-  // dependency or changing the backend contract.
-  const randomPart = Math.random().toString(36).slice(2, 10);
-  return `session-${Date.now().toString(36)}-${randomPart}`;
-}
-
-function createConversationId(sessionId: string): string {
-  return `conversation-${sessionId}`;
 }
 
 function describeRequestError(
@@ -144,24 +93,14 @@ function getSystemTheme(): "light" | "dark" {
     : "light";
 }
 
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
 export default function App() {
-  const [sessionId, setSessionId] = useState<string>(() => {
-    const stored = safeGetItem("sec_qa_session_id");
-    const next = stored || createSessionId();
-    if (!stored) safeSetItem("sec_qa_session_id", next);
-    return next;
-  });
-  const [activeConversationId, setActiveConversationId] = useState<string>(() => {
-    const stored = safeGetItem("sec_qa_active_conversation_id");
-    return stored || createConversationId(safeGetItem("sec_qa_session_id") || "pending");
-  });
-  const [conversations, setConversations] = useState<ConversationRecord[]>([]);
-  const [storageMode, setStorageMode] = useState<ConversationStorageMode>("memory");
-  const [storageWarning, setStorageWarning] = useState<string | null>(null);
-  const [activeSidebarPanel, setActiveSidebarPanel] = useState<"research" | "library">("research");
-  const [isLibraryReady, setIsLibraryReady] = useState(false);
-  const [bookmarkedMessageIds, setBookmarkedMessageIds] = useState<string[]>([]);
-  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
   const [tickers, setTickers] = useState<string[]>([]);
   const [sections, setSections] = useState<string[]>([]);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
@@ -169,21 +108,6 @@ export default function App() {
   const [topK, setTopK] = useState<number>(5);
   const [enableComparative, setEnableComparative] = useState<boolean>(true);
 
-  const [inputText, setInputText] = useState<string>("");
-  const [messages, setMessages] = useState<Message[]>(() => {
-    const saved = safeGetItem("sec_qa_messages");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.slice(-MAX_PERSISTED_MESSAGES);
-        }
-      } catch {
-        safeRemoveItem("sec_qa_messages");
-      }
-    }
-    return [];
-  });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isBackendConnected, setIsBackendConnected] = useState<boolean | null>(
     null,
@@ -193,16 +117,23 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [isClearingSession, setIsClearingSession] = useState<boolean>(false);
   const [showResetDialog, setShowResetDialog] = useState<boolean>(false);
+  const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
   const [activeView, setActiveView] = useState<"overview" | "conversation">(
     "overview",
   );
+  const [pendingFocusMessageId, setPendingFocusMessageId] = useState<string | null>(null);
+  const [activeSidebarPanel, setActiveSidebarPanel] = useState<"research" | "library">("research");
 
   // Theme state. Keep the preference separate from the resolved color so a
   // system preference can follow OS changes without overwriting user choice.
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
-    const saved = safeGetItem("theme");
-    if (saved === "system" || saved === "light" || saved === "dark") {
-      return saved;
+    try {
+      const saved = localStorage.getItem("theme");
+      if (saved === "system" || saved === "light" || saved === "dark") {
+        return saved;
+      }
+    } catch {
+      // Storage may be unavailable; fall back to system.
     }
     return "system";
   });
@@ -214,12 +145,43 @@ export default function App() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const requestAbortRef = useRef<AbortController | null>(null);
-  const conversationCreatedAtRef = useRef(Date.now());
-  const localLibraryHasRecordRef = useRef(false);
   const resetCancelRef = useRef<HTMLButtonElement>(null);
   const healthRequestRef = useRef<Promise<HealthResponse> | null>(null);
   const lastHealthRefreshRef = useRef(0);
   const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
+
+  const cancelActiveRequest = useCallback(() => {
+    const controller = requestAbortRef.current;
+    requestAbortRef.current = null;
+    controller?.abort();
+    setIsLoading(false);
+  }, []);
+
+  const library = useConversationLibrary({ onCancelActiveRequest: cancelActiveRequest });
+  const {
+    sessionId,
+    conversations,
+    messages,
+    inputText,
+    bookmarkedMessageIds,
+    storageMode,
+    storageWarning,
+    isLibraryReady,
+    saveIndicator,
+    sessionContext,
+    isReadOnly,
+    setInputText,
+    updateMessages,
+    beginSend,
+    registerBackendExchange,
+    selectConversation,
+    startNewConversation,
+    renameConversation,
+    toggleAnswerBookmark,
+    deleteConversation,
+    recheckSessionContext,
+  } = library;
+  const activeConversationId = library.activeConversationId;
 
   const applyHealth = useCallback((health: HealthResponse) => {
     lastHealthRefreshRef.current = Date.now();
@@ -272,74 +234,15 @@ export default function App() {
     } else {
       document.documentElement.classList.remove("dark");
     }
-    safeSetItem("theme", themePreference);
+    try {
+      localStorage.setItem("theme", themePreference);
+    } catch {
+      // Storage may be unavailable; theme still applies for this session.
+    }
   }, [resolvedTheme, themePreference]);
 
-  const persistCurrentConversation = useCallback(async () => {
-    if (!isLibraryReady || (!messages.length && !inputText.trim())) return;
-    const record = createConversationRecord(
-      activeConversationId,
-      sessionId,
-      messages,
-      inputText,
-      bookmarkedMessageIds,
-      conversationCreatedAtRef.current,
-    );
-    const result = await saveConversationRecord(record);
-    setStorageMode(result.storageMode);
-    setStorageWarning(result.warning);
-    setConversations((current) => [
-      record,
-      ...current.filter((conversation) => conversation.id !== record.id),
-    ].sort((a, b) => b.updatedAt - a.updatedAt));
-  }, [activeConversationId, bookmarkedMessageIds, inputText, isLibraryReady, messages, sessionId]);
-
-  // Autosave completed responses and drafts without writing on every streamed token.
-  useEffect(() => {
-    if (!isLibraryReady || messages.some((message) => message.isStreaming)) return;
-    const timeoutId = window.setTimeout(() => {
-      void persistCurrentConversation();
-    }, MESSAGE_PERSIST_DEBOUNCE_MS);
-    return () => window.clearTimeout(timeoutId);
-  }, [inputText, isLibraryReady, messages, bookmarkedMessageIds, persistCurrentConversation]);
-
-  // Load the local library first. Backend history is only a fallback when no
-  // richer local record exists, so sources and request metadata survive reload.
-  useEffect(() => {
-    let cancelled = false;
-    loadConversationLibrary(sessionId, activeConversationId).then((library) => {
-      if (cancelled) return;
-      setConversations(library.conversations);
-      setStorageMode(library.storageMode);
-      setStorageWarning(library.warning);
-      const current =
-        library.conversations.find((conversation) => conversation.id === activeConversationId) ||
-        library.conversations.find((conversation) => conversation.sessionId === sessionId);
-      if (current) {
-        localLibraryHasRecordRef.current = true;
-        conversationCreatedAtRef.current = current.createdAt;
-        setActiveConversationId(current.id);
-        setSessionId(current.sessionId);
-        setMessages(current.messages);
-        setInputText(current.draft);
-        setBookmarkedMessageIds(current.bookmarkedMessageIds);
-        safeSetItem("sec_qa_session_id", current.sessionId);
-        safeSetItem("sec_qa_active_conversation_id", current.id);
-        if (current.messages.length > 0) setActiveView("conversation");
-      }
-      setIsLibraryReady(true);
-    }).catch((error) => {
-      if (cancelled) return;
-      setStorageWarning("Conversation library could not be loaded; this session will continue in memory.");
-      setIsLibraryReady(true);
-      console.warn("Could not load conversation library:", error);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Handle initialization on first load
+  // Initialization: health and supported metadata only. Session context is
+  // owned by the library hook after local hydration completes.
   useEffect(() => {
     const controller = new AbortController();
 
@@ -347,55 +250,9 @@ export default function App() {
       try {
         const health = await checkHealth(controller.signal);
         applyHealth(health);
-
-        // Supported metadata and history are independent after readiness is
-        // known, so avoid paying for their network latency serially.
-        const [supportResult, historyResult] = await Promise.allSettled([
-          getSupportedTickers(controller.signal),
-          getSessionHistory(sessionId, controller.signal),
-        ]);
-
-        if (supportResult.status === "rejected") {
-          throw supportResult.reason;
-        }
-        setTickers(supportResult.value.tickers || []);
-        setSections(supportResult.value.sections || []);
-
-        if (historyResult.status === "rejected") {
-          const histError = historyResult.reason;
-          if (
-            histError instanceof DOMException &&
-            histError.name === "AbortError"
-          ) {
-            return;
-          }
-          if (localLibraryHasRecordRef.current) {
-            setSessionNotice(
-              "This is a saved local copy. Its backend context is unavailable or expired; start a new conversation before asking follow-ups.",
-            );
-          }
-          console.warn("Could not retrieve session history. Starting fresh.");
-        } else {
-          const history = historyResult.value;
-          if (history?.turns?.length > 0 && !localLibraryHasRecordRef.current) {
-            const loadedMessages: Message[] = [];
-            history.turns.forEach((turn, idx) => {
-              loadedMessages.push({
-                id: `u-${idx}-${Date.now()}`,
-                sender: "user",
-                text: turn.user,
-              });
-              loadedMessages.push({
-                id: `a-${idx}-${Date.now()}`,
-                sender: "assistant",
-                text: turn.assistant,
-                rewritten_query: turn.rewritten_query,
-              });
-            });
-            setMessages(loadedMessages);
-            setActiveView("conversation");
-          }
-        }
+        const support = await getSupportedTickers(controller.signal);
+        setTickers(support.tickers || []);
+        setSections(support.sections || []);
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") {
           return;
@@ -408,7 +265,7 @@ export default function App() {
 
     initData();
     return () => controller.abort();
-  }, [applyHealth, sessionId]);
+  }, [applyHealth]);
 
   useEffect(() => {
     return () => {
@@ -418,9 +275,20 @@ export default function App() {
     };
   }, []);
 
-  // Scroll to bottom helper
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  // Adopted backend history moves the user into the conversation view once.
+  const historyAdoptedRef = useRef(false);
+  useEffect(() => {
+    if (!historyAdoptedRef.current && messages.length > 0 && isLibraryReady) {
+      historyAdoptedRef.current = true;
+      setActiveView("conversation");
+    }
+  }, [messages.length, isLibraryReady]);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const reduced = prefersReducedMotion();
+    messagesEndRef.current?.scrollIntoView({
+      behavior: reduced ? "auto" : behavior,
+    });
   }, []);
 
   useEffect(() => {
@@ -429,9 +297,7 @@ export default function App() {
     // Repeated smooth-scroll animations overlap while tokens arrive every
     // 80ms. Batch the layout read/write to the next animation frame.
     const scroll = () => {
-      messagesEndRef.current?.scrollIntoView({
-        behavior: isLoading ? "auto" : "smooth",
-      });
+      scrollToBottom(isLoading ? "auto" : "smooth");
     };
     const frame =
       typeof requestAnimationFrame === "function"
@@ -444,7 +310,22 @@ export default function App() {
         window.clearTimeout(frame);
       }
     };
-  }, [activeView, isLoading, messages]);
+  }, [activeView, isLoading, messages, scrollToBottom]);
+
+  // Focus a bookmarked message opened from the Library.
+  useEffect(() => {
+    if (!pendingFocusMessageId) return;
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.getElementById(`message-${pendingFocusMessageId}`);
+      target?.scrollIntoView({
+        behavior: prefersReducedMotion() ? "auto" : "smooth",
+        block: "start",
+      });
+      target?.focus({ preventScroll: true });
+      setPendingFocusMessageId(null);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [pendingFocusMessageId, activeView, messages.length]);
 
   // Detect scroll position to show/hide scroll-to-bottom button
   useEffect(() => {
@@ -463,6 +344,7 @@ export default function App() {
 
   const handleSendMessage = useCallback(async (text: string, snapshot?: RequestSnapshot) => {
     if (!isBackendConnected || !isPipelineReady) return;
+    if (isReadOnly) return;
 
     const requestSnapshot: RequestSnapshot = snapshot ?? {
       ticker: selectedTicker,
@@ -471,6 +353,13 @@ export default function App() {
       enableComparative,
     };
 
+    // Re-check a saved conversation's backend session before spending the
+    // question; the session can expire while the user is reading.
+    if (sessionContext !== "fresh") {
+      const status = await recheckSessionContext();
+      if (status === "missing" || status === "unknown") return;
+    }
+
     setActiveView("conversation");
     requestAbortRef.current?.abort();
     const controller = new AbortController();
@@ -478,16 +367,16 @@ export default function App() {
     const isCurrentRequest = () =>
       requestAbortRef.current === controller && !controller.signal.aborted;
 
-    // Add user message to chat list
-    const userMsgId = "user-" + Date.now();
-    const userMessage: Message = {
-      id: userMsgId,
-      sender: "user",
+    beginSend(text);
+
+    const userMessage = {
+      id: "user-" + Date.now(),
+      sender: "user" as const,
       text: text,
       requestSnapshot,
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    updateMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
 
     const isComparative =
@@ -504,22 +393,22 @@ export default function App() {
 
     if (isComparative) {
       // Create initial loading/placeholder message for Decomposed POST
-      const placeholder: Message = {
+      const placeholder = {
         id: assistantMsgId,
-        sender: "assistant",
+        sender: "assistant" as const,
         text: "",
         subQueries: [],
         wasDecomposed: true,
         isStreaming: true,
-        status: "streaming",
+        status: "streaming" as const,
         requestSnapshot,
       };
-      setMessages((prev) => [...prev, placeholder]);
+      updateMessages((prev) => [...prev, placeholder]);
 
       try {
         const response = await queryDecomposed(payload, controller.signal);
         if (!isCurrentRequest()) return;
-        setMessages((prev) =>
+        updateMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
               ? {
@@ -531,18 +420,19 @@ export default function App() {
                   wasDecomposed: response.was_decomposed,
                   numChunks: response.num_total_chunks,
                   isStreaming: false,
-                  status: "completed",
+                  status: "completed" as const,
                 }
               : m,
           ),
         );
+        registerBackendExchange();
       } catch (err: any) {
         if (!isCurrentRequest()) return;
         const requestError = describeRequestError(
           err,
           "We couldn't complete this comparison. Check the connection and try again.",
         );
-        setMessages((prev) =>
+        updateMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
               ? {
@@ -550,7 +440,7 @@ export default function App() {
                   text: requestError.message,
                   error: true,
                   isStreaming: false,
-                  status: "error",
+                  status: "error" as const,
                   errorDetail: requestError.detail,
                   retryText: text,
                 }
@@ -565,18 +455,17 @@ export default function App() {
       }
     } else {
       // Streamed query over POST EventStream
-      const placeholder: Message = {
+      const placeholder = {
         id: assistantMsgId,
-        sender: "assistant",
+        sender: "assistant" as const,
         text: "",
         isStreaming: true,
-        status: "streaming",
+        status: "streaming" as const,
         requestSnapshot,
       };
-      setMessages((prev) => [...prev, placeholder]);
+      updateMessages((prev) => [...prev, placeholder]);
 
       let streamingText = "";
-      let sourcesList: any[] = [];
       let pendingFlush: ReturnType<typeof setTimeout> | null = null;
 
       const cancelPendingFlush = () => {
@@ -590,7 +479,7 @@ export default function App() {
         if (pendingFlush === null) {
           pendingFlush = setTimeout(() => {
             pendingFlush = null;
-            setMessages((prev) =>
+            updateMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantMsgId ? { ...m, text: streamingText } : m,
               ),
@@ -605,8 +494,8 @@ export default function App() {
           (event) => {
             if (!isCurrentRequest()) return;
             if (event.type === "sources") {
-              sourcesList = event.data || [];
-              setMessages((prev) =>
+              const sourcesList = event.data || [];
+              updateMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantMsgId
                     ? {
@@ -621,22 +510,23 @@ export default function App() {
               scheduleStreamingFlush();
             } else if (event.type === "done") {
               cancelPendingFlush();
-              setMessages((prev) =>
+              updateMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantMsgId
                     ? {
                         ...m,
                         text: streamingText,
                         isStreaming: false,
-                        status: "completed",
+                        status: "completed" as const,
                       }
                     : m,
                 ),
               );
+              registerBackendExchange();
               setIsLoading(false);
             } else if (event.type === "error") {
               cancelPendingFlush();
-              setMessages((prev) =>
+              updateMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantMsgId
                     ? {
@@ -647,7 +537,7 @@ export default function App() {
                           "We couldn't complete this answer. Please try again.",
                         isStreaming: false,
                         error: true,
-                        status: "error",
+                        status: "error" as const,
                         errorDetail: event.data,
                         retryText: text,
                       }
@@ -664,7 +554,7 @@ export default function App() {
               "The connection closed before the answer finished. Please try again.",
             );
             cancelPendingFlush();
-            setMessages((prev) =>
+            updateMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantMsgId
                   ? {
@@ -672,7 +562,7 @@ export default function App() {
                         text: streamingText + (streamingText ? "\n\n" : "") + requestError.message,
                       isStreaming: false,
                       error: true,
-                      status: "error",
+                      status: "error" as const,
                       errorDetail: requestError.detail,
                       retryText: text,
                     }
@@ -690,18 +580,18 @@ export default function App() {
           "We couldn't complete this answer. Please try again.",
         );
         cancelPendingFlush();
-        setMessages((prev) =>
+        updateMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
               ? {
                   ...m,
                     text: streamingText + (streamingText ? "\n\n" : "") + requestError.message,
-                    isStreaming: false,
-                    error: true,
-                    status: "error",
-                    errorDetail: requestError.detail,
-                    retryText: text,
-                  }
+                  isStreaming: false,
+                  error: true,
+                  status: "error" as const,
+                  errorDetail: requestError.detail,
+                  retryText: text,
+                }
               : m,
           ),
         );
@@ -726,14 +616,20 @@ export default function App() {
       }
     }
   }, [
+    beginSend,
     enableComparative,
     isBackendConnected,
     isPipelineReady,
+    isReadOnly,
+    recheckSessionContext,
+    registerBackendExchange,
     selectedSection,
     selectedTicker,
     sessionId,
+    sessionContext,
     topK,
     refreshHealth,
+    updateMessages,
   ]);
 
   // Stable retry callback so memoized ChatMessage items skip re-renders;
@@ -741,154 +637,81 @@ export default function App() {
   const handleSendMessageRef = useRef(handleSendMessage);
   handleSendMessageRef.current = handleSendMessage;
   const handleRetry = useCallback((text: string, snapshot?: RequestSnapshot) => {
+    if (isReadOnly) return;
     setInputText(text);
     handleSendMessageRef.current(text, snapshot);
-  }, []);
+  }, [isReadOnly, setInputText]);
 
-  const handleNewConversation = useCallback(async () => {
-    requestAbortRef.current?.abort();
-    requestAbortRef.current = null;
-    setIsLoading(false);
-    setIsClearingSession(true);
+  const confirmNewConversation = useCallback(async () => {
+    setShowResetDialog(false);
+    await startNewConversation();
+    setActiveView("overview");
+    setActiveSidebarPanel("research");
     try {
-      await persistCurrentConversation();
-    } catch (err) {
-      console.error("Conversation save exception:", err);
-    } finally {
-      const newSid = createSessionId();
-      const newConversationId = createConversationId(newSid);
-      conversationCreatedAtRef.current = Date.now();
-      safeSetItem("sec_qa_session_id", newSid);
-      safeSetItem("sec_qa_active_conversation_id", newConversationId);
-      setSessionId(newSid);
-      setActiveConversationId(newConversationId);
-      setMessages([]);
-      safeRemoveItem("sec_qa_messages");
-      setActiveView("overview");
-      setSessionNotice(null);
-      setIsClearingSession(false);
-      setSelectedTicker(null);
-      setSelectedSection(null);
-      setInputText("");
-      setBookmarkedMessageIds([]);
-      setActiveSidebarPanel("research");
-
-      // Refresh health while retaining the previous conversation in the local library.
-      try {
-        await refreshHealth(true);
-      } catch (e) {
-        setIsBackendConnected(false);
-        setIsPipelineReady(false);
-      }
+      await refreshHealth(true);
+    } catch (e) {
+      setIsBackendConnected(false);
+      setIsPipelineReady(false);
     }
-  }, [persistCurrentConversation, refreshHealth]);
+  }, [refreshHealth, startNewConversation]);
 
   const requestNewConversation = useCallback(() => {
     if (messages.length === 0) {
-      void handleNewConversation();
+      void confirmNewConversation();
       return;
     }
     setShowResetDialog(true);
-  }, [handleNewConversation, messages.length]);
+  }, [confirmNewConversation, messages.length]);
 
   const handleSelectConversation = useCallback(
     async (conversation: ConversationRecord) => {
-      if (conversation.id === activeConversationId) {
-        setActiveView(conversation.messages.length ? "conversation" : "overview");
-        return;
-      }
-      requestAbortRef.current?.abort();
-      requestAbortRef.current = null;
-      setIsLoading(false);
-      await persistCurrentConversation();
-      conversationCreatedAtRef.current = conversation.createdAt;
-      setActiveConversationId(conversation.id);
-      setSessionId(conversation.sessionId);
-      setMessages(conversation.messages);
-      setInputText(conversation.draft);
-      setBookmarkedMessageIds(conversation.bookmarkedMessageIds);
-      setSessionNotice(null);
-      safeSetItem("sec_qa_session_id", conversation.sessionId);
-      safeSetItem("sec_qa_active_conversation_id", conversation.id);
       setActiveView(conversation.messages.length ? "conversation" : "overview");
-      setActiveSidebarPanel("research");
+      if (conversation.id === activeConversationId) return;
+      await selectConversation(conversation);
     },
-    [activeConversationId, persistCurrentConversation],
+    [activeConversationId, selectConversation],
   );
 
-  const handleRenameConversation = useCallback(
-    (conversationId: string, title: string) => {
+  // Open the exact bookmarked answer inside its conversation.
+  const handleOpenMessage = useCallback(
+    async (conversationId: string, messageId: string) => {
       const conversation = conversations.find((item) => item.id === conversationId);
       if (!conversation) return;
-      const updated = { ...conversation, title: title.slice(0, 80), updatedAt: Date.now() };
-      setConversations((current) => [
-        updated,
-        ...current.filter((item) => item.id !== conversationId),
-      ].sort((a, b) => b.updatedAt - a.updatedAt));
-      void saveConversationRecord(updated).then((result) => {
-        setStorageMode(result.storageMode);
-        setStorageWarning(result.warning);
-      });
-    },
-    [conversations],
-  );
-
-  const handleToggleBookmark = useCallback(
-    (conversationId: string, messageId: string) => {
-      const conversation = conversations.find((item) => item.id === conversationId);
-      if (!conversation) return;
-      const bookmarked = conversation.bookmarkedMessageIds.includes(messageId);
-      const updated = {
-        ...conversation,
-        bookmarkedMessageIds: bookmarked
-          ? conversation.bookmarkedMessageIds.filter((id) => id !== messageId)
-          : [...conversation.bookmarkedMessageIds, messageId],
-        updatedAt: Date.now(),
-      };
-      setConversations((current) => current.map((item) => item.id === conversationId ? updated : item));
-      if (conversationId === activeConversationId) {
-        setBookmarkedMessageIds(updated.bookmarkedMessageIds);
+      if (conversation.id !== activeConversationId) {
+        await selectConversation(conversation);
       }
-      void saveConversationRecord(updated).then((result) => {
-        setStorageMode(result.storageMode);
-        setStorageWarning(result.warning);
-      });
+      setPendingFocusMessageId(messageId);
+      setActiveView("conversation");
     },
-    [activeConversationId, conversations],
-  );
-
-  const handleDeleteConversation = useCallback(
-    (conversationId: string) => {
-      void deleteConversationRecord(conversationId).then((result) => {
-        setStorageMode(result.storageMode);
-        setStorageWarning(result.warning);
-      });
-      setConversations((current) => current.filter((item) => item.id !== conversationId));
-      if (conversationId === activeConversationId) {
-        const newSid = createSessionId();
-        const newConversationId = createConversationId(newSid);
-        conversationCreatedAtRef.current = Date.now();
-        setSessionId(newSid);
-        setActiveConversationId(newConversationId);
-        setMessages([]);
-        setInputText("");
-        setBookmarkedMessageIds([]);
-        safeSetItem("sec_qa_session_id", newSid);
-        safeSetItem("sec_qa_active_conversation_id", newConversationId);
-        setActiveView("overview");
-      }
-    },
-    [activeConversationId],
+    [activeConversationId, conversations, selectConversation],
   );
 
   const handleExportConversation = useCallback((conversation: ConversationRecord) => {
     downloadConversationMarkdown(conversation);
   }, []);
 
-  const confirmNewConversation = useCallback(async () => {
-    setShowResetDialog(false);
-    await handleNewConversation();
-  }, [handleNewConversation]);
+  // Bookmark toggle that works from Library cards for any conversation,
+  // not only the one currently open.
+  const handleSidebarToggleBookmark = useCallback(
+    (conversationId: string, messageId: string) => {
+      const conversation = conversations.find((item) => item.id === conversationId);
+      if (!conversation) return;
+      if (conversationId === activeConversationId) {
+        toggleAnswerBookmark(messageId);
+        return;
+      }
+      const bookmarked = conversation.bookmarkedMessageIds.includes(messageId);
+      const next = bookmarked
+        ? conversation.bookmarkedMessageIds.filter((id) => id !== messageId)
+        : [...conversation.bookmarkedMessageIds, messageId];
+      void saveConversationRecord({
+        ...conversation,
+        bookmarkedMessageIds: next,
+        updatedAt: Date.now(),
+      });
+    },
+    [activeConversationId, conversations, toggleAnswerBookmark],
+  );
 
   useEffect(() => {
     if (!showResetDialog) return;
@@ -900,6 +723,33 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleDialogKeyDown);
   }, [showResetDialog]);
 
+  // Global shortcuts: Ctrl/Cmd+K opens the Library with search focused;
+  // Escape closes the topmost overlay layer.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setActiveSidebarPanel("library");
+        setIsSidebarOpen(true);
+        window.requestAnimationFrame(() => {
+          document.getElementById("library-search-input")?.focus();
+        });
+        return;
+      }
+      if (event.key === "Escape") {
+        if (isHelpOpen) {
+          setIsHelpOpen(false);
+          return;
+        }
+        if (showResetDialog) {
+          setShowResetDialog(false);
+        }
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isHelpOpen, showResetDialog]);
+
   const handleStopGenerating = useCallback(() => {
     const controller = requestAbortRef.current;
     if (!controller) return;
@@ -907,19 +757,19 @@ export default function App() {
     requestAbortRef.current = null;
     controller.abort();
     setIsLoading(false);
-    setMessages((prev) =>
+    updateMessages((prev) =>
       prev.map((message) =>
         message.isStreaming
           ? {
               ...message,
               text: message.text || "Generation stopped.",
               isStreaming: false,
-              status: "stopped",
+              status: "stopped" as const,
             }
           : message,
       ),
     );
-  }, []);
+  }, [updateMessages]);
 
   const handleSelectSample = useCallback((sample: SampleQuestion) => {
     if (sample.ticker !== undefined) {
@@ -933,7 +783,7 @@ export default function App() {
     window.requestAnimationFrame(() => {
       document.getElementById("chat-textarea")?.focus();
     });
-  }, []);
+  }, [setInputText]);
 
   const handleCloseSidebar = useCallback(() => {
     setIsSidebarOpen(false);
@@ -954,11 +804,15 @@ export default function App() {
   const handleRetryConnection = useCallback(async () => {
     try {
       await refreshHealth(true);
+      // A recovered backend may also have recovered the session context.
+      if (sessionContext === "unknown" || sessionContext === "missing") {
+        void recheckSessionContext();
+      }
     } catch {
       setIsBackendConnected(false);
       setIsPipelineReady(false);
     }
-  }, [refreshHealth]);
+  }, [refreshHealth, recheckSessionContext, sessionContext]);
 
   const isStreaming = useMemo(
     () => messages.some((message) => message.isStreaming),
@@ -972,6 +826,11 @@ export default function App() {
     }
     return labels.join(" · ");
   }, [selectedSection, selectedTicker]);
+
+  const hasExchanges = messages.length > 0;
+  const showContextBanner =
+    activeView === "conversation" && hasExchanges &&
+    (sessionContext === "checking" || isReadOnly);
 
   return (
     <div className="app-shell flex w-screen max-w-full h-dvh font-sans text-[var(--text-primary)] overflow-hidden bg-grid-pattern">
@@ -994,17 +853,19 @@ export default function App() {
         onClose={handleCloseSidebar}
         isClearingSession={isClearingSession}
         activePanel={activeSidebarPanel}
-        onChangePanel={(panel) => {
-          setActiveSidebarPanel(panel);
-        }}
+        onChangePanel={setActiveSidebarPanel}
         conversations={conversations}
         activeConversationId={activeConversationId}
         storageMode={storageMode}
         storageWarning={storageWarning}
+        saveIndicator={saveIndicator}
         onSelectConversation={handleSelectConversation}
-        onRenameConversation={handleRenameConversation}
-        onToggleBookmark={handleToggleBookmark}
-        onDeleteConversation={handleDeleteConversation}
+        onOpenMessage={handleOpenMessage}
+        onRenameConversation={renameConversation}
+        onToggleBookmark={handleSidebarToggleBookmark}
+        onDeleteConversation={(conversationId) => {
+          void deleteConversation(conversationId);
+        }}
         onExportConversation={handleExportConversation}
       />
 
@@ -1016,7 +877,7 @@ export default function App() {
           onToggleSidebar={handleToggleSidebar}
           activeView={activeView}
           onSelectView={setActiveView}
-          hasMessages={messages.length > 0}
+          hasMessages={hasExchanges}
           isBackendConnected={isBackendConnected}
           isPipelineReady={isPipelineReady}
           companyCount={healthData?.corpus?.searchable_company_count ?? (tickers.length || undefined)}
@@ -1025,6 +886,7 @@ export default function App() {
           onSelectTheme={handleSelectTheme}
           isClearingSession={isClearingSession}
           onReset={requestNewConversation}
+          onOpenHelp={() => setIsHelpOpen(true)}
         />
         {/* Content stream area */}
         <main
@@ -1032,17 +894,15 @@ export default function App() {
           ref={scrollContainerRef}
           className="workspace-scroll flex-1 overflow-y-auto overflow-x-hidden min-h-0 relative z-10"
         >
-          {sessionNotice && activeView === "conversation" && (
-            <div className="session-notice" role="status" aria-live="polite">
-              <span className="min-w-0 flex-1">{sessionNotice}</span>
-              <button type="button" onClick={requestNewConversation}>
-                Start new conversation
-              </button>
-            </div>
-          )}
-          {activeView === "overview" ? (
+          {showContextBanner && (
+            <SessionContextBanner
+              status={sessionContext}
+              onRecheck={() => void recheckSessionContext()}
+              onNewConversation={requestNewConversation}
+            />
+          )}          {activeView === "overview" ? (
             <OverviewPanel
-              hasMessages={messages.length > 0}
+              hasMessages={hasExchanges}
               companyCount={healthData?.corpus?.searchable_company_count ?? (tickers.length || null)}
               indexedChunkCount={healthData?.corpus?.indexed_chunk_count ?? null}
               onReturnToConversation={handleReturnToConversation}
@@ -1068,7 +928,14 @@ export default function App() {
                     message={msg}
                     messageId={msg.id}
                     isLatest={index === messages.length - 1}
-                    onRetry={handleRetry}
+                    onRetry={isReadOnly ? undefined : handleRetry}
+                    bookmarked={bookmarkedMessageIds.includes(msg.id)}
+                    onToggleBookmark={
+                      msg.sender === "assistant" && !msg.isStreaming && msg.text
+                        ? () => toggleAnswerBookmark(msg.id)
+                        : undefined
+                    }
+                    tabIndex={0}
                   />
                 ))}
               </Suspense>
@@ -1078,8 +945,8 @@ export default function App() {
               {showScrollButton && (
                 <button
                   type="button"
-                  onClick={scrollToBottom}
-                  className="ui-message-enter fixed bottom-32 right-6 md:right-8 min-h-10 min-w-10 p-2.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer z-30"
+                  onClick={() => scrollToBottom()}
+                  className="ui-message-enter fixed bottom-32 right-6 md:right-8 min-h-10 min-w-10 p-2.5 rounded-full surface-raised border-[var(--border-subtle)] shadow-lg text-[var(--text-muted)] transition-colors cursor-pointer z-30"
                   aria-label="Scroll to bottom"
                 >
                   <ChevronDown className="w-5 h-5" />
@@ -1100,15 +967,23 @@ export default function App() {
             isStreaming={isStreaming}
             isBackendConnected={isBackendConnected}
             isPipelineReady={isPipelineReady}
-            showBanner={activeView === "conversation" && messages.length > 0}
+            isReadOnly={isReadOnly && hasExchanges}
+            readOnlyMessage={
+              sessionContext === "missing"
+                ? "The backend session for this saved conversation has expired. Start a new conversation to ask follow-up questions."
+                : "The backend could not be reached. Check the connection again before asking follow-up questions."
+            }
+            showBanner={activeView === "conversation" && hasExchanges}
             scopeLabel={scopeLabel || undefined}
           />
         </div>
       </div>
 
+      <HelpDialog open={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+
       {showResetDialog && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[#26324A]/30 p-4 backdrop-blur-sm dark:bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center overlay-backdrop p-4"
           role="presentation"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setShowResetDialog(false);
@@ -1118,44 +993,45 @@ export default function App() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="reset-dialog-title"
-            className="w-full max-w-md rounded-2xl border border-slate-200 bg-[#FCFBF8] p-5 shadow-2xl dark:border-slate-700 dark:bg-[#1E2738]"
+            className="w-full max-w-md rounded-2xl surface-raised border-[var(--border-subtle)] p-5 shadow-2xl"
           >
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full state-warning-surface">
                 <AlertTriangle className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-3">
-                  <h2 id="reset-dialog-title" className="text-base font-semibold text-[#26324A] dark:text-[#FCFBF8]">
+                  <h2 id="reset-dialog-title" className="text-base font-semibold text-[var(--text-primary)]">
                     Start a new conversation?
                   </h2>
                   <button
                     type="button"
                     aria-label="Close confirmation dialog"
                     onClick={() => setShowResetDialog(false)}
-                    className="min-h-9 min-w-9 rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                    className="min-h-9 min-w-9 rounded-lg p-2 text-[var(--text-subtle)] hover:surface-muted-hover"
                   >
                     <X className="h-4 w-4" />
                   </button>
                 </div>
-                <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                <p className="mt-2 text-sm leading-relaxed text-[var(--text-muted)]">
                   This saves the current conversation to your local Library and
                   starts a fresh session. The new conversation does not carry
-                  over the previous backend context.
+                  over the previous backend context. Your draft text and
+                  filters are kept so you can edit and resend them.
                 </p>
                 <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                   <button
                     type="button"
                     ref={resetCancelRef}
                     onClick={() => setShowResetDialog(false)}
-                    className="min-h-10 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                    className="min-h-10 rounded-lg border-[var(--border-strong)] px-4 py-2 text-sm font-semibold text-[var(--text-primary)] hover:surface-muted-hover"
                   >
                     Keep conversation
                   </button>
                   <button
                     type="button"
-                    onClick={confirmNewConversation}
-                    className="min-h-10 rounded-lg bg-[#26324A] px-4 py-2 text-sm font-semibold text-[#FCFBF8] hover:opacity-90 dark:bg-[#FCFBF8] dark:text-[#26324A]"
+                    onClick={() => void confirmNewConversation()}
+                    className="min-h-10 rounded-lg primary-action-button px-4 py-2 text-sm font-semibold"
                   >
                     Start new conversation
                   </button>
@@ -1165,6 +1041,58 @@ export default function App() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Backend session context banner. It explains that the local copy is
+ * authoritative for reading while the backend memory is unavailable — it
+ * never implies that local history was restored on the server.
+ */
+function SessionContextBanner({
+  status,
+  onRecheck,
+  onNewConversation,
+}: {
+  status: SessionContextStatus;
+  onRecheck: () => void;
+  onNewConversation: () => void;
+}) {
+  if (status === "fresh" || status === "available") return null;
+  if (status === "checking") {
+    return (
+      <div className="session-notice session-notice--checking" role="status" aria-live="polite">
+        <RefreshCw className="h-4 w-4 animate-spin flex-shrink-0" aria-hidden="true" />
+        <span className="min-w-0 flex-1">Checking whether the backend still holds this conversation's context…</span>
+      </div>
+    );
+  }
+  if (status === "missing") {
+    return (
+      <div className="session-notice session-notice--missing" role="status" aria-live="polite">
+        <BookMarked className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+        <span className="min-w-0 flex-1">
+          The backend session for this saved conversation has expired. You can
+          still read, search, bookmark, and export the local copy below.
+        </span>
+        <button type="button" onClick={onNewConversation}>
+          Start new conversation
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="session-notice session-notice--unknown" role="status" aria-live="polite">
+      <AlertTriangle className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+      <span className="min-w-0 flex-1">
+        The backend could not be reached, so this conversation's context is
+        unknown. Follow-up questions are paused until the connection is
+        checked.
+      </span>
+      <button type="button" onClick={onRecheck}>
+        Check connection again
+      </button>
     </div>
   );
 }

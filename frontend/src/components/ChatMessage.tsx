@@ -14,6 +14,8 @@ import {
   ChevronDown,
   Copy,
   Check,
+  Bookmark,
+  BookmarkCheck,
 } from "lucide-react";
 import { Message, RequestSnapshot } from "../types";
 import { SourcesPanel } from "./SourcesPanel";
@@ -24,6 +26,11 @@ interface ChatMessageProps {
   messageId?: string;
   isLatest?: boolean;
   onRetry?: (text: string, snapshot?: RequestSnapshot) => void;
+  /** Bookmarked answers can be reopened from the Library filter. */
+  bookmarked?: boolean;
+  onToggleBookmark?: () => void;
+  /** The article container is focusable so Library links can land on it. */
+  tabIndex?: number;
 }
 
 // Tickers rendered with the monospace ticker chip styling
@@ -161,6 +168,9 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
   messageId = message.id,
   isLatest = false,
   onRetry,
+  bookmarked = false,
+  onToggleBookmark,
+  tabIndex,
 }) => {
   const isUser = message.sender === "user";
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
@@ -185,6 +195,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
       id={`message-${message.id}`}
       role="article"
       aria-label={isUser ? "Your question" : "Research assistant response"}
+      tabIndex={tabIndex}
     >
       <div
         className={`max-w-4xl mx-auto w-full flex gap-3 md:gap-4 ${
@@ -229,29 +240,57 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
             </div>
 
             {!isUser && !message.isStreaming && message.text && (
-              <button
-                type="button"
-                onClick={handleCopy}
-                aria-label={copyState === "copied" ? "Copied answer" : "Copy answer"}
-                className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-brand-indigo dark:text-slate-500 dark:hover:text-indigo-300 transition-colors py-0.5 px-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
-              >
-                {copyState === "copied" ? (
-                  <>
-                    <Check className="w-3 h-3 text-emerald-500" />
-                    <span className="text-emerald-500 font-sans">Copied</span>
-                  </>
-                ) : copyState === "error" ? (
-                  <>
-                    <AlertCircle className="w-3 h-3 text-rose-500" />
-                    <span className="text-rose-500 font-sans">Copy unavailable</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3 h-3" />
-                    <span className="font-sans">Copy</span>
-                  </>
+              <div className="flex items-center gap-1">
+                {onToggleBookmark && message.status !== "error" && (
+                  <button
+                    type="button"
+                    onClick={onToggleBookmark}
+                    aria-label={bookmarked ? "Remove bookmark from this answer" : "Bookmark this answer"}
+                    aria-pressed={bookmarked}
+                    title={bookmarked ? "Remove bookmark" : "Bookmark answer"}
+                    className={`inline-flex items-center gap-1 text-[11px] font-semibold transition-colors py-0.5 px-2 rounded-md cursor-pointer border ${
+                      bookmarked
+                        ? "text-brand-indigo bg-brand-indigo/10 border-brand-indigo/30"
+                        : "text-slate-400 hover:text-brand-indigo dark:text-slate-500 dark:hover:text-indigo-300 border-transparent hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-200 dark:hover:border-slate-700"
+                    }`}
+                  >
+                    {bookmarked ? (
+                      <>
+                        <BookmarkCheck className="w-3 h-3" />
+                        <span className="font-sans">Bookmarked</span>
+                      </>
+                    ) : (
+                      <>
+                        <Bookmark className="w-3 h-3" />
+                        <span className="font-sans">Bookmark</span>
+                      </>
+                    )}
+                  </button>
                 )}
-              </button>
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  aria-label={copyState === "copied" ? "Copied answer" : "Copy answer"}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-brand-indigo dark:text-slate-500 dark:hover:text-indigo-300 transition-colors py-0.5 px-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+                >
+                  {copyState === "copied" ? (
+                    <>
+                      <Check className="w-3 h-3 text-emerald-500" />
+                      <span className="text-emerald-500 font-sans">Copied</span>
+                    </>
+                  ) : copyState === "error" ? (
+                    <>
+                      <AlertCircle className="w-3 h-3 text-rose-500" />
+                      <span className="text-rose-500 font-sans">Copy unavailable</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3" />
+                      <span className="font-sans">Copy</span>
+                    </>
+                  )}
+                </button>
+              </div>
             )}
           </div>
 

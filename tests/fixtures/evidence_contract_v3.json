@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "description": "Frozen, source-authored calibration inputs for Evidence Contract v3.",
+  "cases": [
+    {
+      "id": "qualified-bounded-disclosure",
+      "question": "Which company depends more on cloud/subscription revenue, Microsoft or Apple?",
+      "context": "[Source 1] MSFT 10-K, MD&A\nMicrosoft Cloud revenue increased 23% to $168.9 billion.\n\n[Source 2] AAPL 10-K, MD&A\nServices net sales were 109,158 million.",
+      "answer": "Microsoft disclosed Microsoft Cloud revenue of $168.9 billion [Source 1]. Apple disclosed Services net sales of 109,158 million [Source 2]. These differently scoped absolute amounts do not establish which company depends more on cloud or subscription revenue as a share of total revenue in the supplied excerpts.",
+      "expected": {"faithfulness_min": 1.0, "answer_relevancy_min": 1.0, "accept": true}
+    },
+    {
+      "id": "ranking-with-compatible-share",
+      "question": "Which company depends more on cloud/subscription revenue, Microsoft or Apple?",
+      "context": "[Source 1] MSFT 10-K, MD&A\nCloud revenue was 30% of total revenue in fiscal year 2025.\n\n[Source 2] AAPL 10-K, MD&A\nCloud revenue was 20% of total revenue in fiscal year 2025.",
+      "answer": "Microsoft's cloud revenue was 30% of total revenue, compared with Apple's 20%, in fiscal year 2025 [Source 1] [Source 2]. Microsoft is higher on this same-period share measure.",
+      "expected": {"faithfulness_min": 1.0, "answer_relevancy_min": 1.0, "accept": true}
+    },
+    {
+      "id": "ranking-without-share",
+      "question": "Which company depends more on cloud/subscription revenue, Microsoft or Apple?",
+      "context": "[Source 1] MSFT 10-K, MD&A\nMicrosoft Cloud revenue was $168.9 billion.\n\n[Source 2] AAPL 10-K, MD&A\nServices net sales were 109,158 million.",
+      "answer": "Microsoft depends more on cloud/subscription revenue than Apple because $168.9 billion is larger than 109,158 million [Source 1] [Source 2].",
+      "expected": {"faithfulness_max": 0.9, "answer_relevancy_min": 0.0, "accept": false}
+    },
+    {
+      "id": "refusal-with-compatible-share",
+      "question": "Which company depends more on cloud/subscription revenue, Microsoft or Apple?",
+      "context": "[Source 1] MSFT 10-K, MD&A\nCloud revenue was 30% of total revenue in fiscal year 2025.\n\n[Source 2] AAPL 10-K, MD&A\nCloud revenue was 20% of total revenue in fiscal year 2025.",
+      "answer": "The supplied excerpts do not establish which company depends more on cloud/subscription revenue [Source 1] [Source 2].",
+      "expected": {"faithfulness_min": 1.0, "answer_relevancy_max": 0.9, "accept": false}
+    },
+    {
+      "id": "risk-complete-primary-groups",
+      "question": "What are all the major risk factors Microsoft discloses?",
+      "context": "[Source 1] MSFT 10-K, Risk Factors\nIntense competition creates strategic and competitive risk.\n\n[Source 2] MSFT 10-K, Risk Factors\nTrade laws, sanctions, and restrictions may affect the business. Cybersecurity regulation and compliance costs may increase. The company discloses handling of personal data.\n\n[Source 3] MSFT 10-K, Risk Factors\nAI development, deployment, and use may cause reputational or competitive harm or liability.\n\n[Source 4] MSFT 10-K, Risk Factors\nOutages, data losses, and service disruption create operational risks.\n\n[Source 5] MSFT 10-K, Risk Factors\nEvolving legal, regulatory, and litigation requirements create risk.",
+      "answer": "The supplied excerpts identify these primary risk groups: strategic and competitive risk from intense competition [Source 1]; trade risks from laws, sanctions, and restrictions [Source 2]; cybersecurity risks including regulation and compliance costs [Source 2]; handling of personal data [Source 2]; AI risks involving reputational harm, competitive harm, or liability [Source 3]; operational risks from outages, data losses, and service disruption [Source 4]; and legal, regulatory, and litigation risks from evolving requirements [Source 5].",
+      "expected": {"faithfulness_min": 1.0, "answer_relevancy_min": 1.0, "accept": true}
+    },
+    {
+      "id": "risk-missing-primary-group",
+      "question": "What are all the major risk factors Microsoft discloses?",
+      "context": "[Source 1] MSFT 10-K, Risk Factors\nIntense competition creates strategic and competitive risk.\n\n[Source 2] MSFT 10-K, Risk Factors\nTrade laws, sanctions, and restrictions may affect the business. Cybersecurity regulation and compliance costs may increase. The company discloses handling of personal data.\n\n[Source 3] MSFT 10-K, Risk Factors\nAI development, deployment, and use may cause reputational or competitive harm or liability.\n\n[Source 4] MSFT 10-K, Risk Factors\nOutages, data losses, and service disruption create operational risks.\n\n[Source 5] MSFT 10-K, Risk Factors\nEvolving legal, regulatory, and litigation requirements create risk.",
+      "answer": "Microsoft discloses strategic and competitive risks [Source 1], trade risks [Source 2], cybersecurity risks [Source 2], handling of personal data [Source 2], AI risks [Source 3], and operational risks [Source 4].",
+      "expected": {"faithfulness_min": 1.0, "answer_relevancy_max": 0.9, "accept": false}
+    }
+  ]
+}

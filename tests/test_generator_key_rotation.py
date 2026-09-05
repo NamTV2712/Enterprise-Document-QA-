@@ -70,3 +70,17 @@ def test_duplicate_and_blank_keys_are_removed(monkeypatch) -> None:
 
     assert len(generator.clients) == 1
     assert generator._create_groq_chat_completion() == "ok"
+
+
+def test_campaign_can_disable_provider_client_retries(monkeypatch) -> None:
+    configured: list[int] = []
+
+    class RetryAwareGroq:
+        def __init__(self, *, api_key: str, max_retries: int):
+            configured.append(max_retries)
+
+    monkeypatch.setitem(sys.modules, "groq", SimpleNamespace(Groq=RetryAwareGroq))
+
+    Generator(api_keys=["campaign-key"], client_max_retries=0)
+
+    assert configured == [0]

@@ -8,8 +8,10 @@ import re
 from src.company_entities import detect_tickers
 from src.generation.comparative_evidence import (
     ComparativeFact,
+    ComparativeFactV3,
     classify_comparative_question,
     extract_comparative_facts,
+    select_dependency_evidence_v3,
     facts_match_intent,
 )
 from src.generation.period_value_completeness import parse_evidence_sources
@@ -17,6 +19,10 @@ from src.generation.period_value_completeness import parse_evidence_sources
 
 COMPARATIVE_ANSWER_RENDERER_FINGERPRINT = "sha256:" + hashlib.sha256(
     b"comparative-answer-renderer-v2-qualified-dependency-no-absolute-value-inference"
+).hexdigest()
+COMPARATIVE_ANSWER_RENDERER_V3_FINGERPRINT = "sha256:" + hashlib.sha256(
+    b"comparative-answer-renderer-v3-bounded-disclosure-share-ranking-"
+    b"evidence-contract-v3"
 ).hexdigest()
 
 _DISPLAY_NAMES = {
@@ -115,3 +121,73 @@ def render_deterministic_comparative_answer(
 ) -> str | None:
     """Try deterministic comparison renderers in a fixed order."""
     return render_dependency_comparison(question, evidence_context)
+
+
+def _clean_v3_evidence(fact: ComparativeFactV3) -> str:
+    """Display the source value without normalizing away its scope."""
+    value = re.sub(r"\s+", " ", fact.value).strip()
+    if fact.has_explicit_share and fact.denominator:
+        return f"{value} of {fact.denominator}"
+    unit = fact.unit or ""
+    if unit and unit.casefold() not in value.casefold():
+        value = f"{value} ({unit})"
+    return value
+
+
+def render_dependency_comparison_v3(
+    question: str,
+    evidence_context: str,
+) -> str | None:
+    """Render the Evidence Contract v3 comparison from one shared selection.
+
+    A ranking is emitted only for same-metric, same-denominator, same-period
+    shares. Otherwise the renderer reports the bounded disclosures and makes
+    no claim about information outside the supplied excerpts.
+    """
+    selection = select_dependency_evidence_v3(question, evidence_context)
+    if not selection.evidence_sufficient:
+        return None
+    lines: list[str] = []
+    for ticker in selection.expected_tickers:
+        fact = selection.selected_by_ticker.get(ticker)
+        excerpt = selection.excerpts_by_ticker.get(ticker)
+        if fact is not None:
+            lines.append(
+                f"{_display_name(ticker)} disclosed {fact.metric} of "
+                f"{_clean_v3_evidence(fact)} [Source {fact.source_number}]."
+            )
+        elif excerpt is not None:
+            source_number, text = excerpt
+            lines.append(
+                f"{_display_name(ticker)}'s supplied excerpt states: {text} "
+                f"[Source {source_number}]."
+            )
+    if selection.compatible:
+        if len(selection.winners) == 1:
+            winner = _display_name(selection.winners[0])
+            lines.append(
+                f"On this same-period, same-denominator share measure, "
+                f"{winner} is higher; this conclusion is limited to the "
+                "disclosed measure."
+            )
+        else:
+            names = " and ".join(_display_name(ticker) for ticker in selection.winners)
+            lines.append(
+                f"The disclosed shares are equal for {names} on this "
+                "same-period, same-denominator measure."
+            )
+    else:
+        lines.append(
+            "The supplied excerpts do not establish which company depends "
+            "more on this revenue as a share of total revenue; this is a "
+            "bounded conclusion about the excerpts, not the full filings."
+        )
+    return " ".join(lines)
+
+
+def render_deterministic_comparative_answer_v3(
+    question: str,
+    evidence_context: str,
+) -> str | None:
+    """Opt-in v3 deterministic renderer; production remains on the v2 API."""
+    return render_dependency_comparison_v3(question, evidence_context)

@@ -586,12 +586,21 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
         completeness gates; both 12-call sentinels were provider-complete but
         semantic admission remained NO-GO. The protected official result is
         unchanged. See `PROJECT_STATE.md` for receipt hashes.
-83. [ ] Do not run N=30 for Comparative Evidence Contract v2. First create a
-        versioned evaluation contract that accepts a correct qualified answer
-        when dependency shares are not comparable, and separately stabilize
-        the Microsoft exhaustive-risk control with provider-free answer-shape
-        checks. Keep the production renderer feature-flagged until both
-        contracts pass two fresh sentinels under the registered floors.
+83. [x] Implement Evidence Contract v3 and its verifiable evaluation
+        protocol. The opt-in profile now separates qualified disclosure from
+        comparable-share ranking, uses source-authored calibration fixtures,
+        and keeps production defaults unchanged. The verifier recomputes
+        bindings, contexts, scores, aggregates, gates, and run identity; the
+        durable ledger counts retries and refuses unknown outcomes. Offline
+        gates passed, calibration passed 12/12, and the corrected provider
+        campaign reached 25/60 reserved requests before two 429s exhausted
+        one logical retry. It is recorded as provider-incomplete NO-GO; R2,
+        legacy comparison, and N=30 were not run. The protected official result
+        and canonical/index artifacts remain unchanged.
+84. [ ] Do not run N=30 or resume the incomplete v3 ledger. Only start a new
+        pre-registered provider window after quota/capacity is available, then
+        complete R1/R2 and legacy comparison under the existing floors. Do not
+        select a better sample or relax semantic gates.
 
 ## Always-On Deployment
 

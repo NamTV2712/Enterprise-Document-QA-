@@ -376,6 +376,39 @@ canonical data, and official result remain unchanged. Detailed receipt paths
 and hashes are recorded in `PROJECT_STATE.md`; do not run N=30 or select a
 better sample for this binding.
 
+### Evidence Contract v3 — provider-incomplete / NO-GO
+
+The next improvement adds a versioned Evidence Contract v3 profile, strict
+source/period/unit fact extraction, bounded dependency ranking, filing-native
+risk calibration fixtures, and fail-closed receipt verification. The v3 path
+is opt-in: production defaults still use the existing renderer and official
+benchmark. The manifest locks the canonical Phase 1 artifact fingerprint
+`sha256:f6d2cada527b6ded976570b2065ae6150d5868aaee4ecfc3201d7d46d0a41460`
+and the protected official result remains
+`sha256:a5b3c16e43c44ea79199c525e6345acf837172d956d8b659e5a234dc4692a7ba`.
+
+Offline implementation and integrity gates passed; the final backend suite
+passed `661` tests. The provider campaign was
+pre-registered at 60 requests with zero SDK retries and at most one explicit
+retry per logical operation. Rubric calibration passed `12/12`. R1 reached
+`6/6` generation and `5/6` judging; the remaining judge operation received
+429 twice, so the durable ledger stopped at `25/60` reserved requests (`23`
+completed, `2` errors) and recorded `INCOMPLETE`. R2 and legacy comparison
+were not run on incomplete evidence, and no candidate GO decision or N=30
+replay was made. The campaign is therefore a provider-incomplete NO-GO for
+this handoff, not a semantic benchmark failure. The manifest, calibration,
+ledger, and status receipt are retained under the ignored `data/diagnostics/`
+paths; canonical data, index, production defaults, and official results were
+not changed.
+
+To reproduce the protocol after a newly authorized provider window, run the
+manifest check first and then the campaign without `--fresh` when resuming:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.diagnostics.evidence_contract_v3_manifest --check
+.\.venv\Scripts\python.exe -m scripts.run_evidence_contract_v3_campaign
+```
+
 ### Historical evaluation log
 
 Admission audits are clean: the promoted-official self-check reports zero

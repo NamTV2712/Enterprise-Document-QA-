@@ -113,19 +113,27 @@ def judging_pool_keys() -> list[str]:
 
 
 def make_generation_call(
-    generator: Generator, tracker: UsageTracker
+    generator: Generator,
+    tracker: UsageTracker,
+    transport_retries: int | None = None,
 ) -> Callable[[str], str]:
     def generate(prompt: str) -> str:
         started = time.perf_counter()
-        response = generator._create_groq_chat_completion(
-            model=generator.model,
-            messages=[
+        request_kwargs = {
+            "model": generator.model,
+            "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
-            max_tokens=PHASE2_MAX_TOKENS,
-            temperature=0,
-        )
+            "max_tokens": PHASE2_MAX_TOKENS,
+            "temperature": 0,
+        }
+        if transport_retries is None:
+            response = generator._create_groq_chat_completion(**request_kwargs)
+        else:
+            response = generator._create_groq_chat_completion(
+                _retry_limit=transport_retries, **request_kwargs
+            )
         elapsed = time.perf_counter() - started
         tracker.record("generation", getattr(response, "usage", None), elapsed)
         return response.choices[0].message.content or ""
@@ -236,19 +244,27 @@ def make_answer_completion_postprocessor(
 
 
 def make_judge_call(
-    generator: Generator, tracker: UsageTracker
+    generator: Generator,
+    tracker: UsageTracker,
+    transport_retries: int | None = None,
 ) -> Callable[[str], dict]:
     def judge(prompt: str) -> dict:
         started = time.perf_counter()
-        response = generator._create_groq_chat_completion(
-            model=generator.model,
-            messages=[
+        request_kwargs = {
+            "model": generator.model,
+            "messages": [
                 {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
-            max_tokens=PHASE2_MAX_TOKENS,
-            temperature=0,
-        )
+            "max_tokens": PHASE2_MAX_TOKENS,
+            "temperature": 0,
+        }
+        if transport_retries is None:
+            response = generator._create_groq_chat_completion(**request_kwargs)
+        else:
+            response = generator._create_groq_chat_completion(
+                _retry_limit=transport_retries, **request_kwargs
+            )
         elapsed = time.perf_counter() - started
         tracker.record("judging", getattr(response, "usage", None), elapsed)
         raw = response.choices[0].message.content or ""

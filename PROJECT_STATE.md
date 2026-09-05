@@ -2725,6 +2725,58 @@ comparison and risk-control evaluation stable under the registered provider
 protocol, or introduce a separately pre-registered provider-independent
 answer/evaluation contract before another N=30 replay.
 
+### Evidence Contract v3 — implementation complete, provider-incomplete NO-GO (2026-09-05)
+
+The Evidence Contract v3 implementation is complete as an opt-in candidate
+path. It adds strict comparative fact records with original value, metric,
+currency, scale, period, kind, denominator, source location, and evidence
+text; table row/column binding; unknown-period abstention; latest-period
+selection without magnitude ranking; compatible-share comparison; bounded
+absence wording; and a shared selection consumed by both renderer and
+answerability assessment. The existing v2 and production defaults remain
+unchanged. The risk path reuses the filing-native grouped renderer, while the
+new judge profile has independently authored calibration fixtures and a
+versioned rubric/reference fingerprint.
+
+The verifier at
+`scripts/diagnostics/answerability_stability_v1_reproducibility.py` now
+rejects missing, duplicate, extra, malformed, or non-OK records; recomputes
+generation/judge bindings, scores, aggregates, and gates; re-renders V7
+context from the locked artifact; checks hardlink/path identity; and binds
+replicates to durable run IDs. The request ledger reserves a slot before every
+transport attempt, counts explicit retries, refuses unknown outcomes, and
+rejects request 61. The campaign runner disables both wrapper and Groq-client
+retries, and keeps calibration, sentinel, and legacy calls in one ledger.
+
+The targeted v3/provenance suite passed `32/32`, and the final full backend
+suite passed `661` tests with `121` existing parser warnings. M0 manifest
+identity passed with canonical
+artifact fingerprint
+`sha256:f6d2cada527b6ded976570b2065ae6150d5868aaee4ecfc3201d7d46d0a41460`
+and protected official-result hash
+`sha256:a5b3c16e43c44ea79199c525e6345acf837172d956d8b659e5a234dc4692a7ba`.
+
+The first provider attempt was abandoned after observing hidden SDK retries
+on a 429; its ledger was not resumed or mixed. The corrected, separately
+bound campaign `evidence_contract_v3_retry_disabled` passed rubric calibration
+`12/12`, then reached R1 generation `6/6` and judging `5/6`. The next logical
+judge operation received 429 twice (one explicit retry), leaving `25/60`
+reserved requests, `23` completed and `2` errors. The campaign status receipt
+is `data/diagnostics/evidence_contract_v3_retry_disabled_campaign_status.json`
+(SHA-256
+`sha256:42ebd0f4044a6551d7c6a546dd36e396d6bd9a30a29e6b0f397ca887c89790f0`);
+the manifest SHA-256 is
+`sha256:efc076187e7d6a4ea66c52e967a763abec39a4fcb18fc88512fbd9d83c329175`,
+the ledger SHA-256 is
+`sha256:92d6bf0bd7566b41681b8f4ec2adf12a0b0f067ebd504c5c8fa75832fd41b4ac`,
+and calibration SHA-256 is
+`sha256:15cb52fe051ccbdf2359f9d697c5074abb4e841bb654101f2586dcfe552dfb9d`.
+R2 and legacy comparison were correctly not run with incomplete evidence; no
+N=30 replay, canonical/index rebuild, production rollout, or official result
+change was attempted. This is a provider-incomplete NO-GO, not a semantic
+score failure, and the next action is a newly authorized provider window or a
+provider-independent admission decision.
+
 During this campaign, a separate exact-priority Phase 1 artifact was also
 rebuilt with byte-identical determinism (`12` cases; fingerprint
 `sha256:443df50844648615e37feba3b30b61f68b12b3c874b10ce5d1ef121eebd88c8a`,

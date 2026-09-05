@@ -9,10 +9,13 @@ from dataclasses import dataclass
 from src.company_entities import detect_tickers
 from src.generation.comparative_evidence import (
     COMPARATIVE_EVIDENCE_FINGERPRINT,
+    COMPARATIVE_EVIDENCE_V3_FINGERPRINT,
     ComparativeFact,
+    DependencySelectionV3,
     classify_comparative_question,
     extract_comparative_facts,
     facts_match_intent,
+    select_dependency_evidence_v3,
 )
 from src.generation.period_value_completeness import (
     EvidenceSource,
@@ -26,6 +29,10 @@ COMPARATIVE_ANSWERABILITY_FINGERPRINT = "sha256:" + hashlib.sha256(
         b"metric-value-period-unit-compatibility-"
         + COMPARATIVE_EVIDENCE_FINGERPRINT.encode()
     )
+).hexdigest()
+COMPARATIVE_ANSWERABILITY_V3_FINGERPRINT = "sha256:" + hashlib.sha256(
+    b"comparative-answerability-v3-shared-selection-unsupported-ranking-"
+    + COMPARATIVE_EVIDENCE_V3_FINGERPRINT.encode()
 ).hexdigest()
 
 _FALLBACK_PHRASE = "could not find sufficient information"
@@ -126,6 +133,88 @@ class ComparativeAnswerabilityAssessment:
         if self.qualified:
             return "qualified"
         return "sufficient"
+
+
+@dataclass(frozen=True)
+class ComparativeAnswerabilityAssessmentV3:
+    """Answerability result backed by the same v3 selection as the renderer."""
+
+    applicable: bool
+    expected_tickers: tuple[str, ...]
+    selection: DependencySelectionV3
+    status: str
+    qualified: bool
+    draft_is_fallback: bool
+    unsupported_ranking: bool
+    reason_codes: tuple[str, ...]
+
+    @property
+    def evidence_sufficient(self) -> bool:
+        return self.selection.evidence_sufficient
+
+    @property
+    def passed(self) -> bool:
+        if not self.applicable:
+            return True
+        if not self.evidence_sufficient:
+            return self.draft_is_fallback and not self.unsupported_ranking
+        return not self.draft_is_fallback and not self.unsupported_ranking
+
+
+_POSITIVE_RANKING_RE = re.compile(
+    r"\b(?:depends?|relies|reliance|higher|lower|more|less|winner|leading|"
+    r"greater)\b",
+    re.IGNORECASE,
+)
+_BOUNDED_NEGATION_RE = re.compile(
+    r"\b(?:do(?:es)?\s+not|doesn't|cannot|can't|unable to|insufficient|"
+    r"not enough)\b[^.]{0,100}\b(?:establish|determine|compare|rank|winner)",
+    re.IGNORECASE,
+)
+
+
+def _has_unsupported_dependency_ranking(answer: str, selection: DependencySelectionV3) -> bool:
+    """Reject positive ranking language when v3 found no compatible shares."""
+    if selection.compatible or not _POSITIVE_RANKING_RE.search(answer):
+        return False
+    bounded = _BOUNDED_NEGATION_RE.sub("", answer)
+    # Describing a metric as higher/lower is still a ranking claim unless it
+    # is explicitly tied to a compatible share selected by v3.
+    return bool(_POSITIVE_RANKING_RE.search(bounded))
+
+
+def assess_comparative_answerability_v3(
+    question: str,
+    evidence_context: str,
+    answer: str,
+) -> ComparativeAnswerabilityAssessmentV3:
+    """Assess a dependency answer without consulting reference labels."""
+    selection = select_dependency_evidence_v3(question, evidence_context)
+    fallback = _FALLBACK_PHRASE in answer.casefold()
+    unsupported = _has_unsupported_dependency_ranking(answer, selection)
+    if not selection.applicable:
+        status = "not_applicable"
+    elif not selection.evidence_sufficient:
+        status = "insufficient"
+    elif selection.compatible:
+        status = "sufficient"
+    else:
+        status = "qualified"
+    reasons = list(selection.reason_codes)
+    if unsupported:
+        reasons.append("unsupported_dependency_ranking")
+    if fallback and selection.evidence_sufficient:
+        reasons.append("fallback_despite_evidence")
+    return ComparativeAnswerabilityAssessmentV3(
+        applicable=selection.applicable,
+        expected_tickers=selection.expected_tickers,
+        selection=selection,
+        status=status,
+        qualified=selection.evidence_sufficient and not selection.compatible,
+        draft_is_fallback=fallback,
+        unsupported_ranking=unsupported,
+        reason_codes=tuple(dict.fromkeys(reasons)),
+    )
 
 
 def _normalize(value: str) -> str:

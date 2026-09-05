@@ -105,6 +105,7 @@ class Generator:
         model: str | None = None,
         api_key: str | None = None,
         api_keys: list[str] | None = None,
+        client_max_retries: int | None = None,
     ):
         from configs.settings import settings
         from groq import Groq
@@ -127,7 +128,15 @@ class Generator:
         selected_keys = list(dict.fromkeys(key for key in configured_keys if key))
         if not selected_keys:
             raise ValueError("GROQ_API_KEY is not configured in .env")
-        self.clients = [Groq(api_key=key) for key in selected_keys]
+        if client_max_retries is None:
+            self.clients = [Groq(api_key=key) for key in selected_keys]
+        else:
+            if type(client_max_retries) is not int or client_max_retries < 0:
+                raise ValueError("client_max_retries must be a non-negative integer")
+            self.clients = [
+                Groq(api_key=key, max_retries=client_max_retries)
+                for key in selected_keys
+            ]
         # Preserve the old public attribute for integrations that inspect it.
         self.client = self.clients[0]
         self._client_cursor = 0
@@ -150,9 +159,21 @@ class Generator:
         delay = value / 1000 if unit == "ms" else value
         return min(delay + 0.5, 30.0)
 
-    def _create_groq_chat_completion(self, **kwargs: Any) -> Any:
+    def _create_groq_chat_completion(
+        self, *, _retry_limit: int | None = None, **kwargs: Any
+    ) -> Any:
+        """Create a completion with an optional caller-owned retry budget.
+
+        Production keeps the historical retry policy. Bounded evaluation
+        campaigns pass ``_retry_limit=0`` and account for explicit retries in
+        their durable request ledger instead of hiding them in the SDK layer.
+        The underscore keeps this control parameter out of the provider call.
+        """
         last_stream = None
-        for attempt in range(GROQ_MAX_RETRIES + 1):
+        retry_limit = GROQ_MAX_RETRIES if _retry_limit is None else _retry_limit
+        if type(retry_limit) is not int or retry_limit < 0:
+            raise ValueError("retry limit must be a non-negative integer")
+        for attempt in range(retry_limit + 1):
             client_index, client, wait = self._next_available_client()
             if wait:
                 time.sleep(wait)
@@ -168,7 +189,7 @@ class Generator:
                 # For streaming calls, the result might be a partially-opened stream
                 # that needs cleanup before retrying
                 delay = self._groq_retry_delay(error)
-                if delay is None or attempt >= GROQ_MAX_RETRIES:
+                if delay is None or attempt >= retry_limit:
                     raise
                 self._cool_down_client(client_index, delay)
                 logger.warning(
@@ -176,7 +197,7 @@ class Generator:
                     client_index + 1,
                     len(self.clients),
                     attempt + 1,
-                    GROQ_MAX_RETRIES,
+                    retry_limit,
                 )
 
     def _next_available_client(self) -> tuple[int, Any, float]:

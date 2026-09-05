@@ -2786,16 +2786,34 @@ the clean priority-2 N=30 result. The Phase 1 model was not fully cached, so
 the rebuild required the documented `--allow-network` model-loading escape
 hatch; raw filings and the canonical 30-case artifact were not altered.
 
-### Financial workspace UX and campaign diagnostics — implementation complete (2026-09-05)
+### Financial workspace UX, conversation Library and campaign diagnostics — implementation complete (2026-09-05)
 
 The next provider-free improvement is implemented on top of the Evidence
 Contract v3 candidate. The frontend now has semantic light/dark tokens, a
-system theme preference with pre-React startup application, restrained
-financial-workspace surfaces, clearer loading/error states, filter scope near
-the composer, IME-safe trimmed input validation, snapshot-preserving retry,
-and keyboard-accessible citation controls that open and focus the matching
-source excerpt. Mobile sidebar focus is trapped while open and restored after
-close. Existing API and SSE payloads remain unchanged.
+system theme preference with pre-React startup application, a three-choice
+theme menu, restrained financial-workspace surfaces, clearer loading/error
+states, filter scope near the composer, IME-safe trimmed input validation,
+snapshot-preserving retry, and keyboard-accessible citation controls that open
+and focus the matching source excerpt. Mobile sidebar focus is trapped while
+open and restored after close.
+
+Conversations autosave to a versioned local Library. IndexedDB is preferred,
+localStorage is the browser fallback, and a clear in-memory warning covers
+storage-disabled tabs. The Library migrates the legacy message/session keys,
+supports search, bookmark, rename, delete confirmation, and Markdown export,
+and preserves source text, request scope, and evidence metadata. Starting a
+new conversation saves the local record but intentionally starts a fresh
+backend session; it does not claim to restore expired server memory. Desktop
+answers use a side evidence column and small screens keep the evidence in the
+stacked disclosure flow.
+
+The API now returns optional full source text and stable source metadata
+(`chunk_id`, ticker, section, and filing date) on query responses. Health
+responses expose optional searchable-company and indexed-chunk counts, allowing
+the overview to report live corpus facts instead of hardcoded percentages or
+counts. Frontend API errors distinguish provider quota, timeout, server, and
+unreachable-backend states while retaining technical detail behind the retry
+surface.
 
 Campaign transport diagnostics now record only redacted key aliases and safe
 metadata for each provider attempt. The runner separates provider
@@ -2805,10 +2823,12 @@ and invokes the shared verifier before computing `candidate_go`. The current
 incomplete ledger remains preserved; it must not be resumed under a new quota
 window.
 
-Frontend typecheck, production build, and Vitest passed (`20/20`). The full
-backend suite passed `663` tests with `121` existing parser warnings; the
-campaign, provenance, manifest, generator, and ledger targeted tests passed
-`25/25`, and Python compilation passed. Browser smoke verification covered
-light, dark, system, and the mobile search-controls drawer. No provider
-request, canonical artifact, index, official benchmark, or production default
-was changed in this improvement.
+Frontend typecheck, production build, and Vitest passed with `26/26` tests.
+The full backend suite passed `666` tests with `121` existing parser warnings;
+the campaign, provenance, manifest, API, and ledger targeted tests also pass,
+Python compilation passes, and the registered v3 manifest check is green. A
+new in-app browser smoke attempt was blocked by the local browser surface with
+`ERR_BLOCKED_BY_CLIENT` for localhost, so the UI conclusion is based on the
+hermetic behavioral suite and production build rather than an unverified
+visual screenshot. No provider request, canonical artifact, index, official
+benchmark, or production default was changed in this improvement.

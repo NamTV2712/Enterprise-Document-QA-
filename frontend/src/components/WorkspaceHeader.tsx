@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   BookOpen,
   Menu,
@@ -12,6 +12,7 @@ import {
   Monitor,
   RefreshCw,
   Sun,
+  Check,
 } from "lucide-react";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { BrandMark } from "./BrandMark";
@@ -28,7 +29,7 @@ interface WorkspaceHeaderProps {
   companyCount?: number;
   theme: ThemePreference;
   resolvedTheme: "light" | "dark";
-  onToggleTheme: () => void;
+  onSelectTheme: (theme: ThemePreference) => void;
   isClearingSession: boolean;
   onReset: () => void;
 }
@@ -45,10 +46,34 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
     companyCount,
     theme,
     resolvedTheme,
-    onToggleTheme,
+    onSelectTheme,
     isClearingSession,
     onReset,
-  }) => (
+  }) => {
+    const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
+    const themeMenuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+      if (!isThemeMenuOpen) return;
+      const handlePointerDown = (event: PointerEvent) => {
+        if (!themeMenuRef.current?.contains(event.target as Node)) {
+          setIsThemeMenuOpen(false);
+        }
+      };
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === "Escape") setIsThemeMenuOpen(false);
+      };
+      document.addEventListener("pointerdown", handlePointerDown);
+      document.addEventListener("keydown", handleKeyDown);
+      return () => {
+        document.removeEventListener("pointerdown", handlePointerDown);
+        document.removeEventListener("keydown", handleKeyDown);
+      };
+    }, [isThemeMenuOpen]);
+
+    const themeLabel = theme === "system" ? "System" : theme === "light" ? "Light" : "Dark";
+
+    return (
     <header className="workspace-header">
       <div className="flex items-center gap-3 min-w-0">
         <button
@@ -126,25 +151,54 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
           isPipelineReady={isPipelineReady}
           companyCount={companyCount}
         />
-        <button
-          type="button"
-          id="theme-switcher-btn"
-          onClick={onToggleTheme}
-          aria-pressed={resolvedTheme === "dark"}
-          className="theme-toggle"
-          title={`Theme: ${theme}. Click to switch to ${theme === "system" ? "light" : theme === "light" ? "dark" : "system"}`}
-          aria-label={`Theme ${theme}. Switch to ${theme === "system" ? "light" : theme === "light" ? "dark" : "system"} theme`}
-        >
-          <span className="theme-toggle__icon" aria-hidden="true">
-            {theme === "system" ? (
-              <Monitor className="w-4 h-4" />
-            ) : resolvedTheme === "dark" ? (
-              <Sun className="w-4 h-4" />
-            ) : (
-              <Moon className="w-4 h-4" />
-            )}
-          </span>
-        </button>
+        <div className="theme-menu" ref={themeMenuRef}>
+          <button
+            type="button"
+            id="theme-switcher-btn"
+            onClick={() => setIsThemeMenuOpen((open) => !open)}
+            aria-expanded={isThemeMenuOpen}
+            aria-haspopup="menu"
+            className="theme-toggle"
+            title={`Theme: ${themeLabel}`}
+            aria-label={`Theme ${themeLabel}. Choose light, dark, or system theme`}
+          >
+            <span className="theme-toggle__icon" aria-hidden="true">
+              {theme === "system" ? (
+                <Monitor className="w-4 h-4" />
+              ) : resolvedTheme === "dark" ? (
+                <Sun className="w-4 h-4" />
+              ) : (
+                <Moon className="w-4 h-4" />
+              )}
+            </span>
+            <span className="theme-toggle__label">{themeLabel}</span>
+          </button>
+          {isThemeMenuOpen && (
+            <div className="theme-menu__popover" role="menu" aria-label="Theme preference">
+              {(["system", "light", "dark"] as ThemePreference[]).map((option) => {
+                const label = option === "system" ? "System" : option === "light" ? "Light" : "Dark";
+                const Icon = option === "system" ? Monitor : option === "light" ? Sun : Moon;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={theme === option}
+                    className="theme-menu__item"
+                    onClick={() => {
+                      onSelectTheme(option);
+                      setIsThemeMenuOpen(false);
+                    }}
+                  >
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                    <span>{label}</span>
+                    {theme === option && <Check className="ml-auto h-4 w-4" aria-hidden="true" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
         <button
           type="button"
           id="quick-reset-btn"
@@ -161,7 +215,8 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
         </button>
       </div>
     </header>
-  ),
+    );
+  },
 );
 
 WorkspaceHeader.displayName = "WorkspaceHeader";

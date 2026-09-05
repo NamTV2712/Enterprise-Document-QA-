@@ -15,12 +15,18 @@ import {
   Search,
   HelpCircle,
   Settings2,
+  BookOpen,
 } from "lucide-react";
 import { SampleQuestionChips, SampleQuestion } from "./SampleQuestionChips";
 import { HealthResponse } from "../types";
 import { Tooltip } from "./Tooltip";
 import { BrandMark } from "./BrandMark";
 import { SidebarFooter } from "./SidebarFooter";
+import { ConversationLibrary } from "./ConversationLibrary";
+import {
+  ConversationRecord,
+  ConversationStorageMode,
+} from "../lib/conversationStore";
 import {
   ALL_SECTIONS_DESCRIPTION,
   COMPANY_NAMES,
@@ -45,6 +51,17 @@ interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
   isClearingSession: boolean;
+  activePanel: "research" | "library";
+  onChangePanel: (panel: "research" | "library") => void;
+  conversations: ConversationRecord[];
+  activeConversationId: string;
+  storageMode: ConversationStorageMode;
+  storageWarning: string | null;
+  onSelectConversation: (conversation: ConversationRecord) => void;
+  onRenameConversation: (conversationId: string, title: string) => void;
+  onToggleBookmark: (conversationId: string, messageId: string) => void;
+  onDeleteConversation: (conversationId: string) => void;
+  onExportConversation: (conversation: ConversationRecord) => void;
 }
 
 const SidebarBase: React.FC<SidebarProps> = ({
@@ -64,6 +81,17 @@ const SidebarBase: React.FC<SidebarProps> = ({
   isOpen,
   onClose,
   isClearingSession,
+  activePanel,
+  onChangePanel,
+  conversations,
+  activeConversationId,
+  storageMode,
+  storageWarning,
+  onSelectConversation,
+  onRenameConversation,
+  onToggleBookmark,
+  onDeleteConversation,
+  onExportConversation,
 }) => {
   const minSidebarWidth = 280;
   const maxSidebarWidth = 480;
@@ -230,7 +258,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
       <aside
         ref={sidebarRef}
         id="control-sidebar"
-        aria-labelledby="search-controls-heading"
+        aria-labelledby={activePanel === "research" ? "search-controls-heading" : "library-heading"}
         className={`sidebar-shell fixed inset-y-0 left-0 flex flex-col z-45 lg:static lg:translate-x-0 ${
           isResizing ? "transition-none" : "transition-transform duration-300"
         } ${
@@ -275,7 +303,47 @@ const SidebarBase: React.FC<SidebarProps> = ({
           </button>
         </div>
 
-        {/* Filters and Configs Area */}
+        <nav className="sidebar-tabs" aria-label="Workspace views" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activePanel === "research"}
+            className={`sidebar-tab ${activePanel === "research" ? "is-active" : ""}`}
+            onClick={() => onChangePanel("research")}
+          >
+            <Compass className="h-4 w-4" />
+            Research
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activePanel === "library"}
+            className={`sidebar-tab ${activePanel === "library" ? "is-active" : ""}`}
+            onClick={() => onChangePanel("library")}
+          >
+            <BookOpen className="h-4 w-4" />
+            Library
+            {conversations.length > 0 && <span className="sidebar-tab-count">{conversations.length}</span>}
+          </button>
+        </nav>
+
+        {activePanel === "library" ? (
+          <div className="flex-1 overflow-y-auto p-4 md:p-5">
+            <ConversationLibrary
+              conversations={conversations}
+              activeConversationId={activeConversationId}
+              storageMode={storageMode}
+              storageWarning={storageWarning}
+              onSelect={onSelectConversation}
+              onRename={onRenameConversation}
+              onToggleBookmark={onToggleBookmark}
+              onDelete={onDeleteConversation}
+              onExport={onExportConversation}
+              onClose={() => onChangePanel("research")}
+            />
+          </div>
+        ) : (
+        /* Filters and Configs Area */
         <div className="flex-1 overflow-y-auto p-4 md:p-5 space-y-5">
           {/* Controls Title */}
           <h2 id="search-controls-heading" className="flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300 pb-2 border-b border-slate-200 dark:border-slate-800">
@@ -570,12 +638,15 @@ const SidebarBase: React.FC<SidebarProps> = ({
             <SampleQuestionChips onSelect={onSelectSample} />
           </div>
         </div>
+        )}
 
-        <SidebarFooter
-          healthData={healthData}
-          isClearingSession={isClearingSession}
-          onNewConversation={onNewConversation}
-        />
+        {activePanel === "research" && (
+          <SidebarFooter
+            healthData={healthData}
+            isClearingSession={isClearingSession}
+            onNewConversation={onNewConversation}
+          />
+        )}
       </aside>
     </>
   );

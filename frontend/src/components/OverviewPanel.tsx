@@ -26,7 +26,8 @@ import { SAMPLE_QUESTIONS, SampleQuestion } from "./SampleQuestionChips";
 
 interface OverviewPanelProps {
   hasMessages: boolean;
-  companyCount: number;
+  companyCount: number | null;
+  indexedChunkCount?: number | null;
   onReturnToConversation: () => void;
   isBackendConnected: boolean | null;
   isPipelineReady: boolean | null;
@@ -98,6 +99,7 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
   ({
     hasMessages,
     companyCount,
+    indexedChunkCount,
     onReturnToConversation,
     isBackendConnected,
     isPipelineReady,
@@ -120,7 +122,10 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
           ) : (
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-brand-indigo/30 bg-brand-indigo/5 dark:bg-brand-indigo/10 text-brand-indigo text-xs font-semibold shadow-4xs">
               <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-              <span>SEC EDGAR Intelligence • 50 Enterprise 10-K Filings</span>
+              <span>
+                SEC EDGAR Intelligence
+                {companyCount !== null ? ` · ${companyCount} searchable companies` : " · filing research"}
+              </span>
             </div>
           )}
         </div>
@@ -129,8 +134,9 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
           Ask questions. Verify every answer.
         </h2>
         <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 max-w-xl mx-auto leading-relaxed font-sans">
-          Research SEC 10-K filings across {companyCount || 50} searchable
-          companies with cited evidence, deterministic number preservation, and a clear retrieval trail.
+          Research SEC 10-K filings
+          {companyCount !== null ? ` across ${companyCount} searchable companies` : " across the available corpus"}
+          {" with cited evidence, deterministic number preservation, and a clear retrieval trail."}
         </p>
       </div>
 
@@ -175,11 +181,11 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
       {/* System Telemetry & Capability Stat Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="stat-card">
-          <div className="stat-card__value">{companyCount || 50}</div>
+          <div className="stat-card__value">{companyCount ?? "—"}</div>
           <div className="stat-card__label">Searchable Companies</div>
         </div>
         <div className="stat-card">
-          <div className="stat-card__value">10,053</div>
+          <div className="stat-card__value">{indexedChunkCount ?? "—"}</div>
           <div className="stat-card__label">Indexed Chunks</div>
         </div>
         <div className="stat-card">
@@ -187,8 +193,8 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
           <div className="stat-card__label">BM25 + Dense + CE</div>
         </div>
         <div className="stat-card">
-          <div className="stat-card__value">100%</div>
-          <div className="stat-card__label">Grounded Evidence</div>
+          <div className="stat-card__value">Source trail</div>
+          <div className="stat-card__label">Cited evidence</div>
         </div>
       </div>
 

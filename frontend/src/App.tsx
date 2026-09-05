@@ -28,15 +28,23 @@ import {
   checkHealth,
   getSupportedTickers,
   queryDecomposed,
-  deleteSession,
   getSessionHistory,
   streamQuery,
 } from "./lib/api";
 import { formatCompanyLabel, SECTION_METADATA } from "./lib/displayMetadata";
+import {
+  ConversationRecord,
+  ConversationStorageMode,
+  createConversationRecord,
+  deleteConversationRecord,
+  loadConversationLibrary,
+  saveConversationRecord,
+} from "./lib/conversationStore";
+import { downloadConversationMarkdown } from "./lib/conversationExport";
 
 const STREAM_FLUSH_INTERVAL_MS = 80;
 const MAX_PERSISTED_MESSAGES = 50;
-const MESSAGE_PERSIST_DEBOUNCE_MS = 180;
+const MESSAGE_PERSIST_DEBOUNCE_MS = 1000;
 const HEALTH_REFRESH_INTERVAL_MS = 15_000;
 const COMPARATIVE_KEYWORDS = [
   "compare",
@@ -97,6 +105,38 @@ function createSessionId(): string {
   return `session-${Date.now().toString(36)}-${randomPart}`;
 }
 
+function createConversationId(sessionId: string): string {
+  return `conversation-${sessionId}`;
+}
+
+function describeRequestError(
+  error: unknown,
+  fallback: string,
+): { message: string; detail: string } {
+  const detail = error instanceof Error ? error.message : String(error);
+  const candidateStatus =
+    error && typeof error === "object" && "status" in error
+      ? (error as { status?: unknown }).status
+      : null;
+  const status = typeof candidateStatus === "number" ? candidateStatus : null;
+  if (status === 429) {
+    return {
+      message: "The provider is temporarily out of quota. Please wait and try again later.",
+      detail,
+    };
+  }
+  if (status === 408 || status === 504) {
+    return { message: "The request timed out. Try a narrower question or try again.", detail };
+  }
+  if (status !== null && status >= 500) {
+    return { message: "The research service is temporarily unavailable. Please try again.", detail };
+  }
+  if (error instanceof TypeError) {
+    return { message: "The backend could not be reached. Check the connection and try again.", detail };
+  }
+  return { message: fallback, detail };
+}
+
 function getSystemTheme(): "light" | "dark" {
   return typeof window !== "undefined" &&
     window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -105,7 +145,23 @@ function getSystemTheme(): "light" | "dark" {
 }
 
 export default function App() {
-  const [sessionId, setSessionId] = useState<string>("");
+  const [sessionId, setSessionId] = useState<string>(() => {
+    const stored = safeGetItem("sec_qa_session_id");
+    const next = stored || createSessionId();
+    if (!stored) safeSetItem("sec_qa_session_id", next);
+    return next;
+  });
+  const [activeConversationId, setActiveConversationId] = useState<string>(() => {
+    const stored = safeGetItem("sec_qa_active_conversation_id");
+    return stored || createConversationId(safeGetItem("sec_qa_session_id") || "pending");
+  });
+  const [conversations, setConversations] = useState<ConversationRecord[]>([]);
+  const [storageMode, setStorageMode] = useState<ConversationStorageMode>("memory");
+  const [storageWarning, setStorageWarning] = useState<string | null>(null);
+  const [activeSidebarPanel, setActiveSidebarPanel] = useState<"research" | "library">("research");
+  const [isLibraryReady, setIsLibraryReady] = useState(false);
+  const [bookmarkedMessageIds, setBookmarkedMessageIds] = useState<string[]>([]);
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
   const [tickers, setTickers] = useState<string[]>([]);
   const [sections, setSections] = useState<string[]>([]);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
@@ -158,6 +214,8 @@ export default function App() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const requestAbortRef = useRef<AbortController | null>(null);
+  const conversationCreatedAtRef = useRef(Date.now());
+  const localLibraryHasRecordRef = useRef(false);
   const resetCancelRef = useRef<HTMLButtonElement>(null);
   const healthRequestRef = useRef<Promise<HealthResponse> | null>(null);
   const lastHealthRefreshRef = useRef(0);
@@ -217,41 +275,73 @@ export default function App() {
     safeSetItem("theme", themePreference);
   }, [resolvedTheme, themePreference]);
 
-  // Persist messages to localStorage with size limit and cleanup
+  const persistCurrentConversation = useCallback(async () => {
+    if (!isLibraryReady || (!messages.length && !inputText.trim())) return;
+    const record = createConversationRecord(
+      activeConversationId,
+      sessionId,
+      messages,
+      inputText,
+      bookmarkedMessageIds,
+      conversationCreatedAtRef.current,
+    );
+    const result = await saveConversationRecord(record);
+    setStorageMode(result.storageMode);
+    setStorageWarning(result.warning);
+    setConversations((current) => [
+      record,
+      ...current.filter((conversation) => conversation.id !== record.id),
+    ].sort((a, b) => b.updatedAt - a.updatedAt));
+  }, [activeConversationId, bookmarkedMessageIds, inputText, isLibraryReady, messages, sessionId]);
+
+  // Autosave completed responses and drafts without writing on every streamed token.
   useEffect(() => {
-    // Streaming updates arrive every 80ms. Persist once the response finishes
-    // (or is stopped) instead of serializing the full history for every flush.
-    if (messages.some((message) => message.isStreaming)) return;
-
+    if (!isLibraryReady || messages.some((message) => message.isStreaming)) return;
     const timeoutId = window.setTimeout(() => {
-      if (messages.length === 0) {
-        safeRemoveItem("sec_qa_messages");
-        return;
-      }
-      const messagesToSave = messages.slice(-MAX_PERSISTED_MESSAGES);
-      try {
-        localStorage.setItem("sec_qa_messages", JSON.stringify(messagesToSave));
-      } catch (e) {
-        console.warn("Failed to save messages to localStorage:", e);
-        // If storage full, clear old messages
-        safeRemoveItem("sec_qa_messages");
-      }
+      void persistCurrentConversation();
     }, MESSAGE_PERSIST_DEBOUNCE_MS);
-
     return () => window.clearTimeout(timeoutId);
-  }, [messages]);
+  }, [inputText, isLibraryReady, messages, bookmarkedMessageIds, persistCurrentConversation]);
+
+  // Load the local library first. Backend history is only a fallback when no
+  // richer local record exists, so sources and request metadata survive reload.
+  useEffect(() => {
+    let cancelled = false;
+    loadConversationLibrary(sessionId, activeConversationId).then((library) => {
+      if (cancelled) return;
+      setConversations(library.conversations);
+      setStorageMode(library.storageMode);
+      setStorageWarning(library.warning);
+      const current =
+        library.conversations.find((conversation) => conversation.id === activeConversationId) ||
+        library.conversations.find((conversation) => conversation.sessionId === sessionId);
+      if (current) {
+        localLibraryHasRecordRef.current = true;
+        conversationCreatedAtRef.current = current.createdAt;
+        setActiveConversationId(current.id);
+        setSessionId(current.sessionId);
+        setMessages(current.messages);
+        setInputText(current.draft);
+        setBookmarkedMessageIds(current.bookmarkedMessageIds);
+        safeSetItem("sec_qa_session_id", current.sessionId);
+        safeSetItem("sec_qa_active_conversation_id", current.id);
+        if (current.messages.length > 0) setActiveView("conversation");
+      }
+      setIsLibraryReady(true);
+    }).catch((error) => {
+      if (cancelled) return;
+      setStorageWarning("Conversation library could not be loaded; this session will continue in memory.");
+      setIsLibraryReady(true);
+      console.warn("Could not load conversation library:", error);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Handle initialization on first load
   useEffect(() => {
     const controller = new AbortController();
-
-    // 1. Session ID creation/restoration
-    let sid = safeGetItem("sec_qa_session_id");
-    if (!sid) {
-      sid = createSessionId();
-      safeSetItem("sec_qa_session_id", sid);
-    }
-    setSessionId(sid);
 
     const initData = async () => {
       try {
@@ -262,7 +352,7 @@ export default function App() {
         // known, so avoid paying for their network latency serially.
         const [supportResult, historyResult] = await Promise.allSettled([
           getSupportedTickers(controller.signal),
-          getSessionHistory(sid, controller.signal),
+          getSessionHistory(sessionId, controller.signal),
         ]);
 
         if (supportResult.status === "rejected") {
@@ -279,10 +369,15 @@ export default function App() {
           ) {
             return;
           }
+          if (localLibraryHasRecordRef.current) {
+            setSessionNotice(
+              "This is a saved local copy. Its backend context is unavailable or expired; start a new conversation before asking follow-ups.",
+            );
+          }
           console.warn("Could not retrieve session history. Starting fresh.");
         } else {
           const history = historyResult.value;
-          if (history?.turns?.length > 0) {
+          if (history?.turns?.length > 0 && !localLibraryHasRecordRef.current) {
             const loadedMessages: Message[] = [];
             history.turns.forEach((turn, idx) => {
               loadedMessages.push({
@@ -313,7 +408,7 @@ export default function App() {
 
     initData();
     return () => controller.abort();
-  }, [applyHealth]);
+  }, [applyHealth, sessionId]);
 
   useEffect(() => {
     return () => {
@@ -443,16 +538,20 @@ export default function App() {
         );
       } catch (err: any) {
         if (!isCurrentRequest()) return;
+        const requestError = describeRequestError(
+          err,
+          "We couldn't complete this comparison. Check the connection and try again.",
+        );
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
               ? {
                   ...m,
-                  text: "We couldn't complete this comparison. Check the connection and try again.",
+                  text: requestError.message,
                   error: true,
                   isStreaming: false,
                   status: "error",
-                  errorDetail: err?.message || String(err),
+                  errorDetail: requestError.detail,
                   retryText: text,
                 }
               : m,
@@ -560,20 +659,21 @@ export default function App() {
           },
           (error) => {
             if (!isCurrentRequest()) return;
+            const requestError = describeRequestError(
+              error,
+              "The connection closed before the answer finished. Please try again.",
+            );
             cancelPendingFlush();
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantMsgId
                   ? {
                       ...m,
-                        text:
-                          streamingText +
-                          (streamingText ? "\n\n" : "") +
-                          "The connection closed before the answer finished. Please try again.",
+                        text: streamingText + (streamingText ? "\n\n" : "") + requestError.message,
                       isStreaming: false,
                       error: true,
                       status: "error",
-                      errorDetail: error.message,
+                      errorDetail: requestError.detail,
                       retryText: text,
                     }
                   : m,
@@ -585,20 +685,21 @@ export default function App() {
         );
       } catch (err: any) {
         if (!isCurrentRequest()) return;
+        const requestError = describeRequestError(
+          err,
+          "We couldn't complete this answer. Please try again.",
+        );
         cancelPendingFlush();
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
               ? {
                   ...m,
-                    text:
-                      streamingText +
-                      (streamingText ? "\n\n" : "") +
-                      "We couldn't complete this answer. Please try again.",
+                    text: streamingText + (streamingText ? "\n\n" : "") + requestError.message,
                     isStreaming: false,
                     error: true,
                     status: "error",
-                    errorDetail: err?.message || String(err),
+                    errorDetail: requestError.detail,
                     retryText: text,
                   }
               : m,
@@ -650,26 +751,29 @@ export default function App() {
     setIsLoading(false);
     setIsClearingSession(true);
     try {
-      if (sessionId) {
-        await deleteSession(sessionId).catch((e) =>
-          console.warn("Could not delete session on backend:", e),
-        );
-      }
+      await persistCurrentConversation();
     } catch (err) {
-      console.error("Session clearance exception:", err);
+      console.error("Conversation save exception:", err);
     } finally {
       const newSid = createSessionId();
+      const newConversationId = createConversationId(newSid);
+      conversationCreatedAtRef.current = Date.now();
       safeSetItem("sec_qa_session_id", newSid);
+      safeSetItem("sec_qa_active_conversation_id", newConversationId);
       setSessionId(newSid);
+      setActiveConversationId(newConversationId);
       setMessages([]);
       safeRemoveItem("sec_qa_messages");
       setActiveView("overview");
+      setSessionNotice(null);
       setIsClearingSession(false);
       setSelectedTicker(null);
       setSelectedSection(null);
+      setInputText("");
+      setBookmarkedMessageIds([]);
+      setActiveSidebarPanel("research");
 
-      // Refresh health, sharing any in-flight request and avoiding duplicate
-      // checks during rapid resets.
+      // Refresh health while retaining the previous conversation in the local library.
       try {
         await refreshHealth(true);
       } catch (e) {
@@ -677,7 +781,7 @@ export default function App() {
         setIsPipelineReady(false);
       }
     }
-  }, [refreshHealth, sessionId]);
+  }, [persistCurrentConversation, refreshHealth]);
 
   const requestNewConversation = useCallback(() => {
     if (messages.length === 0) {
@@ -686,6 +790,100 @@ export default function App() {
     }
     setShowResetDialog(true);
   }, [handleNewConversation, messages.length]);
+
+  const handleSelectConversation = useCallback(
+    async (conversation: ConversationRecord) => {
+      if (conversation.id === activeConversationId) {
+        setActiveView(conversation.messages.length ? "conversation" : "overview");
+        return;
+      }
+      requestAbortRef.current?.abort();
+      requestAbortRef.current = null;
+      setIsLoading(false);
+      await persistCurrentConversation();
+      conversationCreatedAtRef.current = conversation.createdAt;
+      setActiveConversationId(conversation.id);
+      setSessionId(conversation.sessionId);
+      setMessages(conversation.messages);
+      setInputText(conversation.draft);
+      setBookmarkedMessageIds(conversation.bookmarkedMessageIds);
+      setSessionNotice(null);
+      safeSetItem("sec_qa_session_id", conversation.sessionId);
+      safeSetItem("sec_qa_active_conversation_id", conversation.id);
+      setActiveView(conversation.messages.length ? "conversation" : "overview");
+      setActiveSidebarPanel("research");
+    },
+    [activeConversationId, persistCurrentConversation],
+  );
+
+  const handleRenameConversation = useCallback(
+    (conversationId: string, title: string) => {
+      const conversation = conversations.find((item) => item.id === conversationId);
+      if (!conversation) return;
+      const updated = { ...conversation, title: title.slice(0, 80), updatedAt: Date.now() };
+      setConversations((current) => [
+        updated,
+        ...current.filter((item) => item.id !== conversationId),
+      ].sort((a, b) => b.updatedAt - a.updatedAt));
+      void saveConversationRecord(updated).then((result) => {
+        setStorageMode(result.storageMode);
+        setStorageWarning(result.warning);
+      });
+    },
+    [conversations],
+  );
+
+  const handleToggleBookmark = useCallback(
+    (conversationId: string, messageId: string) => {
+      const conversation = conversations.find((item) => item.id === conversationId);
+      if (!conversation) return;
+      const bookmarked = conversation.bookmarkedMessageIds.includes(messageId);
+      const updated = {
+        ...conversation,
+        bookmarkedMessageIds: bookmarked
+          ? conversation.bookmarkedMessageIds.filter((id) => id !== messageId)
+          : [...conversation.bookmarkedMessageIds, messageId],
+        updatedAt: Date.now(),
+      };
+      setConversations((current) => current.map((item) => item.id === conversationId ? updated : item));
+      if (conversationId === activeConversationId) {
+        setBookmarkedMessageIds(updated.bookmarkedMessageIds);
+      }
+      void saveConversationRecord(updated).then((result) => {
+        setStorageMode(result.storageMode);
+        setStorageWarning(result.warning);
+      });
+    },
+    [activeConversationId, conversations],
+  );
+
+  const handleDeleteConversation = useCallback(
+    (conversationId: string) => {
+      void deleteConversationRecord(conversationId).then((result) => {
+        setStorageMode(result.storageMode);
+        setStorageWarning(result.warning);
+      });
+      setConversations((current) => current.filter((item) => item.id !== conversationId));
+      if (conversationId === activeConversationId) {
+        const newSid = createSessionId();
+        const newConversationId = createConversationId(newSid);
+        conversationCreatedAtRef.current = Date.now();
+        setSessionId(newSid);
+        setActiveConversationId(newConversationId);
+        setMessages([]);
+        setInputText("");
+        setBookmarkedMessageIds([]);
+        safeSetItem("sec_qa_session_id", newSid);
+        safeSetItem("sec_qa_active_conversation_id", newConversationId);
+        setActiveView("overview");
+      }
+    },
+    [activeConversationId],
+  );
+
+  const handleExportConversation = useCallback((conversation: ConversationRecord) => {
+    downloadConversationMarkdown(conversation);
+  }, []);
 
   const confirmNewConversation = useCallback(async () => {
     setShowResetDialog(false);
@@ -745,10 +943,8 @@ export default function App() {
     setIsSidebarOpen((open) => !open);
   }, []);
 
-  const handleToggleTheme = useCallback(() => {
-    setThemePreference((current) =>
-      current === "system" ? "light" : current === "light" ? "dark" : "system",
-    );
+  const handleSelectTheme = useCallback((nextTheme: ThemePreference) => {
+    setThemePreference(nextTheme);
   }, []);
 
   const handleReturnToConversation = useCallback(() => {
@@ -797,6 +993,19 @@ export default function App() {
         isOpen={isSidebarOpen}
         onClose={handleCloseSidebar}
         isClearingSession={isClearingSession}
+        activePanel={activeSidebarPanel}
+        onChangePanel={(panel) => {
+          setActiveSidebarPanel(panel);
+        }}
+        conversations={conversations}
+        activeConversationId={activeConversationId}
+        storageMode={storageMode}
+        storageWarning={storageWarning}
+        onSelectConversation={handleSelectConversation}
+        onRenameConversation={handleRenameConversation}
+        onToggleBookmark={handleToggleBookmark}
+        onDeleteConversation={handleDeleteConversation}
+        onExportConversation={handleExportConversation}
       />
 
       {/* Main chat window area */}
@@ -810,10 +1019,10 @@ export default function App() {
           hasMessages={messages.length > 0}
           isBackendConnected={isBackendConnected}
           isPipelineReady={isPipelineReady}
-          companyCount={tickers.length || undefined}
+          companyCount={healthData?.corpus?.searchable_company_count ?? (tickers.length || undefined)}
           theme={themePreference}
           resolvedTheme={resolvedTheme}
-          onToggleTheme={handleToggleTheme}
+          onSelectTheme={handleSelectTheme}
           isClearingSession={isClearingSession}
           onReset={requestNewConversation}
         />
@@ -823,10 +1032,19 @@ export default function App() {
           ref={scrollContainerRef}
           className="workspace-scroll flex-1 overflow-y-auto overflow-x-hidden min-h-0 relative z-10"
         >
+          {sessionNotice && activeView === "conversation" && (
+            <div className="session-notice" role="status" aria-live="polite">
+              <span className="min-w-0 flex-1">{sessionNotice}</span>
+              <button type="button" onClick={requestNewConversation}>
+                Start new conversation
+              </button>
+            </div>
+          )}
           {activeView === "overview" ? (
             <OverviewPanel
               hasMessages={messages.length > 0}
-              companyCount={tickers.length}
+              companyCount={healthData?.corpus?.searchable_company_count ?? (tickers.length || null)}
+              indexedChunkCount={healthData?.corpus?.indexed_chunk_count ?? null}
               onReturnToConversation={handleReturnToConversation}
               isBackendConnected={isBackendConnected}
               isPipelineReady={isPipelineReady}
@@ -921,8 +1139,9 @@ export default function App() {
                   </button>
                 </div>
                 <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-                  This clears the current messages and starts a fresh session.
-                  Your backend history for this conversation will also be removed.
+                  This saves the current conversation to your local Library and
+                  starts a fresh session. The new conversation does not carry
+                  over the previous backend context.
                 </p>
                 <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                   <button

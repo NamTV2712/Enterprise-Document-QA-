@@ -1,6 +1,6 @@
 # Enterprise Document QA Frontend
 
-Vite + React + TypeScript client for the Enterprise Document QA FastAPI backend. The frontend displays streamed answers, source citations, supported ticker filters, session history, and decomposed sub-queries.
+Vite + React + TypeScript client for the Enterprise Document QA FastAPI backend. The frontend displays streamed answers, source citations, supported ticker filters, saved local conversations, session history, and decomposed sub-queries.
 
 The research workspace uses a warm paper/navy palette with calmer indigo action
 accents and teal verification states in both light and dark themes.
@@ -9,7 +9,10 @@ The workspace keeps the primary question flow compact: advanced retrieval
 settings, interpreted queries, decomposition traces, and filing evidence are
 progressively disclosed so the answer remains the visual focus. The layout is
 responsive for mobile drawers, keyboard navigation, dark mode, and reduced
-motion preferences.
+motion preferences. Conversations autosave to IndexedDB when available, fall
+back to localStorage or in-memory storage, and can be searched, bookmarked,
+renamed, deleted, or exported as Markdown. Local records retain evidence and
+request scope; they do not restore expired backend memory into a new session.
 
 ## Local Development
 
@@ -93,4 +96,8 @@ data: {"type":"sources|token|done|error","data":...}
 
 Initialization requests share one `AbortController` and are cancelled on unmount. During an active SSE response, the input exposes a Stop button that aborts the request, preserves any partial answer already rendered, and immediately re-enables the input. Reloaded session history renders full assistant answers without client-side truncation.
 
-Source objects contain `citation`, `score`, and `text_preview`. Decomposed responses also include `was_decomposed`, `sub_queries`, and `num_total_chunks`.
+Source objects contain `citation`, `score`, `text_preview`, and optional full
+`text` plus `chunk_id`, `ticker`, `section`, and `filing_date` metadata. The
+health payload may include `corpus.searchable_company_count` and
+`corpus.indexed_chunk_count`. Decomposed responses also include
+`was_decomposed`, `sub_queries`, and `num_total_chunks`.

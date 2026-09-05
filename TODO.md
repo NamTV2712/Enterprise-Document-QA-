@@ -607,8 +607,17 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
         citation navigation, filter-snapshot retry, IME-safe input, mobile
         sidebar focus trapping, key-alias diagnostics, campaign status
         separation, output isolation, and final verifier admission are covered
-        by frontend `20/20` and backend targeted `25/25` tests. No provider
-        request or official artifact was changed.
+        by frontend tests. No provider request or official artifact was
+        changed.
+86. [x] Add the local conversation Library and evidence contract surface:
+        IndexedDB/localStorage/in-memory fallback, legacy-message migration,
+        autosave, search, bookmarks, rename/delete confirmation, Markdown
+        export, desktop evidence side panel, full source metadata, dynamic
+        health corpus counts, theme selection menu, and actionable 429/timeout
+        service errors. Frontend `26/26` tests cover the store, export, Library,
+        App, source panel, expired-session messaging, typecheck, and production
+        build; backend full suite is `666` tests. No provider or canonical
+        artifact was changed.
 
 ## Always-On Deployment
 

@@ -165,27 +165,30 @@ def verify_manifest(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--artifact", type=Path, default=ARTIFACT_PATH)
     parser.add_argument("--campaign-id", default=CAMPAIGN_ID)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args(argv)
+    output_path = args.output or Path(
+        f"data/diagnostics/{args.campaign_id}_manifest.json"
+    )
     if args.check:
         errors = verify_manifest(
-            args.output,
+            output_path,
             args.artifact,
             args.campaign_id,
             campaign_output_paths(args.campaign_id),
         )
-        print(json.dumps({"path": str(args.output), "errors": list(errors), "passed": not errors}, indent=2))
+        print(json.dumps({"path": str(output_path), "errors": list(errors), "passed": not errors}, indent=2))
         return 0 if not errors else 1
     manifest = build_manifest(
         args.artifact,
         args.campaign_id,
         campaign_output_paths(args.campaign_id),
     )
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(manifest, ensure_ascii=False, indent=2))
     return 0 if manifest["passed"] else 1
 

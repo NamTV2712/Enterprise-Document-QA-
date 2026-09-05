@@ -21,10 +21,17 @@ class CampaignIncomplete(RuntimeError):
 class ProviderOperationError(RuntimeError):
     """Safe provider error carrying redacted transport metadata for the ledger."""
 
-    def __init__(self, error_type: str, status_code: int | None, metadata: dict[str, Any] | None = None):
+    def __init__(
+        self,
+        error_type: str,
+        status_code: int | None,
+        metadata: dict[str, Any] | None = None,
+        retryable: bool | None = None,
+    ):
         super().__init__(f"provider operation failed: {error_type}")
         self.provider_error_type = error_type
         self.status_code = status_code
+        self.retryable = retryable
         self.provider_metadata = {
             key: value
             for key, value in (metadata or {}).items()
@@ -137,7 +144,9 @@ class RequestLedger:
                 response = send()
             except Exception as error:
                 status = getattr(error, "status_code", None)
-                retryable = status in {408, 429, 500, 502, 503, 504} or isinstance(error, (TimeoutError, ConnectionError)) or type(error).__name__ in {"APITimeoutError", "APIConnectionError"}
+                retryable = getattr(error, "retryable", None)
+                if retryable is None:
+                    retryable = status in {408, 429, 500, 502, 503, 504} or isinstance(error, (TimeoutError, ConnectionError)) or type(error).__name__ in {"APITimeoutError", "APIConnectionError"}
                 error_record = {
                     **identity,
                     "event": "error",

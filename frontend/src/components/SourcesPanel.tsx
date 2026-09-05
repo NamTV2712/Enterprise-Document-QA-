@@ -224,6 +224,8 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
                 const { section, ticker, year } = getSectionDisplay(
                   source.citation,
                 );
+                const evidenceText = source.text || source.text_preview;
+                const isPreviewOnly = !source.text;
                 const displayScore =
                   typeof source.score === "number"
                     ? source.score.toFixed(4)
@@ -233,7 +235,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
                   <div
                     key={index}
                     className="source-item py-3 first:pt-0 last:pb-0"
-                    id={`source-item-${index}`}
+                    id={`${safeMessageId}-source-item-${index}`}
                     tabIndex={-1}
                     data-source-index={index}
                   >
@@ -263,7 +265,10 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
                       tabIndex={-1}
                       className="source-preview text-sm leading-relaxed p-3.5 rounded-lg whitespace-pre-wrap select-all font-sans"
                     >
-                      {source.text_preview}
+                      {isPreviewOnly && (
+                        <span className="source-preview-label">Preview only · </span>
+                      )}
+                      {evidenceText}
                     </p>
                   </div>
                 );

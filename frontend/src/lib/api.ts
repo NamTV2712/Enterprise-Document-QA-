@@ -13,6 +13,16 @@ import {
   SessionHistoryResponse,
 } from "../types";
 
+export class ApiError extends Error {
+  readonly status: number | null;
+
+  constructor(message: string, status: number | null = null) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 // Note: QueryRequest and QueryResponse types are kept for compatibility
 // but the frontend uses streaming (streamQuery) and decomposed (queryDecomposed) paths.
 // The non-streaming queryDirect function was removed as unused.
@@ -56,7 +66,7 @@ export async function checkHealth(signal?: AbortSignal): Promise<HealthResponse>
     signal,
   });
   if (!response.ok) {
-    throw new Error(`Health check failed with status: ${response.status}`);
+    throw new ApiError(`Health check failed with status: ${response.status}`, response.status);
   }
   return response.json();
 }
@@ -77,7 +87,7 @@ export async function getSupportedTickers(
     signal,
   });
   if (!response.ok) {
-    throw new Error(`Failed to fetch supported tickers: ${response.status}`);
+    throw new ApiError(`Failed to fetch supported tickers: ${response.status}`, response.status);
   }
   return response.json();
 }
@@ -97,7 +107,7 @@ export async function queryDecomposed(
     signal,
   });
   if (!response.ok) {
-    throw new Error(`Decomposed query failed with status: ${response.status}`);
+    throw new ApiError(`Decomposed query failed with status: ${response.status}`, response.status);
   }
   return response.json();
 }
@@ -113,7 +123,7 @@ export async function deleteSession(
     },
   });
   if (!response.ok) {
-    throw new Error(`Failed to delete session: ${response.status}`);
+    throw new ApiError(`Failed to delete session: ${response.status}`, response.status);
   }
   return response.json();
 }
@@ -132,7 +142,7 @@ export async function getSessionHistory(
     signal,
   });
   if (!response.ok) {
-    throw new Error(`Failed to fetch session history: ${response.status}`);
+    throw new ApiError(`Failed to fetch session history: ${response.status}`, response.status);
   }
   return response.json();
 }
@@ -159,13 +169,14 @@ export async function streamQuery(
 
     if (!response.ok) {
       const errText = await response.text().catch(() => "");
-      throw new Error(
+      throw new ApiError(
         `Streaming query failed with status ${response.status}: ${errText || response.statusText}`,
+        response.status,
       );
     }
 
     if (!response.body) {
-      throw new Error("No readable response body available for streaming.");
+      throw new ApiError("No readable response body available for streaming.");
     }
 
     const reader = response.body.getReader();

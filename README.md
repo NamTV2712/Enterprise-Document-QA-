@@ -47,7 +47,7 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 | RAG generation | Grounded answer generation with source citations and fallback behavior |
 | API | FastAPI service with Swagger UI and SSE streaming |
 | Cache | Filter-aware semantic response cache for repeated stateless queries |
-| Memory | Multi-turn conversation memory and LLM-powered query rewriting |
+| Memory | Multi-turn backend memory, query rewriting, and a searchable local conversation library with bookmarks and Markdown export |
 | Decomposition | Comparative and enumeration queries decomposed into focused sub-queries |
 | Evaluation | Fixed benchmark with faithfulness, relevancy, and context precision metrics |
 | Research workspace | Vite/React interface with searchable company and section controls, streaming answers, evidence inspection, and session history |
@@ -110,6 +110,11 @@ Current searchable corpus:
   its uniquely linked, page-bounded Annual Report companion.
 
 The `/supported-tickers` endpoint returns the live searchable ticker list from embedded chunks, not the full configured list.
+
+When the pipeline is ready, `/health` and `/health/ready` also expose a
+`corpus` object with `searchable_company_count` and `indexed_chunk_count`.
+These values are informational and are used by the frontend to avoid showing
+hardcoded corpus statistics.
 
 ## API Endpoints
 
@@ -1238,9 +1243,12 @@ must start Docker and ngrok before a demo session.
 Demo frontend: `https://frontend-one-gamma-f9jf11u8ec.vercel.app`
 
 The workspace supports full legal company names, professional section labels,
-streamed conversation cards, collapsible filing evidence, Overview/Conversation
-navigation without deleting history, viewport-safe help tooltips, and a desktop
-sidebar that can be resized from `280` to `480` pixels.
+streamed conversation cards, collapsible filing evidence, a desktop evidence
+side panel, Overview/Conversation navigation, a searchable local Library with
+bookmarks and Markdown export, viewport-safe help tooltips, and a desktop
+sidebar that can be resized from `280` to `480` pixels. Light, dark, and system
+theme choices share the same semantic token system; reduced-motion preferences
+disable nonessential effects.
 
 ```powershell
 .\scripts\start_demo.ps1
@@ -1310,7 +1318,7 @@ Secrets are loaded from `.env` and should never be committed.
 | Multi-turn conversation memory | Complete |
 | Query decomposition | Integrated and validated for comparative and enumeration queries |
 | Docker deployment | Complete; CPU-only image supports local Qdrant or stateless Qdrant Cloud startup |
-| Vite frontend | Deployed on Vercel with Overview/Conversation navigation, evidence inspection, and resizable desktop controls; verified against the local Docker backend through the reserved ngrok URL |
+| Vite frontend | Deployed on Vercel with Overview/Conversation navigation, local conversation Library, evidence inspection, synchronized light/dark/system themes, and resizable desktop controls; verified against the local Docker backend through the reserved ngrok URL |
 
 ## Known Limitations
 

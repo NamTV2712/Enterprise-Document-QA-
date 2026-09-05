@@ -132,6 +132,39 @@ describe("App request cancellation", () => {
     expect(await screen.findByText(longAnswer)).toBeInTheDocument();
   });
 
+  test("explains when a locally saved conversation has expired backend context", async () => {
+    localStorage.setItem("sec_qa_session_id", "expired-session");
+    localStorage.setItem("sec_qa_active_conversation_id", "conversation-expired-session");
+    localStorage.setItem(
+      "sec_qa_conversations_v1",
+      JSON.stringify([
+        {
+          schemaVersion: 1,
+          id: "conversation-expired-session",
+          sessionId: "expired-session",
+          title: "Saved risks",
+          createdAt: 1,
+          updatedAt: 2,
+          draft: "",
+          bookmarkedMessageIds: [],
+          messages: [
+            { id: "u-1", sender: "user", text: "What are the risks?" },
+            { id: "a-1", sender: "assistant", text: "Saved answer with evidence." },
+          ],
+        },
+      ]),
+    );
+    apiMocks.getSessionHistory.mockRejectedValue(new Error("session expired"));
+
+    render(<App />);
+
+    expect(await screen.findByText("Saved answer with evidence.")).toBeInTheDocument();
+    expect(
+      await screen.findByText(/saved local copy.*backend context is unavailable or expired/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start new conversation" })).toBeInTheDocument();
+  });
+
   test("onboarding explains scope and how to verify results", async () => {
     render(<App />);
 
@@ -153,26 +186,29 @@ describe("App request cancellation", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("theme preference cycles through system, light, and dark", async () => {
+  test("theme preference can be selected from the three-mode menu", async () => {
     render(<App />);
     await screen.findByText("Pipeline: Ready");
 
     const themeButton = screen.getByRole("button", {
-      name: "Theme system. Switch to light theme",
+      name: "Theme System. Choose light, dark, or system theme",
     });
     expect(document.documentElement).not.toHaveClass("dark");
 
     fireEvent.click(themeButton);
-    expect(themeButton).toHaveAccessibleName("Theme light. Switch to dark theme");
-    expect(document.documentElement).not.toHaveClass("dark");
-
-    fireEvent.click(themeButton);
-    expect(themeButton).toHaveAccessibleName("Theme dark. Switch to system theme");
+    expect(screen.getByRole("menu", { name: "Theme preference" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Dark" }));
+    expect(themeButton).toHaveAccessibleName("Theme Dark. Choose light, dark, or system theme");
     expect(document.documentElement).toHaveClass("dark");
 
     fireEvent.click(themeButton);
-    expect(themeButton).toHaveAccessibleName("Theme system. Switch to light theme");
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Light" }));
+    expect(themeButton).toHaveAccessibleName("Theme Light. Choose light, dark, or system theme");
     expect(document.documentElement).not.toHaveClass("dark");
+
+    fireEvent.click(themeButton);
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "System" }));
+    expect(themeButton).toHaveAccessibleName("Theme System. Choose light, dark, or system theme");
   });
 
   test("sidebar width can be adjusted with the resize separator", async () => {
@@ -277,7 +313,7 @@ describe("App request cancellation", () => {
     expect(input).toBeEnabled();
     await waitFor(() =>
       expect(
-        setItemSpy.mock.calls.filter(([key]) => key === "sec_qa_messages"),
+        setItemSpy.mock.calls.filter(([key]) => key === "sec_qa_conversations_v1"),
       ).toHaveLength(1),
     );
     setItemSpy.mockRestore();
@@ -354,6 +390,10 @@ describe("App request cancellation", () => {
     );
     const dialog = screen.getByRole("dialog", { name: "Start a new conversation?" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Start new conversation" }));
-    await waitFor(() => expect(apiMocks.deleteSession).toHaveBeenCalledWith("reset-test"));
+    await waitFor(() => {
+      const raw = localStorage.getItem("sec_qa_conversations_v1");
+      expect(raw).toContain("Full historical answer");
+    });
+    expect(apiMocks.deleteSession).not.toHaveBeenCalled();
   });
 });

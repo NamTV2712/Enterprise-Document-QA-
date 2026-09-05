@@ -88,6 +88,21 @@ def test_health_returns_ok_when_pipeline_ready(client) -> None:
     assert data["memory"] == {"active_sessions": 0, "total_turns": 0}
 
 
+def test_health_exposes_corpus_counts_when_available(client) -> None:
+    app_module._state["corpus"] = {
+        "searchable_company_count": 12,
+        "indexed_chunk_count": 3456,
+    }
+
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json()["corpus"] == {
+        "searchable_company_count": 12,
+        "indexed_chunk_count": 3456,
+    }
+
+
 def test_health_live_and_ready_have_distinct_semantics() -> None:
     app_module._state.clear()
     test_client = TestClient(app_module.app)
@@ -253,6 +268,13 @@ def test_query_returns_answer_and_sources(client, mock_pipeline) -> None:
     assert data["sources"][0]["citation"] == (
         "AAPL 10-K (filed 2025-10-31), Section: Risk Factors"
     )
+    assert data["sources"][0]["text"] == (
+        "Apple faces competition risks in all its markets."
+    )
+    assert data["sources"][0]["chunk_id"] == "AAPL_test_risk_factors_0"
+    assert data["sources"][0]["ticker"] == "AAPL"
+    assert data["sources"][0]["section"] == "risk_factors"
+    assert data["sources"][0]["filing_date"] == "2025-10-31"
 
     mock_pipeline.query.assert_called_once()
     call_kwargs = mock_pipeline.query.call_args.kwargs

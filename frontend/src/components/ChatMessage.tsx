@@ -267,6 +267,8 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
             </details>
           )}
 
+          <div className={isUser ? "message-answer-layout" : "assistant-evidence-layout"}>
+          <div className="assistant-answer-column">
           {/* Keep the answer visually primary; execution details follow it. */}
           <div
             className={`ui-answer-enter prose prose-slate dark:prose-invert max-w-none text-[#26324A] dark:text-[#FCFBF8] text-sm md:text-base leading-relaxed font-sans ${
@@ -425,6 +427,8 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
               onFocusHandled={() => setFocusSourceIndex(null)}
             />
             )}
+          </div>
+          </div>
         </div>
       </div>
     </div>

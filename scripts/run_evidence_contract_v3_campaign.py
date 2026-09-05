@@ -16,7 +16,6 @@ from typing import Any, Callable
 
 from scripts.diagnostics.evidence_contract_v3_manifest import (
     CAMPAIGN_ID as DEFAULT_CAMPAIGN_ID,
-    DEFAULT_OUTPUT as DEFAULT_MANIFEST_PATH,
     MAX_REQUESTS,
     build_manifest,
     campaign_output_paths,
@@ -155,6 +154,24 @@ def configure_campaign(campaign_id: str) -> None:
     }
 
 
+def _same_file_identity(left: Path, right: Path) -> bool:
+    """Accept a registered path plus a safe symlink/hardlink alias."""
+    try:
+        if left.resolve() == right.resolve():
+            return True
+        return left.exists() and right.exists() and os.path.samefile(left, right)
+    except OSError:
+        return False
+
+
+def _transport_is_retryable(error: Exception, status_code: int | None) -> bool:
+    return (
+        status_code in {408, 429, 500, 502, 503, 504}
+        or isinstance(error, (TimeoutError, ConnectionError))
+        or type(error).__name__ in {"APITimeoutError", "APIConnectionError"}
+    )
+
+
 def _read_partial(path: Path, expected: set[str]) -> dict[str, dict[str, Any]]:
     if not path.exists():
         return {}
@@ -248,6 +265,9 @@ def _provider_wrappers(ledger: RequestLedger) -> tuple[Callable[[str, str, str],
                     metadata.get("error_type", type(error).__name__),
                     metadata.get("status_code"),
                     metadata,
+                    retryable=_transport_is_retryable(
+                        error, metadata.get("status_code")
+                    ),
                 ) from error
             return {
                 "content": content,
@@ -275,6 +295,9 @@ def _provider_wrappers(ledger: RequestLedger) -> tuple[Callable[[str, str, str],
                     metadata.get("error_type", type(error).__name__),
                     metadata.get("status_code"),
                     metadata,
+                    retryable=_transport_is_retryable(
+                        error, metadata.get("status_code")
+                    ),
                 ) from error
             return {
                 "scores": scores,
@@ -594,7 +617,42 @@ def main(argv: list[str] | None = None) -> int:
     configure_campaign(args.campaign_id)
     manifest_path = args.manifest or (DIAGNOSTIC_ROOT / f"{CAMPAIGN_ID}_manifest.json")
     ledger_path = args.ledger or LEDGER_PATH
-    owned_paths = (*campaign_output_paths(CAMPAIGN_ID), manifest_path)
+    registered_ledger_path = LEDGER_PATH
+    if args.ledger and not _same_file_identity(ledger_path, registered_ledger_path):
+        print(
+            json.dumps(
+                {
+                    "status": "NO-GO",
+                    "execution_status": "NOT_STARTED",
+                    "candidate_decision": "UNDECIDED",
+                    "error": "--ledger must reference the registered campaign ledger",
+                    "registered_ledger": str(registered_ledger_path),
+                    "requested_ledger": str(ledger_path),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 1
+    # The manifest is the immutable registration record and is expected to
+    # exist before execution. Mutable outputs are what trigger collision checks.
+    owned_paths = campaign_output_paths(CAMPAIGN_ID)
+    protected_paths = (*owned_paths, ARTIFACT_PATH, REFERENCE_PATH)
+    if any(_same_file_identity(manifest_path, path) for path in protected_paths):
+        print(
+            json.dumps(
+                {
+                    "status": "NO-GO",
+                    "execution_status": "NOT_STARTED",
+                    "candidate_decision": "UNDECIDED",
+                    "error": "manifest path overlaps a protected artifact or campaign output",
+                    "manifest": str(manifest_path),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 1
     existing_paths = [path for path in owned_paths if path.exists()]
     if existing_paths and not args.resume:
         print(

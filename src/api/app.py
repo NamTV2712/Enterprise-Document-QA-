@@ -143,6 +143,10 @@ async def lifespan(app: FastAPI):
     _state["decomposer"] = QueryDecomposer(pipeline=pipeline)
     _state["store"] = store
     searchable_tickers = {chunk["ticker"] for chunk in all_chunks}
+    _state["corpus"] = {
+        "searchable_company_count": len(searchable_tickers),
+        "indexed_chunk_count": len(all_chunks),
+    }
     _state["supported_tickers"] = [
         ticker for ticker in TICKERS if ticker in searchable_tickers
     ]
@@ -237,7 +241,12 @@ class QueryRequest(BaseModel):
 class SourceChunk(BaseModel):
     citation: str
     score: float
-    text_preview: str  # Just the first 200 characters — enough for the UI to display
+    text_preview: str  # First 200 characters for collapsed evidence previews.
+    text: str | None = None
+    chunk_id: str | None = None
+    ticker: str | None = None
+    section: str | None = None
+    filing_date: str | None = None
 
 
 class QueryResponse(BaseModel):
@@ -273,11 +282,28 @@ class CacheTestRequest(BaseModel):
 def _health_payload() -> dict:
     pipeline: RAGPipeline | None = _state.get("pipeline")
     memory = getattr(pipeline, "memory", None)
-    return {
+    payload = {
         "status": "ok",
         "pipeline_ready": pipeline is not None,
         "memory": memory.get_stats() if memory else {},
     }
+    if _state.get("corpus") is not None:
+        payload["corpus"] = dict(_state["corpus"])
+    return payload
+
+
+def _source_chunk_payload(chunk: Any) -> SourceChunk:
+    """Serialize one retrieved chunk consistently across all query routes."""
+    return SourceChunk(
+        citation=chunk.citation,
+        score=round(chunk.score, 4),
+        text_preview=chunk.text[:200],
+        text=chunk.text,
+        chunk_id=chunk.chunk_id,
+        ticker=chunk.ticker,
+        section=chunk.section,
+        filing_date=chunk.filing_date,
+    )
 
 
 @app.get("/health/live")
@@ -333,14 +359,7 @@ async def query(request: Request, body: QueryRequest) -> QueryResponse:
         logger.exception("Error occurred while processing query: %s", e)
         raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
 
-    sources = [
-        SourceChunk(
-            citation=chunk.citation,
-            score=round(chunk.score, 4),
-            text_preview=chunk.text[:200],
-        )
-        for chunk in response.retrieved_chunks
-    ]
+    sources = [_source_chunk_payload(chunk) for chunk in response.retrieved_chunks]
 
     return QueryResponse(
         answer=response.answer,
@@ -412,14 +431,7 @@ async def query_decomposed(
             )
             for sub_query in result.sub_queries
         ],
-        sources=[
-            SourceChunk(
-                citation=chunk.citation,
-                score=round(chunk.score, 4),
-                text_preview=chunk.text[:200],
-            )
-            for chunk in result.all_chunks[:10]
-        ],
+        sources=[_source_chunk_payload(chunk) for chunk in result.all_chunks[:10]],
         num_total_chunks=len(result.all_chunks),
     )
 

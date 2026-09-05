@@ -38,6 +38,21 @@ def test_retry_consumes_real_slot_and_budget_survives_resume(tmp_path):
         RequestLedger(ledger.path, "campaign", 2).call("next", "run", "hash", lambda: pytest.fail("over budget"))
 
 
+def test_explicit_retryable_metadata_preserves_timeout_retry(tmp_path):
+    ledger = RequestLedger(tmp_path / "ledger.jsonl", "campaign", 2)
+    attempts = []
+
+    def send():
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise ProviderOperationError("GatewayTimeout", None, retryable=True)
+        return {"content": "ok"}
+
+    assert ledger.call("op", "run", "hash", send) == {"content": "ok"}
+    assert attempts == [1, 1]
+    assert ledger.used == 2
+
+
 def test_unknown_reserved_result_never_reissued(tmp_path):
     ledger = RequestLedger(tmp_path / "ledger.jsonl", "campaign", 2)
     append_record(ledger.path, {"event": "reserved", "campaign_id": "campaign", "limit": 2,

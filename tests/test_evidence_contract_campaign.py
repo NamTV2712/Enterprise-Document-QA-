@@ -1,5 +1,6 @@
 import copy
 import json
+import os
 
 from scripts import run_evidence_contract_v3_campaign as campaign
 from scripts.diagnostics.answerability_stability_v1_reproducibility import (
@@ -85,3 +86,23 @@ def test_v3_verifier_rejects_tampered_answer_score_and_aggregate(tmp_path, monke
     audit = build_report(report, duplicate_run, config["report"], config["report"])
     assert audit["gates"]["distinct_replicates"] is False
     assert audit["passed"] is False
+
+
+def test_manifest_path_identity_cannot_overlap_campaign_output(tmp_path, monkeypatch) -> None:
+    campaign_id = "evidence_contract_v3_path_guard_test"
+    output_path = tmp_path / "owned-output.jsonl"
+    output_path.write_text("owned", encoding="utf-8")
+    hardlink_path = tmp_path / "manifest-hardlink.json"
+    os.link(output_path, hardlink_path)
+
+    monkeypatch.setattr(campaign, "campaign_output_paths", lambda _campaign_id: (output_path,))
+
+    original_campaign_id = campaign.CAMPAIGN_ID
+    try:
+        assert campaign.main(
+            ["--campaign-id", campaign_id, "--manifest", str(hardlink_path)]
+        ) == 1
+    finally:
+        campaign.configure_campaign(original_campaign_id)
+
+    assert campaign._same_file_identity(hardlink_path, output_path) is True

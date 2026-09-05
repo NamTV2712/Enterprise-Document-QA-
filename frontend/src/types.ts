@@ -10,6 +10,10 @@ export interface HealthResponse {
     active_sessions: number;
     total_turns: number;
   };
+  corpus?: {
+    searchable_company_count?: number;
+    indexed_chunk_count?: number;
+  };
 }
 
 export interface SupportedTickersResponse {
@@ -29,6 +33,11 @@ export interface Source {
   citation: string;
   score: number;
   text_preview: string;
+  text?: string;
+  chunk_id?: string;
+  ticker?: string;
+  section?: string;
+  filing_date?: string;
 }
 
 export type ThemePreference = "system" | "light" | "dark";

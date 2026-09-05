@@ -337,7 +337,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
                           <ArrowUpRight className="w-3.5 h-3.5" />
                           <span>
                             {formatCompanyLabel(source.ticker || ticker)}
-                            {filedLabel ? ` · ${filedLabel}` : year ? ` '${year.slice(-2)}` : ""} ·{" "}
+                            {filedLabel ? ` · Filed ${filedLabel}` : year ? ` '${year.slice(-2)}` : ""} ·{" "}
                             {section}
                           </span>
                         </span>

@@ -603,6 +603,26 @@ export default function App() {
           setIsLoading(false);
         }
       }
+
+      // The connection closed. If the server never sent a done or error
+      // event, flush the buffered partial answer and normalize it to a
+      // stopped state; a dropped stream must never remain "streaming".
+      updateMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== assistantMsgId || !m.isStreaming) return m;
+          if (streamingText) {
+            return { ...m, text: streamingText, isStreaming: false, status: "stopped" as const };
+          }
+          return {
+            ...m,
+            text: "The connection closed before the answer finished. Please try again.",
+            isStreaming: false,
+            error: true,
+            status: "error" as const,
+            retryText: text,
+          };
+        }),
+      );
     }
 
     if (controller.signal.aborted) return;

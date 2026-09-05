@@ -1,0 +1,150 @@
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Lora", Georgia, serif;
+  --font-serif: "Lora", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-ledger-white: #FCFBF8;
+  --color-filing-ink: #26324A;
+  --color-filing-ink-dark: #171D2B;
+  --color-verified-green: #287A68;
+  --color-verified-green-dark: #3D9A83;
+  --color-brand-indigo: #5B63D3;
+
+  --animate-shimmer-slide: shimmer-slide 2s infinite linear;
+
+  @keyframes shimmer-slide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(250%); }
+  }
+}
+
+@variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+  --canvas: #f7f8fa;
+  --surface: #ffffff;
+  --surface-muted: #eef2f6;
+  --surface-raised: #ffffff;
+  --text-primary: #172033;
+  --text-muted: #526176;
+  --text-subtle: #718096;
+  --border-subtle: #d8e0ea;
+  --border-strong: #b7c4d4;
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-soft: #eef2ff;
+  --success: #166534;
+  --warning: #92400e;
+  --danger: #b91c1c;
+  --shadow-sm: 0 2px 8px rgb(23 32 51 / 0.06);
+  --shadow-md: 0 12px 30px rgb(23 32 51 / 0.1);
+}
+
+:root.dark {
+  color-scheme: dark;
+  --canvas: #0f172a;
+  --surface: #172033;
+  --surface-muted: #202c40;
+  --surface-raised: #1d2940;
+  --text-primary: #e8edf5;
+  --text-muted: #a8b5c8;
+  --text-subtle: #8291a8;
+  --border-subtle: #344258;
+  --border-strong: #4a5a73;
+  --primary: #6366f1;
+  --primary-hover: #818cf8;
+  --primary-soft: #252d58;
+  --success: #86efac;
+  --warning: #fcd34d;
+  --danger: #fca5a5;
+  --shadow-sm: 0 2px 10px rgb(0 0 0 / 0.18);
+  --shadow-md: 0 14px 34px rgb(0 0 0 / 0.28);
+}
+
+@keyframes ui-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ui-popover-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes ui-expand-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ui-message-enter {
+  animation: ui-fade-in 0.28s ease-out both;
+}
+
+.ui-answer-enter {
+  animation: ui-fade-in 0.35s ease-out both;
+}
+
+.ui-popover-enter {
+  animation: ui-popover-in 0.15s ease-out both;
+  transform-origin: top center;
+}
+
+.ui-expand-enter {
+  animation: ui-expand-in 0.22s ease-in-out both;
+}
+
+.ui-stagger-enter {
+  animation: ui-fade-in 0.15s ease-out both;
+}
+
+/* --- Interactive and state tokens -------------------------------------
+   Accent text and accent button surfaces are intentionally separate: the
+   indigo text color keeps a readable contrast on muted surfaces while the
+   button background uses a deeper indigo with white text. */
+:root {
+  --accent-text: #4f46e5;
+  --accent-button-bg: #4f46e5;
+  --accent-button-text: #ffffff;
+  --state-success-surface: #dcfce7;
+  --state-success-border: #86efac;
+  --state-success-text: #166534;
+  --state-warning-surface: #fef3c7;
+  --state-warning-border: #fcd34d;
+  --state-warning-text: #92400e;
+  --state-danger-surface: #fee2e2;
+  --state-danger-border: #fca5a5;
+  --state-danger-text: #b91c1c;
+  --overlay-backdrop: rgb(23 32 51 / 0.3);
+}
+
+:root.dark {
+  --accent-text: #a5b4fc;
+  --accent-button-bg: #6366f1;
+  --accent-button-text: #ffffff;
+  --state-success-surface: rgb(6 78 59 / 0.35);
+  --state-success-border: rgb(134 239 172 / 0.4);
+  --state-success-text: #86efac;
+  --state-warning-surface: rgb(120 53 15 / 0.3);
+  --state-warning-border: rgb(252 211 77 / 0.35);
+  --state-warning-text: #fcd34d;
+  --state-danger-surface: rgb(127 29 29 / 0.3);
+  --state-danger-border: rgb(252 165 165 / 0.35);
+  --state-danger-text: #fca5a5;
+  --overlay-backdrop: rgb(0 0 0 / 0.5);
+}
+
+/* Evidence grouping gets its own accent family so filing evidence stays
+   distinguishable from primary actions in both themes. */
+:root {
+  --evidence-accent: #0e7490;
+  --evidence-accent-soft: #e0f2fe;
+  --evidence-accent-border: #7dd3fc;
+}
+
+:root.dark {
+  --evidence-accent: #67e8f9;
+  --evidence-accent-soft: rgb(8 51 68 / 0.55);
+  --evidence-accent-border: rgb(103 232 249 / 0.4);
+}

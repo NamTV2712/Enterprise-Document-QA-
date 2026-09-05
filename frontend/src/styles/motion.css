@@ -1,0 +1,45 @@
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .citation-button,
+  .sources-toggle {
+    transition: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .theme-menu__popover {
+    animation: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-tab,
+  .icon-button,
+  .citation-button,
+  .library-search,
+  .ui-message-enter,
+  .ui-answer-enter {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-mark,
+  .connection-dot--checking,
+  .connection-dot--ready,
+  .connection-dot--loading {
+    animation: none !important;
+  }
+
+  .hero-title,
+  .theme-toggle__icon {
+    transition: none !important;
+  }
+}

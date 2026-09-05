@@ -139,6 +139,13 @@ class Generator:
             ]
         # Preserve the old public attribute for integrations that inspect it.
         self.client = self.clients[0]
+        self.client_aliases = [f"key-{index + 1}" for index in range(len(self.clients))]
+        self.last_transport_metadata: dict[str, Any] = {
+            "key_alias": None,
+            "pool_size": len(self.clients),
+            "transport_attempt": None,
+            "status": "not_started",
+        }
         self._client_cursor = 0
         self._client_cooldowns = [0.0] * len(self.clients)
         self._client_lock = Lock()
@@ -177,8 +184,25 @@ class Generator:
             client_index, client, wait = self._next_available_client()
             if wait:
                 time.sleep(wait)
+            client_aliases = getattr(
+                self,
+                "client_aliases",
+                [f"key-{index + 1}" for index in range(len(self.clients))],
+            )
+            self.last_transport_metadata = {
+                "key_alias": client_aliases[client_index],
+                "pool_size": len(self.clients),
+                "transport_attempt": attempt + 1,
+                "status": "started",
+            }
             try:
                 result = client.chat.completions.create(**kwargs)
+                self.last_transport_metadata.update(
+                    {
+                        "status": "completed",
+                        "provider_request_id": getattr(result, "id", None),
+                    }
+                )
                 # If we got a stream, close any previous failed stream
                 if last_stream is not None:
                     close = getattr(last_stream, "close", None)
@@ -186,6 +210,17 @@ class Generator:
                         close()
                 return result
             except Exception as error:
+                response = getattr(error, "response", None)
+                headers = getattr(response, "headers", None)
+                retry_after = headers.get("retry-after") if headers is not None else None
+                self.last_transport_metadata.update(
+                    {
+                        "status": "error",
+                        "error_type": type(error).__name__,
+                        "status_code": getattr(error, "status_code", None),
+                        "retry_after": retry_after,
+                    }
+                )
                 # For streaming calls, the result might be a partially-opened stream
                 # that needs cleanup before retrying
                 delay = self._groq_retry_delay(error)

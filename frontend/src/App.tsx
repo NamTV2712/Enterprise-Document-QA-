@@ -18,7 +18,12 @@ import { ChatInput } from "./components/ChatInput";
 import { SampleQuestion } from "./components/SampleQuestionChips";
 import { OverviewPanel } from "./components/OverviewPanel";
 import { WorkspaceHeader } from "./components/WorkspaceHeader";
-import { Message, HealthResponse } from "./types";
+import {
+  Message,
+  HealthResponse,
+  RequestSnapshot,
+  ThemePreference,
+} from "./types";
 import {
   checkHealth,
   getSupportedTickers,
@@ -27,6 +32,7 @@ import {
   getSessionHistory,
   streamQuery,
 } from "./lib/api";
+import { formatCompanyLabel, SECTION_METADATA } from "./lib/displayMetadata";
 
 const STREAM_FLUSH_INTERVAL_MS = 80;
 const MAX_PERSISTED_MESSAGES = 50;
@@ -91,6 +97,13 @@ function createSessionId(): string {
   return `session-${Date.now().toString(36)}-${randomPart}`;
 }
 
+function getSystemTheme(): "light" | "dark" {
+  return typeof window !== "undefined" &&
+    window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
+
 export default function App() {
   const [sessionId, setSessionId] = useState<string>("");
   const [tickers, setTickers] = useState<string[]>([]);
@@ -128,14 +141,19 @@ export default function App() {
     "overview",
   );
 
-  // Theme state
-  const [theme, setTheme] = useState<"light" | "dark">(() => {
+  // Theme state. Keep the preference separate from the resolved color so a
+  // system preference can follow OS changes without overwriting user choice.
+  const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
     const saved = safeGetItem("theme");
-    if (saved === "light" || saved === "dark") return saved;
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
+    if (saved === "system" || saved === "light" || saved === "dark") {
+      return saved;
+    }
+    return "system";
   });
+  const [systemTheme, setSystemTheme] = useState<"light" | "dark">(
+    getSystemTheme,
+  );
+  const resolvedTheme = themePreference === "system" ? systemTheme : themePreference;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -179,15 +197,25 @@ export default function App() {
     [applyHealth],
   );
 
-  // Apply theme class
   useEffect(() => {
-    if (theme === "dark") {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const updateSystemTheme = (event?: MediaQueryListEvent) => {
+      setSystemTheme(event ? (event.matches ? "dark" : "light") : getSystemTheme());
+    };
+    updateSystemTheme();
+    media.addEventListener?.("change", updateSystemTheme);
+    return () => media.removeEventListener?.("change", updateSystemTheme);
+  }, []);
+
+  // Apply the resolved theme class and persist the preference.
+  useEffect(() => {
+    if (resolvedTheme === "dark") {
       document.documentElement.classList.add("dark");
     } else {
       document.documentElement.classList.remove("dark");
     }
-    safeSetItem("theme", theme);
-  }, [theme]);
+    safeSetItem("theme", themePreference);
+  }, [resolvedTheme, themePreference]);
 
   // Persist messages to localStorage with size limit and cleanup
   useEffect(() => {
@@ -338,8 +366,15 @@ export default function App() {
     return () => scrollContainer.removeEventListener("scroll", handleScroll);
   }, [activeView, messages.length]);
 
-  const handleSendMessage = useCallback(async (text: string) => {
+  const handleSendMessage = useCallback(async (text: string, snapshot?: RequestSnapshot) => {
     if (!isBackendConnected || !isPipelineReady) return;
+
+    const requestSnapshot: RequestSnapshot = snapshot ?? {
+      ticker: selectedTicker,
+      section: selectedSection,
+      topK,
+      enableComparative,
+    };
 
     setActiveView("conversation");
     requestAbortRef.current?.abort();
@@ -354,19 +389,21 @@ export default function App() {
       id: userMsgId,
       sender: "user",
       text: text,
+      requestSnapshot,
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
 
-    const isComparative = enableComparative && isComparativeQuery(text);
+    const isComparative =
+      requestSnapshot.enableComparative && isComparativeQuery(text);
     const assistantMsgId = "assistant-" + Date.now();
 
     const payload = {
       question: text,
-      ticker: selectedTicker,
-      section: selectedSection,
-      top_k: topK,
+      ticker: requestSnapshot.ticker,
+      section: requestSnapshot.section,
+      top_k: requestSnapshot.topK,
       session_id: sessionId,
     };
 
@@ -379,6 +416,8 @@ export default function App() {
         subQueries: [],
         wasDecomposed: true,
         isStreaming: true,
+        status: "streaming",
+        requestSnapshot,
       };
       setMessages((prev) => [...prev, placeholder]);
 
@@ -397,6 +436,7 @@ export default function App() {
                   wasDecomposed: response.was_decomposed,
                   numChunks: response.num_total_chunks,
                   isStreaming: false,
+                  status: "completed",
                 }
               : m,
           ),
@@ -408,9 +448,12 @@ export default function App() {
             m.id === assistantMsgId
               ? {
                   ...m,
-                  text: `Failed to complete comparative query analysis: ${err?.message || err}`,
+                  text: "We couldn't complete this comparison. Check the connection and try again.",
                   error: true,
                   isStreaming: false,
+                  status: "error",
+                  errorDetail: err?.message || String(err),
+                  retryText: text,
                 }
               : m,
           ),
@@ -428,6 +471,8 @@ export default function App() {
         sender: "assistant",
         text: "",
         isStreaming: true,
+        status: "streaming",
+        requestSnapshot,
       };
       setMessages((prev) => [...prev, placeholder]);
 
@@ -484,6 +529,7 @@ export default function App() {
                         ...m,
                         text: streamingText,
                         isStreaming: false,
+                        status: "completed",
                       }
                     : m,
                 ),
@@ -498,9 +544,13 @@ export default function App() {
                         ...m,
                         text:
                           streamingText +
-                          `\n\n[RAG Pipeline Error]: ${event.data}`,
+                          (streamingText ? "\n\n" : "") +
+                          "We couldn't complete this answer. Please try again.",
                         isStreaming: false,
                         error: true,
+                        status: "error",
+                        errorDetail: event.data,
+                        retryText: text,
                       }
                     : m,
                 ),
@@ -516,11 +566,15 @@ export default function App() {
                 m.id === assistantMsgId
                   ? {
                       ...m,
-                      text:
-                        streamingText +
-                        `\n\n[SSE Connection Failure]: ${error.message}`,
+                        text:
+                          streamingText +
+                          (streamingText ? "\n\n" : "") +
+                          "The connection closed before the answer finished. Please try again.",
                       isStreaming: false,
                       error: true,
+                      status: "error",
+                      errorDetail: error.message,
+                      retryText: text,
                     }
                   : m,
               ),
@@ -537,12 +591,16 @@ export default function App() {
             m.id === assistantMsgId
               ? {
                   ...m,
-                  text:
-                    streamingText +
-                    `\n\n[General Retrieval Error]: ${err?.message || err}`,
-                  isStreaming: false,
-                  error: true,
-                }
+                    text:
+                      streamingText +
+                      (streamingText ? "\n\n" : "") +
+                      "We couldn't complete this answer. Please try again.",
+                    isStreaming: false,
+                    error: true,
+                    status: "error",
+                    errorDetail: err?.message || String(err),
+                    retryText: text,
+                  }
               : m,
           ),
         );
@@ -581,9 +639,9 @@ export default function App() {
   // the ref indirection keeps access to the latest send handler.
   const handleSendMessageRef = useRef(handleSendMessage);
   handleSendMessageRef.current = handleSendMessage;
-  const handleRetry = useCallback((text: string) => {
+  const handleRetry = useCallback((text: string, snapshot?: RequestSnapshot) => {
     setInputText(text);
-    handleSendMessageRef.current(text);
+    handleSendMessageRef.current(text, snapshot);
   }, []);
 
   const handleNewConversation = useCallback(async () => {
@@ -658,6 +716,7 @@ export default function App() {
               ...message,
               text: message.text || "Generation stopped.",
               isStreaming: false,
+              status: "stopped",
             }
           : message,
       ),
@@ -673,6 +732,9 @@ export default function App() {
     }
     setInputText(sample.text);
     setIsSidebarOpen(false); // Close sidebar on mobile if clicked
+    window.requestAnimationFrame(() => {
+      document.getElementById("chat-textarea")?.focus();
+    });
   }, []);
 
   const handleCloseSidebar = useCallback(() => {
@@ -684,7 +746,9 @@ export default function App() {
   }, []);
 
   const handleToggleTheme = useCallback(() => {
-    setTheme((current) => (current === "dark" ? "light" : "dark"));
+    setThemePreference((current) =>
+      current === "system" ? "light" : current === "light" ? "dark" : "system",
+    );
   }, []);
 
   const handleReturnToConversation = useCallback(() => {
@@ -704,9 +768,17 @@ export default function App() {
     () => messages.some((message) => message.isStreaming),
     [messages],
   );
+  const scopeLabel = useMemo(() => {
+    const labels: string[] = [];
+    if (selectedTicker) labels.push(`Company: ${formatCompanyLabel(selectedTicker)}`);
+    if (selectedSection) {
+      labels.push(SECTION_METADATA[selectedSection]?.shortLabel || selectedSection);
+    }
+    return labels.join(" · ");
+  }, [selectedSection, selectedTicker]);
 
   return (
-    <div className="app-shell flex w-screen max-w-full h-dvh bg-[#FCFBF8] dark:bg-[#171D2B] font-sans text-slate-800 dark:text-slate-100 overflow-hidden bg-grid-pattern">
+    <div className="app-shell flex w-screen max-w-full h-dvh font-sans text-[var(--text-primary)] overflow-hidden bg-grid-pattern">
       {/* Collapsible Sidebar */}
       <Sidebar
         tickers={tickers}
@@ -739,7 +811,8 @@ export default function App() {
           isBackendConnected={isBackendConnected}
           isPipelineReady={isPipelineReady}
           companyCount={tickers.length || undefined}
-          theme={theme}
+          theme={themePreference}
+          resolvedTheme={resolvedTheme}
           onToggleTheme={handleToggleTheme}
           isClearingSession={isClearingSession}
           onReset={requestNewConversation}
@@ -748,7 +821,7 @@ export default function App() {
         <main
           aria-label="Research workspace"
           ref={scrollContainerRef}
-          className="workspace-scroll flex-1 overflow-y-auto overflow-x-hidden min-h-0 bg-[#FCFBF8] dark:bg-[#171D2B] relative z-10"
+          className="workspace-scroll flex-1 overflow-y-auto overflow-x-hidden min-h-0 relative z-10"
         >
           {activeView === "overview" ? (
             <OverviewPanel
@@ -758,6 +831,7 @@ export default function App() {
               isBackendConnected={isBackendConnected}
               isPipelineReady={isPipelineReady}
               onRetryConnection={handleRetryConnection}
+              onSelectQuestion={handleSelectSample}
             />
           ) : (
             /* Active Chat Stream */
@@ -774,6 +848,7 @@ export default function App() {
                   <ChatMessage
                     key={msg.id}
                     message={msg}
+                    messageId={msg.id}
                     isLatest={index === messages.length - 1}
                     onRetry={handleRetry}
                   />
@@ -797,7 +872,7 @@ export default function App() {
         </main>
 
         {/* The composer is a flex sibling, so it never overlays response evidence. */}
-        <div className="composer-shell flex-shrink-0 bg-[#FCFBF8] dark:bg-[#171D2B] z-10">
+        <div className="composer-shell flex-shrink-0 z-10">
           <ChatInput
             inputText={inputText}
             setInputText={setInputText}
@@ -808,6 +883,7 @@ export default function App() {
             isBackendConnected={isBackendConnected}
             isPipelineReady={isPipelineReady}
             showBanner={activeView === "conversation" && messages.length > 0}
+            scopeLabel={scopeLabel || undefined}
           />
         </div>
       </div>

@@ -18,6 +18,22 @@ class CampaignIncomplete(RuntimeError):
     """The campaign cannot make progress without exceeding its protocol."""
 
 
+class ProviderOperationError(RuntimeError):
+    """Safe provider error carrying redacted transport metadata for the ledger."""
+
+    def __init__(self, error_type: str, status_code: int | None, metadata: dict[str, Any] | None = None):
+        super().__init__(f"provider operation failed: {error_type}")
+        self.provider_error_type = error_type
+        self.status_code = status_code
+        self.provider_metadata = {
+            key: value
+            for key, value in (metadata or {}).items()
+            if key in {"key_alias", "pool_size", "transport_attempt", "status", "status_code", "retry_after", "provider_error_type"}
+            and isinstance(value, (str, int, float, bool, type(None)))
+        }
+        self.provider_metadata["provider_error_type"] = error_type
+
+
 def append_record(path: Path, record: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as stream:
@@ -122,10 +138,28 @@ class RequestLedger:
             except Exception as error:
                 status = getattr(error, "status_code", None)
                 retryable = status in {408, 429, 500, 502, 503, 504} or isinstance(error, (TimeoutError, ConnectionError)) or type(error).__name__ in {"APITimeoutError", "APIConnectionError"}
-                append_record(self.path, {**identity, "event": "error", "error_type": type(error).__name__,
-                                         "status_code": status, "retryable": retryable})
+                error_record = {
+                    **identity,
+                    "event": "error",
+                    "error_type": getattr(error, "provider_error_type", type(error).__name__),
+                    "status_code": status,
+                    "retryable": retryable,
+                }
+                provider_metadata = getattr(error, "provider_metadata", None)
+                if isinstance(provider_metadata, dict):
+                    error_record["provider"] = {
+                        key: value
+                        for key, value in provider_metadata.items()
+                        if key in {"key_alias", "pool_size", "transport_attempt", "status", "status_code", "retry_after", "provider_error_type"}
+                        and isinstance(value, (str, int, float, bool, type(None)))
+                    }
+                append_record(self.path, error_record)
                 if not retryable or attempt == 2:
-                    raise CampaignIncomplete("provider operation failed: " + type(error).__name__) from error
+                    raise CampaignIncomplete(
+                        str(error)
+                        if isinstance(error, ProviderOperationError)
+                        else "provider operation failed: " + type(error).__name__
+                    ) from error
             else:
                 append_record(self.path, {**identity, "event": "completed", "response": response})
                 return response

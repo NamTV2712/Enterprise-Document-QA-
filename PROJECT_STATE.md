@@ -2766,7 +2766,7 @@ is `data/diagnostics/evidence_contract_v3_retry_disabled_campaign_status.json`
 (SHA-256
 `sha256:42ebd0f4044a6551d7c6a546dd36e396d6bd9a30a29e6b0f397ca887c89790f0`);
 the manifest SHA-256 is
-`sha256:efc076187e7d6a4ea66c52e967a763abec39a4fcb18fc88512fbd9d83c329175`,
+`sha256:3cd90d1c06b4a50ce8d727d8f43bdfb47d1b3f637a4254b080e5c2b4d04a000e`,
 the ledger SHA-256 is
 `sha256:92d6bf0bd7566b41681b8f4ec2adf12a0b0f067ebd504c5c8fa75832fd41b4ac`,
 and calibration SHA-256 is
@@ -2785,3 +2785,30 @@ It is retained as a non-official exact-selection artifact and was not used for
 the clean priority-2 N=30 result. The Phase 1 model was not fully cached, so
 the rebuild required the documented `--allow-network` model-loading escape
 hatch; raw filings and the canonical 30-case artifact were not altered.
+
+### Financial workspace UX and campaign diagnostics — implementation complete (2026-09-05)
+
+The next provider-free improvement is implemented on top of the Evidence
+Contract v3 candidate. The frontend now has semantic light/dark tokens, a
+system theme preference with pre-React startup application, restrained
+financial-workspace surfaces, clearer loading/error states, filter scope near
+the composer, IME-safe trimmed input validation, snapshot-preserving retry,
+and keyboard-accessible citation controls that open and focus the matching
+source excerpt. Mobile sidebar focus is trapped while open and restored after
+close. Existing API and SSE payloads remain unchanged.
+
+Campaign transport diagnostics now record only redacted key aliases and safe
+metadata for each provider attempt. The runner separates provider
+`INCOMPLETE` from completed semantic `NO-GO`, rejects accidental `--fresh`
+deletion, supports new campaign IDs with isolated manifests and output paths,
+and invokes the shared verifier before computing `candidate_go`. The current
+incomplete ledger remains preserved; it must not be resumed under a new quota
+window.
+
+Frontend typecheck, production build, and Vitest passed (`20/20`). The full
+backend suite passed `663` tests with `121` existing parser warnings; the
+campaign, provenance, manifest, generator, and ledger targeted tests passed
+`25/25`, and Python compilation passed. Browser smoke verification covered
+light, dark, system, and the mobile search-controls drawer. No provider
+request, canonical artifact, index, official benchmark, or production default
+was changed in this improvement.

@@ -153,6 +153,28 @@ describe("App request cancellation", () => {
     ).not.toBeInTheDocument();
   });
 
+  test("theme preference cycles through system, light, and dark", async () => {
+    render(<App />);
+    await screen.findByText("Pipeline: Ready");
+
+    const themeButton = screen.getByRole("button", {
+      name: "Theme system. Switch to light theme",
+    });
+    expect(document.documentElement).not.toHaveClass("dark");
+
+    fireEvent.click(themeButton);
+    expect(themeButton).toHaveAccessibleName("Theme light. Switch to dark theme");
+    expect(document.documentElement).not.toHaveClass("dark");
+
+    fireEvent.click(themeButton);
+    expect(themeButton).toHaveAccessibleName("Theme dark. Switch to system theme");
+    expect(document.documentElement).toHaveClass("dark");
+
+    fireEvent.click(themeButton);
+    expect(themeButton).toHaveAccessibleName("Theme system. Switch to light theme");
+    expect(document.documentElement).not.toHaveClass("dark");
+  });
+
   test("sidebar width can be adjusted with the resize separator", async () => {
     render(<App />);
     await screen.findByText("Pipeline: Ready");

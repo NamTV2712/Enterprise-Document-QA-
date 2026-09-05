@@ -31,6 +31,16 @@ export interface Source {
   text_preview: string;
 }
 
+export type ThemePreference = "system" | "light" | "dark";
+export type MessageStatus = "streaming" | "stopped" | "completed" | "error";
+
+export interface RequestSnapshot {
+  ticker: string | null;
+  section: string | null;
+  topK: number;
+  enableComparative: boolean;
+}
+
 export interface QueryResponse {
   answer: string;
   model_used: string;
@@ -82,4 +92,8 @@ export interface Message {
   numChunks?: number;
   rewritten_query?: string | null;
   error?: boolean;
+  errorDetail?: string;
+  retryText?: string;
+  status?: MessageStatus;
+  requestSnapshot?: RequestSnapshot;
 }

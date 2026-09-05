@@ -9,11 +9,13 @@ import {
   Menu,
   MessageSquare,
   Moon,
+  Monitor,
   RefreshCw,
   Sun,
 } from "lucide-react";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { BrandMark } from "./BrandMark";
+import { ThemePreference } from "../types";
 
 interface WorkspaceHeaderProps {
   isSidebarOpen: boolean;
@@ -24,7 +26,8 @@ interface WorkspaceHeaderProps {
   isBackendConnected: boolean | null;
   isPipelineReady: boolean | null;
   companyCount?: number;
-  theme: "light" | "dark";
+  theme: ThemePreference;
+  resolvedTheme: "light" | "dark";
   onToggleTheme: () => void;
   isClearingSession: boolean;
   onReset: () => void;
@@ -41,6 +44,7 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
     isPipelineReady,
     companyCount,
     theme,
+    resolvedTheme,
     onToggleTheme,
     isClearingSession,
     onReset,
@@ -62,23 +66,28 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
         </button>
         <div className="flex items-center gap-2.5 min-w-0">
           <BrandMark size="sm" />
-          <span className="font-semibold text-sm md:text-base text-slate-900 dark:text-white truncate">
-            Enterprise Document QA
-          </span>
+          <div className="flex flex-col min-w-0">
+            <span className="font-bold text-sm md:text-base text-slate-900 dark:text-white truncate leading-tight tracking-tight">
+              Enterprise Document QA
+            </span>
+            <span className="hidden sm:inline text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider font-mono">
+              SEC 10-K Intelligence
+            </span>
+          </div>
         </div>
         {hasMessages && activeView === "conversation" && (
           <button
             type="button"
             onClick={() => onSelectView("overview")}
             aria-label="Show overview"
-            className="lg:hidden min-h-9 inline-flex items-center gap-1.5 px-2 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            className="lg:hidden min-h-9 inline-flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <BookOpen className="w-4 h-4" />
             <span className="hidden sm:inline">Overview</span>
           </button>
         )}
         <nav
-          className="hidden lg:flex items-center gap-1 ml-2 pl-3 border-l border-slate-200 dark:border-slate-700"
+          className="hidden lg:flex items-center gap-1.5 ml-2 pl-3 border-l border-slate-200 dark:border-slate-800"
           aria-label="Workspace views"
         >
           <button
@@ -121,13 +130,15 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
           type="button"
           id="theme-switcher-btn"
           onClick={onToggleTheme}
-          aria-pressed={theme === "dark"}
+          aria-pressed={resolvedTheme === "dark"}
           className="theme-toggle"
-          title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
-          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          title={`Theme: ${theme}. Click to switch to ${theme === "system" ? "light" : theme === "light" ? "dark" : "system"}`}
+          aria-label={`Theme ${theme}. Switch to ${theme === "system" ? "light" : theme === "light" ? "dark" : "system"} theme`}
         >
           <span className="theme-toggle__icon" aria-hidden="true">
-            {theme === "dark" ? (
+            {theme === "system" ? (
+              <Monitor className="w-4 h-4" />
+            ) : resolvedTheme === "dark" ? (
               <Sun className="w-4 h-4" />
             ) : (
               <Moon className="w-4 h-4" />

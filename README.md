@@ -401,13 +401,38 @@ ledger, and status receipt are retained under the ignored `data/diagnostics/`
 paths; canonical data, index, production defaults, and official results were
 not changed.
 
-To reproduce the protocol after a newly authorized provider window, run the
-manifest check first and then the campaign without `--fresh` when resuming:
+To reproduce the protocol after a newly authorized provider window, choose a
+new campaign ID. The runner rejects existing outputs unless `--resume` is
+explicitly supplied, and it refuses to resume an incomplete campaign:
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.diagnostics.evidence_contract_v3_manifest --check
-.\.venv\Scripts\python.exe -m scripts.run_evidence_contract_v3_campaign
+.\.venv\Scripts\python.exe -m scripts.diagnostics.evidence_contract_v3_manifest `
+  --campaign-id evidence_contract_v3_window_02
+.\.venv\Scripts\python.exe -m scripts.run_evidence_contract_v3_campaign `
+  --campaign-id evidence_contract_v3_window_02
 ```
+
+The campaign ledger records a redacted provider key alias, pool size, transport
+attempt, status code, and retry hint when available. These fields distinguish a
+single key or rate-limit window from a claim that every configured key is out
+of quota. The `--fresh` option is disabled so an existing receipt cannot be
+deleted accidentally.
+
+### Frontend workspace UX and themes
+
+The research workspace now uses a semantic financial-workspace palette across
+light and dark themes. The theme control cycles through system, light, and dark
+preferences, follows OS changes while in system mode, and applies the saved
+choice before the first React paint. Cards and controls use restrained borders
+and shadows; indigo is reserved for primary actions and evidence links.
+
+Citations in rendered answers are keyboard-accessible controls that open and
+focus the matching evidence excerpt for that answer. Retry preserves the
+question's original filters, stopped answers preserve partial text, clipboard
+failures are reported, and the composer handles IME composition and trimmed
+length validation. Mobile sidebar focus is trapped while open and restored on
+close. Frontend verification covers both theme behavior and evidence navigation
+with Vitest and TypeScript checks.
 
 ### Historical evaluation log
 

@@ -15,10 +15,11 @@ from pathlib import Path
 from typing import Any, Callable
 
 from scripts.diagnostics.evidence_contract_v3_manifest import (
-    CAMPAIGN_ID,
-    DEFAULT_OUTPUT as MANIFEST_PATH,
+    CAMPAIGN_ID as DEFAULT_CAMPAIGN_ID,
+    DEFAULT_OUTPUT as DEFAULT_MANIFEST_PATH,
     MAX_REQUESTS,
     build_manifest,
+    campaign_output_paths,
     verify_manifest,
 )
 from scripts.run_answerability_stability_sentinel import (
@@ -32,6 +33,10 @@ from scripts.run_answerability_stability_sentinel import (
     RISK_CONTROL_QUESTION,
     OUT_OF_CORPUS_QUESTION,
     load_bound_artifact,
+)
+from scripts.diagnostics.answerability_stability_v1_reproducibility import (
+    build_report,
+    validate_report,
 )
 from src.evaluation.context_packing import (
     CONTEXT_STRATEGY_SELECTIVE_V7,
@@ -77,7 +82,15 @@ from src.generation.risk_answer_shape import (
     RISK_ANSWER_SHAPE_FINGERPRINT,
     render_deterministic_risk_answer,
 )
-from src.evaluation.request_ledger import CampaignIncomplete, RequestLedger
+from src.evaluation.request_ledger import (
+    CampaignIncomplete,
+    ProviderOperationError,
+    RequestLedger,
+)
+
+
+class CampaignSemanticFailure(RuntimeError):
+    """A registered semantic protocol check failed after complete execution."""
 
 
 # Checkpoint writes are kept separate from the request ledger so their schema
@@ -92,9 +105,12 @@ def _append_jsonl(path: Path, record: dict[str, Any]) -> None:
 
 CAMPAIGN_ROOT = Path("data/eval_artifacts")
 DIAGNOSTIC_ROOT = Path("data/diagnostics")
+CAMPAIGN_ID = DEFAULT_CAMPAIGN_ID
 LEDGER_PATH = DIAGNOSTIC_ROOT / "evidence_contract_v3_retry_disabled_campaign_ledger.jsonl"
 CALIBRATION_OUTPUT = DIAGNOSTIC_ROOT / "evidence_contract_v3_retry_disabled_calibration.json"
 LEGACY_OUTPUT = DIAGNOSTIC_ROOT / "evidence_contract_v3_retry_disabled_legacy_comparison.json"
+STATUS_OUTPUT = DIAGNOSTIC_ROOT / "evidence_contract_v3_retry_disabled_campaign_status.json"
+REPRO_OUTPUT = DIAGNOSTIC_ROOT / "evidence_contract_v3_retry_disabled_reproducibility.json"
 RUN_CONFIG = {
     "r1": {
         "run_id": "evidence-contract-v3-r1",
@@ -109,6 +125,34 @@ RUN_CONFIG = {
         "report": CAMPAIGN_ROOT / "evidence_contract_v3_retry_disabled_r2.json",
     },
 }
+
+
+def configure_campaign(campaign_id: str) -> None:
+    """Switch all campaign-owned paths and run IDs to one fresh identity."""
+    global CAMPAIGN_ID, LEDGER_PATH, CALIBRATION_OUTPUT, LEGACY_OUTPUT, STATUS_OUTPUT, REPRO_OUTPUT, RUN_CONFIG
+    if not campaign_id or any(character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for character in campaign_id):
+        raise ValueError("campaign id must contain only letters, numbers, '_' or '-'")
+    CAMPAIGN_ID = campaign_id
+    prefix = campaign_id
+    LEDGER_PATH = DIAGNOSTIC_ROOT / f"{prefix}_campaign_ledger.jsonl"
+    CALIBRATION_OUTPUT = DIAGNOSTIC_ROOT / f"{prefix}_calibration.json"
+    LEGACY_OUTPUT = DIAGNOSTIC_ROOT / f"{prefix}_legacy_comparison.json"
+    REPRO_OUTPUT = DIAGNOSTIC_ROOT / f"{prefix}_reproducibility.json"
+    STATUS_OUTPUT = DIAGNOSTIC_ROOT / f"{prefix}_campaign_status.json"
+    RUN_CONFIG = {
+        "r1": {
+            "run_id": "evidence-contract-v3-r1" if campaign_id == DEFAULT_CAMPAIGN_ID else f"{campaign_id}-r1",
+            "generation": CAMPAIGN_ROOT / f"{prefix}_r1_generation.jsonl",
+            "judge": CAMPAIGN_ROOT / f"{prefix}_r1_judge.jsonl",
+            "report": CAMPAIGN_ROOT / f"{prefix}_r1.json",
+        },
+        "r2": {
+            "run_id": "evidence-contract-v3-r2" if campaign_id == DEFAULT_CAMPAIGN_ID else f"{campaign_id}-r2",
+            "generation": CAMPAIGN_ROOT / f"{prefix}_r2_generation.jsonl",
+            "judge": CAMPAIGN_ROOT / f"{prefix}_r2_judge.jsonl",
+            "report": CAMPAIGN_ROOT / f"{prefix}_r2.json",
+        },
+    }
 
 
 def _read_partial(path: Path, expected: set[str]) -> dict[str, dict[str, Any]]:
@@ -195,11 +239,26 @@ def _provider_wrappers(ledger: RequestLedger) -> tuple[Callable[[str, str, str],
     judge_provider = make_judge_call(judge, tracker, transport_retries=0)
 
     def generate(run_id: str, operation: str, prompt: str) -> str:
+        def send() -> dict[str, Any]:
+            try:
+                content = generation_provider(prompt)
+            except Exception as error:
+                metadata = dict(generation.last_transport_metadata)
+                raise ProviderOperationError(
+                    metadata.get("error_type", type(error).__name__),
+                    metadata.get("status_code"),
+                    metadata,
+                ) from error
+            return {
+                "content": content,
+                "provider": dict(generation.last_transport_metadata),
+            }
+
         response = ledger.call(
             operation=operation,
             run_id=run_id,
             request_sha256=sha256_text(prompt),
-            send=lambda: {"content": generation_provider(prompt)},
+            send=send,
         )
         content = response.get("content") if isinstance(response, dict) else None
         if not isinstance(content, str):
@@ -207,11 +266,26 @@ def _provider_wrappers(ledger: RequestLedger) -> tuple[Callable[[str, str, str],
         return content
 
     def score(run_id: str, operation: str, prompt: str) -> dict[str, Any]:
+        def send() -> dict[str, Any]:
+            try:
+                scores = judge_provider(prompt)
+            except Exception as error:
+                metadata = dict(judge.last_transport_metadata)
+                raise ProviderOperationError(
+                    metadata.get("error_type", type(error).__name__),
+                    metadata.get("status_code"),
+                    metadata,
+                ) from error
+            return {
+                "scores": scores,
+                "provider": dict(judge.last_transport_metadata),
+            }
+
         response = ledger.call(
             operation=operation,
             run_id=run_id,
             request_sha256=sha256_text(prompt),
-            send=lambda: {"scores": judge_provider(prompt)},
+            send=send,
         )
         scores = response.get("scores") if isinstance(response, dict) else None
         if not isinstance(scores, dict):
@@ -447,7 +521,9 @@ def _run_calibration(ledger: RequestLedger, judge: Callable[[str, str, str], dic
     CALIBRATION_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     CALIBRATION_OUTPUT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if not report["passed"]:
-        raise CampaignIncomplete("rubric calibration failed; sentinel stage was not started")
+        raise CampaignSemanticFailure(
+            "rubric calibration failed; sentinel stage was not started"
+        )
     return report
 
 
@@ -475,29 +551,93 @@ def _run_legacy_comparison(
     return output
 
 
-def _write_incomplete(stage: str, error: Exception, ledger: RequestLedger, output: Path) -> None:
+def _write_campaign_status(
+    execution_status: str,
+    candidate_decision: str,
+    stage: str,
+    error: Exception | None,
+    ledger: RequestLedger,
+    output: Path,
+) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps({"schema_version": 1, "campaign_id": CAMPAIGN_ID, "status": "INCOMPLETE", "stage": stage, "error": str(error), "request_count": ledger.used, "request_limit": MAX_REQUESTS}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    output.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "campaign_id": CAMPAIGN_ID,
+                "execution_status": execution_status,
+                "candidate_decision": candidate_decision,
+                "stage": stage,
+                "error_type": type(error).__name__ if error else None,
+                "error": str(error) if error else None,
+                "request_count": ledger.used,
+                "request_limit": MAX_REQUESTS,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--manifest", type=Path, default=MANIFEST_PATH)
-    parser.add_argument("--ledger", type=Path, default=LEDGER_PATH)
+    parser.add_argument("--manifest", type=Path, default=None)
+    parser.add_argument("--campaign-id", default=DEFAULT_CAMPAIGN_ID)
+    parser.add_argument("--ledger", type=Path, default=None)
+    parser.add_argument("--resume", action="store_true")
     parser.add_argument("--fresh", action="store_true")
     args = parser.parse_args(argv)
     if args.fresh:
-        for path in (args.ledger, CALIBRATION_OUTPUT, LEGACY_OUTPUT, *(config[key] for config in RUN_CONFIG.values() for key in ("generation", "judge", "report"))):
-            path.unlink(missing_ok=True)
-    if not args.manifest.exists():
-        manifest = build_manifest(ARTIFACT_PATH)
-        args.manifest.parent.mkdir(parents=True, exist_ok=True)
-        args.manifest.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    manifest_errors = verify_manifest(args.manifest, ARTIFACT_PATH)
+        parser.error("--fresh is disabled; use a new --campaign-id to create a clean campaign")
+    configure_campaign(args.campaign_id)
+    manifest_path = args.manifest or (DIAGNOSTIC_ROOT / f"{CAMPAIGN_ID}_manifest.json")
+    ledger_path = args.ledger or LEDGER_PATH
+    owned_paths = (*campaign_output_paths(CAMPAIGN_ID), manifest_path)
+    existing_paths = [path for path in owned_paths if path.exists()]
+    if existing_paths and not args.resume:
+        print(
+            json.dumps(
+                {
+                    "status": "NO-GO",
+                    "execution_status": "NOT_STARTED",
+                    "candidate_decision": "UNDECIDED",
+                    "error": "campaign outputs already exist; choose a new --campaign-id or pass --resume",
+                    "existing_paths": [str(path) for path in existing_paths],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 1
+    if args.resume and manifest_path.exists():
+        try:
+            previous_status = json.loads(STATUS_OUTPUT.read_text(encoding="utf-8")) if STATUS_OUTPUT.exists() else {}
+        except (OSError, ValueError) as error:
+            print(json.dumps({"status": "NO-GO", "error": f"cannot inspect existing campaign status: {error}"}, indent=2))
+            return 1
+        if previous_status.get("execution_status") == "INCOMPLETE" or previous_status.get("status") == "INCOMPLETE":
+            print(json.dumps({"status": "NO-GO", "error": "incomplete campaign cannot be resumed; use a new campaign id after provider authorization"}, indent=2))
+            return 1
+    if not manifest_path.exists():
+        manifest = build_manifest(
+            ARTIFACT_PATH,
+            CAMPAIGN_ID,
+            campaign_output_paths(CAMPAIGN_ID),
+        )
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    manifest_errors = verify_manifest(
+        manifest_path,
+        ARTIFACT_PATH,
+        CAMPAIGN_ID,
+        campaign_output_paths(CAMPAIGN_ID),
+    )
     if manifest_errors:
         print(json.dumps({"status": "NO-GO", "manifest_errors": list(manifest_errors)}, indent=2))
         return 1
-    ledger = RequestLedger(args.ledger, CAMPAIGN_ID, MAX_REQUESTS)
+    ledger = RequestLedger(ledger_path, CAMPAIGN_ID, MAX_REQUESTS)
     stage = "calibration"
     try:
         artifact, _ = load_bound_artifact(ARTIFACT_PATH, EXPECTED_ARTIFACT_FINGERPRINT, CONTEXT_STRATEGY_SELECTIVE_V7)
@@ -509,13 +649,63 @@ def main(argv: list[str] | None = None) -> int:
         r2 = _run_replicate("r2", artifact, ledger, generate, judge)
         stage = "legacy-comparison"
         legacy = _run_legacy_comparison([r1, r2], ledger, judge)
+        stage = "reproducibility-verification"
+        integrity = {
+            "r1": list(validate_report(r1, RUN_CONFIG["r1"]["report"])),
+            "r2": list(validate_report(r2, RUN_CONFIG["r2"]["report"])),
+        }
+        reproducibility = build_report(
+            r1,
+            r2,
+            RUN_CONFIG["r1"]["report"],
+            RUN_CONFIG["r2"]["report"],
+        )
+        reproducibility["campaign_id"] = CAMPAIGN_ID
+        reproducibility["case_integrity_errors"] = integrity
+        REPRO_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+        REPRO_OUTPUT.write_text(
+            json.dumps(reproducibility, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
         stage = "complete"
-        output = {"schema_version": 1, "campaign_id": CAMPAIGN_ID, "status": "COMPLETE", "request_count": ledger.used, "request_limit": MAX_REQUESTS, "calibration": calibration, "replicates": [{"path": str(RUN_CONFIG["r1"]["report"]), "passed": r1["passed"]}, {"path": str(RUN_CONFIG["r2"]["report"]), "passed": r2["passed"]}], "legacy_comparison": str(LEGACY_OUTPUT), "token_usage_totals": tracker.totals, "candidate_go": bool(r1["passed"] and r2["passed"] and ledger.used <= MAX_REQUESTS)}
+        candidate_go = bool(
+            r1["passed"]
+            and r2["passed"]
+            and not any(integrity.values())
+            and reproducibility.get("passed") is True
+            and ledger.used <= MAX_REQUESTS
+        )
+        output = {"schema_version": 2, "campaign_id": CAMPAIGN_ID, "status": "COMPLETE", "request_count": ledger.used, "request_limit": MAX_REQUESTS, "calibration": calibration, "replicates": [{"path": str(RUN_CONFIG["r1"]["report"]), "passed": r1["passed"]}, {"path": str(RUN_CONFIG["r2"]["report"]), "passed": r2["passed"]}], "legacy_comparison": str(LEGACY_OUTPUT), "reproducibility": str(REPRO_OUTPUT), "token_usage_totals": tracker.totals, "candidate_go": candidate_go}
+        _write_campaign_status(
+            "COMPLETE",
+            "GO" if candidate_go else "NO-GO",
+            stage,
+            None if candidate_go else RuntimeError("one or more candidate gates failed"),
+            ledger,
+            STATUS_OUTPUT,
+        )
         print(json.dumps(output, ensure_ascii=False, indent=2))
         return 0 if output["candidate_go"] else 1
+    except CampaignSemanticFailure as error:
+        _write_campaign_status(
+            "COMPLETE",
+            "NO-GO",
+            stage,
+            error,
+            ledger,
+            STATUS_OUTPUT,
+        )
+        print(json.dumps({"status": "COMPLETE", "candidate_decision": "NO-GO", "stage": stage, "error": str(error), "request_count": ledger.used, "request_limit": MAX_REQUESTS}, ensure_ascii=False, indent=2))
+        return 1
     except CampaignIncomplete as error:
-        status_path = DIAGNOSTIC_ROOT / "evidence_contract_v3_retry_disabled_campaign_status.json"
-        _write_incomplete(stage, error, ledger, status_path)
+        _write_campaign_status(
+            "INCOMPLETE",
+            "UNDECIDED",
+            stage,
+            error,
+            ledger,
+            STATUS_OUTPUT,
+        )
         print(json.dumps({"status": "INCOMPLETE", "stage": stage, "error": str(error), "request_count": ledger.used, "request_limit": MAX_REQUESTS}, ensure_ascii=False, indent=2))
         return 2
 

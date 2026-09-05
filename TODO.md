@@ -599,8 +599,16 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
         and canonical/index artifacts remain unchanged.
 84. [ ] Do not run N=30 or resume the incomplete v3 ledger. Only start a new
         pre-registered provider window after quota/capacity is available, then
-        complete R1/R2 and legacy comparison under the existing floors. Do not
-        select a better sample or relax semantic gates.
+        complete R1/R2 and legacy comparison under the existing floors. Use a
+        new campaign ID; the runner rejects `--fresh` deletion and incomplete
+        ledger resume. Do not select a better sample or relax semantic gates.
+85. [x] Implement the provider-free Financial Workspace UX pass. Semantic
+        light/dark/system theme tokens, startup theme application, source
+        citation navigation, filter-snapshot retry, IME-safe input, mobile
+        sidebar focus trapping, key-alias diagnostics, campaign status
+        separation, output isolation, and final verifier admission are covered
+        by frontend `20/20` and backend targeted `25/25` tests. No provider
+        request or official artifact was changed.
 
 ## Always-On Deployment
 

@@ -71,7 +71,12 @@ const SidebarBase: React.FC<SidebarProps> = ({
   const [sectionDropdownOpen, setSectionDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarWidth, setSidebarWidth] = useState(() => {
-    const savedWidth = Number(localStorage.getItem("sec_qa_sidebar_width"));
+    let savedWidth = 0;
+    try {
+      savedWidth = Number(localStorage.getItem("sec_qa_sidebar_width"));
+    } catch {
+      savedWidth = 0;
+    }
     return Number.isFinite(savedWidth) && savedWidth >= minSidebarWidth
       ? Math.min(savedWidth, maxSidebarWidth)
       : 320;
@@ -167,17 +172,36 @@ const SidebarBase: React.FC<SidebarProps> = ({
     if (!isOpen) return;
 
     const previouslyFocused = document.activeElement as HTMLElement | null;
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(
+        sidebarRef.current?.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
+        ) || [],
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
 
-    document.addEventListener("keydown", handleEscape);
+    document.addEventListener("keydown", handleKeyDown);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     sidebarRef.current?.querySelector<HTMLElement>("button")?.focus();
 
     return () => {
-      document.removeEventListener("keydown", handleEscape);
+      document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
       previouslyFocused?.focus();
     };
@@ -199,7 +223,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
         <div
           onClick={onClose}
           aria-hidden="true"
-          className="fixed inset-0 bg-[#26324A]/20 dark:bg-[#171D2B]/50 backdrop-blur-xs z-40 lg:hidden transition-opacity"
+          className="sidebar-overlay fixed inset-0 z-40 lg:hidden transition-opacity"
         />
       )}
 
@@ -207,7 +231,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
         ref={sidebarRef}
         id="control-sidebar"
         aria-labelledby="search-controls-heading"
-        className={`fixed inset-y-0 left-0 bg-[#FCFBF8] dark:bg-[#171D2B] text-[#26324A] dark:text-[#FCFBF8] flex flex-col border-r border-slate-200 dark:border-slate-800 z-45 lg:static lg:translate-x-0 ${
+        className={`sidebar-shell fixed inset-y-0 left-0 flex flex-col z-45 lg:static lg:translate-x-0 ${
           isResizing ? "transition-none" : "transition-transform duration-300"
         } ${
           isOpen ? "translate-x-0" : "-translate-x-full"
@@ -229,7 +253,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
           <span className="h-12 w-0.5 rounded-full bg-slate-300 dark:bg-slate-700 opacity-0 group-hover:opacity-100 group-focus:opacity-100 group-active:opacity-100 transition-opacity" />
         </div>
         {/* Header */}
-        <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-[#26324A]/10">
+        <div className="sidebar-header p-4 md:p-5 flex items-center justify-between backdrop-blur-md">
           <div className="flex items-center gap-2.5">
             <BrandMark size="md" />
             <div>
@@ -300,7 +324,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
             </button>
 
             {tickerDropdownOpen && (
-                <div className="ui-popover-enter absolute z-55 left-0 right-0 mt-1 bg-white dark:bg-[#171D2B] border border-slate-200 dark:border-slate-800 rounded-lg shadow-lg flex flex-col overflow-hidden max-h-64">
+                <div className="ui-popover-enter absolute z-55 left-0 right-0 mt-1 bg-white/95 dark:bg-[#0D111C]/95 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl flex flex-col overflow-hidden max-h-64 backdrop-blur-md">
                   <div className="p-2 border-b border-slate-100 dark:border-slate-800/40 bg-slate-50/50 dark:bg-slate-900/30 sticky top-0 z-10 flex items-center gap-2">
                     <Search className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
                     <input
@@ -412,7 +436,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
             </button>
 
             {sectionDropdownOpen && (
-                <div className="ui-popover-enter absolute z-55 left-0 right-0 mt-1 bg-white dark:bg-[#171D2B] border border-slate-200 dark:border-slate-800 rounded-lg shadow-lg divide-y divide-slate-100 dark:divide-slate-800/40 overflow-y-auto max-h-96">
+                <div className="ui-popover-enter absolute z-55 left-0 right-0 mt-1 bg-white/95 dark:bg-[#0D111C]/95 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl divide-y divide-slate-100 dark:divide-slate-800/40 overflow-y-auto max-h-96 backdrop-blur-md">
                   <button
                     type="button"
                     onClick={() => {
@@ -431,35 +455,32 @@ const SidebarBase: React.FC<SidebarProps> = ({
                       <Check className="w-3.5 h-3.5 text-brand-indigo flex-shrink-0" />
                     )}
                   </button>
-                  {availableSections.map(([value, metadata]) => {
-                    const isSelected = selectedSection === value;
-                    return (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => {
-                          onSelectSection(value);
-                          setSectionDropdownOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 text-xs text-left hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer ${isSelected ? "text-brand-indigo font-bold bg-brand-indigo/[0.03]" : "text-slate-600 dark:text-slate-300 font-medium"}`}
-                      >
-                        <span className="min-w-0 pr-2">
-                          <span className="block leading-snug">{metadata.label}</span>
-                          <span className="block mt-0.5 text-[10px] font-normal text-slate-400 dark:text-slate-500 leading-snug">
-                            {metadata.description}
-                          </span>
+                  {availableSections.map(([value, meta]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => {
+                        onSelectSection(value);
+                        setSectionDropdownOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer ${selectedSection === value ? "text-brand-indigo font-bold bg-brand-indigo/[0.03]" : "text-slate-600 dark:text-slate-300 font-medium"}`}
+                    >
+                      <span className="min-w-0 pr-2">
+                        <span className="block">{meta.label}</span>
+                        <span className="block mt-0.5 text-[10px] font-normal text-slate-400 dark:text-slate-500 leading-snug">
+                          {meta.description}
                         </span>
-                        {isSelected && (
-                          <Check className="w-3.5 h-3.5 text-brand-indigo flex-shrink-0" />
-                        )}
-                      </button>
-                    );
-                  })}
+                      </span>
+                      {selectedSection === value && (
+                        <Check className="w-3.5 h-3.5 text-brand-indigo flex-shrink-0" />
+                      )}
+                    </button>
+                  ))}
                 </div>
             )}
           </div>
 
-          {/* Advanced retrieval settings stay collapsed until they are needed. */}
+          {/* Comparative Analysis Toggle */}
           <details className="group rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-[#26324A]/15">
             <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 [&::-webkit-details-marker]:hidden">
               <span className="flex items-center gap-2">
@@ -515,7 +536,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
               </div>
 
           {/* Comparative Analysis Toggle */}
-              <div className="space-y-2 bg-slate-50 dark:bg-[#171D2B]/30 p-3.5 rounded-lg border border-slate-200/80 dark:border-slate-800">
+              <div className="space-y-2 bg-slate-50 dark:bg-slate-800/40 p-3.5 rounded-lg border border-slate-200/80 dark:border-slate-800">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                 Query Decomposition

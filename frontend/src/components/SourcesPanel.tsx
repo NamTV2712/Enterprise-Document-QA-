@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useId, useMemo, useState } from "react";
+import React, { useEffect, useId, useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -15,6 +15,9 @@ import { formatCompanyLabel, SECTION_METADATA } from "../lib/displayMetadata";
 
 interface SourcesPanelProps {
   sources: Source[];
+  messageId?: string;
+  focusSourceIndex?: number | null;
+  onFocusHandled?: () => void;
 }
 
 export function getSectionDisplay(
@@ -125,11 +128,24 @@ export function getSectionDisplay(
   return { section: sectionName, ticker, year };
 }
 
-export const SourcesPanel: React.FC<SourcesPanelProps> = ({ sources }) => {
+function getSectionBadgeClass(sectionName: string): string {
+  const lower = sectionName.toLowerCase();
+  if (lower.includes("risk")) return "section-badge--risk";
+  if (lower.includes("table") || lower.includes("financial") || lower.includes("statement"))
+    return "section-badge--financial";
+  if (lower.includes("md&a") || lower.includes("discussion")) return "section-badge--mdna";
+  return "section-badge--business";
+}
+
+export const SourcesPanel: React.FC<SourcesPanelProps> = ({
+  sources,
+  messageId = "message",
+  focusSourceIndex = null,
+  onFocusHandled,
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const panelId = `sources-panel-${useId().replace(/:/g, "")}`;
-
-  if (!sources || sources.length === 0) return null;
+  const safeMessageId = messageId.replace(/[^a-zA-Z0-9_-]/g, "-");
 
   const { companySummary, remainingCompanies } = useMemo(() => {
     const sourceTickers = Array.from(
@@ -144,15 +160,31 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({ sources }) => {
     };
   }, [sources]);
 
+  useEffect(() => {
+    if (focusSourceIndex === null || focusSourceIndex < 0) return;
+    setIsOpen(true);
+    const frame = window.requestAnimationFrame(() => {
+      const source = document.getElementById(
+        `${safeMessageId}-source-${focusSourceIndex}`,
+      );
+      source?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      source?.focus({ preventScroll: true });
+      onFocusHandled?.();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusSourceIndex, onFocusHandled, safeMessageId]);
+
+  if (!sources || sources.length === 0) return null;
+
   return (
-    <div className="border border-slate-200/80 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-900/40 overflow-hidden my-4 shadow-3xs hover:shadow-2xs transition-all">
+    <div className="sources-panel overflow-hidden my-4">
       <button
         type="button"
         aria-expanded={isOpen}
         aria-controls={panelId}
         aria-label={`${isOpen ? "Hide" : "Show"} ${sources.length} retrieved filing evidence excerpts`}
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full min-h-12 flex items-center justify-between gap-3 p-3.5 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+        className="sources-toggle w-full min-h-12 flex items-center justify-between gap-3 p-3.5 text-left text-sm font-semibold transition-colors cursor-pointer"
       >
         <div className="flex items-start gap-2 min-w-0">
           <FileText className="w-4 h-4 mt-0.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
@@ -180,14 +212,14 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({ sources }) => {
       {isOpen && (
           <div
             id={panelId}
-            className="ui-expand-enter overflow-hidden border-t border-slate-200/60 dark:border-slate-800/80"
+            className="ui-expand-enter overflow-hidden border-t border-[var(--border-subtle)]"
           >
-            <div className="px-3.5 py-3 bg-brand-indigo/[0.03] border-b border-slate-200/60 dark:border-slate-800/80 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            <div className="px-3.5 py-3 bg-[var(--surface-muted)] border-b border-[var(--border-subtle)] text-xs text-[var(--text-muted)] leading-relaxed">
               These are the filing excerpts used to ground the answer. Rank score
               orders excerpts within this result set; it is not a probability or
               confidence percentage.
             </div>
-            <div className="p-3.5 divide-y divide-slate-200/50 dark:divide-slate-800/40 md:max-h-[min(28rem,55vh)] md:overflow-y-auto bg-slate-50/30 dark:bg-slate-950/20">
+            <div className="p-3.5 divide-y divide-[var(--border-subtle)] md:max-h-[min(28rem,55vh)] md:overflow-y-auto bg-[var(--surface-muted)]">
               {sources.map((source, index) => {
                 const { section, ticker, year } = getSectionDisplay(
                   source.citation,
@@ -200,13 +232,15 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({ sources }) => {
                 return (
                   <div
                     key={index}
-                    className="py-3 first:pt-0 last:pb-0"
+                    className="source-item py-3 first:pt-0 last:pb-0"
                     id={`source-item-${index}`}
+                    tabIndex={-1}
+                    data-source-index={index}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                       <div className="flex items-center gap-2">
-                        {/* Exhibit Amber Citation Tag */}
-                        <span className="text-[10px] md:text-xs font-bold text-brand-indigo border border-brand-indigo/30 bg-brand-indigo/5 px-2 py-0.5 rounded shadow-3xs flex items-center gap-1 font-sans">
+                        {/* Section-colored badge tag */}
+                        <span className={`section-badge ${getSectionBadgeClass(section)} shadow-4xs`}>
                           <ArrowUpRight className="w-3.5 h-3.5" />
                           <span>
                             {formatCompanyLabel(ticker)} {year ? `'${year.slice(-2)}` : ""} ·{" "}
@@ -219,12 +253,16 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({ sources }) => {
                         <span className="text-xs text-slate-400 dark:text-slate-500 font-semibold">
                           Rank score
                         </span>
-                        <span className="text-xs font-bold text-brand-indigo bg-brand-indigo/5 border border-brand-indigo/20 px-1.5 py-0.5 rounded shadow-3xs">
+                        <span className="text-xs font-bold text-brand-indigo bg-brand-indigo/10 dark:bg-brand-indigo/20 border border-brand-indigo/30 px-2 py-0.5 rounded shadow-4xs">
                           {displayScore}
                         </span>
                       </div>
                     </div>
-                    <p className="text-sm text-slate-650 dark:text-slate-350 leading-relaxed bg-white dark:bg-slate-900/50 p-3.5 rounded-lg border border-slate-200/50 dark:border-slate-800/40 whitespace-pre-wrap select-all font-sans shadow-4xs">
+                    <p
+                      id={`${safeMessageId}-source-${index}`}
+                      tabIndex={-1}
+                      className="source-preview text-sm leading-relaxed p-3.5 rounded-lg whitespace-pre-wrap select-all font-sans"
+                    >
                       {source.text_preview}
                     </p>
                   </div>

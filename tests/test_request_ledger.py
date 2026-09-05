@@ -2,7 +2,12 @@ import json
 
 import pytest
 
-from src.evaluation.request_ledger import CampaignIncomplete, RequestLedger, append_record
+from src.evaluation.request_ledger import (
+    CampaignIncomplete,
+    ProviderOperationError,
+    RequestLedger,
+    append_record,
+)
 
 
 def test_completed_operation_resumes_without_request(tmp_path):
@@ -70,3 +75,41 @@ def test_changed_budget_and_malformed_ledger_rejected(tmp_path):
         file.write(json.dumps({"campaign_id": "other"}) + "\n")
     with pytest.raises(CampaignIncomplete):
         RequestLedger(ledger.path, "campaign", 2)
+
+
+def test_provider_metadata_is_redacted_and_persisted_per_attempt(tmp_path):
+    path = tmp_path / "ledger.jsonl"
+    ledger = RequestLedger(path, "campaign", 3)
+    attempts = []
+
+    def send():
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise ProviderOperationError(
+                "RateLimitError",
+                429,
+                {
+                    "key_alias": "key-2",
+                    "pool_size": 3,
+                    "transport_attempt": 1,
+                    "status": "error",
+                    "retry_after": "2",
+                    "secret": "must-not-be-written",
+                },
+            )
+        return {"content": "ok", "provider": {"key_alias": "key-3"}}
+
+    ledger.call("op", "run", "hash", send)
+    rows = [json.loads(line) for line in path.read_text().splitlines()]
+    error = next(row for row in rows if row["event"] == "error")
+    assert error["error_type"] == "RateLimitError"
+    assert error["status_code"] == 429
+    assert error["provider"] == {
+        "key_alias": "key-2",
+        "pool_size": 3,
+        "transport_attempt": 1,
+        "status": "error",
+        "retry_after": "2",
+        "provider_error_type": "RateLimitError",
+    }
+    assert "must-not-be-written" not in path.read_text()

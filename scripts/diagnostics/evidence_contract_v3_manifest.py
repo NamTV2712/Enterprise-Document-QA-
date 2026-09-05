@@ -29,15 +29,24 @@ CAMPAIGN_ID = "evidence_contract_v3_retry_disabled"
 CAMPAIGN_VERSION = "evidence-contract-v3-candidate-2-retry-disabled"
 MAX_REQUESTS = 60
 DEFAULT_OUTPUT = Path("data/diagnostics/evidence_contract_v3_retry_disabled_manifest.json")
-NEW_OUTPUTS = (
-    Path("data/eval_artifacts/evidence_contract_v3_retry_disabled_r1.json"),
-    Path("data/eval_artifacts/evidence_contract_v3_retry_disabled_r2.json"),
-    Path("data/eval_artifacts/evidence_contract_v3_retry_disabled_r1_generation.jsonl"),
-    Path("data/eval_artifacts/evidence_contract_v3_retry_disabled_r2_generation.jsonl"),
-    Path("data/eval_artifacts/evidence_contract_v3_retry_disabled_r1_judge.jsonl"),
-    Path("data/eval_artifacts/evidence_contract_v3_retry_disabled_r2_judge.jsonl"),
-    Path("data/diagnostics/evidence_contract_v3_retry_disabled_campaign_ledger.jsonl"),
-)
+def campaign_output_paths(campaign_id: str) -> tuple[Path, ...]:
+    """Return every mutable output owned by one campaign identity."""
+    return (
+        Path(f"data/eval_artifacts/{campaign_id}_r1.json"),
+        Path(f"data/eval_artifacts/{campaign_id}_r2.json"),
+        Path(f"data/eval_artifacts/{campaign_id}_r1_generation.jsonl"),
+        Path(f"data/eval_artifacts/{campaign_id}_r2_generation.jsonl"),
+        Path(f"data/eval_artifacts/{campaign_id}_r1_judge.jsonl"),
+        Path(f"data/eval_artifacts/{campaign_id}_r2_judge.jsonl"),
+        Path(f"data/diagnostics/{campaign_id}_campaign_ledger.jsonl"),
+        Path(f"data/diagnostics/{campaign_id}_calibration.json"),
+        Path(f"data/diagnostics/{campaign_id}_legacy_comparison.json"),
+        Path(f"data/diagnostics/{campaign_id}_reproducibility.json"),
+        Path(f"data/diagnostics/{campaign_id}_campaign_status.json"),
+    )
+
+
+NEW_OUTPUTS = campaign_output_paths(CAMPAIGN_ID)
 
 
 def sha256_file(path: Path) -> str:
@@ -69,21 +78,26 @@ def _artifact_identity(path: Path) -> dict[str, Any]:
     }
 
 
-def build_manifest(artifact_path: Path = ARTIFACT_PATH) -> dict[str, Any]:
+def build_manifest(
+    artifact_path: Path = ARTIFACT_PATH,
+    campaign_id: str = CAMPAIGN_ID,
+    output_paths: tuple[Path, ...] | None = None,
+) -> dict[str, Any]:
     artifact = _artifact_identity(artifact_path)
-    output_paths = [str(path) for path in NEW_OUTPUTS]
-    resolved = [path.resolve() for path in NEW_OUTPUTS]
+    paths = output_paths or campaign_output_paths(campaign_id)
+    output_values = [str(path) for path in paths]
+    resolved = [path.resolve() for path in paths]
     errors: list[str] = []
     if len(set(resolved)) != len(resolved):
         errors.append("new output paths are not distinct")
-    if any(path.resolve() == artifact_path.resolve() for path in NEW_OUTPUTS):
+    if any(path.resolve() == artifact_path.resolve() for path in paths):
         errors.append("new output path overlaps canonical artifact")
     if artifact["matches_expected_embedded_fingerprint"] is not True:
         errors.append("canonical artifact fingerprint does not match the registered artifact")
     return {
         "schema_version": 1,
-        "campaign_id": CAMPAIGN_ID,
-        "campaign_version": CAMPAIGN_VERSION,
+        "campaign_id": campaign_id,
+        "campaign_version": CAMPAIGN_VERSION if campaign_id == CAMPAIGN_ID else f"{CAMPAIGN_VERSION}:{campaign_id}",
         "git_commit": _git_commit(),
         "canonical_artifact": artifact,
         "official_result": {
@@ -105,7 +119,11 @@ def build_manifest(artifact_path: Path = ARTIFACT_PATH) -> dict[str, Any]:
             "sentinel_requests": 24,
             "legacy_comparison_requests": 12,
             "reserved_retry_budget": 12,
-            "run_ids": ["evidence-contract-v3-r1", "evidence-contract-v3-r2"],
+            "run_ids": (
+                ["evidence-contract-v3-r1", "evidence-contract-v3-r2"]
+                if campaign_id == CAMPAIGN_ID
+                else [f"{campaign_id}-r1", f"{campaign_id}-r2"]
+            ),
         },
         "pre_registered_gates": {
             "minimum_replicates": 2,
@@ -117,19 +135,24 @@ def build_manifest(artifact_path: Path = ARTIFACT_PATH) -> dict[str, Any]:
             "aggregate_context_precision_floor": 0.67,
             "best_of_selection_forbidden": True,
         },
-        "registered_outputs": output_paths,
+        "registered_outputs": output_values,
         "errors": errors,
         "passed": not errors,
     }
 
 
-def verify_manifest(path: Path, artifact_path: Path = ARTIFACT_PATH) -> tuple[str, ...]:
+def verify_manifest(
+    path: Path,
+    artifact_path: Path = ARTIFACT_PATH,
+    campaign_id: str = CAMPAIGN_ID,
+    output_paths: tuple[Path, ...] | None = None,
+) -> tuple[str, ...]:
     errors: list[str] = []
     try:
         stored = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         return (f"cannot read manifest: {error}",)
-    current = build_manifest(artifact_path)
+    current = build_manifest(artifact_path, campaign_id, output_paths)
     for key in ("campaign_id", "campaign_version", "questions", "context_strategy",
                 "evidence_contract", "provider_protocol", "registered_outputs"):
         if stored.get(key) != current.get(key):
@@ -144,13 +167,23 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--artifact", type=Path, default=ARTIFACT_PATH)
+    parser.add_argument("--campaign-id", default=CAMPAIGN_ID)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args(argv)
     if args.check:
-        errors = verify_manifest(args.output, args.artifact)
+        errors = verify_manifest(
+            args.output,
+            args.artifact,
+            args.campaign_id,
+            campaign_output_paths(args.campaign_id),
+        )
         print(json.dumps({"path": str(args.output), "errors": list(errors), "passed": not errors}, indent=2))
         return 0 if not errors else 1
-    manifest = build_manifest(args.artifact)
+    manifest = build_manifest(
+        args.artifact,
+        args.campaign_id,
+        campaign_output_paths(args.campaign_id),
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(manifest, ensure_ascii=False, indent=2))

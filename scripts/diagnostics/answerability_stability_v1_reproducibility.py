@@ -558,9 +558,9 @@ def build_report(
         ),
         "same_answerability_fingerprint": (
             first.get("answerability_fingerprint")
-            == COMPARATIVE_ANSWERABILITY_FINGERPRINT
+            == (COMPARATIVE_ANSWERABILITY_V3_FINGERPRINT if is_v3 else COMPARATIVE_ANSWERABILITY_FINGERPRINT)
             and second.get("answerability_fingerprint")
-            == COMPARATIVE_ANSWERABILITY_FINGERPRINT
+            == (COMPARATIVE_ANSWERABILITY_V3_FINGERPRINT if is_v3 else COMPARATIVE_ANSWERABILITY_FINGERPRINT)
         ),
         "same_generation_binding": (
             first.get("binding")
@@ -604,6 +604,10 @@ def build_report(
             first.get("provider_complete") is True
             and second.get("provider_complete") is True
         ),
+        "same_campaign_identity": (
+            isinstance(first.get("campaign_id"), str)
+            and first.get("campaign_id") == second.get("campaign_id")
+        ) if is_v3 else True,
     }
     gates["all_replicates_pass"] = all(gates.values())
     return {

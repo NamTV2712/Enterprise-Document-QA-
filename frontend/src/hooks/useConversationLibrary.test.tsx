@@ -277,3 +277,69 @@ describe("useConversationLibrary request isolation", () => {
     expect(rendered.result.current.inputText).toBe("");
   });
 });
+
+describe("non-active deletion isolation", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.clearAllMocks();
+    apiMocks.getSessionHistory.mockResolvedValue({
+      session_id: "test",
+      turns: [],
+      context: { status: "missing", retained_turns: 0, ttl_remaining_seconds: 0 },
+    } satisfies SessionHistoryResponse);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("deleting a background conversation never cancels the active request", async () => {
+    const recordA = makeRecord("conversation-active", "session-active", [
+      { id: "u-1", sender: "user", text: "Active question" },
+      { id: "a-1", sender: "assistant", text: "Active answer", status: "completed" },
+    ]);
+    const recordB = makeRecord("conversation-background", "session-background", [
+      { id: "u-1", sender: "user", text: "Background question" },
+    ]);
+    localStorage.setItem(
+      V3_KEY,
+      JSON.stringify({ envelopeVersion: 3, records: [recordA, recordB], tombstones: [] }),
+    );
+    localStorage.setItem("sec_qa_session_id", "session-active");
+    localStorage.setItem("sec_qa_active_conversation_id", "conversation-active");
+
+    const { rendered, onCancel } = await freshHook();
+    await waitFor(() =>
+      expect(rendered.result.current.activeConversationId).toBe("conversation-active"),
+    );
+
+    // A generation is in flight on the active conversation.
+    act(() => {
+      rendered.result.current.updateMessages((prev) => [
+        ...prev,
+        {
+          id: "a-2",
+          sender: "assistant",
+          text: "Streaming",
+          isStreaming: true,
+          status: "streaming",
+        },
+      ]);
+    });
+
+    await act(async () => {
+      await rendered.result.current.deleteConversation("conversation-background");
+    });
+
+    expect(onCancel).not.toHaveBeenCalled();
+    // The active conversation keeps streaming untouched.
+    expect(rendered.result.current.activeConversationId).toBe("conversation-active");
+    expect(
+      rendered.result.current.messages.some((message) => message.id === "a-2" && message.isStreaming),
+    ).toBe(true);
+    // The background conversation is gone from the library.
+    expect(
+      rendered.result.current.conversations.some((item) => item.id === "conversation-background"),
+    ).toBe(false);
+  });
+});

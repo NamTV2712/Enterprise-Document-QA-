@@ -691,9 +691,11 @@ export function useConversationLibrary(
 
   const deleteConversation = useCallback(
     async (conversationId: string) => {
-      // Invalidate pending autosaves and any running request for the
-      // conversation being deleted.
-      const epoch = invalidateActiveOperation();
+      // Only deleting the ACTIVE conversation may invalidate its running
+      // requests and preflight; deleting a background Library item must
+      // never cancel the user's in-flight work.
+      const isActive = conversationId === activeIdRef.current;
+      const epoch = isActive ? invalidateActiveOperation() : epochRef.current;
       const result = await deleteConversationRecord(conversationId);
       applyWriteResult(result, { setStorageMode, setStorageWarning });
       syncConversationsFromRepository();
@@ -707,7 +709,7 @@ export function useConversationLibrary(
       if (stillListed) {
         return;
       }
-      if (conversationId === activeIdRef.current && epochRef.current === epoch) {
+      if (isActive && epochRef.current === epoch) {
         const newSessionId = createSessionId();
         const newConversationId = createConversationId(newSessionId);
         conversationCreatedAtRef.current = Date.now();
@@ -756,7 +758,12 @@ export function useConversationLibrary(
     [activeConversationId, conversations],
   );
 
-  const isReadOnly = sessionContext === "missing" || sessionContext === "unknown";
+  // Read-only saved conversations and conversations pending deletion lock
+  // sending; the composer still accepts a draft for the next conversation.
+  const isReadOnly =
+    sessionContext === "missing" ||
+    sessionContext === "unknown" ||
+    (activeRecord?.deletionPending ?? false);
 
   return {
     sessionId,

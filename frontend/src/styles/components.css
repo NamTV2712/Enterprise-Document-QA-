@@ -1598,3 +1598,14 @@ summary {
   line-height: 1.4;
   text-align: left;
 }
+
+/* Deletion-pending state inside the Library list. */
+.library-item-pending {
+  margin: 0.25rem 0 0.5rem;
+  border-left: 3px solid var(--state-warning-border);
+  padding: 0.25rem 0 0.25rem 0.5rem;
+  color: var(--state-warning-text);
+  font-size: 0.7rem;
+  line-height: 1.45;
+  text-align: left;
+}

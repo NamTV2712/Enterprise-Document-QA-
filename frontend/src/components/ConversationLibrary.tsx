@@ -215,15 +215,17 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
                   </span>
                 </button>
                 <div className="library-item-actions">
-                  <button
-                    type="button"
-                    className="icon-button is-bookmarked"
-                    onClick={() => onToggleBookmark(conversation.id, messageId)}
-                    aria-label="Remove answer bookmark"
-                    title="Remove bookmark"
-                  >
-                    <BookmarkCheck className="h-4 w-4" />
-                  </button>
+                  {!conversation.deletionPending && (
+                    <button
+                      type="button"
+                      className="icon-button is-bookmarked"
+                      onClick={() => onToggleBookmark(conversation.id, messageId)}
+                      aria-label="Remove answer bookmark"
+                      title="Remove bookmark"
+                    >
+                      <BookmarkCheck className="h-4 w-4" />
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="icon-button"
@@ -271,37 +273,58 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
                 </button>
               )}
 
+              {conversation.deletionPending && (
+                <p className="library-item-pending" role="status">
+                  Deletion pending — retry to finish removing it. You can still
+                  read and export this conversation.
+                </p>
+              )}
               <div className="library-item-actions">
-                {conversation.messages
-                  .filter((message) => message.sender === "assistant" && message.text)
-                  .slice(-1)
-                  .map((message) => (
-                    <button
-                      type="button"
-                      key={message.id}
-                      className={`icon-button ${conversation.bookmarkedMessageIds.includes(message.id) ? "is-bookmarked" : ""}`}
-                      onClick={() => onToggleBookmark(conversation.id, message.id)}
-                      aria-label={conversation.bookmarkedMessageIds.includes(message.id) ? "Remove answer bookmark" : "Bookmark latest answer"}
-                      title={conversation.bookmarkedMessageIds.includes(message.id) ? "Remove bookmark" : "Bookmark latest answer"}
-                    >
-                      {conversation.bookmarkedMessageIds.includes(message.id) ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
-                    </button>
-                  ))}
+                {!conversation.deletionPending &&
+                  conversation.messages
+                    .filter((message) => message.sender === "assistant" && message.text)
+                    .slice(-1)
+                    .map((message) => (
+                      <button
+                        type="button"
+                        key={message.id}
+                        className={`icon-button ${conversation.bookmarkedMessageIds.includes(message.id) ? "is-bookmarked" : ""}`}
+                        onClick={() => onToggleBookmark(conversation.id, message.id)}
+                        aria-label={conversation.bookmarkedMessageIds.includes(message.id) ? "Remove answer bookmark" : "Bookmark latest answer"}
+                        title={conversation.bookmarkedMessageIds.includes(message.id) ? "Remove bookmark" : "Bookmark latest answer"}
+                      >
+                        {conversation.bookmarkedMessageIds.includes(message.id) ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
+                      </button>
+                    ))}
                 <button type="button" className="icon-button" onClick={() => onExport(conversation)} aria-label="Export conversation" title="Export Markdown">
                   <Download className="h-4 w-4" />
                 </button>
-                <button type="button" className="icon-button" onClick={() => beginRename(conversation)} aria-label="Rename conversation" title="Rename">
-                  <Edit3 className="h-4 w-4" />
-                </button>
-                {pendingDeleteId === conversation.id ? (
-                  <span className="library-delete-confirm">
-                    <button type="button" onClick={() => { onDelete(conversation.id); setPendingDeleteId(null); }}>Delete</button>
-                    <button type="button" onClick={() => setPendingDeleteId(null)}>Cancel</button>
-                  </span>
-                ) : (
-                  <button type="button" className="icon-button is-danger" onClick={() => setPendingDeleteId(conversation.id)} aria-label="Delete conversation" title="Delete">
+                {conversation.deletionPending ? (
+                  <button
+                    type="button"
+                    className="icon-button is-danger"
+                    onClick={() => onDelete(conversation.id)}
+                    aria-label="Retry deletion"
+                    title="Retry deletion"
+                  >
                     <Trash2 className="h-4 w-4" />
                   </button>
+                ) : (
+                  <>
+                    <button type="button" className="icon-button" onClick={() => beginRename(conversation)} aria-label="Rename conversation" title="Rename">
+                      <Edit3 className="h-4 w-4" />
+                    </button>
+                    {pendingDeleteId === conversation.id ? (
+                      <span className="library-delete-confirm">
+                        <button type="button" onClick={() => { onDelete(conversation.id); setPendingDeleteId(null); }}>Delete</button>
+                        <button type="button" onClick={() => setPendingDeleteId(null)}>Cancel</button>
+                      </span>
+                    ) : (
+                      <button type="button" className="icon-button is-danger" onClick={() => setPendingDeleteId(conversation.id)} aria-label="Delete conversation" title="Delete">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </article>

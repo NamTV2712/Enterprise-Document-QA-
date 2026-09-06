@@ -235,25 +235,38 @@ function parseRecordPayload(raw: unknown): ParsedRecords {
   return result;
 }
 
-function normalizeTombstone(value: unknown): TombstoneRecord | null {
-  if (!value || typeof value !== "object") return null;
-  const candidate = value as Partial<TombstoneRecord>;
-  if (typeof candidate.id !== "string") return null;
-  return {
-    id: candidate.id,
-    revision: typeof candidate.revision === "number" && candidate.revision > 0 ? candidate.revision : 1,
-    deletedAt: typeof candidate.deletedAt === "number" ? candidate.deletedAt : Date.now(),
-  };
+/**
+ * Strict tombstone validation: every field must be present and well typed.
+ * Invalid entries are never repaired with defaults — they mark the payload
+ * unreadable so the holding backend is write-locked and preserved.
+ */
+function isPositiveFiniteInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 && Number.isFinite(value);
 }
 
-function parseTombstones(raw: unknown): { tombstones: TombstoneRecord[]; corrupt: boolean } {
-  if (!Array.isArray(raw)) return { tombstones: [], corrupt: false };
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function parseTombstones(raw: unknown): { tombstones: TombstoneRecord[]; hasUnreadable: boolean } {
+  if (raw === null || raw === undefined) return { tombstones: [], hasUnreadable: false };
+  if (!Array.isArray(raw)) return { tombstones: [], hasUnreadable: true };
   const tombstones: TombstoneRecord[] = [];
+  let hasUnreadable = false;
   for (const item of raw) {
-    const tombstone = normalizeTombstone(item);
-    if (tombstone) tombstones.push(tombstone);
+    if (!item || typeof item !== "object") {
+      hasUnreadable = true;
+      continue;
+    }
+    const candidate = item as Partial<TombstoneRecord>;
+    const validId = typeof candidate.id === "string" && candidate.id.length > 0;
+    if (!validId || !isPositiveFiniteInteger(candidate.revision) || !isFiniteNumber(candidate.deletedAt)) {
+      hasUnreadable = true;
+      continue;
+    }
+    tombstones.push({ id: candidate.id, revision: candidate.revision, deletedAt: candidate.deletedAt });
   }
-  return { tombstones, corrupt: false };
+  return { tombstones, hasUnreadable };
 }
 
 export function conversationTitle(messages: Message[]): string {
@@ -500,6 +513,7 @@ interface IndexedDbSnapshot {
   tombstones: TombstoneRecord[];
   hasFutureSchema: boolean;
   hasUnreadable: boolean;
+  hasUnreadableTombstones: boolean;
 }
 
 async function readIndexedDbSnapshot(): Promise<IndexedDbSnapshot> {
@@ -517,6 +531,7 @@ async function readIndexedDbSnapshot(): Promise<IndexedDbSnapshot> {
     tombstones: parsedTombstones.tombstones,
     hasFutureSchema: parsed.hasFutureSchema,
     hasUnreadable: parsed.hasUnreadable,
+    hasUnreadableTombstones: parsedTombstones.hasUnreadable,
   };
 }
 
@@ -581,6 +596,14 @@ interface LocalEnvelope {
   tombstones: TombstoneRecord[];
   hasFutureSchema: boolean;
   hasUnreadable: boolean;
+  /** Tombstone entries that failed strict validation. */
+  hasUnreadableTombstones: boolean;
+  /**
+   * True when the envelope exists but its structure or tombstone entries
+   * cannot be understood. The payload is preserved and the backend is
+   * write-locked; it is never silently replaced by an empty library.
+   */
+  hasInvalidStructure: boolean;
 }
 
 function readLocalEnvelope(): LocalEnvelope {
@@ -590,20 +613,38 @@ function readLocalEnvelope(): LocalEnvelope {
     tombstones: [],
     hasFutureSchema: false,
     hasUnreadable: false,
+    hasUnreadableTombstones: false,
+    hasInvalidStructure: false,
   };
   const parsed = readLocalJson(LOCAL_ENVELOPE_KEY);
   if (parsed.status !== "parsed") return empty;
   const value = parsed.value as Partial<LocalEnvelope> | null;
-  if (!value || typeof value !== "object" || !Array.isArray(value.records)) return empty;
-  const parsedRecords = parseRecordPayload(value.records);
+  if (!value || typeof value !== "object") {
+    return { ...empty, hasInvalidStructure: true };
+  }
+  const version = value.envelopeVersion;
+  if (!isPositiveFiniteInteger(version) || version > LIBRARY_ENVELOPE_VERSION) {
+    return { ...empty, hasInvalidStructure: true };
+  }
+  if (!Array.isArray(value.records)) {
+    return { ...empty, hasInvalidStructure: true };
+  }
+  // A missing tombstones key is a valid envelope; a present-but-malformed
+  // one, or malformed entries, mark the payload unreadable.
+  const hasTombstonesKey = "tombstones" in value;
   const parsedTombstones = parseTombstones(value.tombstones);
+  if (hasTombstonesKey && !Array.isArray(value.tombstones)) {
+    return { ...empty, hasInvalidStructure: true };
+  }
+  const parsedRecords = parseRecordPayload(value.records);
   return {
-    envelopeVersion:
-      typeof value.envelopeVersion === "number" ? value.envelopeVersion : LIBRARY_ENVELOPE_VERSION,
+    envelopeVersion: version,
     records: parsedRecords.records,
     tombstones: parsedTombstones.tombstones,
     hasFutureSchema: parsedRecords.hasFutureSchema,
     hasUnreadable: parsedRecords.hasUnreadable,
+    hasUnreadableTombstones: parsedTombstones.hasUnreadable,
+    hasInvalidStructure: false,
   };
 }
 
@@ -676,22 +717,41 @@ export function listConversations(): ConversationRecord[] {
 }
 
 /**
- * Pending (volatile) records are never included: they must not be admitted
- * into durable storage by their own save or by another conversation's
- * autosave. The computed deletion-pending flag is also never persisted.
+ * The durable snapshot always comes from the persisted records, never from
+ * the merged UI list: a pending update covers only the UI, a pending
+ * update of one conversation never removes the persisted copy of another,
+ * and a record pending its first save is never admitted. The computed
+ * deletion-pending flag is also never persisted.
  */
-function durableRecordsForWrite(): ConversationRecord[] {
-  return listConversations()
-    .filter((record) => persistedRecords.has(record.id) && !pendingRecords.has(record.id))
-    .map((record) => ({ ...record, deletionPending: undefined }));
+function durableSnapshotRecords(): ConversationRecord[] {
+  return Array.from(persistedRecords.values()).map((record) => ({
+    ...record,
+    deletionPending: undefined,
+  }));
 }
 
-function persistedBytes(): number {
-  return utf8Length(JSON.stringify(Array.from(persistedRecords.values())));
+/**
+ * The snapshot for one save: the persisted set with the record being saved
+ * replacing its own persisted entry. Other conversations' pending changes
+ * are invisible to it.
+ */
+function buildSaveSnapshot(full: ConversationRecord): ConversationRecord[] {
+  return durableSnapshotRecords()
+    .filter((record) => record.id !== full.id)
+    .concat(full);
 }
 
-function libraryOverLimit(): boolean {
-  return persistedRecords.size > MAX_CONVERSATIONS || persistedBytes() > MAX_LIBRARY_BYTES;
+/**
+ * Only tombstones confirmed durable in at least one backend are written
+ * into snapshots. A deletion whose tombstone never reached any backend is
+ * still an attempt: persisting it through another conversation's autosave
+ * would harden that intent without the user's knowledge. The id being
+ * deleted right now is always included when its own write succeeds.
+ */
+function durableTombstonesForWrite(includeId?: string): TombstoneRecord[] {
+  return Array.from(tombstones.values()).filter(
+    (tombstone) => durableTombstoneIds.has(tombstone.id) || tombstone.id === includeId,
+  );
 }
 
 function collectTombstones(): Map<string, TombstoneRecord> {
@@ -724,6 +784,17 @@ export async function loadConversationLibrary(
   let idbSnapshot: IndexedDbSnapshot | null = null;
   try {
     idbSnapshot = await readIndexedDbSnapshot();
+    if (idbSnapshot.hasUnreadableTombstones) {
+      idbLock = {
+        readable: true,
+        writable: false,
+        reason: "unreadable-tombstones",
+        permanent: true,
+      };
+      warnings.push(
+        "The deletion state in IndexedDB could not be verified; it was opened read-only so it is preserved.",
+      );
+    }
     if (idbSnapshot.hasFutureSchema || idbSnapshot.hasUnreadable) {
       // Preserve what we cannot understand: reads continue, writes to this
       // backend are locked for the whole session so a re-save can never
@@ -755,29 +826,37 @@ export async function loadConversationLibrary(
       "Saved conversation data in browser storage could not be read and was left untouched; that backend cannot be written until the data is recovered.",
     );
   } else if (envelopeParsed.status === "parsed") {
-    const value = envelopeParsed.value as Partial<LocalEnvelope> | null;
-    if (!value || typeof value !== "object" || !Array.isArray(value.records)) {
-      localLock = { readable: false, writable: false, reason: "corrupt", permanent: true };
+    if (localSnapshot.hasInvalidStructure) {
+      localLock = { readable: false, writable: false, reason: "unreadable-envelope", permanent: true };
       warnings.push(
-        "Saved conversation data in browser storage has an unexpected shape and was left untouched; that backend cannot be written until the data is recovered.",
+        "Saved conversation data in browser storage has an unexpected structure and was left untouched; that backend cannot be written until the data is recovered.",
       );
-    } else if (
-      typeof value.envelopeVersion === "number" &&
-      value.envelopeVersion > LIBRARY_ENVELOPE_VERSION
-    ) {
-      localLock = { readable: false, writable: false, reason: "newer-envelope", permanent: true };
-      warnings.push(
-        "The browser conversation library was written by a newer app version and was left untouched.",
-      );
-    }
-    if (localSnapshot.hasFutureSchema || localSnapshot.hasUnreadable) {
-      const reason = localSnapshot.hasFutureSchema ? "newer-schema" : "unreadable-record";
-      localLock = { readable: true, writable: false, reason, permanent: true };
-      warnings.push(
-        reason === "newer-schema"
-          ? "Some saved conversations in browser storage use a newer app schema; that storage is read-only so they are preserved."
-          : "Some saved conversations in browser storage could not be read; that storage is read-only so they are preserved.",
-      );
+    } else {
+      if (localSnapshot.envelopeVersion > LIBRARY_ENVELOPE_VERSION) {
+        localLock = { readable: false, writable: false, reason: "newer-envelope", permanent: true };
+        warnings.push(
+          "The browser conversation library was written by a newer app version and was left untouched.",
+        );
+      }
+      if (localSnapshot.hasFutureSchema || localSnapshot.hasUnreadable) {
+        const reason = localSnapshot.hasFutureSchema ? "newer-schema" : "unreadable-record";
+        localLock = { readable: true, writable: false, reason, permanent: true };
+        warnings.push(
+          reason === "newer-schema"
+            ? "Some saved conversations in browser storage use a newer app schema; that storage is read-only so they are preserved."
+            : "Some saved conversations in browser storage could not be read; that storage is read-only so they are preserved.",
+        );
+      } else if (localSnapshot.hasUnreadableTombstones) {
+        localLock = {
+          readable: true,
+          writable: false,
+          reason: "unreadable-tombstones",
+          permanent: true,
+        };
+        warnings.push(
+          "The deletion state in browser storage could not be verified; that storage is read-only so it is preserved.",
+        );
+      }
     }
   }
 
@@ -790,11 +869,15 @@ export async function loadConversationLibrary(
   if (readLocalJson(LOCAL_STORAGE_V1_KEY).status === "corrupt") {
     warnings.push("An older conversation backup could not be read and was left untouched.");
   }
+  const legacyTombstoneRaw = readLocalJson(LOCAL_TOMBSTONES_V2_KEY);
   const legacyTombstones = parseTombstones(
-    readLocalJson(LOCAL_TOMBSTONES_V2_KEY).status === "parsed"
-      ? (readLocalJson(LOCAL_TOMBSTONES_V2_KEY) as { status: "parsed"; value: unknown }).value
-      : null,
+    legacyTombstoneRaw.status === "parsed" ? legacyTombstoneRaw.value : null,
   );
+  if (legacyTombstoneRaw.status === "parsed" && legacyTombstones.hasUnreadable) {
+    warnings.push(
+      "The deletion state of an older conversation backup could not be read and was left untouched; deletions involving it cannot be verified.",
+    );
+  }
 
   // --- Merge tombstones from every source before merging records ---
   tombstones.clear();
@@ -951,6 +1034,14 @@ export async function saveConversationRecord(
 
     const existingPersisted = persistedRecords.get(normalized.id);
     const existingPending = pendingRecords.get(normalized.id);
+    if (existingPersisted?.deletionPending || existingPending?.deletionPending) {
+      // A record with a durable tombstone is slated for removal: saves,
+      // renames, and bookmarks must not resurrect it.
+      transientWarning =
+        "This conversation is pending deletion. Retry the deletion or export it instead of editing it.";
+      libraryWarning = combineWarning(transientWarning);
+      return { status: "failed", storageMode: activeStorageMode, warning: libraryWarning };
+    }
     const wasPersisted = Boolean(existingPersisted);
     const baseRevision = Math.max(
       existingPersisted?.revision ?? 0,
@@ -965,10 +1056,13 @@ export async function saveConversationRecord(
     };
 
     // --- Admission against the durable snapshot only ---
+    const saveSnapshot = buildSaveSnapshot(full);
     const intendedCount = persistedRecords.size + (wasPersisted ? 0 : 1);
-    const intendedBytes =
-      persistedBytes() - (existingPersisted ? utf8Length(JSON.stringify(existingPersisted)) : 0) +
-      utf8Length(JSON.stringify(full));
+    // Both backends are admitted against the same measure: the envelope
+    // serialization of the snapshot plus its tombstones.
+    const intendedBytes = utf8Length(
+      JSON.stringify({ records: saveSnapshot, tombstones: durableTombstonesForWrite() }),
+    );
     let blockedWarning: string | null = null;
     if (!wasPersisted && intendedCount > MAX_CONVERSATIONS) {
       blockedWarning = `The library keeps at most ${MAX_CONVERSATIONS} conversations. This conversation is only kept in this tab until you export or delete an older one.`;
@@ -983,12 +1077,10 @@ export async function saveConversationRecord(
       return { status: "volatile", storageMode: activeStorageMode, warning: libraryWarning };
     }
 
-    // --- Durable write: pending records are never part of the snapshot ---
-    const durableSnapshot = [
-      ...durableRecordsForWrite().filter((item) => item.id !== full.id),
-      full,
-    ];
-    const allTombstones = Array.from(tombstones.values());
+    // --- Durable write: pending records and deletion intents are never
+    // part of the snapshot ---
+    const durableSnapshot = saveSnapshot;
+    const allTombstones = durableTombstonesForWrite();
     let anyDurable = false;
     let reportedMode: ConversationStorageMode = activeStorageMode;
 
@@ -1092,8 +1184,8 @@ export async function deleteConversationRecord(id: string): Promise<Conversation
     }
     if (localLock.writable) {
       try {
-        const remaining = durableRecordsForWrite().filter((record) => record.id !== id);
-        writeLocalEnvelope(remaining, Array.from(tombstones.values()));
+        const remaining = durableSnapshotRecords().filter((record) => record.id !== id);
+        writeLocalEnvelope(remaining, durableTombstonesForWrite(id));
         knownLocalCopies.delete(id);
         anyDurable = true;
         if (reportedMode !== "indexeddb") reportedMode = "localstorage";

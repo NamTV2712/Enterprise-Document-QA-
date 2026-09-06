@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
 import type { MockInstance } from "vitest";
 import { Message } from "../types";
+import type { ConversationRecord } from "./conversationStore";
 
 type StoreModule = typeof import("./conversationStore");
 
@@ -883,5 +884,158 @@ describe("conversation store repository", () => {
     expect(store.listConversations().some((record) => record.id === "conversation-race")).toBe(true);
     const reloaded = await store.loadConversationLibrary();
     expect(reloaded.conversations.some((record) => record.id === "conversation-race")).toBe(true);
+  });
+});
+
+describe("tombstone and envelope validation", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    globalThis.indexedDB = new IDBFactory() as unknown as IDBFactory;
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function seedEnvelope(envelope: Record<string, unknown>): void {
+    window.localStorage.setItem(V3_KEY, JSON.stringify(envelope));
+  }
+
+  it("accepts an envelope without a tombstones key", async () => {
+    seedEnvelope({ envelopeVersion: 3, records: [makeRecord()] });
+    const store = await freshStore();
+    const state = await store.loadConversationLibrary();
+    expect(state.conversations).toHaveLength(1);
+    expect(state.warning).toBeNull();
+  });
+
+  it("write-locks the backend when tombstones is not an array and preserves the bytes", async () => {
+    const raw = JSON.stringify({
+      envelopeVersion: 3,
+      records: [makeRecord()],
+      tombstones: "not-an-array",
+    });
+    window.localStorage.setItem(V3_KEY, raw);
+    const store = await freshStore();
+    const state = await store.loadConversationLibrary();
+    expect(state.warning).toContain("unexpected structure");
+    expect(state.storageMode).not.toBe("localstorage");
+
+    // Operations in this session cannot rewrite the malformed payload.
+    const record = store.createConversationRecord("conversation-live", "session-live", [
+      userMessage("u1", "Question"),
+    ]);
+    await store.saveConversationRecord(record);
+    await store.deleteConversationRecord(makeRecord().id as string).catch(() => undefined);
+    expect(window.localStorage.getItem(V3_KEY)).toBe(raw);
+  });
+
+  it.each([
+    ["revision zero", { id: "x", revision: 0, deletedAt: 1 }],
+    ["negative revision", { id: "x", revision: -1, deletedAt: 1 }],
+    ["fractional revision", { id: "x", revision: 1.5, deletedAt: 1 }],
+    ["string revision", { id: "x", revision: "3", deletedAt: 1 }],
+    ["missing revision", { id: "x", deletedAt: 1 }],
+    ["string deletedAt", { id: "x", revision: 1, deletedAt: "later" }],
+    ["numeric id", { id: 5, revision: 1, deletedAt: 1 }],
+    ["null entry", null],
+    ["string entry", "tombstone"],
+  ])("treats %s as unreadable and locks writes", async (_label, badTombstone) => {
+    seedEnvelope({
+      envelopeVersion: 3,
+      records: [makeRecord()],
+      tombstones: [badTombstone, { id: "conversation-a", revision: 9, deletedAt: 5 }],
+    });
+    const rawBefore = window.localStorage.getItem(V3_KEY);
+    const store = await freshStore();
+    const state = await store.loadConversationLibrary();
+    expect(state.warning).toContain("deletion state");
+    expect(state.storageMode).not.toBe("localstorage");
+
+    // The malformed payload is preserved byte-for-byte through operations.
+    const record = store.createConversationRecord("conversation-live", "session-live", [
+      userMessage("u1", "Question"),
+    ]);
+    await store.saveConversationRecord(record);
+    expect(window.localStorage.getItem(V3_KEY)).toBe(rawBefore);
+    expect(store.getStorageStatus().warning).toContain("deletion state");
+  });
+
+  it("locks the envelope when the container version is unsupported or missing", async () => {
+    for (const envelope of [
+      { envelopeVersion: 4, records: [], tombstones: [] },
+      { envelopeVersion: "3", records: [], tombstones: [] },
+      { records: [], tombstones: [] },
+    ]) {
+      window.localStorage.clear();
+      const raw = JSON.stringify(envelope);
+      window.localStorage.setItem(V3_KEY, raw);
+      const store = await freshStore();
+      const state = await store.loadConversationLibrary();
+      expect(state.warning).toBeTruthy();
+      expect(window.localStorage.getItem(V3_KEY)).toBe(raw);
+    }
+  });
+
+  it("rejects saving, renaming, or bookmarking a record pending deletion", async () => {
+    seedEnvelope({
+      envelopeVersion: 3,
+      records: [makeRecord({ revision: 2 })],
+      tombstones: [{ id: "conversation-a", revision: 2, deletedAt: 5 }],
+    });
+    const store = await freshStore();
+    const state = await store.loadConversationLibrary();
+    const pending = state.conversations.find((record) => record.id === "conversation-a");
+    expect(pending?.deletionPending).toBe(true);
+
+    // A direct save — even with a much higher revision — cannot resurrect it.
+    const attempt = await store.saveConversationRecord({
+      ...(pending as unknown as ConversationRecord),
+      revision: 999,
+      title: "Resurrected",
+      titleMode: "custom",
+    });
+    expect(attempt.status).toBe("failed");
+    expect(attempt.warning).toContain("pending deletion");
+    expect(store.listConversations().find((record) => record.id === "conversation-a")?.title).toBe(
+      "First question",
+    );
+
+    const reloaded = await store.loadConversationLibrary();
+    const stillPending = reloaded.conversations.find((record) => record.id === "conversation-a");
+    expect(stillPending?.deletionPending).toBe(true);
+    expect(stillPending?.title).toBe("First question");
+  });
+
+  it("never persists a deletion intent through another conversation's autosave", async () => {
+    seedLocal([makeRecord({ id: "conversation-a", sessionId: "session-a", revision: 2 })]);
+    const store = await freshStore();
+    await store.loadConversationLibrary();
+
+    // Both backends fail for this deletion (IDB via a write-broken spy,
+    // localStorage via a quota error): the tombstone stays an intent.
+    const db = await openDb();
+    const transactionSpy = breakIdbTransactions(db);
+    const setItemSpy = breakLocalStorageWrites();
+    const result = await store.deleteConversationRecord("conversation-a");
+    setItemSpy.mockRestore();
+    transactionSpy.mockRestore();
+    expect(result.status).not.toBe("persisted");
+
+    // B's successful autosave must not harden the deletion intent.
+    const other = store.createConversationRecord("conversation-b", "session-b", [
+      userMessage("u1", "Other conversation"),
+    ]);
+    const saved = await store.saveConversationRecord(other);
+    expect(saved.status).toBe("persisted");
+    const envelope = JSON.parse(window.localStorage.getItem(V3_KEY) ?? "{}");
+    expect(
+      (envelope.tombstones as { id: string }[]).some((tombstone) => tombstone.id === "conversation-a"),
+    ).toBe(false);
+    // The record itself stays fully intact.
+    expect(
+      (envelope.records as { id: string }[]).some((record) => record.id === "conversation-a"),
+    ).toBe(true);
   });
 });

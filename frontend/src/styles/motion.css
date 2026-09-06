@@ -43,3 +43,18 @@
     transition: none !important;
   }
 }
+
+/* Reduced motion must never leave content invisible. Entrance animations
+   start from opacity 0 with fill-mode both; disabling them entirely lets
+   the elements render their static, fully visible styles immediately, even
+   when a browser environment cannot advance CSS animation clocks. */
+@media (prefers-reduced-motion: reduce) {
+  .ui-message-enter,
+  .ui-answer-enter,
+  .ui-popover-enter,
+  .ui-expand-enter,
+  .ui-stagger-enter,
+  .overview-panel {
+    animation: none !important;
+  }
+}

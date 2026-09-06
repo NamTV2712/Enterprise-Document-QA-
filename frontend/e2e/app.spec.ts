@@ -30,23 +30,30 @@ async function setup(page: Page, options?: Parameters<typeof installApiFixtures>
 }
 
 /**
- * Jump every animation to its final frame before a screenshot. Headless
- * Chromium can freeze CSS animation clocks on small viewports, which would
- * otherwise capture entrance animations at their transparent first frame.
+ * Assert an element is genuinely displayed: non-zero size and a fully
+ * opaque, visible ancestor chain. Condition-based retries replace fixed
+ * sleeps, and no test ever forces animation state.
  */
-async function settleAnimations(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    // Document.getAnimations() already returns every animation in the tree.
-    document.getAnimations().forEach((animation) => {
-      try {
-        animation.finish();
-      } catch {
-        // Infinite animations have no end state; canceling them keeps the
-        // element's static styles, which is what the matrix documents.
-        animation.cancel();
+export async function expectVisiblyDisplayed(locator: ReturnType<Page["getByText"]>): Promise<void>;
+export async function expectVisiblyDisplayed(locator: import("@playwright/test").Locator): Promise<void>;
+export async function expectVisiblyDisplayed(locator: import("@playwright/test").Locator): Promise<void> {
+  await expect(async () => {
+    const box = await locator.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box?.width ?? 0).toBeGreaterThan(0);
+    expect(box?.height ?? 0).toBeGreaterThan(0);
+    const displayed = await locator.evaluate((element) => {
+      let node: Element | null = element;
+      while (node) {
+        const style = getComputedStyle(node);
+        if (style.visibility === "hidden" || style.display === "none") return false;
+        if (Number.parseFloat(style.opacity) < 0.99) return false;
+        node = node.parentElement;
       }
+      return true;
     });
-  });
+    expect(displayed).toBe(true);
+  }).toPass({ timeout: 5_000 });
 }
 
 async function expectNoCriticalAxeViolations(page: Page) {
@@ -290,6 +297,8 @@ test("conversation survives a full page reload through IndexedDB", async ({ page
 });
 
 test.describe("visual matrix", () => {
+  // Each screenshot name carries browser, theme, viewport, and state so
+  // Chromium and Firefox never overwrite each other's images.
   // Headless Chromium can freeze CSS animation clocks on small viewports,
   // which would freeze entrance animations at their transparent first
   // frame. The matrix captures the settled UI under reduced motion; the
@@ -298,7 +307,7 @@ test.describe("visual matrix", () => {
 
   for (const theme of ["light", "dark"] as const) {
     for (const viewport of VIEWPORTS) {
-      test(`screenshot ${theme} ${viewport.name} overview`, async ({ page }) => {
+      test(`screenshot ${theme} ${viewport.name} overview`, async ({ page }, testInfo) => {
         await page.setViewportSize({ width: viewport.width, height: viewport.height });
         await setup(page);
         if (theme === "dark") {
@@ -308,14 +317,13 @@ test.describe("visual matrix", () => {
         await expect(page.getByText("Ask questions. Verify every answer.")).toBeVisible();
         // Let entrance animations settle so screenshots show the final state.
         await page.waitForTimeout(700);
-        await settleAnimations(page);
         await page.screenshot({
-          path: `e2e/screenshots/${theme}-${viewport.name}-overview.png`,
+          path: `e2e/screenshots/${testInfo.project.name}-${theme}-${viewport.name}-overview.png`,
           fullPage: false,
         });
       });
 
-      test(`screenshot ${theme} ${viewport.name} conversation`, async ({ page }) => {
+      test(`screenshot ${theme} ${viewport.name} conversation`, async ({ page }, testInfo) => {
         await page.setViewportSize({ width: viewport.width, height: viewport.height });
         await setup(page);
         if (theme === "dark") {
@@ -327,12 +335,116 @@ test.describe("visual matrix", () => {
         await page.getByRole("button", { name: /Show 2 retrieved filing evidence excerpts/i }).click();
         await expect(page.getByText("Microsoft Cloud revenue increased").first()).toBeVisible();
         await page.waitForTimeout(700);
-        await settleAnimations(page);
         await page.screenshot({
-          path: `e2e/screenshots/${theme}-${viewport.name}-conversation.png`,
+          path: `e2e/screenshots/${testInfo.project.name}-${theme}-${viewport.name}-conversation.png`,
           fullPage: false,
         });
       });
     }
   }
 });
+
+// --- Display verification without animation manipulation ----------------
+
+async function expectWorkspaceVisible(page: Page): Promise<void> {
+  // The heading, the composer, and (after a question) the answer and its
+  // evidence must be genuinely displayed: sized, opaque, unclipped.
+  const heading = page.getByText("Ask questions. Verify every answer.");
+  await expectVisiblyDisplayed(heading);
+  const composer = page.getByRole("textbox", { name: "Research question" });
+  await expectVisiblyDisplayed(composer);
+}
+
+test.describe("display smokes", () => {
+  for (const motion of ["no-preference", "reduce"] as const) {
+    test.describe(`motion: ${motion}`, () => {
+      test.use({ reducedMotion: motion });
+
+      test(`390px overview renders visibly (${motion})`, async ({ page }) => {
+        await page.setViewportSize({ width: 390, height: 844 });
+        await setup(page);
+        await expectWorkspaceVisible(page);
+      });
+
+      test(`390px answer and evidence render visibly (${motion})`, async ({ page }) => {
+        await page.setViewportSize({ width: 390, height: 844 });
+        await setup(page);
+        await askQuestion(page, "What was Apple's total net sales in fiscal year 2025?");
+        const answer = page.getByText(LONG_ANSWER.split("\n")[0]).first();
+        await expectVisiblyDisplayed(answer);
+        await page
+          .getByRole("button", { name: /Show 2 retrieved filing evidence excerpts/i })
+          .click();
+        await expectVisiblyDisplayed(
+          page.getByText("Microsoft Cloud revenue increased").first(),
+        );
+      });
+    });
+  }
+
+  test("320px smoke keeps the workspace usable", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 700 });
+    await setup(page);
+    await expectWorkspaceVisible(page);
+  });
+
+  test("200% zoom keeps the workspace usable", async ({ page }) => {
+    // 200% browser zoom on a 1280px window is a 640px CSS viewport.
+    await page.setViewportSize({ width: 640, height: 450 });
+    await setup(page);
+    await expectWorkspaceVisible(page);
+  });
+});
+
+// --- Regression: persistence and request lifecycle -----------------------
+
+test("unreadable library data survives load and later operations untouched", async ({
+  page,
+}) => {
+  const corrupt =
+    '{"envelopeVersion":3,"records":[{"id":"broken","schemaVersion":2';
+  await installApiFixtures(page);
+  await page.addInitScript((raw) => {
+    localStorage.setItem("sec_qa_library_v3", raw);
+    // The v2 fallback still holds one readable conversation.
+    localStorage.setItem(
+      "sec_qa_conversations_v2",
+      JSON.stringify([
+        {
+          schemaVersion: 2,
+          id: "conversation-legacy-copy",
+          sessionId: "session-legacy-copy",
+          title: "Legacy copy",
+          titleMode: "auto",
+          revision: 1,
+          createdAt: 1,
+          updatedAt: 2,
+          messages: [
+            { id: "u-1", sender: "user", text: "Legacy question" },
+            { id: "a-1", sender: "assistant", text: "Legacy answer" },
+          ],
+          draft: "",
+          bookmarkedMessageIds: [],
+        },
+      ]),
+    );
+  }, corrupt);
+  await page.goto("/");
+  await expect(page.getByRole("textbox", { name: "Research question" })).toBeEnabled();
+
+  // The unreadable payload is reported and the legacy copy still shows.
+  await openLibrary(page);
+  await expect(page.getByText("Legacy copy")).toBeVisible();
+  await expect(page.getByText(/could not be read/i)).toBeVisible();
+
+  // Ask a question in a new conversation; the corrupt bytes must survive.
+  await page.getByRole("tab", { name: /Research/ }).click();
+  await askQuestion(page, "What was Apple's total net sales in fiscal year 2025?");
+  await expect(page.getByText(LONG_ANSWER.split("\n")[0]).first()).toBeVisible();
+  await openLibrary(page);
+  await expect(page.getByText(/could not be read/i)).toBeVisible();
+
+  const stored = await page.evaluate(() => localStorage.getItem("sec_qa_library_v3"));
+  expect(stored).toBe(corrupt);
+});
+

@@ -57,8 +57,16 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-artifacts
+          name: playwright-failure-artifacts
           path: |
             frontend/test-results/
             frontend/playwright-report/
+          retention-days: 14
+
+      - name: Upload screenshot matrix
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-screenshot-matrix
+          path: frontend/e2e/screenshots/
           retention-days: 14

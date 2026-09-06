@@ -5,8 +5,9 @@
 ### Deletion-state hardening and snapshot-preservation round (2026-09-05) — COMPLETE
 
 Independent review probes against `853cb08` reproduced two data-loss bugs and
-found two UI gaps. All four are fixed on this branch (commit `0c0b6f2`-range,
-see git log) with regression tests written first.
+found two UI gaps. All four are fixed on this branch (commit `50e88b5`,
+followed by browser-test and docs commits) with regression tests written
+first.
 
 1. Saving B could delete the persisted copy of A while A had a pending
    update. Root cause: the durable snapshot was built from the merged UI

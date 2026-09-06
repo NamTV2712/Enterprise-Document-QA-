@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     # Required provenance for trusted embedding/index rebuilds.
     embedding_model_id: str = "nomic-ai/nomic-embed-text-v1.5"
     embedding_model_revision: str = ""
+    reranker_model_id: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    reranker_model_revision: str = "233902d25c440f23af6f7d6e94d2946bac0bee0a"
     embedding_generations_dir: Path = Path("data/embedding_generations")
     embedding_generation_path: Path | None = None
 

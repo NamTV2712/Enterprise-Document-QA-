@@ -7,6 +7,8 @@ const baseURL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
+  // Integration-over-HTTP specs run through playwright.integration.config.ts.
+  testIgnore: /integration\.spec\.ts/,
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: true,

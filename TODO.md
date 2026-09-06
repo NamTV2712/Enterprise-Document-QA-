@@ -654,6 +654,21 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
         App, source panel, expired-session messaging, typecheck, and production
         build; backend full suite is `666` tests. No provider or canonical
         artifact was changed.
+87. [x] Stabilize the real HTTP/SSE frontend integration harness: reset
+        mutable state per test, serialize shared harness workers, wait for
+        durable conversation persistence before reload assertions, use the
+        repository virtualenv automatically, and mark backend integration
+        tests explicitly. Verified `14/14` browser tests (Chromium `7/7`,
+        Firefox `7/7`) and backend integration `13/13`.
+88. [x] Complete the local Docker M3 candidate path: pin embedding and
+        reranker revisions in image labels/runtime, add read-only preflight
+        and a non-secret receipt generator, and document provider-free
+        readiness/ticker smoke. The image build and smoke must be rerun from
+        the final candidate commit before handoff.
+89. [x] Push `codex/local-release-readiness` and verify the release gates on
+        the candidate SHA. Backend CI run `34036758953` and Frontend CI run
+        `34036759029` are green; frontend `test` and `http-integration` jobs
+        both succeeded.
 
 ## Always-On Deployment
 

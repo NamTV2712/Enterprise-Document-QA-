@@ -32,6 +32,7 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 | [`TODO.md`](TODO.md) | Short current action queue for always-on deployment, diagnostics, and evidence-gated backlog work |
 | [`AGENTS.md`](AGENTS.md) | Stable repository rules and operational traps for coding agents |
 | [`frontend/README.md`](frontend/README.md) | Frontend-specific local development, Vercel setup, and API usage |
+| [`docs/LOCAL_RELEASE_RUNBOOK.md`](docs/LOCAL_RELEASE_RUNBOOK.md) | Provider-free local Docker build, smoke test, provenance, and receipt |
 
 ## Key Features
 
@@ -1146,7 +1147,9 @@ offline flags prevent accidental model downloads. The frontend job uses the
 project-pinned Bun `1.3.14`, installs from `bun.lock`, type-checks, runs Vitest,
 builds the production bundle, runs the token contrast gate, and executes the
 Playwright browser suite (Chromium and Firefox) against fully mocked API
-routes, uploading traces and screenshots as artifacts on failure.
+routes, uploading traces and screenshots as artifacts on failure. A separate
+frontend job installs the Python harness dependencies and runs the real
+HTTP/SSE integration suite in Chromium and Firefox without provider calls.
 
 Run the same checks locally:
 
@@ -1184,17 +1187,32 @@ assertions check real rendered state instead of forcing animation state, and
 the screenshot matrix covers Light and Dark themes at 390, 768, and 1440
 pixels for both Chromium and Firefox.
 
+The real HTTP/SSE integration suite is separate from the mocked browser suite:
+
+```bash
+bun run test:e2e-integration
+```
+
+It builds with a fixed loopback API origin, starts the deterministic FastAPI
+harness and byte-splitting proxy, and runs seven transport/session tests in
+each of Chromium and Firefox with one worker. The harness is provider-free.
+
 ## Running With Docker
 
 Prerequisites: Docker Desktop installed and running, plus corpus artifacts already built locally under `data/processed/`.
 
-1. Copy `.env.example` to `.env` and fill in `GROQ_API_KEY`. `GROQ_API_KEY2` through `GROQ_API_KEY5` are optional serving and judging failover keys. `GROQ_API_KEY_FALL_BACK` and `GROQ_API_KEY_FALL_BACK2` form the optional evaluation-generation pool; evaluation uses the primary pair when that dedicated pair is blank, then appends keys 3 through 5. Duplicate values are removed. Each pool rotates keys round-robin and cools down a key after a Groq `429` before retrying another key.
+1. Copy `.env.example` to `.env` and fill in `GROQ_API_KEY`. `GROQ_API_KEY2` through `GROQ_API_KEY5` are optional serving and judging failover keys. `GROQ_API_KEY_FALL_BACK` and `GROQ_API_KEY_FALL_BACK2` form the optional evaluation-generation pool; evaluation uses the primary pair when that dedicated pair is blank, then appends keys 3 through 5. Duplicate values are removed. Each pool rotates keys round-robin and cools down a key after a Groq `429` before retrying another key. Keep the pinned `EMBEDDING_MODEL_REVISION` and `RERANKER_MODEL_REVISION` values from `.env.example` unless the index and image are intentionally rebuilt together.
 
-2. Build and run the backend:
+2. Build and run the backend with a provenance-bound image. See
+   [`docs/LOCAL_RELEASE_RUNBOOK.md`](docs/LOCAL_RELEASE_RUNBOOK.md) for the
+   complete PowerShell sequence:
 
-```bash
-docker compose build
-docker compose up
+```powershell
+$releaseSha = (git rev-parse HEAD).Trim()
+$env:GIT_REVISION = $releaseSha
+docker compose build --build-arg GIT_REVISION=$releaseSha
+docker tag edqa-api:local edqa-api:$releaseSha
+docker compose up -d --no-build
 ```
 
 3. Verify the API is ready:
@@ -1207,7 +1225,7 @@ The response should include `"pipeline_ready": true`.
 
 Docker notes:
 
-- The container uses CPU-only PyTorch for portability, so it runs on machines without an NVIDIA GPU. The verified Docker smoke test answered an Apple financial-table query in about `1.3s` end-to-end including the Groq API call.
+- The container uses CPU-only PyTorch for portability, so it runs on machines without an NVIDIA GPU. The provider-free release smoke checks readiness and ticker discovery only; use the receipt generator in the runbook to bind health to the image and Git commit. A query route is deliberately outside this smoke because it can spend provider quota.
 - Qdrant runs in local persistent mode and is mounted from `./data/processed` into `/app/data/processed`. The image does not bundle corpus data; `data/processed/` must exist on the host before running Docker.
 - The service uses one Uvicorn worker because Qdrant local mode uses a file lock and does not support multiple API worker processes reading the same local storage path. Use Qdrant server or Qdrant Cloud before enabling multi-worker deployment.
 

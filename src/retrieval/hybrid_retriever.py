@@ -27,6 +27,7 @@ from src.retrieval.vector_store import VectorStore
 logger = logging.getLogger(__name__)
 
 CROSS_ENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+CROSS_ENCODER_MODEL_REVISION = "233902d25c440f23af6f7d6e94d2946bac0bee0a"
 CROSS_ENCODER_BATCH_SIZE = 4
 RRF_K = 60  # The RRF constant, 60, is a commonly observed empirical value
 CE_RELATIVE_CUTOFF = 0.50
@@ -84,6 +85,8 @@ class HybridRetriever:
         store: VectorStore,
         all_chunks: list[dict],
         device: str = AUTO_DEVICE,
+        cross_encoder_model: str = CROSS_ENCODER_MODEL,
+        cross_encoder_revision: str = CROSS_ENCODER_MODEL_REVISION,
     ):
         self.embedder = embedder
         self.store = store
@@ -116,8 +119,19 @@ class HybridRetriever:
         self.bm25 = BM25Okapi(tokenized)
 
         # Load cross-encoder
-        logger.info("Loading cross-encoder: %s on %s", CROSS_ENCODER_MODEL, self.device)
-        self.cross_encoder = CrossEncoder(CROSS_ENCODER_MODEL, device=self.device)
+        logger.info(
+            "Loading cross-encoder: %s (revision=%s) on %s",
+            cross_encoder_model,
+            cross_encoder_revision or "unversioned",
+            self.device,
+        )
+        self.cross_encoder_model = cross_encoder_model
+        self.cross_encoder_revision = cross_encoder_revision
+        self.cross_encoder = CrossEncoder(
+            cross_encoder_model,
+            revision=cross_encoder_revision or None,
+            device=self.device,
+        )
         # Protect shared model instances for every retrieval path, including
         # direct queries, streaming queries, and decomposed sub-queries.
         self._model_lock = threading.Lock()

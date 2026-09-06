@@ -47,9 +47,7 @@ Firefox 47/47 browser tests including new persistence-chain, pending-deletion
 UI, and library-state screenshot coverage reviewed by eye; backend
 672 passed and compileall with the local corpus.
 
-### Deletion-state hardening and snapshot-preservation round (details above)
-
-### Persistence and request-lifecycle remediation round (2026-09-05) — COMPLETE### Persistence and request-lifecycle remediation round (2026-09-05) — COMPLETE
+### Persistence and request-lifecycle remediation round (2026-09-05) — COMPLETE
 
 A review of the previous round found six findings; this round fixed each one
 with regression tests first, on branch `codex/library-reliability-ux`
@@ -117,7 +115,7 @@ backend tests are reported separately: the 12 artifact-dependent replays
 stay behind `skip_without_data` guards because they verify pinned
 provenance that cannot be synthesized.
 
-### Library reliability and research UX round (2026-09-05) — COMPLETE### Library reliability and research UX round (2026-09-05) — COMPLETE
+### Library reliability and research UX round (2026-09-05) — COMPLETE
 
 The next frontend round made the local conversation Library trustworthy and
 clarified backend session state. Baseline was commit `4b52314` with frontend

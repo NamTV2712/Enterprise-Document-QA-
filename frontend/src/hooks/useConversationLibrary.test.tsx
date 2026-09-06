@@ -263,8 +263,6 @@ describe("useConversationLibrary request isolation", () => {
     });
 
     // The old conversation was saved with the streaming message normalized.
-    // eslint-disable-next-line no-console
-    console.log("DEBUG convs:", JSON.stringify(rendered.result.current.conversations));
     const saved = rendered.result.current.conversations.find(
       (item) => item.messages.some((message) => message.id === "a-1"),
     );

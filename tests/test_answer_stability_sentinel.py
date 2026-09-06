@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from tests.conftest import skip_without_data
 
 from scripts.run_answer_stability_sentinel import (
     ENUMERATION_CONTROL_QUESTIONS,
@@ -24,6 +25,9 @@ def test_sentinel_contract_contains_focus_targets_and_controls() -> None:
     assert REGRESSION_QUESTIONS.isdisjoint(FACT_QUESTIONS)
 
 
+@skip_without_data(
+    "data/eval_artifacts/phase1_priority2.json",
+)
 def test_sentinel_selector_is_provider_free_and_preserves_regression_contexts() -> None:
     artifact = json.loads(
         Path("data/eval_artifacts/phase1_priority2.json").read_text(

@@ -6,6 +6,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   BookOpen,
+  CircleHelp,
   Menu,
   MessageSquare,
   Moon,
@@ -32,6 +33,19 @@ interface WorkspaceHeaderProps {
   onSelectTheme: (theme: ThemePreference) => void;
   isClearingSession: boolean;
   onReset: () => void;
+  onOpenHelp?: () => void;
+}
+
+const THEME_OPTIONS: ThemePreference[] = ["system", "light", "dark"];
+
+function themeOptionLabel(option: ThemePreference): string {
+  return option === "system" ? "System" : option === "light" ? "Light" : "Dark";
+}
+
+function ThemeOptionIcon({ option, className }: { option: ThemePreference; className: string }) {
+  if (option === "system") return <Monitor className={className} />;
+  if (option === "light") return <Sun className={className} />;
+  return <Moon className={className} />;
 }
 
 export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
@@ -45,13 +59,15 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
     isPipelineReady,
     companyCount,
     theme,
-    resolvedTheme,
     onSelectTheme,
     isClearingSession,
     onReset,
+    onOpenHelp,
   }) => {
     const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
     const themeMenuRef = useRef<HTMLDivElement>(null);
+    const themeTriggerRef = useRef<HTMLButtonElement>(null);
+    const themeMenuListRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
       if (!isThemeMenuOpen) return;
@@ -60,16 +76,55 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
           setIsThemeMenuOpen(false);
         }
       };
-      const handleKeyDown = (event: KeyboardEvent) => {
-        if (event.key === "Escape") setIsThemeMenuOpen(false);
-      };
       document.addEventListener("pointerdown", handlePointerDown);
-      document.addEventListener("keydown", handleKeyDown);
       return () => {
         document.removeEventListener("pointerdown", handlePointerDown);
-        document.removeEventListener("keydown", handleKeyDown);
       };
     }, [isThemeMenuOpen]);
+
+    // Focus the selected item when the menu opens.
+    useEffect(() => {
+      if (!isThemeMenuOpen) return;
+      const frame = window.requestAnimationFrame(() => {
+        const selected = themeMenuListRef.current?.querySelector<HTMLElement>('[aria-checked="true"]');
+        (selected ?? themeMenuListRef.current?.querySelector<HTMLElement>("button"))?.focus();
+      });
+      return () => window.cancelAnimationFrame(frame);
+    }, [isThemeMenuOpen]);
+
+    // WAI-ARIA menu pattern: Arrow keys move, Home/End jump, Enter/Space
+    // activate, Escape closes and returns focus to the trigger button.
+    const handleMenuKeyDown = (event: React.KeyboardEvent) => {
+      const currentIndex = THEME_OPTIONS.indexOf(theme);
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        setIsThemeMenuOpen(false);
+        themeTriggerRef.current?.focus();
+        return;
+      }
+      if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+        event.preventDefault();
+        const next = themeMenuListRef.current?.querySelectorAll<HTMLElement>("button");
+        next?.[(currentIndex + 1) % THEME_OPTIONS.length]?.focus();
+        return;
+      }
+      if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+        event.preventDefault();
+        const items = themeMenuListRef.current?.querySelectorAll<HTMLElement>("button");
+        items?.[(currentIndex - 1 + THEME_OPTIONS.length) % THEME_OPTIONS.length]?.focus();
+        return;
+      }
+      if (event.key === "Home") {
+        event.preventDefault();
+        themeMenuListRef.current?.querySelector<HTMLElement>("button")?.focus();
+        return;
+      }
+      if (event.key === "End") {
+        event.preventDefault();
+        const items = themeMenuListRef.current?.querySelectorAll<HTMLElement>("button");
+        items?.[items.length - 1]?.focus();
+      }
+    };
 
     const themeLabel = theme === "system" ? "System" : theme === "light" ? "Light" : "Dark";
 
@@ -155,6 +210,7 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
           <button
             type="button"
             id="theme-switcher-btn"
+            ref={themeTriggerRef}
             onClick={() => setIsThemeMenuOpen((open) => !open)}
             aria-expanded={isThemeMenuOpen}
             aria-haspopup="menu"
@@ -163,42 +219,58 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
             aria-label={`Theme ${themeLabel}. Choose light, dark, or system theme`}
           >
             <span className="theme-toggle__icon" aria-hidden="true">
-              {theme === "system" ? (
-                <Monitor className="w-4 h-4" />
-              ) : resolvedTheme === "dark" ? (
-                <Sun className="w-4 h-4" />
-              ) : (
-                <Moon className="w-4 h-4" />
-              )}
+              <ThemeOptionIcon
+                option={theme}
+                className="w-4 h-4"
+              />
             </span>
             <span className="theme-toggle__label">{themeLabel}</span>
           </button>
           {isThemeMenuOpen && (
-            <div className="theme-menu__popover" role="menu" aria-label="Theme preference">
-              {(["system", "light", "dark"] as ThemePreference[]).map((option) => {
-                const label = option === "system" ? "System" : option === "light" ? "Light" : "Dark";
-                const Icon = option === "system" ? Monitor : option === "light" ? Sun : Moon;
+            <div
+              className="theme-menu__popover"
+              role="menu"
+              aria-label="Theme preference"
+              ref={themeMenuListRef}
+              onKeyDown={handleMenuKeyDown}
+            >
+              {THEME_OPTIONS.map((option) => {
+                const isSelected = theme === option;
                 return (
                   <button
                     key={option}
                     type="button"
                     role="menuitemradio"
-                    aria-checked={theme === option}
+                    aria-checked={isSelected}
+                    tabIndex={isSelected ? 0 : -1}
                     className="theme-menu__item"
                     onClick={() => {
                       onSelectTheme(option);
                       setIsThemeMenuOpen(false);
+                      themeTriggerRef.current?.focus();
                     }}
                   >
-                    <Icon className="h-4 w-4" aria-hidden="true" />
-                    <span>{label}</span>
-                    {theme === option && <Check className="ml-auto h-4 w-4" aria-hidden="true" />}
+                    <ThemeOptionIcon option={option} className="h-4 w-4" />
+                    <span>{themeOptionLabel(option)}</span>
+                    {isSelected && <Check className="ml-auto h-4 w-4" aria-hidden="true" />}
                   </button>
                 );
               })}
             </div>
           )}
         </div>
+        {onOpenHelp && (
+          <button
+            type="button"
+            onClick={onOpenHelp}
+            aria-haspopup="dialog"
+            aria-label="Open help"
+            title="Help and usage guide"
+            className="theme-toggle"
+          >
+            <CircleHelp className="w-4 h-4" aria-hidden="true" />
+          </button>
+        )}
         <button
           type="button"
           id="quick-reset-btn"

@@ -2,7 +2,206 @@
 
 ## Current Milestone
 
-### Comparative Evidence Contract v2 — non-official NO-GO (2026-09-05)
+### Deletion-state hardening and snapshot-preservation round (2026-09-05) — COMPLETE
+
+Independent review probes against `853cb08` reproduced two data-loss bugs and
+found two UI gaps. All four are fixed on this branch (commit `50e88b5`,
+followed by browser-test and docs commits) with regression tests written
+first.
+
+1. Saving B could delete the persisted copy of A while A had a pending
+   update. Root cause: the durable snapshot was built from the merged UI
+   list, which excluded any record with a pending update. The snapshot is
+   now built directly from persisted records, with the saved record
+   replacing only its own entry. Verified with state-chain tests over
+   localStorage-only, IndexedDB-only, and dual backends: failed update of A
+   plus successful save of B keeps A's persisted copy and B's new content;
+   a never-persisted pending record stays out of storage; retries persist
+   exactly once with metadata intact.
+2. A malformed `tombstones` payload was silently coerced (defaults filled,
+   invalid entries dropped, non-array key ignored) and the envelope was
+   rewritten. Tombstones are now strictly validated (id, positive finite
+   integer revision, finite timestamp, no defaults). A malformed
+   tombstones key, unsupported container version, or invalid entries
+   write-lock the holding backend for the session while the bytes stay
+   untouched behind a sticky "deletion state cannot be verified" warning;
+   a missing tombstones key remains valid.
+3. The Library had no pending-deletion UI. It now shows a "Deletion
+   pending" label with Retry deletion and Export, locks rename and
+   bookmark for pending items (store-level save rejection too, so even a
+   direct high-revision save cannot resurrect them), and the composer is
+   read-only while the active conversation is pending.
+4. Deleting a background Library item invalidated the active conversation's
+   in-flight request. Only deleting the active conversation aborts now.
+
+Additional fixes found while verifying: a rejected save (pending-deletion
+record) no longer flips the saved indicator to "Only kept in this tab", and
+the autosave skips pending-deletion records entirely. The narrow-viewport
+e2e check was renamed to state plainly that it is a 640px CSS-viewport
+reflow check, not a browser-zoom test.
+
+Verified: frontend 86/86 unit/component tests (including state-chain tests
+across three backend modes and nine malformed-tombstone variants),
+typecheck, production build, token contrast gate; Chromium 47/47 and
+Firefox 47/47 browser tests including new persistence-chain, pending-deletion
+UI, and library-state screenshot coverage reviewed by eye; backend
+672 passed and compileall with the local corpus.
+
+### Persistence and request-lifecycle remediation round (2026-09-05) — COMPLETE
+
+A review of the previous round found six findings; this round fixed each one
+with regression tests first, on branch `codex/library-reliability-ux`
+(commits `38b13e6`, `dd8c5f1`, `25ab161`).
+
+1. Unreadable data could be filtered out and an empty snapshot rewritten.
+   Corrupt localStorage payloads, malformed records, and records with a
+   newer schema now write-lock the affected backend for the whole session
+   while its bytes stay untouched; readable records still merge; the sticky
+   warning survives later saves on the other backend; legacy migration is
+   only marked after a durable write of fully read data.
+2. Message history was silently truncated by a 200-message slice in
+   normalization. The slice is gone; 202- and 500-message conversations keep
+   every message, source, and bookmark through save, reload, and migration.
+   The 100-conversation and 25 MiB UTF-8 limits are admission decisions
+   against the durable snapshot before any write, for new records and
+   updates alike.
+3. Deletions were not atomic: IndexedDB now commits the tombstone and the
+   record removal in one transaction, and the localStorage mirror moved to a
+   single v3 envelope key (`sec_qa_library_v3`) holding records and
+   tombstones together (v1/v2 keys remain read-only inputs). A deletion is
+   reported complete only when every backend known to hold a copy has been
+   updated; otherwise the item stays visible as "Deletion pending — retry"
+   with edits locked and export available, and retries never lower the
+   revision or recreate the record. Tombstones never delete recovered
+   copies.
+4. Limits were only enforced for new conversations, and volatile records
+   could be admitted by another conversation's autosave. Saves now build the
+   intended snapshot from the persisted set plus the record being saved;
+   pending records are never written by any autosave and become persistable
+   again once space is freed. Oversized legacy libraries stay readable,
+   exportable, and deletable.
+5. Sends mixed session identities across conversations. `beginSend` captures
+   conversationId, sessionId, and the operation epoch before the preflight;
+   every await re-checks the identity; a cancelled preflight returns
+   "cancelled" without touching the newer conversation; duplicate sends are
+   blocked; the payload uses the captured session id.
+6. Switch/delete could interleave. One invalidation procedure bumps the
+   navigation epoch (last selection wins A→B→C), aborts preflight and
+   generation, drops save timers, flushes buffered SSE text, and persists
+   the old conversation from an immutable snapshot. Deleting the active
+   conversation keeps it open until the deletion completes or is reported
+   pending.
+
+Browser verification was reworked: display assertions check real rendered
+state (bounding box plus opacity/visibility ancestor chain) with
+condition-based retries and never force animation state; reduced-motion CSS
+now disables entrance animations so content renders directly. Chromium
+40/40 and Firefox 40/40 pass, including 390px smokes under both motion
+preferences, 320px, and a narrow-viewport reflow check at a 640px CSS
+viewport (no browser zoom was involved). A headed Chromium comparison
+showed the 390px display smokes passing headed; the final headless runs
+also passed, so the earlier blank-render did not reproduce. The frozen
+animation-clock explanation for that one-off remains plausible but
+unproven; what is verified is that reduced motion renders content directly
+and both engines display correctly in the recorded runs. Color-contrast
+axe scans now cover the
+real conversation view.
+
+Final gates: frontend 61/61 unit tests, typecheck, production build, token
+contrast gate; backend 672 passed with the local corpus and compileall; a
+clean checkout (git worktree at the baseline of this round) reports 638
+passed / 34 skipped / 0 failed, matching CI. Hermetic and artifact-dependent
+backend tests are reported separately: the 12 artifact-dependent replays
+stay behind `skip_without_data` guards because they verify pinned
+provenance that cannot be synthesized.
+
+### Library reliability and research UX round (2026-09-05) — COMPLETE
+
+The next frontend round made the local conversation Library trustworthy and
+clarified backend session state. Baseline was commit `4b52314` with frontend
+`26/26` and backend `666 passed`. Branch: `codex/library-reliability-ux`.
+
+M0/M1 — Persistence rewrite. `frontend/src/lib/conversationStore.ts` is now a
+schema-v2 repository: records carry `titleMode` and `revision`; both IndexedDB
+and a localStorage mirror are written, and loads merge both backends by
+revision (v1 payloads fall back to `updatedAt`). Deletions write revision
+tombstones so stale fallback copies cannot resurrect conversations. Corrupt
+localStorage payloads and newer IndexedDB schemas are preserved untouched and
+reported instead of being replaced by an empty library. Write results are
+explicit `persisted` / `volatile` / `failed` outcomes; the 100-conversation
+and 25 MiB UTF-8 limits never trim silently. The legacy `sec_qa_messages`
+import remains idempotent through a stable ID and a migration flag that is
+only set after a durable write. Library lifecycle moved out of `App.tsx` into
+`frontend/src/hooks/useConversationLibrary.ts` with per-conversation operation
+tokens, snapshot-captured debounced saves, hydrate-before-backend ordering,
+and switch/delete request invalidation. Custom titles survive autosave, and
+streaming messages are normalized to `stopped` before any switch or save.
+
+M2 — Session context. `ConversationMemory.get_history_snapshot` reads turns
+and TTL metadata under one lock, never creates a session, and never extends
+the TTL; expired and unknown sessions both report `missing`.
+`GET /session/{session_id}/history` returns an optional `context` object
+(`status`, `retained_turns`, `ttl_remaining_seconds`). The frontend marks
+saved conversations read-only when the context is `missing`, treats network
+failures as `unknown` with an explicit re-check, re-checks before follow-up
+sends, adopts backend history only when no local record exists, and keeps
+drafts editable in read-only mode.
+
+M3 — Stylesheet split. `index.css` only orchestrates imports over
+`styles/tokens.css`, `styles/components.css`, `styles/base.css`, and
+`styles/motion.css`; the byte-identical duplicate of the final override block
+and the duplicated `.theme-toggle` rule set were removed after text-level
+comparison. Reduced-motion guards now live last so they keep winning. New
+tokens separate accent text from accent button surfaces, define
+success/warning/danger state surfaces, and add an evidence accent family.
+A WCAG token contrast gate (`frontend/e2e/token-contrast.mjs`) passes for
+both themes; the light `--text-subtle` value was darkened to `#5d6b80`
+(4.02 -> 4.83:1) and dark `--accent-button-bg` to `#575af0` (4.47 -> 5.09:1).
+Decorative borders were intentionally kept below 3:1 to preserve the existing
+visual style; essential state uses focus rings and state text, which pass.
+
+M4 — Research support. Per-answer bookmarks on completed/stopped answers with
+a "Bookmarked answers" Library filter that opens the exact message; literal
+case-insensitive evidence search per SourcesPanel that preserves original
+`[Source N]` numbering and clears itself when a citation jumps to a filtered
+source; per-excerpt copy including citation, company, section, and filed
+date; a Help dialog; `Ctrl/Cmd+K` Library focus; Escape layer closing; and a
+WAI-ARIA keyboard pattern for the theme menu with focus return.
+
+A real serving bug was found by the browser suite and fixed: when an SSE
+stream ended without a `done` or `error` event (connection drop), the
+buffered partial answer was never flushed and the message stayed "streaming"
+forever. The stream-end path now flushes the buffered text and normalizes the
+message to `stopped` (or an explicit error when nothing arrived).
+
+Browser verification: Playwright (Chromium + Firefox) runs `48/48` tests
+against the production build with fully mocked API routes and a hard block on
+external requests, covering streaming, dropped streams, bookmarks, evidence
+search/copy, read-only sessions, help, shortcuts, theme persistence against a
+dark OS preference, keyboard theme selection, IndexedDB reload survival, an
+axe accessibility scan, and a Light/Dark x 390/768/1440 screenshot matrix
+that was reviewed by eye. Headless Chromium was observed freezing CSS
+animation clocks at small viewports; the matrix captures settled states under
+reduced motion with forced-finished animations. Final gates: frontend
+`43/43` unit tests, typecheck, production build, token contrast; backend
+`672 passed` (666 baseline + 6 new session-context tests) plus compileall.
+
+The push also exposed and fixed an inherited CI failure: the backend job had
+been red since before this branch because tests replaying git-ignored
+`data/` artifacts cannot run on a clean checkout. Those twelve tests now
+share a `skip_without_data` guard (verified by hiding `data/` locally:
+638 passed / 34 skipped / 0 failed; with the corpus: 672 passed), and the
+frontend workflow now bakes the mocked API origin into the browser-test
+build. Remote runs are green: Backend CI on `ddc94ce` and Frontend CI
+(browser tests included) on `86d969e`.
+
+Known limitations: multi-tab concurrent editing of the same Library is out of
+scope; the localStorage fallback copy is intentionally retained this cycle;
+decorative borders remain below 3:1 by design; headless Chromium can freeze
+CSS animation clocks at small viewports, so the screenshot matrix captures
+settled reduced-motion states.
+
+### Comparative Evidence Contract v2 — non-official NO-GO (2026-09-05)### Comparative Evidence Contract v2 — non-official NO-GO (2026-09-05)
 
 The next bounded QA improvement adds a provider-free Comparative Evidence
 Contract v2 for dependency comparisons. It extracts a company-scoped

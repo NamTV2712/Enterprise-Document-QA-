@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import pytest
 
+from pathlib import Path
+
 from configs.offline_guard import install_offline_socket_guard
 
 _HERMETIC_MARKERS = frozenset({"integration", "live_network"})
@@ -31,3 +33,17 @@ def forbid_real_network(request):
         yield
     finally:
         restore()
+
+
+def skip_without_data(*paths: str):
+    """Skip tests that replay git-ignored data artifacts when absent.
+
+    A repository checkout (including CI) has no ``data/`` directory; tests
+    that read frozen evaluation artifacts or diagnostics receipts can only
+    run on a machine where an authorized local corpus exists.
+    """
+    missing = [path for path in paths if not Path(path).exists()]
+    return pytest.mark.skipif(
+        bool(missing),
+        reason="requires git-ignored data artifacts: " + ", ".join(paths),
+    )

@@ -3,7 +3,13 @@ from pathlib import Path
 
 from scripts.diagnostics.answer_stability_contract import build_report
 
+from tests.conftest import skip_without_data
 
+
+@skip_without_data(
+    "data/eval_artifacts/phase1_priority2.json",
+    "data/eval_artifacts/phase2_results_packed_selective_v2.json",
+)
 def test_answer_stability_contract_is_provider_free_and_detects_known_omission() -> None:
     root = Path("data/eval_artifacts")
     artifact = json.loads(

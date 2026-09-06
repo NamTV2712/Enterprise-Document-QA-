@@ -7,6 +7,8 @@ from src.generation.enumeration_completeness import (
 from src.generation.period_value_completeness import parse_evidence_sources
 from src.evaluation.revenue_intent_contract import audit_revenue_intent_scope
 
+from tests.conftest import skip_without_data
+
 
 APPLE_CONTEXT = """[Source 1] AAPL 10-K, Business
 The Company designs and markets smartphones, personal computers, tablets, wearables and accessories, and sells a variety of related services.
@@ -254,6 +256,9 @@ Cybersecurity:
     assert result.overdetailed is True
 
 
+@skip_without_data(
+    "data/eval_artifacts/phase1_priority2.json",
+)
 def test_real_microsoft_risk_taxonomy_covers_all_rendered_top_level_items() -> None:
     import json
     from pathlib import Path

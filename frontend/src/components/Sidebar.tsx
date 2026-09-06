@@ -27,6 +27,7 @@ import {
   ConversationRecord,
   ConversationStorageMode,
 } from "../lib/conversationStore";
+import { SaveIndicator } from "../hooks/useConversationLibrary";
 import {
   ALL_SECTIONS_DESCRIPTION,
   COMPANY_NAMES,
@@ -57,7 +58,9 @@ interface SidebarProps {
   activeConversationId: string;
   storageMode: ConversationStorageMode;
   storageWarning: string | null;
+  saveIndicator?: SaveIndicator;
   onSelectConversation: (conversation: ConversationRecord) => void;
+  onOpenMessage?: (conversationId: string, messageId: string) => void;
   onRenameConversation: (conversationId: string, title: string) => void;
   onToggleBookmark: (conversationId: string, messageId: string) => void;
   onDeleteConversation: (conversationId: string) => void;
@@ -87,7 +90,9 @@ const SidebarBase: React.FC<SidebarProps> = ({
   activeConversationId,
   storageMode,
   storageWarning,
+  saveIndicator,
   onSelectConversation,
+  onOpenMessage,
   onRenameConversation,
   onToggleBookmark,
   onDeleteConversation,
@@ -334,11 +339,13 @@ const SidebarBase: React.FC<SidebarProps> = ({
               activeConversationId={activeConversationId}
               storageMode={storageMode}
               storageWarning={storageWarning}
+              saveIndicator={saveIndicator}
               onSelect={onSelectConversation}
               onRename={onRenameConversation}
               onToggleBookmark={onToggleBookmark}
               onDelete={onDeleteConversation}
               onExport={onExportConversation}
+              onOpenMessage={onOpenMessage}
               onClose={() => onChangePanel("research")}
             />
           </div>

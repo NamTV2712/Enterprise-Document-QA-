@@ -9,10 +9,52 @@ The workspace keeps the primary question flow compact: advanced retrieval
 settings, interpreted queries, decomposition traces, and filing evidence are
 progressively disclosed so the answer remains the visual focus. The layout is
 responsive for mobile drawers, keyboard navigation, dark mode, and reduced
-motion preferences. Conversations autosave to IndexedDB when available, fall
-back to localStorage or in-memory storage, and can be searched, bookmarked,
-renamed, deleted, or exported as Markdown. Local records retain evidence and
-request scope; they do not restore expired backend memory into a new session.
+motion preferences.
+
+## Conversation Library
+
+Conversations persist through a schema-v2 repository. IndexedDB holds records
+and tombstones (written in one transaction), and the localStorage mirror is a
+single v3 envelope (`sec_qa_library_v3`) holding both, so a mirror write is
+one atomic `setItem`. The older v1/v2 keys are read as migration inputs and
+are never rewritten. Loads merge every backend by `revision`:
+
+- Custom titles (`titleMode: "custom"`) survive autosave; the auto title only
+  follows the first question until you rename the conversation.
+- Deletions write revision tombstones atomically with the record removal, so
+  a stale fallback copy can never resurrect a deleted conversation. A
+  deletion is reported complete only when every backend known to hold a copy
+  has been updated; otherwise the item stays visible as "Deletion pending —
+  retry" with export available, and retries never lower the revision or
+  recreate the record.
+- Corrupt storage, malformed records, and records written by a newer schema
+  write-lock the affected backend for the whole session while its bytes stay
+  untouched; a sticky warning survives later saves on the other backend.
+- Message history is never truncated: size limits are admission decisions
+  (100 conversations, 25 MiB UTF-8) applied to the durable snapshot before
+  any write, for new records and updates alike. Records that do not fit stay
+  readable and exportable in the tab and can be persisted once space is
+  freed.
+- Write results are explicit: `persisted`, `volatile`, or `failed`. The Library
+  shows "Saved on this device" only after a durable write, and "Only kept in
+  this tab" whenever storage is unavailable. Deletion stays retryable when no
+  durable backend accepts the tombstone.
+- Limits are 100 conversations and 25 MiB of UTF-8 JSON. Reaching a limit never
+  silently drops records; the newest conversation stays in memory with a
+  warning while older records remain readable and exportable.
+
+Saved conversations whose backend session has expired become read-only: history
+stays readable, searchable, bookmarkable, and exportable, while sending and
+retry are locked. The composer still accepts drafts so they can be carried into
+a new conversation. `Ctrl/Cmd+K` focuses the Library search; the Help dialog in
+the header documents usage and shortcuts.
+
+Answers expose a per-answer Bookmark control, and the Library's "Bookmarked
+answers" filter opens the exact message. Each evidence panel has a literal,
+case-insensitive search that filters excerpts while keeping the original
+`[Source N]` numbering, plus a per-excerpt copy button that includes the
+citation, company, section, and filed date. Filed dates are document metadata
+and are never presented as the fiscal period of a number.
 
 ## Local Development
 
@@ -46,6 +88,28 @@ The production build keeps the Markdown conversation renderer in a lazy chunk,
 uses cacheable vendor chunks, and relies on lightweight CSS transitions for
 micro-interactions. The indexed ticker catalog is browser-cacheable; health
 and session history remain fresh requests.
+
+## Browser Verification
+
+Browser tests run against the production build with fully mocked API routes;
+no test reaches a real backend or provider. Display assertions check real
+rendered state (bounding box plus the opacity/visibility ancestor chain) and
+never force animation state; under `prefers-reduced-motion` entrance
+animations are disabled so content is visible immediately.
+
+```bash
+VITE_API_BASE_URL=http://127.0.0.1:8000 bun run test:e2e
+bun e2e/token-contrast.mjs
+```
+
+`test:e2e` builds, serves `dist/` with `vite preview`, and runs Playwright
+across Chromium and Firefox: streaming and dropped-stream normalization,
+bookmarks, evidence search and copy, read-only sessions, help and shortcuts,
+theme persistence, and a Light/Dark x 390/768/1440 screenshot matrix written
+to `e2e/screenshots/`. The token contrast script verifies the real Light/Dark
+CSS token pairs against WCAG ratios (4.5:1 body text, 3:1 state text and
+focus indicators). Traces, reports, and screenshots stay outside Git; CI
+uploads them as artifacts on failure.
 
 ## Vercel
 
@@ -85,7 +149,7 @@ All request and response bodies are JSON except the SSE stream. Query requests u
 | `POST` | `/query` | Submit a non-streaming query |
 | `POST` | `/query/stream` | Stream answer events over SSE |
 | `POST` | `/query/decomposed` | Run comparative or complex queries |
-| `GET` | `/session/{session_id}/history` | Load conversation history |
+| `GET` | `/session/{session_id}/history` | Load conversation history plus backend context metadata |
 | `DELETE` | `/session/{session_id}` | Clear a conversation session |
 
 The streaming endpoint returns records in this format:
@@ -101,3 +165,8 @@ Source objects contain `citation`, `score`, `text_preview`, and optional full
 health payload may include `corpus.searchable_company_count` and
 `corpus.indexed_chunk_count`. Decomposed responses also include
 `was_decomposed`, `sub_queries`, and `num_total_chunks`.
+
+Session history responses may include an optional `context` object
+(`status: "available" | "missing"`, `retained_turns`,
+`ttl_remaining_seconds`). Older backends without `context` are supported:
+the frontend infers availability from the turns array.

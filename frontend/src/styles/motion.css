@@ -1,0 +1,60 @@
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .citation-button,
+  .sources-toggle {
+    transition: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .theme-menu__popover {
+    animation: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-tab,
+  .icon-button,
+  .citation-button,
+  .library-search,
+  .ui-message-enter,
+  .ui-answer-enter {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-mark,
+  .connection-dot--checking,
+  .connection-dot--ready,
+  .connection-dot--loading {
+    animation: none !important;
+  }
+
+  .hero-title,
+  .theme-toggle__icon {
+    transition: none !important;
+  }
+}
+
+/* Reduced motion must never leave content invisible. Entrance animations
+   start from opacity 0 with fill-mode both; disabling them entirely lets
+   the elements render their static, fully visible styles immediately, even
+   when a browser environment cannot advance CSS animation clocks. */
+@media (prefers-reduced-motion: reduce) {
+  .ui-message-enter,
+  .ui-answer-enter,
+  .ui-popover-enter,
+  .ui-expand-enter,
+  .ui-stagger-enter,
+  .overview-panel {
+    animation: none !important;
+  }
+}

@@ -5,6 +5,42 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
 
 ## Active Quality Backlog
 
+0c. [x] Deletion-state hardening round: fixed the two reproduced data-loss
+        probes (pending update deleting another conversation's persisted
+        copy via the merged-list snapshot; malformed tombstones silently
+        coerced and rewritten) and completed the pending-deletion lifecycle
+        in the Library (label, retry, export-only controls, read-only
+        composer, store-level save rejection, background-delete
+        isolation). Verified: frontend 86/86, typecheck, build, contrast;
+        Chromium 47/47 and Firefox 47/47 browser tests with library-state
+        screenshots reviewed; backend 672 passed and compileall.
+0b. [x] Remediation round on `codex/library-reliability-ux` (commits
+        `38b13e6`..`25ab161`): six review findings fixed with regression
+        tests — unreadable-data write locks with sticky warnings, no message
+        truncation (limits are admission decisions), atomic tombstone
+        deletion with a v3 envelope and a deletion-pending state, admission
+        limits on every write, per-conversation send identity with operation
+        epochs, and ordered switch/delete invalidation. Browser suite
+        reworked to assert real display state without forcing animations;
+        reduced-motion CSS renders content directly. Verified: frontend
+        61/61 unit tests, typecheck, build, contrast gate; Chromium 40/40
+        and Firefox 40/40 browser tests plus a headed comparison for the
+        headless animation-clock artifact; backend 672 passed with the
+        corpus and 638 passed / 34 skipped on a clean checkout.
+0. [x] Library reliability and research UX round (branch
+       `codex/library-reliability-ux`): schema-v2 conversation repository with
+       dual-backend merge, tombstones, explicit persisted/volatile outcomes,
+       and non-destructive limits; `useConversationLibrary` lifecycle hook;
+       backend session-context metadata plus TTL-correct history reads;
+       read-only saved conversations; per-answer bookmarks; evidence search
+       and copy; help dialog and shortcuts; stylesheet split into four layers
+       with a WCAG token contrast gate; Playwright Chromium/Firefox suite
+       (`48/48`) with a reviewed Light/Dark x 390/768/1440 screenshot matrix
+       and an axe scan. Fixed a real bug: SSE streams that end without a
+       `done` event now flush and normalize the partial answer instead of
+       staying in the streaming state forever. Final gates: frontend `43/43`
+       unit tests, typecheck, build, contrast; backend `672 passed` and
+       compileall. Multi-tab concurrent editing remains out of scope.
 1. [x] Finish annual-report extraction adapters for MCD and INTC, which do not
        expose same-document TOC anchors. Keep the new anchor fallback for MS,
        COST, GE, and HON covered by fixture tests; do not overwrite generated

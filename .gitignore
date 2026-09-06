@@ -17,3 +17,8 @@ frontend/.vercel/
 frontend/.bun/
 frontend/*.tsbuildinfo
 frontend/.env*.local
+
+# Playwright artifacts (reports and screenshots stay in CI artifacts only)
+frontend/test-results/
+frontend/playwright-report/
+frontend/e2e/screenshots/

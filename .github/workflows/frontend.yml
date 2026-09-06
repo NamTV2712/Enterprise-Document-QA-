@@ -16,10 +16,14 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: frontend
+    env:
+      # Baked into the production bundle so Playwright route fixtures and the
+      # built app agree on the mocked API origin.
+      VITE_API_BASE_URL: http://127.0.0.1:8000
 
     steps:
       - uses: actions/checkout@v4
@@ -34,8 +38,35 @@ jobs:
       - name: Type check
         run: bun run lint
 
-      - name: Run tests
+      - name: Run unit tests
         run: bun run test
 
       - name: Build
         run: bun run build
+
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium firefox
+
+      - name: Token contrast gate
+        run: bun e2e/token-contrast.mjs
+
+      - name: Run browser tests
+        run: bunx playwright test
+
+      - name: Upload browser test artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure-artifacts
+          path: |
+            frontend/test-results/
+            frontend/playwright-report/
+          retention-days: 14
+
+      - name: Upload screenshot matrix
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-screenshot-matrix
+          path: frontend/e2e/screenshots/
+          retention-days: 14

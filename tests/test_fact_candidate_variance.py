@@ -1,5 +1,7 @@
 from scripts.diagnostics.fact_candidate_variance import build_variance_report
 
+from tests.conftest import skip_without_data
+
 
 def _case(question: str, category: str, answer: str, relevancy: float) -> dict:
     return {
@@ -14,6 +16,10 @@ def _case(question: str, category: str, answer: str, relevancy: float) -> dict:
     }
 
 
+@skip_without_data(
+    "data/eval_artifacts/phase1_priority2.json",
+    "data/eval_artifacts/phase2_results_packed_selective_v2.json",
+)
 def test_variance_report_classifies_unchanged_context_answer_drift(tmp_path) -> None:
     questions = [
         "What quality and manufacturing risks does Apple mention?",

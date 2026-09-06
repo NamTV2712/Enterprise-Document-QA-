@@ -2,7 +2,73 @@
 
 ## Current Milestone
 
-### Library reliability and research UX round (2026-09-05) — COMPLETE
+### Persistence and request-lifecycle remediation round (2026-09-05) — COMPLETE
+
+A review of the previous round found six findings; this round fixed each one
+with regression tests first, on branch `codex/library-reliability-ux`
+(commits `38b13e6`, `dd8c5f1`, `25ab161`).
+
+1. Unreadable data could be filtered out and an empty snapshot rewritten.
+   Corrupt localStorage payloads, malformed records, and records with a
+   newer schema now write-lock the affected backend for the whole session
+   while its bytes stay untouched; readable records still merge; the sticky
+   warning survives later saves on the other backend; legacy migration is
+   only marked after a durable write of fully read data.
+2. Message history was silently truncated by a 200-message slice in
+   normalization. The slice is gone; 202- and 500-message conversations keep
+   every message, source, and bookmark through save, reload, and migration.
+   The 100-conversation and 25 MiB UTF-8 limits are admission decisions
+   against the durable snapshot before any write, for new records and
+   updates alike.
+3. Deletions were not atomic: IndexedDB now commits the tombstone and the
+   record removal in one transaction, and the localStorage mirror moved to a
+   single v3 envelope key (`sec_qa_library_v3`) holding records and
+   tombstones together (v1/v2 keys remain read-only inputs). A deletion is
+   reported complete only when every backend known to hold a copy has been
+   updated; otherwise the item stays visible as "Deletion pending — retry"
+   with edits locked and export available, and retries never lower the
+   revision or recreate the record. Tombstones never delete recovered
+   copies.
+4. Limits were only enforced for new conversations, and volatile records
+   could be admitted by another conversation's autosave. Saves now build the
+   intended snapshot from the persisted set plus the record being saved;
+   pending records are never written by any autosave and become persistable
+   again once space is freed. Oversized legacy libraries stay readable,
+   exportable, and deletable.
+5. Sends mixed session identities across conversations. `beginSend` captures
+   conversationId, sessionId, and the operation epoch before the preflight;
+   every await re-checks the identity; a cancelled preflight returns
+   "cancelled" without touching the newer conversation; duplicate sends are
+   blocked; the payload uses the captured session id.
+6. Switch/delete could interleave. One invalidation procedure bumps the
+   navigation epoch (last selection wins A→B→C), aborts preflight and
+   generation, drops save timers, flushes buffered SSE text, and persists
+   the old conversation from an immutable snapshot. Deleting the active
+   conversation keeps it open until the deletion completes or is reported
+   pending.
+
+Browser verification was reworked: display assertions check real rendered
+state (bounding box plus opacity/visibility ancestor chain) with
+condition-based retries and never force animation state; reduced-motion CSS
+now disables entrance animations so content renders directly. Chromium
+40/40 and Firefox 40/40 pass, including 390px smokes under both motion
+preferences, 320px, and 200% zoom. A headed Chromium comparison confirmed
+that an earlier intermittent blank-render at 390px was a headless animation
+clock artifact, not an application bug (the same test passes headed and, in
+the final runs, headless as well). Color-contrast axe scans now cover the
+real conversation view.
+
+Final gates: frontend 61/61 unit tests, typecheck, production build, token
+contrast gate; backend 672 passed with the local corpus and compileall; a
+clean checkout (git worktree at the baseline of this round) reports 638
+passed / 34 skipped / 0 failed, matching CI. Hermetic and artifact-dependent
+backend tests are reported separately: the 12 artifact-dependent replays
+stay behind `skip_without_data` guards because they verify pinned
+provenance that cannot be synthesized.
+
+### Persistence and request-lifecycle remediation (continued)
+
+### Library reliability and research UX round (2026-09-05) — COMPLETE### Library reliability and research UX round (2026-09-05) — COMPLETE
 
 The next frontend round made the local conversation Library trustworthy and
 clarified backend session state. Baseline was commit `4b52314` with frontend

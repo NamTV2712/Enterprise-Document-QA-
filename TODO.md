@@ -5,6 +5,19 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
 
 ## Active Quality Backlog
 
+0b. [x] Remediation round on `codex/library-reliability-ux` (commits
+        `38b13e6`..`25ab161`): six review findings fixed with regression
+        tests — unreadable-data write locks with sticky warnings, no message
+        truncation (limits are admission decisions), atomic tombstone
+        deletion with a v3 envelope and a deletion-pending state, admission
+        limits on every write, per-conversation send identity with operation
+        epochs, and ordered switch/delete invalidation. Browser suite
+        reworked to assert real display state without forcing animations;
+        reduced-motion CSS renders content directly. Verified: frontend
+        61/61 unit tests, typecheck, build, contrast gate; Chromium 40/40
+        and Firefox 40/40 browser tests plus a headed comparison for the
+        headless animation-clock artifact; backend 672 passed with the
+        corpus and 638 passed / 34 skipped on a clean checkout.
 0. [x] Library reliability and research UX round (branch
        `codex/library-reliability-ux`): schema-v2 conversation repository with
        dual-backend merge, tombstones, explicit persisted/volatile outcomes,

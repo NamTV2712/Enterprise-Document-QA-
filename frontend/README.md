@@ -13,15 +13,28 @@ motion preferences.
 
 ## Conversation Library
 
-Conversations persist through a schema-v2 repository that writes both IndexedDB
-and a localStorage mirror, then merges both backends by `revision` on load:
+Conversations persist through a schema-v2 repository. IndexedDB holds records
+and tombstones (written in one transaction), and the localStorage mirror is a
+single v3 envelope (`sec_qa_library_v3`) holding both, so a mirror write is
+one atomic `setItem`. The older v1/v2 keys are read as migration inputs and
+are never rewritten. Loads merge every backend by `revision`:
 
 - Custom titles (`titleMode: "custom"`) survive autosave; the auto title only
   follows the first question until you rename the conversation.
-- Deletions write revision tombstones, so a stale fallback copy can never
-  resurrect a deleted conversation.
-- Corrupt or unreadable storage is left untouched and reported; a newer
-  IndexedDB schema opens read-only instead of being wiped.
+- Deletions write revision tombstones atomically with the record removal, so
+  a stale fallback copy can never resurrect a deleted conversation. A
+  deletion is reported complete only when every backend known to hold a copy
+  has been updated; otherwise the item stays visible as "Deletion pending —
+  retry" with export available, and retries never lower the revision or
+  recreate the record.
+- Corrupt storage, malformed records, and records written by a newer schema
+  write-lock the affected backend for the whole session while its bytes stay
+  untouched; a sticky warning survives later saves on the other backend.
+- Message history is never truncated: size limits are admission decisions
+  (100 conversations, 25 MiB UTF-8) applied to the durable snapshot before
+  any write, for new records and updates alike. Records that do not fit stay
+  readable and exportable in the tab and can be persisted once space is
+  freed.
 - Write results are explicit: `persisted`, `volatile`, or `failed`. The Library
   shows "Saved on this device" only after a durable write, and "Only kept in
   this tab" whenever storage is unavailable. Deletion stays retryable when no
@@ -79,7 +92,10 @@ and session history remain fresh requests.
 ## Browser Verification
 
 Browser tests run against the production build with fully mocked API routes;
-no test reaches a real backend or provider.
+no test reaches a real backend or provider. Display assertions check real
+rendered state (bounding box plus the opacity/visibility ancestor chain) and
+never force animation state; under `prefers-reduced-motion` entrance
+animations are disabled so content is visible immediately.
 
 ```bash
 VITE_API_BASE_URL=http://127.0.0.1:8000 bun run test:e2e

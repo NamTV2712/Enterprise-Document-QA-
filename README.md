@@ -1179,8 +1179,10 @@ bun e2e/token-contrast.mjs
 ```
 
 The Playwright run serves the production build with `vite preview` and mocks
-every backend route locally, so browser tests never reach a real API. The
-screenshot matrix covers Light and Dark themes at 390, 768, and 1440 pixels.
+every backend route locally, so browser tests never reach a real API. Display
+assertions check real rendered state instead of forcing animation state, and
+the screenshot matrix covers Light and Dark themes at 390, 768, and 1440
+pixels for both Chromium and Firefox.
 
 ## Running With Docker
 

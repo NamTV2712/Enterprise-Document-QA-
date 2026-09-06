@@ -6,6 +6,7 @@ at startup via the lifespan context manager.
 """
 
 import logging
+import os
 import re
 import time
 import asyncio
@@ -289,6 +290,16 @@ def _health_payload() -> dict:
     }
     if _state.get("corpus") is not None:
         payload["corpus"] = dict(_state["corpus"])
+    # Optional release metadata: set by the Docker build/runtime. Only the
+    # git revision and build version are exposed — never paths, internal
+    # configuration, or secrets. Older frontends ignore unknown fields.
+    build: dict[str, str] = {}
+    if os.environ.get("GIT_REVISION"):
+        build["revision"] = os.environ["GIT_REVISION"]
+    if os.environ.get("BUILD_VERSION"):
+        build["version"] = os.environ["BUILD_VERSION"]
+    if build:
+        payload["build"] = build
     return payload
 
 

@@ -1,15 +1,20 @@
+# Keep the build context minimal: corpus data, secrets, frontend, and
+# diagnostics artifacts are never part of the image.
 .venv/
 .git/
+.github/
 .env
-data/raw/
+.env.*
+!.env.example
+data/
+frontend/
+notebooks/
+tests/
+scripts/diagnostics/
 __pycache__/
 *.pyc
-notebooks/
 .ipynb_checkpoints/
 .pytest_cache/
-eval_checkpoint*.jsonl
-data/evaluation_results*.json
-data/ingestion_report.json
-scripts/diagnostics/
-tests/
-frontend/
+*.md
+!README.md
+docker-compose.yml

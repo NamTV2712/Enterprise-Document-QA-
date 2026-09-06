@@ -126,6 +126,8 @@ def check_index_and_config_alignment(env: dict[str, str]) -> CheckResult:
     manifest_revision = manifest.get("embedding_model_revision")
     configured_model = env.get("EMBEDDING_MODEL_ID")
     configured_revision = env.get("EMBEDDING_MODEL_REVISION")
+    configured_reranker = env.get("RERANKER_MODEL_ID")
+    configured_reranker_revision = env.get("RERANKER_MODEL_REVISION")
 
     problems: list[str] = []
     if configured_model and manifest_model and configured_model != manifest_model:
@@ -136,6 +138,10 @@ def check_index_and_config_alignment(env: dict[str, str]) -> CheckResult:
         )
     if not configured_revision:
         problems.append("EMBEDDING_MODEL_REVISION is not set in configuration")
+    if not configured_reranker:
+        problems.append("RERANKER_MODEL_ID is not set in configuration")
+    if not configured_reranker_revision:
+        problems.append("RERANKER_MODEL_REVISION is not set in configuration")
     if problems:
         return CheckResult(
             "index_and_config",
@@ -145,6 +151,8 @@ def check_index_and_config_alignment(env: dict[str, str]) -> CheckResult:
                 "manifest_model": manifest_model,
                 "manifest_revision": manifest_revision,
                 "configured_revision_present": bool(configured_revision),
+                "reranker_model": configured_reranker,
+                "reranker_revision_present": bool(configured_reranker_revision),
             },
         )
     return CheckResult(
@@ -154,6 +162,8 @@ def check_index_and_config_alignment(env: dict[str, str]) -> CheckResult:
         {
             "manifest_model": manifest_model,
             "manifest_revision": manifest_revision,
+            "reranker_model": configured_reranker,
+            "reranker_revision": configured_reranker_revision,
             "index_manifest_path": str(manifest_path.relative_to(REPO_ROOT)),
         },
     )
@@ -190,7 +200,11 @@ def check_model_cache(env: dict[str, str]) -> CheckResult:
     model_dir_name = f"models--{env.get('EMBEDDING_MODEL_ID', 'nomic-ai/nomic-embed-text-v1.5').replace('/', '--')}"
     model_dir = hub / model_dir_name
     nomic_cached = model_dir.is_dir()
-    reranker_cached = (hub / "models--cross-encoder--ms-marco-MiniLM-L-6-v2").is_dir()
+    reranker_name = env.get("RERANKER_MODEL_ID", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+    reranker_dir = hub / f"models--{reranker_name.replace('/', '--')}"
+    reranker_cached = reranker_dir.is_dir()
+    reranker_revision = env.get("RERANKER_MODEL_REVISION", "")
+    reranker_revision_cached = bool(reranker_revision and (reranker_dir / "snapshots" / reranker_revision).is_dir())
     revision_hint = ""
     if nomic_cached and revision:
         revision_hint = f"; pinned revision {revision} {'has snapshots' if any(model_dir.glob('snapshots/*')) else 'has no local snapshot yet'}"
@@ -199,13 +213,21 @@ def check_model_cache(env: dict[str, str]) -> CheckResult:
             "model_cache",
             "PASS",
             f"Embedding and reranker models are present in the local Hugging Face cache{revision_hint}. The Docker build downloads its own copies.",
-            {"embedding_model_cached": True, "reranker_cached": True},
+            {
+                "embedding_model_cached": True,
+                "reranker_cached": True,
+                "reranker_revision_cached": reranker_revision_cached,
+            },
         )
     return CheckResult(
         "model_cache",
         "WARN",
         "Model cache is incomplete; the Docker build will download pinned models from Hugging Face during build.",
-        {"embedding_model_cached": nomic_cached, "reranker_cached": reranker_cached},
+        {
+            "embedding_model_cached": nomic_cached,
+            "reranker_cached": reranker_cached,
+            "reranker_revision_cached": reranker_revision_cached,
+        },
     )
 
 
@@ -274,6 +296,8 @@ def load_env_without_secrets() -> dict[str, str]:
         "QDRANT_INDEX_MANIFEST_PATH",
         "EMBEDDING_MODEL_ID",
         "EMBEDDING_MODEL_REVISION",
+        "RERANKER_MODEL_ID",
+        "RERANKER_MODEL_REVISION",
         "DATA_PROCESSED_DIR",
         "ALLOWED_ORIGINS",
     ]
@@ -291,6 +315,12 @@ def load_env_without_secrets() -> dict[str, str]:
     for key in safe_keys:
         if key not in values and os.environ.get(key):
             values[key] = os.environ[key]
+    # Keep preflight semantics aligned with docker-compose defaults. A local
+    # .env may intentionally omit non-secret model pins that are already
+    # pinned in the serving configuration.
+    values.setdefault("EMBEDDING_MODEL_ID", "nomic-ai/nomic-embed-text-v1.5")
+    values.setdefault("RERANKER_MODEL_ID", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+    values.setdefault("RERANKER_MODEL_REVISION", "233902d25c440f23af6f7d6e94d2946bac0bee0a")
     return values
 
 

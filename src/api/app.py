@@ -137,7 +137,13 @@ async def lifespan(app: FastAPI):
         model_name=settings.embedding_model_id,
         revision=settings.embedding_model_revision or None,
     )
-    retriever = HybridRetriever(embedder=embedder, store=store, all_chunks=all_chunks)
+    retriever = HybridRetriever(
+        embedder=embedder,
+        store=store,
+        all_chunks=all_chunks,
+        cross_encoder_model=settings.reranker_model_id,
+        cross_encoder_revision=settings.reranker_model_revision or None,
+    )
     generator = Generator()
     pipeline = RAGPipeline(retriever=retriever, generator=generator)
     _state["pipeline"] = pipeline

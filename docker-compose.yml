@@ -5,7 +5,8 @@ services:
       args:
         EMBEDDING_MODEL_ID: ${EMBEDDING_MODEL_ID:-nomic-ai/nomic-embed-text-v1.5}
         EMBEDDING_MODEL_REVISION: ${EMBEDDING_MODEL_REVISION:-e9b6763023c676ca8431644204f50c2b100d9aab}
-        RERANKER_MODEL: cross-encoder/ms-marco-MiniLM-L-6-v2
+        RERANKER_MODEL: ${RERANKER_MODEL_ID:-cross-encoder/ms-marco-MiniLM-L-6-v2}
+        RERANKER_MODEL_REVISION: ${RERANKER_MODEL_REVISION:-233902d25c440f23af6f7d6e94d2946bac0bee0a}
         GIT_REVISION: ${GIT_REVISION:-unknown}
     image: edqa-api:${GIT_REVISION:-local}
     ports:
@@ -24,6 +25,8 @@ services:
       - QDRANT_INDEX_MANIFEST_PATH=${QDRANT_INDEX_MANIFEST_PATH:-data/processed/qdrant_index_manifest.json}
       - EMBEDDING_MODEL_ID=${EMBEDDING_MODEL_ID:-nomic-ai/nomic-embed-text-v1.5}
       - EMBEDDING_MODEL_REVISION=${EMBEDDING_MODEL_REVISION:-e9b6763023c676ca8431644204f50c2b100d9aab}
+      - RERANKER_MODEL_ID=${RERANKER_MODEL_ID:-cross-encoder/ms-marco-MiniLM-L-6-v2}
+      - RERANKER_MODEL_REVISION=${RERANKER_MODEL_REVISION:-233902d25c440f23af6f7d6e94d2946bac0bee0a}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
       - TRUSTED_PROXY_CIDRS=${TRUSTED_PROXY_CIDRS:-}
       - LLM_RATE_LIMIT_BURST=${LLM_RATE_LIMIT_BURST:-10/minute}

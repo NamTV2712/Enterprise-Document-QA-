@@ -49,6 +49,8 @@ def test_serving_critical_variables_are_forwarded() -> None:
         "QDRANT_INDEX_MANIFEST_PATH",
         "EMBEDDING_MODEL_ID",
         "EMBEDDING_MODEL_REVISION",
+        "RERANKER_MODEL_ID",
+        "RERANKER_MODEL_REVISION",
         "ALLOWED_ORIGINS",
         "TRUSTED_PROXY_CIDRS",
         "LLM_RATE_LIMIT_BURST",
@@ -83,7 +85,8 @@ def test_dockerfile_pins_model_revisions_and_disables_proxy_headers() -> None:
     assert "ARG EMBEDDING_MODEL_REVISION" in dockerfile
     assert "e9b6763023c676ca8431644204f50c2b100d9aab" in dockerfile
     assert "SentenceTransformer('$EMBEDDING_MODEL_ID', revision='$EMBEDDING_MODEL_REVISION'" in dockerfile
-    assert "CrossEncoder('$RERANKER_MODEL')" in dockerfile
+    assert "ARG RERANKER_MODEL_REVISION" in dockerfile
+    assert "CrossEncoder('$RERANKER_MODEL', revision='$RERANKER_MODEL_REVISION')" in dockerfile
     assert "--no-proxy-headers" in dockerfile
     assert '"--workers", "1"' in dockerfile
 
@@ -92,6 +95,7 @@ def test_dockerfile_labels_carry_revision() -> None:
     dockerfile = DOCKERFILE_PATH.read_text(encoding="utf-8")
     assert "org.opencontainers.image.revision=${GIT_REVISION}" in dockerfile
     assert "ai.edqa.embedding-revision=${EMBEDDING_MODEL_REVISION}" in dockerfile
+    assert "ai.edqa.reranker-revision=${RERANKER_MODEL_REVISION}" in dockerfile
 
 
 def test_compose_image_tag_follows_git_revision() -> None:

@@ -55,10 +55,9 @@ os.environ.setdefault("LLM_RATE_LIMIT_BURST", os.environ.get("HARNESS_RATE_BURST
 os.environ.setdefault("LLM_RATE_LIMIT_DAILY", "1000/day")
 os.environ.setdefault("DECOMPOSED_RATE_LIMIT", "100/minute")
 os.environ.setdefault("CACHE_TEST_RATE_LIMIT", "100/minute")
-os.environ.setdefault("TRUSTED_PROXY_CIDRS", "127.0.0.1/128" if os.environ.get("HARNESS_TRUSTED_PROXY") == "1" else "")
+os.environ.setdefault("TRUSTED_PROXY_CIDRS", "127.0.0.1/32" if os.environ.get("HARNESS_TRUSTED_PROXY") == "1" else "")
 
 APP_PORT = int(os.environ.get("HARNESS_PORT", "8765"))
-print(f"HARNESS_DEBUG env LLM_RATE_LIMIT_BURST={os.environ.get('LLM_RATE_LIMIT_BURST')!r} HARNESS_RATE_BURST={os.environ.get('HARNESS_RATE_BURST')!r}", flush=True)
 PROXY_PORT = int(os.environ.get("PROXY_PORT", "8766"))
 DECOMPOSED_TIMEOUT = float(os.environ.get("HARNESS_DECOMPOSED_TIMEOUT", "0.5"))
 

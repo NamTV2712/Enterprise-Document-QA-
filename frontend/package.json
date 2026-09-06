@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "lint": "tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "vite build && playwright test"
+    "test:e2e": "vite build && playwright test",
+    "test:e2e-integration": "vite build --mode integration && playwright test -c playwright.integration.config.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

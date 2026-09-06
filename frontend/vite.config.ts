@@ -3,8 +3,15 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
   return {
+    // The integration suite intentionally has a fixed local API target. This
+    // keeps the mode reproducible in CI without committing an ignored .env
+    // file or depending on shell-specific environment syntax.
+    define:
+      mode === 'integration'
+        ? { 'import.meta.env.VITE_API_BASE_URL': JSON.stringify('http://127.0.0.1:8766') }
+        : undefined,
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

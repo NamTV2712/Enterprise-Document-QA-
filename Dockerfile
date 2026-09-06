@@ -15,6 +15,7 @@ FROM python:3.12-slim AS runtime
 ARG EMBEDDING_MODEL_ID=nomic-ai/nomic-embed-text-v1.5
 ARG EMBEDDING_MODEL_REVISION=e9b6763023c676ca8431644204f50c2b100d9aab
 ARG RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2
+ARG RERANKER_MODEL_REVISION=233902d25c440f23af6f7d6e94d2946bac0bee0a
 ARG GIT_REVISION=unknown
 
 LABEL org.opencontainers.image.title="Enterprise Document QA"
@@ -24,6 +25,7 @@ LABEL org.opencontainers.image.source="https://github.com/NamTV2712/Enterprise-D
 LABEL ai.edqa.embedding-model=${EMBEDDING_MODEL_ID}
 LABEL ai.edqa.embedding-revision=${EMBEDDING_MODEL_REVISION}
 LABEL ai.edqa.reranker-model=${RERANKER_MODEL}
+LABEL ai.edqa.reranker-revision=${RERANKER_MODEL_REVISION}
 
 WORKDIR /app
 
@@ -35,10 +37,12 @@ COPY src/ src/
 
 # Pre-download the exact pinned models so container startup does not block on
 # first request and so runtime loading can be verified with HF offline flags.
-RUN python -c "import os; from sentence_transformers import SentenceTransformer, CrossEncoder; SentenceTransformer('$EMBEDDING_MODEL_ID', revision='$EMBEDDING_MODEL_REVISION', trust_remote_code=True); CrossEncoder('$RERANKER_MODEL'); print('Pinned models pre-downloaded successfully.')"
+RUN python -c "import os; from sentence_transformers import SentenceTransformer, CrossEncoder; SentenceTransformer('$EMBEDDING_MODEL_ID', revision='$EMBEDDING_MODEL_REVISION', trust_remote_code=True); CrossEncoder('$RERANKER_MODEL', revision='$RERANKER_MODEL_REVISION'); print('Pinned models pre-downloaded successfully.')"
 
 ENV EMBEDDING_MODEL_ID=${EMBEDDING_MODEL_ID}
 ENV EMBEDDING_MODEL_REVISION=${EMBEDDING_MODEL_REVISION}
+ENV RERANKER_MODEL_ID=${RERANKER_MODEL}
+ENV RERANKER_MODEL_REVISION=${RERANKER_MODEL_REVISION}
 ENV GIT_REVISION=${GIT_REVISION}
 
 EXPOSE 8000

@@ -13,8 +13,15 @@ import { askQuestion } from "./fixtures";
  */
 
 const API_ORIGIN = "http://127.0.0.1:8766";
+const CONTROL_ORIGIN = "http://127.0.0.1:8765";
 
 async function setup(page: Page): Promise<void> {
+  // Reset mutable harness state before each browser test. The request context
+  // avoids browser CORS and runs before the app creates a saved conversation.
+  await page.request.post(`${CONTROL_ORIGIN}/__harness__/failure`, {
+    data: { mode: "clear" },
+  });
+  await page.request.post(`${CONTROL_ORIGIN}/__harness__/memory/reset`);
   // Block static extras (fonts) so the page never leaves local hosts; app
   // routes go over real HTTP to the harness.
   await page.route("**/*", async (route) => {
@@ -34,6 +41,22 @@ async function setup(page: Page): Promise<void> {
   await expect(input).toBeVisible();
   await expect(input).toBeEnabled();
 }
+
+async function waitForDurableConversation(page: Page, question: string): Promise<void> {
+  // The app deliberately saves completed exchanges asynchronously. Waiting on
+  // the localStorage mirror makes a reload test assert durable behavior rather
+  // than racing the completion-save debounce (especially in Firefox).
+  await page.waitForFunction(
+    (expectedQuestion) => window.localStorage.getItem("sec_qa_library_v3")?.includes(expectedQuestion) ?? false,
+    question,
+  );
+}
+
+test.afterEach(async ({ page }) => {
+  await page.request.post(`${CONTROL_ORIGIN}/__harness__/failure`, {
+    data: { mode: "clear" },
+  });
+});
 
 test("health readiness and ticker discovery over real HTTP", async ({ page }) => {
   await setup(page);
@@ -93,6 +116,7 @@ test("session context survives a reload while the backend remembers it", async (
   await setup(page);
   await askQuestion(page, "What was Apple total revenue?");
   await expect(page.getByText(/Harness answer with/).first()).toBeVisible();
+  await waitForDurableConversation(page, "What was Apple total revenue?");
 
   await page.reload();
   await expect(page.getByRole("textbox", { name: "Research question" })).toBeEnabled();
@@ -107,6 +131,7 @@ test("backend memory reset marks the saved conversation read-only", async ({ pag
   await setup(page);
   await askQuestion(page, "What was Apple total revenue?");
   await expect(page.getByText(/Harness answer with/).first()).toBeVisible();
+  await waitForDurableConversation(page, "What was Apple total revenue?");
 
   // Simulate a backend restart: in-memory sessions are gone.
   await page.evaluate(async () => {

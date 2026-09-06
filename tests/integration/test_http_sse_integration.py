@@ -23,6 +23,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 HARNESS_SCRIPT = Path(__file__).resolve().parent / "harness_server.py"
 APP_PORT = 8765

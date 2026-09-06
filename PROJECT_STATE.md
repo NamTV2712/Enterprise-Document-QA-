@@ -2,6 +2,39 @@
 
 ## Current Milestone
 
+### Local release readiness M3 — implementation complete, CI pending (2026-09-06)
+
+The release-readiness pass is now scoped to a provider-free local Docker
+candidate. The real HTTP/SSE harness was made deterministic: each browser test
+resets failure/session state through control requests, shared mutable tests run
+with one Playwright worker, Firefox reload assertions wait for the durable
+`sec_qa_library_v3` mirror, and the runner auto-selects the repository
+`.venv` when present. Backend integration tests are explicitly marked
+`integration`; frontend integration builds a fixed loopback API origin and
+never requires an ignored `.env.integration` file.
+
+The serving image now pins and exposes both embedding and reranker model
+revisions in Docker labels and runtime environment. The read-only release
+preflight checks those pins against the trusted index configuration and the
+new non-secret receipt generator binds Git commit, image labels, readiness,
+searchable tickers, and the preflight hash. No canonical artifact, embedding
+generation, Qdrant index, provider quota, or production default was changed.
+
+Offline gates passed before the final candidate rebuild: frontend HTTP/SSE
+integration `14/14` (Chromium `7/7`, Firefox `7/7`), backend HTTP/SSE
+integration `13/13`, release Compose contract plus reranker-binding targeted
+tests `11/11`, Docker build, image-label inspection, and a healthy container
+with `50` searchable companies and `10,053` indexed chunks. The runtime health
+revision was corrected to match the image/Git revision after detecting that an
+unset Compose `GIT_REVISION` could override the image environment with
+`unknown`.
+
+The final source/docs commit must be the commit recorded by
+`data/diagnostics/local_release_receipt.json`; the receipt is intentionally
+ignored by Git. Push and CI verification remain the last handoff steps. A
+provider-backed benchmark, deployment, frontend hosting change, and canonical
+or index rebuild remain out of scope.
+
 ### Deletion-state hardening and snapshot-preservation round (2026-09-05) — COMPLETE
 
 Independent review probes against `853cb08` reproduced two data-loss bugs and

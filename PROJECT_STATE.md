@@ -2,7 +2,53 @@
 
 ## Current Milestone
 
-### Persistence and request-lifecycle remediation round (2026-09-05) — COMPLETE
+### Deletion-state hardening and snapshot-preservation round (2026-09-05) — COMPLETE
+
+Independent review probes against `853cb08` reproduced two data-loss bugs and
+found two UI gaps. All four are fixed on this branch (commit `0c0b6f2`-range,
+see git log) with regression tests written first.
+
+1. Saving B could delete the persisted copy of A while A had a pending
+   update. Root cause: the durable snapshot was built from the merged UI
+   list, which excluded any record with a pending update. The snapshot is
+   now built directly from persisted records, with the saved record
+   replacing only its own entry. Verified with state-chain tests over
+   localStorage-only, IndexedDB-only, and dual backends: failed update of A
+   plus successful save of B keeps A's persisted copy and B's new content;
+   a never-persisted pending record stays out of storage; retries persist
+   exactly once with metadata intact.
+2. A malformed `tombstones` payload was silently coerced (defaults filled,
+   invalid entries dropped, non-array key ignored) and the envelope was
+   rewritten. Tombstones are now strictly validated (id, positive finite
+   integer revision, finite timestamp, no defaults). A malformed
+   tombstones key, unsupported container version, or invalid entries
+   write-lock the holding backend for the session while the bytes stay
+   untouched behind a sticky "deletion state cannot be verified" warning;
+   a missing tombstones key remains valid.
+3. The Library had no pending-deletion UI. It now shows a "Deletion
+   pending" label with Retry deletion and Export, locks rename and
+   bookmark for pending items (store-level save rejection too, so even a
+   direct high-revision save cannot resurrect them), and the composer is
+   read-only while the active conversation is pending.
+4. Deleting a background Library item invalidated the active conversation's
+   in-flight request. Only deleting the active conversation aborts now.
+
+Additional fixes found while verifying: a rejected save (pending-deletion
+record) no longer flips the saved indicator to "Only kept in this tab", and
+the autosave skips pending-deletion records entirely. The narrow-viewport
+e2e check was renamed to state plainly that it is a 640px CSS-viewport
+reflow check, not a browser-zoom test.
+
+Verified: frontend 86/86 unit/component tests (including state-chain tests
+across three backend modes and nine malformed-tombstone variants),
+typecheck, production build, token contrast gate; Chromium 47/47 and
+Firefox 47/47 browser tests including new persistence-chain, pending-deletion
+UI, and library-state screenshot coverage reviewed by eye; backend
+672 passed and compileall with the local corpus.
+
+### Deletion-state hardening and snapshot-preservation round (details above)
+
+### Persistence and request-lifecycle remediation round (2026-09-05) — COMPLETE### Persistence and request-lifecycle remediation round (2026-09-05) — COMPLETE
 
 A review of the previous round found six findings; this round fixed each one
 with regression tests first, on branch `codex/library-reliability-ux`
@@ -52,10 +98,14 @@ state (bounding box plus opacity/visibility ancestor chain) with
 condition-based retries and never force animation state; reduced-motion CSS
 now disables entrance animations so content renders directly. Chromium
 40/40 and Firefox 40/40 pass, including 390px smokes under both motion
-preferences, 320px, and 200% zoom. A headed Chromium comparison confirmed
-that an earlier intermittent blank-render at 390px was a headless animation
-clock artifact, not an application bug (the same test passes headed and, in
-the final runs, headless as well). Color-contrast axe scans now cover the
+preferences, 320px, and a narrow-viewport reflow check at a 640px CSS
+viewport (no browser zoom was involved). A headed Chromium comparison
+showed the 390px display smokes passing headed; the final headless runs
+also passed, so the earlier blank-render did not reproduce. The frozen
+animation-clock explanation for that one-off remains plausible but
+unproven; what is verified is that reduced motion renders content directly
+and both engines display correctly in the recorded runs. Color-contrast
+axe scans now cover the
 real conversation view.
 
 Final gates: frontend 61/61 unit tests, typecheck, production build, token
@@ -65,8 +115,6 @@ passed / 34 skipped / 0 failed, matching CI. Hermetic and artifact-dependent
 backend tests are reported separately: the 12 artifact-dependent replays
 stay behind `skip_without_data` guards because they verify pinned
 provenance that cannot be synthesized.
-
-### Persistence and request-lifecycle remediation (continued)
 
 ### Library reliability and research UX round (2026-09-05) — COMPLETE### Library reliability and research UX round (2026-09-05) — COMPLETE
 

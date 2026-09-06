@@ -5,6 +5,15 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
 
 ## Active Quality Backlog
 
+0c. [x] Deletion-state hardening round: fixed the two reproduced data-loss
+        probes (pending update deleting another conversation's persisted
+        copy via the merged-list snapshot; malformed tombstones silently
+        coerced and rewritten) and completed the pending-deletion lifecycle
+        in the Library (label, retry, export-only controls, read-only
+        composer, store-level save rejection, background-delete
+        isolation). Verified: frontend 86/86, typecheck, build, contrast;
+        Chromium 47/47 and Firefox 47/47 browser tests with library-state
+        screenshots reviewed; backend 672 passed and compileall.
 0b. [x] Remediation round on `codex/library-reliability-ux` (commits
         `38b13e6`..`25ab161`): six review findings fixed with regression
         tests — unreadable-data write locks with sticky warnings, no message

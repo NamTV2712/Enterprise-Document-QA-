@@ -2,6 +2,8 @@ import { test, expect, Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { installApiFixtures, askQuestion, openLibrary, LONG_ANSWER, API_ORIGIN } from "./fixtures";
 
+const LONG_ANSWER_FIRST_LINE = LONG_ANSWER.split("\n")[0];
+
 /**
  * Regression coverage for the persistence and request-lifecycle fixes. All
  * backend traffic is mocked; storage is the browser's real IndexedDB and
@@ -281,7 +283,7 @@ test("320px smoke keeps the workspace visibly usable", async ({ page }) => {
   await expectVisiblyDisplayed(page.getByRole("textbox", { name: "Research question" }));
 });
 
-test("200% zoom (640px CSS viewport) keeps the workspace visibly usable", async ({ page }) => {
+test("narrow-viewport reflow (640px CSS viewport, no browser zoom) keeps the workspace usable", async ({ page }) => {
   await page.setViewportSize({ width: 640, height: 450 });
   await setup(page);
   await expectVisiblyDisplayed(page.getByText("Ask questions. Verify every answer."));
@@ -302,3 +304,191 @@ test.describe("390px reduced motion", () => {
     await expectVisiblyDisplayed(page.getByText("Microsoft Cloud revenue increased").first());
   });
 });
+
+// --- Persistence chains with real browser storage -------------------------
+
+function libraryRecord(id: string, sessionId: string, title: string) {
+  return {
+    schemaVersion: 2,
+    id,
+    sessionId,
+    title,
+    titleMode: "auto",
+    revision: 1,
+    createdAt: 1,
+    updatedAt: 2,
+    messages: [
+      { id: `${id}-u1`, sender: "user", text: `Question for ${title}` },
+      { id: `${id}-a1`, sender: "assistant", text: `Answer for ${title}`, status: "completed" },
+    ],
+    draft: "",
+    bookmarkedMessageIds: [],
+  };
+}
+
+test("a pending update never removes the persisted copy of another conversation", async ({
+  page,
+}) => {
+  // Seed a full library (100 records): the next new conversation cannot be
+  // admitted, so its completed exchange stays pending while other saves
+  // still work.
+  await installApiFixtures(page);
+  await page.addInitScript(() => {
+    const records = [];
+    for (let index = 0; index < 100; index += 1) {
+      records.push({
+        schemaVersion: 2,
+        id: `conversation-seed-${index}`,
+        sessionId: `session-seed-${index}`,
+        title: `Seeded conversation ${index}`,
+        titleMode: "auto",
+        revision: 1,
+        createdAt: index,
+        updatedAt: index,
+        messages: [
+          { id: `s${index}-u1`, sender: "user", text: `Seed question ${index}` },
+          { id: `s${index}-a1`, sender: "assistant", text: `Seed answer ${index}`, status: "completed" },
+        ],
+        draft: "",
+        bookmarkedMessageIds: [],
+      });
+    }
+    localStorage.setItem(
+      "sec_qa_library_v3",
+      JSON.stringify({ envelopeVersion: 3, records, tombstones: [] }),
+    );
+  });
+  await page.goto("/");
+  await expect(page.getByRole("textbox", { name: "Research question" })).toBeEnabled();
+
+  // Conversation A completes an exchange but cannot be persisted (limit).
+  await askQuestion(page, "What was Apple's total net sales in fiscal year 2025?");
+  await expect(page.getByText(LONG_ANSWER_FIRST_LINE).first()).toBeVisible();
+
+  // Reload: the durable library is intact, still exactly 100 seeded records,
+  // and the pending A was neither admitted nor dropped into storage.
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Research question" })).toBeEnabled();
+  await openLibrary(page);
+  await expect(page.getByText("Seeded conversation 0")).toBeVisible();
+  await expect(page.getByText("Seeded conversation 99")).toBeVisible();
+  const stored = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("sec_qa_library_v3") ?? "{}"),
+  );
+  const seeded = (stored.records as { id: string }[]).filter((record) =>
+    record.id.startsWith("conversation-seed-"),
+  );
+  expect(seeded).toHaveLength(100);
+});
+
+test("malformed tombstones are preserved and reported across reloads", async ({ page }) => {
+  const malformed = JSON.stringify({
+    envelopeVersion: 3,
+    records: [libraryRecord("conversation-kept", "session-kept", "Kept conversation")],
+    tombstones: [{ id: "broken", revision: "not-a-number", deletedAt: 1 }],
+  });
+  await installApiFixtures(page);
+  await page.addInitScript((raw) => {
+    localStorage.setItem("sec_qa_library_v3", raw);
+  }, malformed);
+  await page.goto("/");
+  await expect(page.getByRole("textbox", { name: "Research question" })).toBeEnabled();
+
+  await openLibrary(page);
+  await expect(page.getByText("Kept conversation")).toBeVisible();
+  await expect(page.getByText(/deletion state/i)).toBeVisible();
+
+  // The malformed bytes survive ask/save/reload untouched.
+  await page.getByRole("tab", { name: /Research/ }).click();
+  await askQuestion(page, "What was Apple's total net sales in fiscal year 2025?");
+  await expect(page.getByText(LONG_ANSWER_FIRST_LINE).first()).toBeVisible();
+  await page.reload();
+  await openLibrary(page);
+  await expect(page.getByText(/deletion state/i)).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("sec_qa_library_v3"))).toBe(malformed);
+});
+
+test("a durable tombstone shows deletion-pending with retry and locks editing", async ({
+  page,
+}) => {
+  const payload = {
+    envelopeVersion: 3,
+    records: [libraryRecord("conversation-pending-ui", "session-pending-ui", "Pending deletion")],
+    tombstones: [{ id: "conversation-pending-ui", revision: 1, deletedAt: 5 }],
+  };
+  await installApiFixtures(page);
+  await page.addInitScript((raw) => {
+    localStorage.setItem("sec_qa_library_v3", raw);
+    localStorage.setItem("sec_qa_session_id", "session-pending-ui");
+    localStorage.setItem("sec_qa_active_conversation_id", "conversation-pending-ui");
+  }, JSON.stringify(payload));
+  await page.goto("/");
+  await expect(page.getByRole("textbox", { name: "Research question" })).toBeEnabled();
+
+  await openLibrary(page);
+  await expect(page.getByText(/Deletion pending/i).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Retry deletion" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Rename conversation" })).not.toBeVisible();
+  // The active pending conversation locks follow-up sending.
+  await expect(page.getByRole("button", { name: "Send question" })).toBeDisabled();
+
+  // Retry completes the deletion on healthy backends.
+  await page.getByRole("button", { name: "Retry deletion" }).click();
+  await expect(page.getByRole("button", { name: "Retry deletion" })).not.toBeVisible();
+  await expect(page.getByText(/Deletion pending/i).first()).not.toBeVisible();
+
+  const stored = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("sec_qa_library_v3") ?? "{}"),
+  );
+  expect(
+    (stored.records as { id: string }[]).some((record) => record.id === "conversation-pending-ui"),
+  ).toBe(false);
+});
+
+// --- Library state screenshots (Light/Dark, per browser) ------------------
+
+const LIBRARY_STATES = [
+  {
+    name: "library-pending-deletion",
+    tombstones: [{ id: "conversation-pending-ui", revision: 1, deletedAt: 5 }] as unknown[],
+  },
+  {
+    name: "library-unreadable-warning",
+    tombstones: [{ id: "broken", revision: "not-a-number", deletedAt: 1 }] as unknown[],
+  },
+];
+
+for (const theme of ["light", "dark"] as const) {
+  for (const state of LIBRARY_STATES) {
+    test(`screenshot ${state.name} (${theme})`, async ({ page }, testInfo) => {
+      const payload = {
+        envelopeVersion: 3,
+        records: [
+          libraryRecord("conversation-pending-ui", "session-pending-ui", "Pending deletion"),
+          libraryRecord("conversation-kept", "session-kept", "Kept research"),
+        ],
+        tombstones: state.tombstones,
+      };
+      await installApiFixtures(page);
+      await page.addInitScript((raw) => {
+        localStorage.setItem("sec_qa_library_v3", raw);
+        localStorage.setItem("sec_qa_session_id", "session-pending-ui");
+        localStorage.setItem("sec_qa_active_conversation_id", "conversation-pending-ui");
+      }, JSON.stringify(payload));
+      await page.goto("/");
+      await expect(page.getByRole("textbox", { name: "Research question" })).toBeEnabled();
+      await openLibrary(page);
+      await expect(
+        page.getByText(/Pending deletion|Deletion pending|deletion state/i).first(),
+      ).toBeVisible();
+      if (theme === "dark") {
+        await page.getByRole("button", { name: /Theme System/ }).click();
+        await page.getByRole("menuitemradio", { name: "Dark" }).click();
+      }
+      await page.waitForTimeout(700);
+      await page.screenshot({
+        path: `e2e/screenshots/${testInfo.project.name}-${theme}-desktop-1440-${state.name}.png`,
+      });
+    });
+  }
+}

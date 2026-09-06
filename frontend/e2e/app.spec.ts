@@ -388,7 +388,7 @@ test.describe("display smokes", () => {
     await expectWorkspaceVisible(page);
   });
 
-  test("200% zoom keeps the workspace usable", async ({ page }) => {
+  test("narrow-viewport reflow (640px CSS viewport) keeps the workspace usable", async ({ page }) => {
     // 200% browser zoom on a 1280px window is a 640px CSS viewport.
     await page.setViewportSize({ width: 640, height: 450 });
     await setup(page);

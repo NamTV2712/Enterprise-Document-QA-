@@ -233,6 +233,9 @@ export function useConversationLibrary(
       const existing = conversationsRef.current.find(
         (record) => record.id === conversationId,
       );
+      // A record pending deletion rejects saves by design; do not attempt
+      // one (and do not flip the saved indicator) from its own autosave.
+      if (existing?.deletionPending) return;
       const record = buildConversationRecord(existing ?? null, {
         id: conversationId,
         sessionId: snapshot.sessionId,
@@ -244,7 +247,12 @@ export function useConversationLibrary(
       const result = await saveConversationRecord(record);
       if (epochRef.current !== identityEpoch) return;
       applyWriteResult(result, { setStorageMode, setStorageWarning });
-      setSaveIndicator(result.status === "persisted" ? "saved" : "volatile");
+      // A rejected save (for example a pending-deletion record) is not a
+      // storage problem: keep the previous indicator instead of claiming
+      // the data is only in this tab.
+      if (result.status !== "failed") {
+        setSaveIndicator(result.status === "persisted" ? "saved" : "volatile");
+      }
       syncConversationsFromRepository();
     },
     [syncConversationsFromRepository],

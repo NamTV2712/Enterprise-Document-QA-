@@ -2,7 +2,7 @@
 
 ## Current Milestone
 
-### Local release readiness M3 — implementation complete, CI pending (2026-09-06)
+### Local release readiness M3 — candidate GO, CI green (2026-09-06)
 
 The release-readiness pass is now scoped to a provider-free local Docker
 candidate. The real HTTP/SSE harness was made deterministic: each browser test
@@ -29,9 +29,11 @@ revision was corrected to match the image/Git revision after detecting that an
 unset Compose `GIT_REVISION` could override the image environment with
 `unknown`.
 
-The final source/docs commit must be the commit recorded by
-`data/diagnostics/local_release_receipt.json`; the receipt is intentionally
-ignored by Git. Push and CI verification remain the last handoff steps. A
+The candidate source/docs commit recorded by
+`data/diagnostics/local_release_receipt.json` was pushed to
+`codex/local-release-readiness`. Backend CI run `34036758953` and Frontend CI
+run `34036759029` are green; the frontend run's `test` and `http-integration`
+jobs both succeeded. The receipt is intentionally ignored by Git. A
 provider-backed benchmark, deployment, frontend hosting change, and canonical
 or index rebuild remain out of scope.
 

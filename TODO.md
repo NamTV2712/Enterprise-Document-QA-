@@ -665,8 +665,10 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
         and a non-secret receipt generator, and document provider-free
         readiness/ticker smoke. The image build and smoke must be rerun from
         the final candidate commit before handoff.
-89. [ ] Push `codex/local-release-readiness`, verify Backend CI, Frontend CI,
-        and the HTTP/SSE integration job, then report the exact remote SHA.
+89. [x] Push `codex/local-release-readiness` and verify the release gates on
+        the candidate SHA. Backend CI run `34036758953` and Frontend CI run
+        `34036759029` are green; frontend `test` and `http-integration` jobs
+        both succeeded.
 
 ## Always-On Deployment
 

@@ -1147,7 +1147,9 @@ offline flags prevent accidental model downloads. The frontend job uses the
 project-pinned Bun `1.3.14`, installs from `bun.lock`, type-checks, runs Vitest,
 builds the production bundle, runs the token contrast gate, and executes the
 Playwright browser suite (Chromium and Firefox) against fully mocked API
-routes, uploading traces and screenshots as artifacts on failure.
+routes, uploading traces and screenshots as artifacts on failure. A separate
+frontend job installs the Python harness dependencies and runs the real
+HTTP/SSE integration suite in Chromium and Firefox without provider calls.
 
 Run the same checks locally:
 

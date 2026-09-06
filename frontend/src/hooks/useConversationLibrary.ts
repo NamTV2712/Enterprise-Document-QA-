@@ -17,8 +17,26 @@ import {
 const DRAFT_PERSIST_DEBOUNCE_MS = 1000;
 const COMPLETION_SAVE_DELAY_MS = 150;
 
-export type SessionContextStatus = "fresh" | "checking" | "available" | "missing" | "unknown";
+export type SessionContextStatus =
+  | "fresh"
+  | "checking"
+  | "available"
+  | "missing"
+  | "unknown"
+  | "cancelled";
 export type SaveIndicator = "idle" | "saved" | "volatile";
+
+/**
+ * Identity of one send operation: captured before the context preflight and
+ * carried through message creation, the provider request, buffering,
+ * completion, and the final save. After every await the caller must confirm
+ * the identity is still active before touching state.
+ */
+export interface SendIdentity {
+  conversationId: string;
+  sessionId: string;
+  epoch: number;
+}
 
 function createSessionId(): string {
   if (typeof globalThis.crypto?.randomUUID === "function") {
@@ -78,13 +96,30 @@ export interface ConversationLibraryController {
   sessionContext: SessionContextStatus;
   /** True when follow-up questions must not be sent for this conversation. */
   isReadOnly: boolean;
+  /** True while a send preflight is running; duplicate sends are blocked. */
+  isPreflightRunning: boolean;
   setInputText: (text: string) => void;
   updateMessages: (updater: (prev: Message[]) => Message[]) => void;
-  beginSend: (text: string) => void;
+  /**
+   * Capture the send identity and mark the preflight in flight. Returns
+   * null when another send is still running for this conversation.
+   */
+  beginSend: (text: string) => SendIdentity | null;
+  /**
+   * Run the backend-context preflight for an identity. Returns "ok" when
+   * the question may be sent, "blocked" when the context is missing or
+   * unknown (state already updated for this conversation), and "cancelled"
+   * when the identity was invalidated while waiting — in which case no
+   * state belonging to a newer conversation is touched.
+   */
+  ensureSendable: (identity: SendIdentity) => Promise<"ok" | "blocked" | "cancelled">;
+  /** Release the preflight slot after the send attempt finished. */
+  finishSend: (identity: SendIdentity) => void;
+  /** True when the identity still matches the active operation epoch. */
+  isIdentityActive: (identity: SendIdentity) => boolean;
   registerBackendExchange: () => void;
   /** Abort the active request, normalize partial answers, persist, then return. */
   cancelAndPersistActive: () => Promise<void>;
-  /** Re-check backend context and return the resolved status. */
   recheckSessionContext: () => Promise<SessionContextStatus>;
   selectConversation: (conversation: ConversationRecord) => Promise<void>;
   /** Start a new session while keeping the draft text and current filters. */
@@ -101,9 +136,9 @@ interface UseConversationLibraryOptions {
 
 /**
  * Owns the local conversation library: hydration, autosave lifecycle,
- * per-conversation operation tokens, and the backend session-context state
- * machine. Streaming request state stays in App; this hook coordinates the
- * persistence and switching semantics around it.
+ * operation epochs, and the backend session-context state machine. Every
+ * asynchronous step re-checks its operation epoch before touching state, so
+ * a late response can never mutate a conversation the user already left.
  */
 export function useConversationLibrary(
   options: UseConversationLibraryOptions,
@@ -129,6 +164,7 @@ export function useConversationLibrary(
   const [bookmarkedMessageIds, setBookmarkedMessageIds] = useState<string[]>([]);
   const [saveIndicator, setSaveIndicator] = useState<SaveIndicator>("idle");
   const [sessionContext, setSessionContext] = useState<SessionContextStatus>("fresh");
+  const [isPreflightRunning, setIsPreflightRunning] = useState(false);
 
   const messagesRef = useRef<Message[]>([]);
   messagesRef.current = messages;
@@ -142,29 +178,30 @@ export function useConversationLibrary(
   activeIdRef.current = activeConversationId;
   const conversationsRef = useRef(conversations);
   conversationsRef.current = conversations;
+  const isLibraryReadyRef = useRef(false);
+  isLibraryReadyRef.current = isLibraryReady;
 
   const conversationCreatedAtRef = useRef(Date.now());
-  // Abortable context checks so unmount or conversation switches do not
-  // leave backend history requests running.
+  // One global operation epoch: bumping it instantly invalidates every
+  // captured identity (sends, preflights, selections, saves).
+  const epochRef = useRef(0);
   const activeContextCheckRef = useRef<AbortController | null>(null);
-  const sessionContextRef = useRef<SessionContextStatus>("fresh");
-  sessionContextRef.current = sessionContext;
-  // Every load/send/save is stamped with the conversation it belongs to so a
-  // late response can never mutate a different conversation's state.
-  const operationTokenRef = useRef(new Map<string, number>());
+  const sendInFlightRef = useRef<SendIdentity | null>(null);
   const draftTimerRef = useRef<number | null>(null);
   const completionTimerRef = useRef<number | null>(null);
   const lastSavedSignatureRef = useRef<string>("");
 
-  const beginOperation = useCallback((conversationId: string): number => {
-    const next = (operationTokenRef.current.get(conversationId) ?? 0) + 1;
-    operationTokenRef.current.set(conversationId, next);
-    return next;
+  const bumpEpoch = useCallback((): number => {
+    epochRef.current += 1;
+    return epochRef.current;
   }, []);
 
-  const isCurrentOperation = useCallback((conversationId: string, token: number): boolean => {
-    return operationTokenRef.current.get(conversationId) === token;
-  }, []);
+  const isIdentityActive = useCallback(
+    (identity: SendIdentity): boolean =>
+      epochRef.current === identity.epoch &&
+      activeIdRef.current === identity.conversationId,
+    [],
+  );
 
   const syncConversationsFromRepository = useCallback(() => {
     // The repository snapshot is the source of truth for revisions.
@@ -175,45 +212,56 @@ export function useConversationLibrary(
     async (
       conversationId: string,
       reason: "draft" | "exchange" | "switch",
-      overrides?: { messages?: Message[]; draft?: string; sessionId?: string },
-    ) => {
-      if (!isLibraryReady) return;
-      // Snapshot values must be captured by the caller at schedule time so a
-      // pending save can never write one conversation's content under
-      // another's id.
-      const conversationMessages = overrides?.messages ?? messagesRef.current;
-      const draft = overrides?.draft ?? inputTextRef.current;
-      const hasContent = conversationMessages.length > 0 || draft.trim().length > 0;
+      snapshot: {
+        messages: Message[];
+        draft: string;
+        sessionId: string;
+        bookmarks: string[];
+        createdAt: number;
+      },
+      identityEpoch: number,
+    ): Promise<void> => {
+      if (!isLibraryReadyRef.current) return;
+      // The caller captures the snapshot at schedule time so a pending save
+      // can never write one conversation's content under another's id, and
+      // it never reads live refs after an await.
+      const hasContent =
+        snapshot.messages.length > 0 || snapshot.draft.trim().length > 0;
       if (!hasContent && reason !== "switch") return;
+      if (epochRef.current !== identityEpoch) return;
 
-      const existing = conversationsRef.current.find((record) => record.id === conversationId) ?? null;
-      const record = buildConversationRecord(existing, {
+      const existing = conversationsRef.current.find(
+        (record) => record.id === conversationId,
+      );
+      const record = buildConversationRecord(existing ?? null, {
         id: conversationId,
-        sessionId: overrides?.sessionId ?? sessionIdRef.current,
-        messages: conversationMessages,
-        draft,
-        bookmarkedMessageIds: bookmarksRef.current,
-        createdAt: conversationCreatedAtRef.current,
+        sessionId: snapshot.sessionId,
+        messages: snapshot.messages,
+        draft: snapshot.draft,
+        bookmarkedMessageIds: snapshot.bookmarks,
+        createdAt: snapshot.createdAt,
       });
       const result = await saveConversationRecord(record);
+      if (epochRef.current !== identityEpoch) return;
       applyWriteResult(result, { setStorageMode, setStorageWarning });
       setSaveIndicator(result.status === "persisted" ? "saved" : "volatile");
       syncConversationsFromRepository();
     },
-    [isLibraryReady, syncConversationsFromRepository],
+    [syncConversationsFromRepository],
   );
 
   // Hydrate the local library first; backend history is only consulted for
   // context status after the local state is authoritative.
   useEffect(() => {
     let cancelled = false;
+    const hydrationEpoch = epochRef.current;
     void (async () => {
       try {
         const library: ConversationLibraryState = await loadConversationLibrary(
           sessionId,
           activeConversationId,
         );
-        if (cancelled) return;
+        if (cancelled || epochRef.current !== hydrationEpoch) return;
         setConversations(library.conversations);
         setStorageMode(library.storageMode);
         setStorageWarning(library.warning);
@@ -247,45 +295,74 @@ export function useConversationLibrary(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const checkBackendContext = useCallback(
+  const fetchSessionContext = useCallback(
     async (
       targetSessionId: string,
       signal?: AbortSignal,
-    ): Promise<SessionContextStatus> => {
+    ): Promise<SessionHistoryResponse | null> => {
       try {
-        const history: SessionHistoryResponse = await getSessionHistory(
-          targetSessionId,
-          signal,
-        );
-        const context = history.context;
-        if (context) {
-          return context.status === "available" ? "available" : "missing";
-        }
-        // Backward compatibility with a backend that does not send context.
-        return history.turns.length > 0 ? "available" : "missing";
+        return await getSessionHistory(targetSessionId, signal);
       } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
-          // An aborted check must not be reported as an unreachable backend.
-          return sessionContextRef.current === "fresh" ? "fresh" : "unknown";
-        }
-        return "unknown";
+        if (error instanceof DOMException && error.name === "AbortError") return null;
+        throw error;
       }
     },
     [],
   );
 
+  const statusFromHistory = useCallback((history: SessionHistoryResponse): SessionContextStatus => {
+    const context = history.context;
+    if (context) {
+      return context.status === "available" ? "available" : "missing";
+    }
+    // Backward compatibility with a backend that does not send context.
+    return history.turns.length > 0 ? "available" : "missing";
+  }, []);
+
   const recheckSessionContext = useCallback(async (): Promise<SessionContextStatus> => {
     const conversationId = activeIdRef.current;
-    const token = beginOperation(conversationId);
+    const epoch = bumpEpoch();
     const controller = new AbortController();
     activeContextCheckRef.current = controller;
     setSessionContext("checking");
-    const status = await checkBackendContext(sessionIdRef.current, controller.signal);
-    if (isCurrentOperation(conversationId, token)) {
+    try {
+      const history = await fetchSessionContext(sessionIdRef.current, controller.signal);
+      if (epochRef.current !== epoch) return "cancelled";
+      if (history === null) {
+        // Aborted checks never become a connection error.
+        return "cancelled";
+      }
+      const status = statusFromHistory(history);
       setSessionContext(status);
+      return status;
+    } catch {
+      if (epochRef.current !== epoch) return "cancelled";
+      setSessionContext("unknown");
+      return "unknown";
     }
-    return status;
-  }, [beginOperation, checkBackendContext, isCurrentOperation]);
+  }, [bumpEpoch, fetchSessionContext, statusFromHistory]);
+
+  /**
+   * Preflight for one send identity. A cancelled identity must not report a
+   * usable context and must not change the active conversation's state.
+   */
+  const ensureSendable = useCallback(
+    async (identity: SendIdentity): Promise<"ok" | "blocked" | "cancelled"> => {
+      setSessionContext("checking");
+      try {
+        const history = await fetchSessionContext(identity.sessionId);
+        if (!isIdentityActive(identity)) return "cancelled";
+        const status = statusFromHistory(history);
+        setSessionContext(status);
+        return status === "available" ? "ok" : "blocked";
+      } catch {
+        if (!isIdentityActive(identity)) return "cancelled";
+        setSessionContext("unknown");
+        return "blocked";
+      }
+    },
+    [fetchSessionContext, isIdentityActive, statusFromHistory],
+  );
 
   // Decide the backend context once hydration completed:
   // - conversations with local exchanges re-check the backend session;
@@ -306,13 +383,14 @@ export function useConversationLibrary(
       return;
     }
     let cancelled = false;
+    const epoch = epochRef.current;
     const controller = new AbortController();
     activeContextCheckRef.current = controller;
     void (async () => {
       setSessionContext("checking");
       try {
         const history = await getSessionHistory(sessionIdRef.current, controller.signal);
-        if (cancelled) return;
+        if (cancelled || epochRef.current !== epoch) return;
         const turns = history.turns ?? [];
         if (turns.length > 0) {
           const adopted: Message[] = [];
@@ -336,8 +414,11 @@ export function useConversationLibrary(
           // richer copy (backend history has no evidence metadata).
           await persistConversation(activeIdRef.current, "exchange", {
             messages: adopted,
+            draft: inputTextRef.current,
             sessionId: sessionIdRef.current,
-          });
+            bookmarks: bookmarksRef.current,
+            createdAt: conversationCreatedAtRef.current,
+          }, epochRef.current);
         } else {
           // The backend does not know this session: it behaves as a fresh
           // conversation and the first question creates it.
@@ -346,9 +427,7 @@ export function useConversationLibrary(
       } catch (error) {
         if (cancelled || controller.signal.aborted) return;
         setSessionContext(
-          error instanceof DOMException && error.name === "AbortError"
-            ? "fresh"
-            : "unknown",
+          error instanceof DOMException && error.name === "AbortError" ? "fresh" : "unknown",
         );
       }
     })();
@@ -371,12 +450,19 @@ export function useConversationLibrary(
     const signature = `${activeIdRef.current}:${messages.length}:${last.id}:${last.text.length}`;
     if (signature === lastSavedSignatureRef.current) return;
     const conversationId = activeIdRef.current;
-    const snapshot = { messages };
+    const snapshot = {
+      messages,
+      draft: inputTextRef.current,
+      sessionId: sessionIdRef.current,
+      bookmarks: bookmarksRef.current,
+      createdAt: conversationCreatedAtRef.current,
+    };
+    const epoch = epochRef.current;
     if (completionTimerRef.current !== null) window.clearTimeout(completionTimerRef.current);
     completionTimerRef.current = window.setTimeout(() => {
       completionTimerRef.current = null;
       lastSavedSignatureRef.current = signature;
-      void persistConversation(conversationId, "exchange", snapshot);
+      void persistConversation(conversationId, "exchange", snapshot, epoch);
     }, COMPLETION_SAVE_DELAY_MS);
     return () => {
       if (completionTimerRef.current !== null) {
@@ -392,11 +478,18 @@ export function useConversationLibrary(
     if (!isLibraryReady) return;
     if (messages.some((message) => message.isStreaming)) return;
     const conversationId = activeIdRef.current;
-    const snapshot = { messages, draft: inputText };
+    const snapshot = {
+      messages,
+      draft: inputText,
+      sessionId: sessionIdRef.current,
+      bookmarks: bookmarksRef.current,
+      createdAt: conversationCreatedAtRef.current,
+    };
+    const epoch = epochRef.current;
     if (draftTimerRef.current !== null) window.clearTimeout(draftTimerRef.current);
     draftTimerRef.current = window.setTimeout(() => {
       draftTimerRef.current = null;
-      void persistConversation(conversationId, "draft", snapshot);
+      void persistConversation(conversationId, "draft", snapshot, epoch);
     }, DRAFT_PERSIST_DEBOUNCE_MS);
     return () => {
       if (draftTimerRef.current !== null) {
@@ -412,7 +505,13 @@ export function useConversationLibrary(
     const handleVisibility = () => {
       if (document.visibilityState !== "hidden") return;
       if (messagesRef.current.some((message) => message.isStreaming)) return;
-      void persistConversation(activeIdRef.current, "draft");
+      void persistConversation(activeIdRef.current, "draft", {
+        messages: messagesRef.current,
+        draft: inputTextRef.current,
+        sessionId: sessionIdRef.current,
+        bookmarks: bookmarksRef.current,
+        createdAt: conversationCreatedAtRef.current,
+      }, epochRef.current);
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
@@ -441,20 +540,62 @@ export function useConversationLibrary(
     [syncConversationsFromRepository],
   );
 
-  const cancelAndPersistActive = useCallback(async () => {
+  /**
+   * The single invalidation procedure: bump the epoch so every captured
+   * identity loses effect, abort the context preflight and the generation
+   * request, and drop pending save timers. Buffered partial answers are
+   * normalized by the caller before the old snapshot is persisted.
+   */
+  const invalidateActiveOperation = useCallback((): number => {
+    const epoch = bumpEpoch();
+    activeContextCheckRef.current?.abort();
+    activeContextCheckRef.current = null;
     onCancelActiveRequest();
+    if (draftTimerRef.current !== null) {
+      window.clearTimeout(draftTimerRef.current);
+      draftTimerRef.current = null;
+    }
+    if (completionTimerRef.current !== null) {
+      window.clearTimeout(completionTimerRef.current);
+      completionTimerRef.current = null;
+    }
+    sendInFlightRef.current = null;
+    setIsPreflightRunning(false);
+    return epoch;
+  }, [bumpEpoch, onCancelActiveRequest]);
+
+  const cancelAndPersistActive = useCallback(async () => {
+    const epoch = invalidateActiveOperation();
     const conversationId = activeIdRef.current;
-    beginOperation(conversationId);
     const normalized = normalizeStoredMessages(messagesRef.current);
     setMessages(normalized);
-    await persistConversation(conversationId, "switch", { messages: normalized });
-  }, [beginOperation, onCancelActiveRequest, persistConversation]);
+    await persistConversation(conversationId, "switch", {
+      messages: normalized,
+      draft: inputTextRef.current,
+      sessionId: sessionIdRef.current,
+      bookmarks: bookmarksRef.current,
+      createdAt: conversationCreatedAtRef.current,
+    }, epoch);
+  }, [invalidateActiveOperation, persistConversation]);
 
   const selectConversation = useCallback(
     async (conversation: ConversationRecord) => {
       if (conversation.id === activeIdRef.current) return;
-      await cancelAndPersistActive();
-      beginOperation(conversation.id);
+      // Navigation epoch: the last selection wins. A slow persist of a
+      // previously selected conversation can never pull the UI back.
+      const navigationEpoch = invalidateActiveOperation();
+      const previousSnapshot = {
+        messages: normalizeStoredMessages(messagesRef.current),
+        draft: inputTextRef.current,
+        sessionId: sessionIdRef.current,
+        bookmarks: bookmarksRef.current,
+        createdAt: conversationCreatedAtRef.current,
+      };
+      const previousConversationId = activeIdRef.current;
+      setMessages(previousSnapshot.messages);
+      await persistConversation(previousConversationId, "switch", previousSnapshot, navigationEpoch);
+      if (epochRef.current !== navigationEpoch) return;
+      beginOperationSwitch(conversation.id);
       await switchToConversation(
         conversation.sessionId,
         conversation.id,
@@ -464,14 +605,33 @@ export function useConversationLibrary(
         conversation.createdAt,
       );
     },
-    [beginOperation, cancelAndPersistActive, switchToConversation],
+    // beginOperationSwitch is defined below; it only bumps a marker for the
+    // switched-to conversation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [invalidateActiveOperation, persistConversation, switchToConversation],
   );
 
+  /** Marker bump so effects re-run for the conversation just activated. */
+  function beginOperationSwitch(conversationId: string): void {
+    // The switch itself bumps no epoch: the navigation epoch already
+    // invalidated older work. Recording the id keeps debug tooling simple.
+    void conversationId;
+  }
+
   const startNewConversation = useCallback(async () => {
-    await cancelAndPersistActive();
+    const epoch = invalidateActiveOperation();
+    const previousSnapshot = {
+      messages: normalizeStoredMessages(messagesRef.current),
+      draft: inputTextRef.current,
+      sessionId: sessionIdRef.current,
+      bookmarks: bookmarksRef.current,
+      createdAt: conversationCreatedAtRef.current,
+    };
+    setMessages(previousSnapshot.messages);
+    await persistConversation(activeIdRef.current, "switch", previousSnapshot, epoch);
+    if (epochRef.current !== epoch) return;
     const newSessionId = createSessionId();
     const newConversationId = createConversationId(newSessionId);
-    beginOperation(newConversationId);
     conversationCreatedAtRef.current = Date.now();
     // Keep the draft text and filters so the user can edit and resend them;
     // the new session deliberately does not inherit backend context.
@@ -484,12 +644,12 @@ export function useConversationLibrary(
       conversationCreatedAtRef.current,
     );
     setSessionContext("fresh");
-  }, [beginOperation, cancelAndPersistActive, switchToConversation]);
+  }, [invalidateActiveOperation, persistConversation, switchToConversation]);
 
   const renameConversation = useCallback(
     (conversationId: string, title: string) => {
       const conversation = conversationsRef.current.find((item) => item.id === conversationId);
-      if (!conversation) return;
+      if (!conversation || conversation.deletionPending) return;
       const trimmed = title.trim().replace(/\s+/g, " ").slice(0, 80);
       if (!trimmed) return;
       const updated: ConversationRecord = {
@@ -510,7 +670,7 @@ export function useConversationLibrary(
     (messageId: string) => {
       const conversationId = activeIdRef.current;
       const conversation = conversationsRef.current.find((item) => item.id === conversationId);
-      if (!conversation) return;
+      if (!conversation || conversation.deletionPending) return;
       const bookmarked = bookmarksRef.current.includes(messageId);
       const next = bookmarked
         ? bookmarksRef.current.filter((id) => id !== messageId)
@@ -531,21 +691,25 @@ export function useConversationLibrary(
 
   const deleteConversation = useCallback(
     async (conversationId: string) => {
-      // Invalidate pending autosaves for the deleted conversation first.
-      beginOperation(conversationId);
+      // Invalidate pending autosaves and any running request for the
+      // conversation being deleted.
+      const epoch = invalidateActiveOperation();
       const result = await deleteConversationRecord(conversationId);
       applyWriteResult(result, { setStorageMode, setStorageWarning });
       syncConversationsFromRepository();
-      const stillPresent = listConversations().some((record) => record.id === conversationId);
-      if (stillPresent) {
-        // A durable-backend failure kept the record; the UI keeps it visible
-        // with the warning so the user can retry the deletion.
+      // The deletion is only complete when the record is gone from the
+      // repository list. A pending tombstone (one backend failed) or a
+      // failed deletion (no backend updated) keeps the item visible with
+      // its warning so it can be retried and exported.
+      const stillListed = listConversations().some(
+        (record) => record.id === conversationId,
+      );
+      if (stillListed) {
         return;
       }
-      if (conversationId === activeIdRef.current) {
+      if (conversationId === activeIdRef.current && epochRef.current === epoch) {
         const newSessionId = createSessionId();
         const newConversationId = createConversationId(newSessionId);
-        beginOperation(newConversationId);
         conversationCreatedAtRef.current = Date.now();
         await switchToConversation(
           newSessionId,
@@ -558,16 +722,30 @@ export function useConversationLibrary(
         setSessionContext("fresh");
       }
     },
-    [beginOperation, switchToConversation, syncConversationsFromRepository],
+    [invalidateActiveOperation, switchToConversation, syncConversationsFromRepository],
   );
 
   const beginSend = useCallback(
-    (_text: string) => {
-      const conversationId = activeIdRef.current;
-      beginOperation(conversationId);
+    (_text: string): SendIdentity | null => {
+      if (sendInFlightRef.current) return null;
+      const identity: SendIdentity = {
+        conversationId: activeIdRef.current,
+        sessionId: sessionIdRef.current,
+        epoch: epochRef.current,
+      };
+      sendInFlightRef.current = identity;
+      setIsPreflightRunning(true);
+      return identity;
     },
-    [beginOperation],
+    [],
   );
+
+  const finishSend = useCallback((identity: SendIdentity) => {
+    if (sendInFlightRef.current?.epoch === identity.epoch) {
+      sendInFlightRef.current = null;
+      setIsPreflightRunning(false);
+    }
+  }, []);
 
   const registerBackendExchange = useCallback(() => {
     setSessionContext("available");
@@ -593,10 +771,14 @@ export function useConversationLibrary(
     isLibraryReady,
     saveIndicator,
     sessionContext,
+    isReadOnly,
+    isPreflightRunning,
     setInputText,
     updateMessages: setMessages,
-    isReadOnly,
     beginSend,
+    ensureSendable,
+    finishSend,
+    isIdentityActive,
     registerBackendExchange,
     cancelAndPersistActive,
     recheckSessionContext,

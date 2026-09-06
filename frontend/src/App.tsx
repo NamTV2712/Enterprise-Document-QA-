@@ -145,21 +145,23 @@ export default function App() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const requestAbortRef = useRef<AbortController | null>(null);
+  // Buffered SSE text that has not been flushed to the message yet. The
+  // cancel path flushes it so switching conversations never loses the last
+  // buffered tokens of a partial answer.
+  const streamingBufferRef = useRef<{ messageId: string; text: string } | null>(null);
   const resetCancelRef = useRef<HTMLButtonElement>(null);
   const healthRequestRef = useRef<Promise<HealthResponse> | null>(null);
   const lastHealthRefreshRef = useRef(0);
   const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
 
-  const cancelActiveRequest = useCallback(() => {
-    const controller = requestAbortRef.current;
-    requestAbortRef.current = null;
-    controller?.abort();
-    setIsLoading(false);
-  }, []);
+  // Indirection so the library hook can trigger the cancel path (which
+  // needs updateMessages) before that function is declared below.
+  const cancelActiveRequestRef = useRef<() => void>(() => {});
 
-  const library = useConversationLibrary({ onCancelActiveRequest: cancelActiveRequest });
+  const library = useConversationLibrary({
+    onCancelActiveRequest: () => cancelActiveRequestRef.current(),
+  });
   const {
-    sessionId,
     conversations,
     messages,
     inputText,
@@ -173,6 +175,9 @@ export default function App() {
     setInputText,
     updateMessages,
     beginSend,
+    ensureSendable,
+    finishSend,
+    isIdentityActive,
     registerBackendExchange,
     selectConversation,
     startNewConversation,
@@ -182,6 +187,25 @@ export default function App() {
     recheckSessionContext,
   } = library;
   const activeConversationId = library.activeConversationId;
+
+  const cancelActiveRequest = useCallback(() => {
+    const buffer = streamingBufferRef.current;
+    if (buffer && buffer.text) {
+      updateMessages((prev) =>
+        prev.map((message) =>
+          message.id === buffer.messageId && message.isStreaming
+            ? { ...message, text: buffer.text }
+            : message,
+        ),
+      );
+    }
+    streamingBufferRef.current = null;
+    const controller = requestAbortRef.current;
+    requestAbortRef.current = null;
+    controller?.abort();
+    setIsLoading(false);
+  }, [updateMessages]);
+  cancelActiveRequestRef.current = cancelActiveRequest;
 
   const applyHealth = useCallback((health: HealthResponse) => {
     lastHealthRefreshRef.current = Date.now();
@@ -353,11 +377,26 @@ export default function App() {
       enableComparative,
     };
 
+    // One identity is captured before the preflight and carried through
+    // message creation, the provider request, buffering, completion, and
+    // the final save. Duplicate sends are blocked while one is in flight.
+    const identity = beginSend(text);
+    if (!identity) return;
+
     // Re-check a saved conversation's backend session before spending the
-    // question; the session can expire while the user is reading.
+    // question; the session can expire while the user is reading. A
+    // cancelled preflight (conversation switched meanwhile) never reports a
+    // usable context and never touches the newer conversation's state.
     if (sessionContext !== "fresh") {
-      const status = await recheckSessionContext();
-      if (status === "missing" || status === "unknown") return;
+      const outcome = await ensureSendable(identity);
+      if (outcome !== "ok") {
+        finishSend(identity);
+        return;
+      }
+    }
+    if (!isIdentityActive(identity)) {
+      finishSend(identity);
+      return;
     }
 
     setActiveView("conversation");
@@ -366,8 +405,6 @@ export default function App() {
     requestAbortRef.current = controller;
     const isCurrentRequest = () =>
       requestAbortRef.current === controller && !controller.signal.aborted;
-
-    beginSend(text);
 
     const userMessage = {
       id: "user-" + Date.now(),
@@ -383,14 +420,18 @@ export default function App() {
       requestSnapshot.enableComparative && isComparativeQuery(text);
     const assistantMsgId = "assistant-" + Date.now();
 
+    // The payload uses the session id captured with the identity, so a
+    // session from an older conversation can never be combined with the
+    // messages of a newer one.
     const payload = {
       question: text,
       ticker: requestSnapshot.ticker,
       section: requestSnapshot.section,
       top_k: requestSnapshot.topK,
-      session_id: sessionId,
+      session_id: identity.sessionId,
     };
 
+    try {
     if (isComparative) {
       // Create initial loading/placeholder message for Decomposed POST
       const placeholder = {
@@ -467,6 +508,7 @@ export default function App() {
 
       let streamingText = "";
       let pendingFlush: ReturnType<typeof setTimeout> | null = null;
+      streamingBufferRef.current = { messageId: assistantMsgId, text: "" };
 
       const cancelPendingFlush = () => {
         if (pendingFlush !== null) {
@@ -507,9 +549,11 @@ export default function App() {
               );
             } else if (event.type === "token") {
               streamingText += event.data;
+              streamingBufferRef.current = { messageId: assistantMsgId, text: streamingText };
               scheduleStreamingFlush();
             } else if (event.type === "done") {
               cancelPendingFlush();
+              streamingBufferRef.current = null;
               updateMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantMsgId
@@ -526,6 +570,7 @@ export default function App() {
               setIsLoading(false);
             } else if (event.type === "error") {
               cancelPendingFlush();
+              streamingBufferRef.current = null;
               updateMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantMsgId
@@ -554,6 +599,7 @@ export default function App() {
               "The connection closed before the answer finished. Please try again.",
             );
             cancelPendingFlush();
+            streamingBufferRef.current = null;
             updateMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantMsgId
@@ -580,6 +626,7 @@ export default function App() {
           "We couldn't complete this answer. Please try again.",
         );
         cancelPendingFlush();
+        streamingBufferRef.current = null;
         updateMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
@@ -607,22 +654,29 @@ export default function App() {
       // The connection closed. If the server never sent a done or error
       // event, flush the buffered partial answer and normalize it to a
       // stopped state; a dropped stream must never remain "streaming".
-      updateMessages((prev) =>
-        prev.map((m) => {
-          if (m.id !== assistantMsgId || !m.isStreaming) return m;
-          if (streamingText) {
-            return { ...m, text: streamingText, isStreaming: false, status: "stopped" as const };
-          }
-          return {
-            ...m,
-            text: "The connection closed before the answer finished. Please try again.",
-            isStreaming: false,
-            error: true,
-            status: "error" as const,
-            retryText: text,
-          };
-        }),
-      );
+      if (!isCurrentRequest() && isIdentityActive(identity)) {
+        streamingBufferRef.current = null;
+        updateMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== assistantMsgId || !m.isStreaming) return m;
+            if (streamingText) {
+              return { ...m, text: streamingText, isStreaming: false, status: "stopped" as const };
+            }
+            return {
+              ...m,
+              text: "The connection closed before the answer finished. Please try again.",
+              isStreaming: false,
+              error: true,
+              status: "error" as const,
+              retryText: text,
+            };
+          }),
+        );
+      }
+    }
+    } finally {
+      streamingBufferRef.current = null;
+      finishSend(identity);
     }
 
     if (controller.signal.aborted) return;
@@ -638,14 +692,15 @@ export default function App() {
   }, [
     beginSend,
     enableComparative,
+    ensureSendable,
+    finishSend,
     isBackendConnected,
+    isIdentityActive,
     isPipelineReady,
     isReadOnly,
-    recheckSessionContext,
     registerBackendExchange,
     selectedSection,
     selectedTicker,
-    sessionId,
     sessionContext,
     topK,
     refreshHealth,

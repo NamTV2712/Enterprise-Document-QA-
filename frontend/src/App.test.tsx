@@ -357,7 +357,7 @@ describe("App request cancellation", () => {
     expect(input).toBeEnabled();
     await waitFor(() =>
       expect(
-        setItemSpy.mock.calls.filter(([key]) => key === "sec_qa_conversations_v2"),
+        setItemSpy.mock.calls.filter(([key]) => key === "sec_qa_library_v3"),
       ).toHaveLength(1),
     );
     setItemSpy.mockRestore();
@@ -401,6 +401,8 @@ describe("App request cancellation", () => {
     fireEvent.click(stopButton);
 
     expect(querySignal?.aborted).toBe(true);
+    // Let the aborted request's catch/finally settle before asserting.
+    await new Promise((resolve) => setTimeout(resolve, 200));
     expect(await screen.findByText("Generation stopped.")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Stop generating response" }),
@@ -435,7 +437,7 @@ describe("App request cancellation", () => {
     const dialog = screen.getByRole("dialog", { name: "Start a new conversation?" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Start new conversation" }));
     await waitFor(() => {
-      const raw = localStorage.getItem("sec_qa_conversations_v2");
+      const raw = localStorage.getItem("sec_qa_library_v3");
       expect(raw).toContain("Full historical answer");
     });
     expect(apiMocks.deleteSession).not.toHaveBeenCalled();

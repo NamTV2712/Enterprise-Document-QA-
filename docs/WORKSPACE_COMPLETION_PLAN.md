@@ -168,14 +168,17 @@ be captured before P9/P10 can close.
 - `GROQ_API_KEY5` is configured locally and is already included in the
   generation/judging rotation; key rotation does not increase the shared
   campaign budget.
+- A controlled key5-only probe (`window_05_key5`) completed generation and
+  judging with HTTP 200, `provider_calls_complete=true`, and both quality and
+  acceptance preflight passing. It consumed two additional requests.
 - Fresh Provider B execution was attempted only through its bounded runner:
   `bilingual_evaluation_v1_window_03` stopped at `24/60`, and
   `bilingual_evaluation_v1_window_04` stopped at `39/60`, both on provider
   rate limits. The latest status is `INCOMPLETE`, not a semantic result.
-- This continuation used `67` real requests (`2 + 24 + 2 + 39`) out of the
+- This continuation used `69` real requests (`2 + 24 + 2 + 39 + 2`) out of the
   shared `120` request cap. The fresh Provider A `window_04` manifest was
   registered provider-free but was not executed because a complete 60-call
-  campaign would exceed the remaining `53` slots. No provider retry is safe
+  campaign would exceed the remaining `51` slots. No provider retry is safe
   without a newly authorized budget/window.
 
 ## Handoff checklist

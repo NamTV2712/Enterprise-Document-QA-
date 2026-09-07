@@ -30,7 +30,11 @@ historical entries remain unchanged for provenance.
   executed because the continuation had used `67` of the shared `120` real
   request slots, leaving `53`, which is insufficient for a fresh 60-call run.
   `GROQ_API_KEY5` is configured locally and is already included in the
-  generation/judging key pools; it does not change the shared campaign cap.
+  generation/judging key pools; it does not change the shared campaign cap. A
+  controlled key5-only probe then completed both calls with HTTP 200 and passed
+  quality/acceptance preflight, so there is no evidence that key5 itself is out
+  of quota. The probe used two more slots, bringing the continuation total to
+  `69/120` and leaving `51`.
 - No corpus/index rebuild, merge, deploy, or Docker receipt was performed for
   this frontend-only continuation. The official benchmark remains unchanged;
   production Library p95 and the full 120-variant acceptance freeze remain

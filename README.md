@@ -489,6 +489,11 @@ campaign remains `NOT_STARTED`; a provider interruption is recorded as
 and use `--execute`; do not mutate an incomplete ledger or select a best-of
 replicate.
 
+The latest controlled probe using only `GROQ_API_KEY5` completed generation and
+judging with HTTP 200. This confirms the key is accepted, but does not increase
+the campaign-wide request budget or prove that a full A/B campaign can bypass
+account-level rate limits.
+
 ### Historical evaluation log
 
 Admission audits are clean: the promoted-official self-check reports zero

@@ -71,22 +71,23 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        Explorer catalog/chunk previews, System & provenance metadata, mobile
        workspace navigation, and local answer feedback. Changed contracts have
        targeted frontend/backend tests; no corpus or index rebuild was made.
-5g. [ ] Rerun the complete post-change offline release matrix: full backend,
+5g. [x] Rerun the complete post-change offline release matrix: full backend,
        frontend build/contrast, Chromium/Firefox browser matrix, and HTTP/SSE
-       integration. Update receipts with the actual counts; do not reuse the
-       pre-change release receipt as evidence for this checkpoint.
-5c. [~] Offline release gates for the bilingual branch are green for backend
-       `696 passed` + compileall, frontend `90/90` + build/contrast, browser
-       `94/94` Chromium/Firefox, and HTTP/SSE integration `14/14`. Docker
-       build/receipt remains blocked until Docker Desktop is running. Do not
-       rebuild canonical data or the index.
+       integration. Results and the final commit-bound receipt are recorded
+       above; the prior release receipt was not reused as evidence.
+5c. [x] Offline release gates for the bilingual branch are green: backend
+       `703 passed` + compileall, frontend `94/94` + build/contrast, browser
+       `94/94` Chromium/Firefox, HTTP/SSE integration `14/14`, and Docker
+       build/readiness/receipt PASS. The receipt is ignored at
+       `data/diagnostics/local_release_receipt_bilingual.json`; no canonical
+       data or index rebuild was made.
 5d. [ ] After offline gates pass, prepare the bounded provider campaign under
        a new ledger/window (maximum 120 real requests, including explicit
        retries). Keep the earlier incomplete Evidence Contract v3 ledger
        historical and do not resume it.
-5e. [ ] Update the final round report with receipts and results, commit/push
-        the branch, create the PR, and verify CI. Merge/deploy only after an
-        explicit follow-up decision.
+5e. [x] Update the final round report with receipts and results, commit/push
+        the branch, keep PR #3 open, and verify green CI. Merge/deploy remains
+        a separate explicit follow-up decision.
 6. [ ] Keep `/metrics` disabled unless the deployment protects it. Monitor
        429, 5xx, request count, and latency through aggregate telemetry.
 7. [x] Finalize the FY2026 corpus recovery and table fallback: NOW/NVDA/ORCL

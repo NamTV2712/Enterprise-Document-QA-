@@ -37,19 +37,22 @@ Completed in the current working tree:
   rebuild the corpus/index or call an LLM.
 - Added local answer feedback controls, mobile workspace-view navigation, and
   English/Vietnamese surfaces for the new tools.
-- The current frontend suite is `94/94` with typecheck/lint green; the new
-  retrieval/document panel tests are included. Backend targeted coverage is
-  `60 passed` for the changed API, retriever-inspection, and normalization
-  contracts, plus compileall. Full backend/browser/build gates still need to
-  be rerun after this working-tree checkpoint.
+- The final offline verification for this round is green: frontend
+  typecheck/lint, `94/94` unit tests, production build, and light/dark
+  contrast; Chromium + Firefox browser matrix `94/94`; real HTTP/SSE
+  integration `14/14`; and backend full suite `703 passed` + compileall.
+- Docker release preflight is `PASS`, the pinned image builds successfully,
+  Compose readiness reports 50 searchable companies and 10,053 chunks, the
+  new `/documents` catalog reports 50 loaded filings, and `/system/info`
+  reports the expected `hybrid_rerank` default. The final ignored receipt is
+  `data/diagnostics/local_release_receipt_bilingual.json` with
+  `provider_calls: 0` and `overall: PASS`.
 
-The Docker release preflight is currently `BLOCKED` only because Docker
-Desktop is not running on the host; all host/artifact/config checks passed.
-Therefore no image or provider-free Docker receipt was produced. The provider
-campaign is still pending a newly authorized provider window/quota, so this
-branch is an offline candidate rather than a provider-backed GO. PR/CI is the
-next handoff step. No provider request or data/index rebuild has been made in
-this round.
+The provider campaign is still pending a newly authorized provider
+window/quota, so this branch remains an offline candidate rather than a
+provider-backed GO. PR #3 is open and the final pushed commit has green
+backend/frontend test and HTTP-integration checks plus Vercel preview. No
+provider request or data/index rebuild has been made in this round.
 
 ## Current Milestone
 

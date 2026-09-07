@@ -2,7 +2,10 @@ from src.generation.comparative_answerability import assess_comparative_answerab
 from src.generation.comparative_answer_renderer import (
     COMPARATIVE_ANSWER_RENDERER_FINGERPRINT,
     COMPARATIVE_ANSWER_RENDERER_V3_FINGERPRINT,
+    render_deterministic_growth_comparison,
     render_dependency_comparison_v3,
+    render_dependency_comparison_v3_localized,
+    render_deterministic_international_risk_answer,
 )
 from src.generation.comparative_evidence import (
     COMPARATIVE_EVIDENCE_V3_FINGERPRINT,
@@ -107,6 +110,64 @@ Services net sales were 109,158 million.
     bounded = render_dependency_comparison_v3(QUESTION, context)
     assert bounded is not None
     assert "bounded conclusion" in bounded
+
+
+def test_v3_localized_renderer_keeps_bounded_vietnamese_conclusion() -> None:
+    context = """[Source 1] MSFT 10-K, MD&A
+Microsoft Cloud revenue was $168.9 billion in fiscal year 2025.
+
+[Source 2] AAPL 10-K, MD&A
+Services net sales were 109,158 million in fiscal year 2025.
+"""
+    answer = render_dependency_comparison_v3_localized(QUESTION, context, "vi")
+    assert answer is not None
+    assert "không đủ để xác định" in answer
+    assert "Microsoft" in answer and "Apple" in answer
+
+
+def test_international_risk_renderer_does_not_infer_breadth_or_severity() -> None:
+    question = "Compare Apple's and Amazon's approach to international operations risk."
+    context = """[Source 1] AAPL 10-K, Risk Factors
+Apple describes international operations and foreign exchange risks.
+
+[Source 2] AMZN 10-K, Risk Factors
+Amazon describes international operations and regulatory risks.
+"""
+    answer = render_deterministic_international_risk_answer(question, context)
+    assert answer is not None
+    assert "broader or more severe" in answer
+    assert "[Source 1]" in answer and "[Source 2]" in answer
+
+
+def test_growth_renderer_uses_reported_rates_without_derived_difference() -> None:
+    question = "How does Amazon's AWS segment compare to Microsoft's cloud business in terms of growth?"
+    context = """[Source 1] AMZN 10-K, MD&A
+AWS sales increased 20% in 2025, compared to the prior year.
+
+[Source 2] MSFT 10-K, MD&A
+Microsoft Cloud revenue increased 23% to $168.9 billion.
+"""
+    answer = render_deterministic_growth_comparison(question, context)
+    assert answer is not None
+    assert "20%" in answer and "23%" in answer
+    assert "3% difference" not in answer
+    assert "3 percentage points" not in answer
+    assert "millions" not in answer
+    assert "[Source 1]" in answer and "[Source 2]" in answer
+
+
+def test_growth_renderer_localizes_connective_prose() -> None:
+    question = "How does Amazon's AWS segment compare to Microsoft's cloud business in terms of growth?"
+    context = """[Source 1] AMZN 10-K, MD&A
+AWS sales increased 20% in 2025, compared to the prior year.
+
+[Source 2] MSFT 10-K, MD&A
+Microsoft Cloud revenue increased 23% to $168.9 billion.
+"""
+    answer = render_deterministic_growth_comparison(question, context, "vi")
+    assert answer is not None
+    assert "Theo các tỷ lệ được báo cáo" in answer
+    assert "khoảng" not in answer
 
 
 def test_v3_fingerprints_are_opt_in_and_v2_default_is_unchanged() -> None:

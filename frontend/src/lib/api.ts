@@ -23,11 +23,47 @@ import {
 
 export class ApiError extends Error {
   readonly status: number | null;
+  readonly code: string | null;
+  readonly retryAfterSeconds: number | null;
 
-  constructor(message: string, status: number | null = null) {
+  constructor(
+    message: string,
+    status: number | null = null,
+    code: string | null = null,
+    retryAfterSeconds: number | null = null,
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+async function throwApiError(response: Response, fallback: string): Promise<never> {
+  const text = await response.text().catch(() => "");
+  try {
+    const payload = JSON.parse(text) as {
+      detail?: { code?: unknown; message?: unknown; retry_after_seconds?: unknown } | string;
+      code?: unknown;
+      error?: unknown;
+      retry_after_seconds?: unknown;
+    };
+    const detail = typeof payload.detail === "object" && payload.detail !== null ? payload.detail : null;
+    const code = typeof detail?.code === "string" ? detail.code : typeof payload.code === "string" ? payload.code : null;
+    const retryRaw = detail?.retry_after_seconds ?? payload.retry_after_seconds;
+    const retryAfterSeconds = typeof retryRaw === "number" ? retryRaw : null;
+    const message = typeof detail?.message === "string"
+      ? detail.message
+      : typeof payload.error === "string"
+        ? payload.error
+        : typeof payload.detail === "string"
+          ? payload.detail
+          : fallback;
+    throw new ApiError(message, response.status, code, retryAfterSeconds);
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(`${fallback}: ${text || response.statusText}`, response.status);
   }
 }
 
@@ -252,7 +288,7 @@ export async function queryDecomposed(
     signal,
   });
   if (!response.ok) {
-    throw new ApiError(`Decomposed query failed with status: ${response.status}`, response.status);
+    await throwApiError(response, `Decomposed query failed with status: ${response.status}`);
   }
   return response.json();
 }
@@ -313,11 +349,7 @@ export async function streamQuery(
     });
 
     if (!response.ok) {
-      const errText = await response.text().catch(() => "");
-      throw new ApiError(
-        `Streaming query failed with status ${response.status}: ${errText || response.statusText}`,
-        response.status,
-      );
+      await throwApiError(response, `Streaming query failed with status ${response.status}`);
     }
 
     if (!response.body) {

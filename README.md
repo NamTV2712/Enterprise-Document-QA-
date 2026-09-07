@@ -34,6 +34,7 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 | [`frontend/README.md`](frontend/README.md) | Frontend-specific local development, Vercel setup, and API usage |
 | [`docs/LOCAL_RELEASE_RUNBOOK.md`](docs/LOCAL_RELEASE_RUNBOOK.md) | Provider-free local Docker build, smoke test, provenance, and receipt |
 | [`docs/ARCHITECTURE_API_GUIDE.md`](docs/ARCHITECTURE_API_GUIDE.md) | Retrieval flow, read-only API surfaces, and frontend state boundaries |
+| [`docs/IMPROVEMENT_ROUND_REPORT.md`](docs/IMPROVEMENT_ROUND_REPORT.md) | M0-M11 improvement receipt, provider accounting, and final verification gates |
 
 ## Key Features
 
@@ -52,7 +53,7 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 | Memory | Multi-turn backend memory, query rewriting, and a searchable local conversation library with bookmarks, Markdown export, and versioned JSON backup/restore |
 | Decomposition | Comparative and enumeration queries decomposed into focused sub-queries |
 | Evaluation | Fixed benchmark with faithfulness, relevancy, and context precision metrics |
-| Research workspace | Vite/React interface with searchable company and section controls, English/Vietnamese UI and answer selection, streaming answers, accent-insensitive evidence inspection with per-panel search and copy, per-answer bookmarks, feedback, private notes, local evidence collections, a reliable conversation Library, JSON backup/restore, session context status, glossary/help, research templates, command palette, and keyboard shortcuts |
+| Research workspace | Vite/React interface with searchable company and section controls, English/Vietnamese UI and answer selection, streaming answers, an existing-evidence source rail/reader, accent-insensitive evidence inspection with per-panel search and copy, per-answer bookmarks, feedback, private notes, local evidence collections, a reliable conversation Library, JSON backup/restore, session context status, glossary/help, research templates, command palette, keyboard shortcuts, lazy tool panels, and responsive Light/Dark themes |
 | Research tools | Provider-free Retrieval Lab for BM25/dense/RRF/reranker trace inspection with preset comparison and JSON/CSV export, read-only Document Explorer with filing/chunk search, Evaluation & experiments with validated/recorded modes, local Analytics, and System & provenance metadata without filesystem paths or secrets |
 | Conversation UX | Separate Overview and Conversation views, mobile workspace navigation, bounded answer cards, interpreted-query metadata, and a resizable desktop control sidebar |
 
@@ -459,12 +460,12 @@ existing local records are never overwritten. In browsers with Web Locks, only
 the tab owning the Library writer lock may durably write; other tabs remain
 readable and exportable until ownership is acquired. The current offline gate
 is `107/107` frontend tests, `106/106` Chromium/Firefox browser checks, and
-`718` backend tests; provider campaigns and production hosting remain separate
+`727` backend tests; provider campaigns and production hosting remain separate
 from this local release candidate. The final browser freeze includes backup
 import preview/confirm, the guided portfolio route, responsive
 Light/Dark/system-theme coverage, and the provider-free tool views. A
 production-build fixture with 100 conversations and 10,000 messages measured
-Library search p95 at 42.69 ms in Chromium and 54.08 ms in Firefox on the
+Library search p95 at 70.31 ms in Chromium and 66.93 ms in Firefox on the
 latest full freeze, below the 200 ms target.
 
 ### Evaluation, analytics, and quota-safe campaign handoff
@@ -496,12 +497,11 @@ judging with HTTP 200. This confirms the key is accepted, but does not increase
 the campaign-wide request budget or prove that a full A/B campaign can bypass
 account-level rate limits.
 
-The subsequent key5-only bounded receipts are: Provider A
-`evidence_contract_v3_window_07_key5` `GO` (`48/60` requests, both replicates
-passed), and Provider B `bilingual_evaluation_v1_window_06_key5` `NO-GO`
-(`52/60` requests, zero transport errors but semantic bilingual gates failed).
-The Provider B result is a quality decision, not a quota interruption; the
-runner does not select a better-of retry.
+The subsequent key5-only bounded receipts are recorded in
+[`docs/IMPROVEMENT_ROUND_REPORT.md`](docs/IMPROVEMENT_ROUND_REPORT.md). The
+final bilingual improvement campaign is
+`bilingual_evaluation_improvement_round7_key5`: `54/60` requests, both
+replicates passed, and `candidate_decision=GO`.
 
 ### Historical evaluation log
 
@@ -1124,6 +1124,7 @@ GROQ_API_KEY4=optional_fourth_failover_key
 GROQ_API_KEY5=optional_fifth_failover_key
 GROQ_API_KEY_FALL_BACK=optional_first_evaluation_generation_key
 GROQ_API_KEY_FALL_BACK2=optional_second_evaluation_generation_key
+GROQ_KEY_POLICY=key5_only
 QDRANT_MODE=local
 QDRANT_LOCAL_PATH=data/processed/qdrant
 QDRANT_INDEX_MANIFEST_PATH=data/processed/qdrant_index_manifest.json
@@ -1142,7 +1143,14 @@ ENABLE_CACHE_CLEAR=false
 TRUSTED_PROXY_CIDRS=
 ```
 
-`ALLOWED_ORIGINS` is a comma-separated allowlist. Add the final Vercel domain before public deployment; do not use `*`. `TRUSTED_PROXY_CIDRS` is empty by default; set it to the proxy CIDR ranges only when the API runs behind ngrok or another reverse proxy, as described in the rate-limit section above.
+`GROQ_KEY_POLICY=key5_only` makes all generator, judge, correction, and
+decomposer calls resolve only `GROQ_API_KEY5`; use this for the improvement and
+evaluation round. The legacy `pool` value remains available for serving
+failover when that is an explicit operational choice. `ALLOWED_ORIGINS` is a
+comma-separated allowlist. Add the final Vercel domain before public
+deployment; do not use `*`. `TRUSTED_PROXY_CIDRS` is empty by default; set it
+to the proxy CIDR ranges only when the API runs behind ngrok or another reverse
+proxy, as described in the rate-limit section above.
 
 Build local artifacts in order:
 

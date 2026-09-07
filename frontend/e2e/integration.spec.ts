@@ -72,7 +72,9 @@ test("asked question streams cited answer over real SSE with sources", async ({ 
   await expect(page.getByText(/Harness answer with/).first()).toBeVisible();
   await expect(page.getByText(/Retrieved filing evidence · 1 excerpts/i)).toBeVisible();
   await page.getByRole("button", { name: /Show 1 retrieved filing evidence excerpts/i }).click();
-  await expect(page.getByText(/Harness evidence for:/)).toBeVisible();
+  await expect(
+    page.getByRole("article", { name: "Research assistant response" }).getByText(/Harness evidence for:/),
+  ).toBeVisible();
   // The citation button in the answer opens the matching source excerpt.
   await page.getByRole("button", { name: "Open source 1" }).click();
   await expect(page.getByText(/Harness evidence for:/).first()).toBeVisible();

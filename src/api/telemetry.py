@@ -19,6 +19,7 @@ class RequestTelemetry:
         self._cache_misses: int = 0
         self._streaming_requests: int = 0
         self._decomposed_requests: int = 0
+        self._provider_attempts: Counter[str] = Counter()
         self._started_at = time.time()
 
     def record(self, route: str, status_code: int, elapsed_seconds: float) -> None:
@@ -50,6 +51,13 @@ class RequestTelemetry:
     def record_decomposed_request(self) -> None:
         with self._lock:
             self._decomposed_requests += 1
+
+    def record_provider_event(self, event: str) -> None:
+        """Record allowlisted provider lifecycle labels, never prompts or keys."""
+        if event not in {"completed", "quota", "transport_error", "rate_limited"}:
+            event = "transport_error"
+        with self._lock:
+            self._provider_attempts[event] += 1
 
     def _percentile(self, data: list[float], p: float) -> float:
         """Calculate p-th percentile from a sorted list."""
@@ -104,5 +112,8 @@ class RequestTelemetry:
                 "request_types": {
                     "streaming": self._streaming_requests,
                     "decomposed": self._decomposed_requests,
+                },
+                "provider": {
+                    "attempts": dict(sorted(self._provider_attempts.items())),
                 },
             }

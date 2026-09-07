@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, ExternalLink, FileText, Search, X } from "lucide-react";
 import { getDocumentChunks, getDocuments } from "../lib/api";
 import { DocumentChunk, DocumentRow } from "../types";
@@ -10,6 +10,16 @@ interface DocumentExplorerPanelProps {
 }
 
 const PAGE_SIZE = 12;
+const SEARCH_DEBOUNCE_MS = 250;
+
+function useDebouncedValue(value: string): string {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [value]);
+  return debounced;
+}
 
 export function DocumentExplorerPanel({ tickers, sections }: DocumentExplorerPanelProps) {
   const { locale } = useLocale();
@@ -27,37 +37,73 @@ export function DocumentExplorerPanel({ tickers, sections }: DocumentExplorerPan
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingChunks, setIsLoadingChunks] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const debouncedSearch = useDebouncedValue(search);
+  const debouncedChunkSearch = useDebouncedValue(chunkSearch);
+  const documentCache = useRef(new Map<string, { items: DocumentRow[]; total: number }>());
+  const chunkCache = useRef(new Map<string, DocumentChunk[]>());
+  const documentRequestId = useRef(0);
+  const chunkRequestId = useRef(0);
 
   useEffect(() => {
     const controller = new AbortController();
+    const requestId = ++documentRequestId.current;
+    const cacheKey = JSON.stringify({ ticker, section, search: debouncedSearch, page });
+    const cached = documentCache.current.get(cacheKey);
+    if (cached) {
+      setDocuments(cached.items);
+      setTotal(cached.total);
+      setIsLoading(false);
+      setError(null);
+      return () => controller.abort();
+    }
     setIsLoading(true);
     setError(null);
-    void getDocuments({ ticker: ticker || null, section: section || null, search, page, page_size: PAGE_SIZE }, controller.signal)
+    void getDocuments({ ticker: ticker || null, section: section || null, search: debouncedSearch, page, page_size: PAGE_SIZE }, controller.signal)
       .then((response) => {
+        if (requestId !== documentRequestId.current) return;
+        documentCache.current.set(cacheKey, { items: response.items, total: response.total });
         setDocuments(response.items);
         setTotal(response.total);
       })
       .catch((reason) => {
+        if (requestId !== documentRequestId.current) return;
         if (reason instanceof DOMException && reason.name === "AbortError") return;
         setError(reason instanceof Error ? reason.message : "Could not load documents.");
       })
-      .finally(() => setIsLoading(false));
+      .finally(() => {
+        if (requestId === documentRequestId.current) setIsLoading(false);
+      });
     return () => controller.abort();
-  }, [page, search, section, ticker]);
+  }, [page, debouncedSearch, section, ticker]);
 
   useEffect(() => {
     if (!selected) return;
     const controller = new AbortController();
+    const requestId = ++chunkRequestId.current;
+    const cacheKey = JSON.stringify({ documentId: selected.document_id, search: debouncedChunkSearch, page: chunkPage });
+    const cached = chunkCache.current.get(cacheKey);
+    if (cached) {
+      setChunks(cached);
+      setIsLoadingChunks(false);
+      return () => controller.abort();
+    }
     setIsLoadingChunks(true);
-    void getDocumentChunks(selected.document_id, { search: chunkSearch, page: chunkPage, page_size: 8 }, controller.signal)
-      .then((response) => setChunks(response.items))
+    void getDocumentChunks(selected.document_id, { search: debouncedChunkSearch, page: chunkPage, page_size: 8 }, controller.signal)
+      .then((response) => {
+        if (requestId !== chunkRequestId.current) return;
+        chunkCache.current.set(cacheKey, response.items);
+        setChunks(response.items);
+      })
       .catch((reason) => {
+        if (requestId !== chunkRequestId.current) return;
         if (reason instanceof DOMException && reason.name === "AbortError") return;
         setError(reason instanceof Error ? reason.message : "Could not load document excerpts.");
       })
-      .finally(() => setIsLoadingChunks(false));
+      .finally(() => {
+        if (requestId === chunkRequestId.current) setIsLoadingChunks(false);
+      });
     return () => controller.abort();
-  }, [chunkPage, chunkSearch, selected]);
+  }, [chunkPage, debouncedChunkSearch, selected?.document_id]);
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const rangeLabel = useMemo(() => {

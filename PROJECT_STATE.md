@@ -1,5 +1,32 @@
 # Project State
 
+## Latest improvement round — M0-M11 complete (2026-09-07)
+
+The full improvement plan is implemented and verified on
+`codex/bilingual-research-workspace`. The detailed milestone receipt is in
+[`docs/IMPROVEMENT_ROUND_REPORT.md`](docs/IMPROVEMENT_ROUND_REPORT.md).
+
+- Strict provider policy is implemented through `GROQ_KEY_POLICY=key5_only`;
+  every provider-backed campaign call in this round resolved to
+  `GROQ_API_KEY5`. The append-only round budget contains `319/2000` reserved
+  attempts, `316` completed attempts, `3` terminal transport errors, and no
+  unknown reservations.
+- Fresh campaign `bilingual_evaluation_improvement_round7_key5` completed
+  `54/60` requests with both replicates passing (`COMPLETE / GO`). Earlier
+  incomplete or semantic `NO-GO` campaign ledgers remain immutable and are not
+  reclassified. The official benchmark and canonical corpus/index remain
+  unchanged.
+- The workspace now has a compact desktop evidence rail and reader backed only
+  by existing excerpts/metadata, semantic Light/Dark tokens, contrast-safe
+  state colors, lazy tool panels, indexed Library search, debounced/stale-safe
+  Document Explorer requests, analytics ranges, backend metadata indexes, and
+  structured provider/rate-limit errors.
+- Final gates: backend `727 passed` plus compileall; frontend `107/107`,
+  typecheck, lint, and production build; mocked browser `106/106`; HTTP/SSE
+  integration `14/14`; CPU Docker image build and readiness smoke green.
+- No merge, deploy, public benchmark promotion, or corpus/index regeneration
+  was performed.
+
 ## Latest continuation — final offline workspace closure and Groq validation (2026-09-07)
 
 This section supersedes older test counts and provider-pending wording below;

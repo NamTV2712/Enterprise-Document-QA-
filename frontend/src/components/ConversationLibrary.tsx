@@ -75,18 +75,16 @@ function collectBookmarkedAnswers(
   normalizedSearch: string,
 ): BookmarkedAnswer[] {
   const answers: BookmarkedAnswer[] = [];
+  const matchingConversationIds = normalizedSearch
+    ? new Set(searchConversationRecords(conversations, normalizedSearch).map((item) => item.id))
+    : null;
   for (const conversation of conversations) {
+    if (matchingConversationIds && !matchingConversationIds.has(conversation.id)) continue;
     for (const messageId of conversation.bookmarkedMessageIds) {
       const message = conversation.messages.find(
         (item) => item.id === messageId && item.sender === "assistant" && item.text,
       );
       if (!message) continue;
-      if (
-        normalizedSearch &&
-        !normalizeLocaleSearch(`${conversation.title} ${message.text}`).includes(normalizedSearch)
-      ) {
-        continue;
-      }
       answers.push({
         conversation,
         messageId,

@@ -585,7 +585,13 @@ for (const theme of ["light", "dark"] as const) {
 test("production Library search stays below the 200ms p95 budget", async ({ page }) => {
   await installApiFixtures(page);
   await page.addInitScript(() => {
-    const records = Array.from({ length: 100 }, (_, conversationIndex) => ({
+    const records = Array.from({ length: 100 }, (_, conversationIndex) => {
+      const topic = conversationIndex < 40
+        ? "revenue"
+        : conversationIndex < 70
+          ? "risk"
+          : "cash flow";
+      return {
       schemaVersion: 4,
       id: `conversation-performance-${conversationIndex}`,
       sessionId: `session-performance-${conversationIndex}`,
@@ -595,16 +601,17 @@ test("production Library search stays below the 200ms p95 budget", async ({ page
       createdAt: conversationIndex,
       updatedAt: conversationIndex,
       draft: "",
-      tags: ["revenue"],
+      tags: [topic],
       notes: [],
       variants: [],
       bookmarkedMessageIds: [],
       messages: Array.from({ length: 100 }, (_, messageIndex) => ({
         id: `message-performance-${conversationIndex}-${messageIndex}`,
         sender: "user",
-        text: `Question ${messageIndex} about annual filing evidence and revenue`,
+        text: `Question ${messageIndex} about ${topic} and annual filing evidence`,
       })),
-    }));
+      };
+    });
     localStorage.setItem(
       "sec_qa_library_v3",
       JSON.stringify({ envelopeVersion: 4, records, tombstones: [] }),
@@ -618,16 +625,23 @@ test("production Library search stays below the 200ms p95 budget", async ({ page
   await expect(search).toBeVisible();
   await expect(items).toHaveCount(100);
 
-  for (const query of ["filing evidence", "revenue", "annual filing"]) {
+  const expectedCounts = new Map([
+    ["revenue", 40],
+    ["risk", 30],
+    ["cash flow", 30],
+  ]);
+  for (const query of expectedCounts.keys()) {
     await search.fill(query);
-    await expect(items).toHaveCount(100);
+    await expect(items).toHaveCount(expectedCounts.get(query)!);
+    expect(new Set(await items.locator(".library-item-title").allTextContents()).size).toBe(expectedCounts.get(query));
   }
 
   const samples: number[] = [];
   for (let index = 0; index < 100; index += 1) {
     const start = performance.now();
-    await search.fill(index % 2 ? "revenue" : "filing evidence");
-    await expect(items).toHaveCount(100);
+    const query = ["revenue", "risk", "cash flow"][index % 3];
+    await search.fill(query);
+    await expect(items).toHaveCount(expectedCounts.get(query)!);
     samples.push(performance.now() - start);
   }
   samples.sort((left, right) => left - right);

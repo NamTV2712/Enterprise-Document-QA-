@@ -461,7 +461,8 @@ test.describe("display smokes", () => {
   });
 
   test("narrow-viewport reflow (640px CSS viewport) keeps the workspace usable", async ({ page }) => {
-    // 200% browser zoom on a 1280px window is a 640px CSS viewport.
+    // This is an explicit CSS viewport receipt. Browser UI zoom is not
+    // controllable consistently in headless Firefox/Chromium.
     await page.setViewportSize({ width: 640, height: 450 });
     await setup(page);
     await expectWorkspaceVisible(page);

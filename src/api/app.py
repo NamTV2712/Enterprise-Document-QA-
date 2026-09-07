@@ -41,7 +41,7 @@ from src.api.proxy import get_rate_limit_key
 from src.evaluation.public_report import get_public_report, list_public_reports
 
 import json as json_lib
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 # Setup structured logging (use json_mode=True in production)
 setup_logging(level="INFO", json_mode=False)
@@ -69,6 +69,51 @@ STREAM_QUEUE_POLL_SECONDS = 0.25
 T = TypeVar("T")
 limiter = Limiter(key_func=get_rate_limit_key)
 telemetry = RequestTelemetry()
+
+
+def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    """Return a machine-readable client rate-limit response distinct from provider quota."""
+    retry_after_seconds = 60
+    return JSONResponse(
+        status_code=429,
+        headers={"Retry-After": str(retry_after_seconds)},
+        content={
+            "error": "Rate limit exceeded. Please retry later.",
+            "code": "client_rate_limited",
+            "retry_after_seconds": retry_after_seconds,
+        },
+    )
+
+
+def _provider_failure_detail(error: Exception) -> tuple[int, dict[str, Any]] | None:
+    """Map provider transport failures to safe structured HTTP details."""
+    status_code = getattr(error, "status_code", None)
+    error_name = type(error).__name__.lower()
+    message = str(error).lower()
+    is_quota = status_code == 429 or "rate limit" in message or "quota" in message
+    if is_quota:
+        response = getattr(error, "response", None)
+        headers = getattr(response, "headers", None) or {}
+        retry_after = headers.get("retry-after") if hasattr(headers, "get") else None
+        if retry_after is None:
+            match = re.search(r"try again in\s+([0-9]+(?:\.[0-9]+)?)\s*(ms|s)", message)
+            if match:
+                retry_after = float(match.group(1)) / 1000 if match.group(2) == "ms" else float(match.group(1))
+        try:
+            retry_after_seconds = max(1, int(float(retry_after))) if retry_after is not None else 60
+        except (TypeError, ValueError):
+            retry_after_seconds = 60
+        return 429, {
+            "code": "provider_quota",
+            "message": "The provider quota is temporarily unavailable. Please retry later.",
+            "retry_after_seconds": retry_after_seconds,
+        }
+    if status_code in {408, 500, 502, 503, 504} or "timeout" in error_name or "connection" in error_name:
+        return 503, {
+            "code": "provider_unavailable",
+            "message": "The provider is temporarily unavailable. Please retry later.",
+        }
+    return None
 
 
 def _load_supported_tickers() -> list[str]:
@@ -121,6 +166,28 @@ def _document_rows(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
         {**row, "sections": sorted(row["sections"])}
         for row in sorted(grouped.values(), key=lambda item: (item["ticker"] or "", item["filing_date"] or ""))
     ]
+
+
+def _document_catalog() -> list[dict[str, Any]]:
+    """Return the startup-built document metadata index when available."""
+    cached = _state.get("document_rows")
+    if isinstance(cached, list):
+        return cached
+    rows = _document_rows(_loaded_retrieval_chunks())
+    _state["document_rows"] = rows
+    return rows
+
+
+def _document_chunks_index() -> dict[str, list[dict[str, Any]]]:
+    """Return the startup-built document-to-chunks index, with test fallback."""
+    cached = _state.get("document_chunks_by_id")
+    if isinstance(cached, dict):
+        return cached
+    index: dict[str, list[dict[str, Any]]] = {}
+    for chunk in _loaded_retrieval_chunks():
+        index.setdefault(_document_id(chunk), []).append(chunk)
+    _state["document_chunks_by_id"] = index
+    return index
 
 
 def _embed_query_pair(
@@ -189,6 +256,11 @@ async def lifespan(app: FastAPI):
     _state["pipeline"] = pipeline
     _state["decomposer"] = QueryDecomposer(pipeline=pipeline)
     _state["store"] = store
+    _state["document_rows"] = _document_rows(all_chunks)
+    chunks_by_document: dict[str, list[dict[str, Any]]] = {}
+    for chunk in all_chunks:
+        chunks_by_document.setdefault(_document_id(chunk), []).append(chunk)
+    _state["document_chunks_by_id"] = chunks_by_document
     searchable_tickers = {chunk["ticker"] for chunk in all_chunks}
     _state["corpus"] = {
         "searchable_company_count": len(searchable_tickers),
@@ -457,10 +529,18 @@ async def query(request: Request, body: QueryRequest) -> QueryResponse:
             session_id=body.session_id,
             answer_language=body.answer_language,
         )
+        telemetry.record_provider_event("completed")
     except TimeoutError:
         logger.warning("Query timed out after %.1f seconds", QUERY_TIMEOUT_SECONDS)
         raise HTTPException(status_code=504, detail=QUERY_TIMEOUT_DETAIL)
     except Exception as e:
+        provider_failure = _provider_failure_detail(e)
+        if provider_failure is not None:
+            status_code, detail = provider_failure
+            telemetry.record_provider_event(
+                "quota" if detail["code"] == "provider_quota" else "transport_error"
+            )
+            raise HTTPException(status_code=status_code, detail=detail) from e
         logger.exception("Error occurred while processing query: %s", e)
         raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
 
@@ -517,6 +597,7 @@ async def query_decomposed(
             session_id=body.session_id,
             answer_language=body.answer_language,
         )
+        telemetry.record_provider_event("completed")
     except TimeoutError:
         logger.warning(
             "Decomposed query timed out after %.1f seconds",
@@ -524,6 +605,13 @@ async def query_decomposed(
         )
         raise HTTPException(status_code=504, detail=DECOMPOSED_TIMEOUT_DETAIL)
     except Exception as e:
+        provider_failure = _provider_failure_detail(e)
+        if provider_failure is not None:
+            status_code, detail = provider_failure
+            telemetry.record_provider_event(
+                "quota" if detail["code"] == "provider_quota" else "transport_error"
+            )
+            raise HTTPException(status_code=status_code, detail=detail) from e
         logger.exception("Error occurred while processing decomposed query: %s", e)
         raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
 
@@ -569,7 +657,7 @@ async def documents(
     """Return a paginated catalog derived from loaded retrieval metadata."""
     if _state.get("pipeline") is None:
         raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
-    rows = _document_rows(_loaded_retrieval_chunks())
+    rows = _document_catalog()
     search_folded = search.casefold().strip() if search else ""
     filtered = [
         row
@@ -599,7 +687,7 @@ async def document_detail(document_id: str) -> dict:
     """Return one public document record without exposing filesystem paths."""
     if _state.get("pipeline") is None:
         raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
-    rows = _document_rows(_loaded_retrieval_chunks())
+    rows = _document_catalog()
     row = next((item for item in rows if item["document_id"] == document_id), None)
     if row is None:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -620,7 +708,7 @@ async def document_chunks(
     search_folded = search.casefold().strip() if search else ""
     matching = [
         chunk
-        for chunk in _loaded_retrieval_chunks()
+        for chunk in _document_chunks_index().get(document_id, [])
         if _document_id(chunk) == document_id
         and (section is None or chunk.get("section") == section)
         and (not search_folded or search_folded in str(chunk.get("text") or "").casefold())

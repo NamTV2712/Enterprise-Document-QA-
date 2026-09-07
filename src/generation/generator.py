@@ -20,6 +20,11 @@ from src.generation.period_value_completeness import (
     render_chunk_evidence,
     validate_grounded_answer,
 )
+from src.generation.provider_policy import (
+    key_alias,
+    normalize_groq_key_policy,
+    validate_explicit_keys,
+)
 from src.retrieval.retriever import RetrievedChunk
 
 logger = logging.getLogger(__name__)
@@ -119,10 +124,23 @@ class Generator:
         api_key: str | None = None,
         api_keys: list[str] | None = None,
         client_max_retries: int | None = None,
+        key_policy: str | None = None,
     ):
         from configs.settings import settings
         from groq import Groq
 
+        # Explicit test/integration pools retain their historical behavior
+        # unless a caller opts into the strict policy.  Implicit serving
+        # clients follow the configured environment policy.
+        effective_policy = normalize_groq_key_policy(
+            key_policy
+            if key_policy is not None
+            else (
+                getattr(settings, "groq_key_policy", "pool")
+                if api_keys is None and api_key is None
+                else "pool"
+            )
+        )
         configured_keys = (
             api_keys
             if api_keys is not None
@@ -138,9 +156,12 @@ class Generator:
                 ]
             )
         )
-        selected_keys = list(dict.fromkeys(key for key in configured_keys if key))
+        selected_keys = validate_explicit_keys(
+            list(configured_keys), settings=settings, policy=effective_policy
+        )
         if not selected_keys:
             raise ValueError("GROQ_API_KEY is not configured in .env")
+        self.key_policy = effective_policy
         if client_max_retries is None:
             self.clients = [Groq(api_key=key) for key in selected_keys]
         else:
@@ -152,10 +173,14 @@ class Generator:
             ]
         # Preserve the old public attribute for integrations that inspect it.
         self.client = self.clients[0]
-        self.client_aliases = [f"key-{index + 1}" for index in range(len(self.clients))]
+        self.client_aliases = [
+            key_alias(index, policy=self.key_policy, pool_size=len(self.clients))
+            for index in range(len(self.clients))
+        ]
         self.last_transport_metadata: dict[str, Any] = {
             "key_alias": None,
             "pool_size": len(self.clients),
+            "key_policy": self.key_policy,
             "transport_attempt": None,
             "status": "not_started",
         }
@@ -205,6 +230,7 @@ class Generator:
             self.last_transport_metadata = {
                 "key_alias": client_aliases[client_index],
                 "pool_size": len(self.clients),
+                "key_policy": getattr(self, "key_policy", "pool"),
                 "transport_attempt": attempt + 1,
                 "status": "started",
             }

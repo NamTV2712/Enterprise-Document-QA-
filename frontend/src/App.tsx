@@ -19,12 +19,8 @@ import { SampleQuestion } from "./components/SampleQuestionChips";
 import { OverviewPanel } from "./components/OverviewPanel";
 import { WorkspaceHeader } from "./components/WorkspaceHeader";
 import { HelpDialog } from "./components/HelpDialog";
-import { RetrievalLabPanel } from "./components/RetrievalLabPanel";
-import { DocumentExplorerPanel } from "./components/DocumentExplorerPanel";
-import { SystemInfoPanel } from "./components/SystemInfoPanel";
-import { EvaluationPanel } from "./components/EvaluationPanel";
-import { AnalyticsPanel } from "./components/AnalyticsPanel";
 import { CommandPalette, PaletteView } from "./components/CommandPalette";
+import { EvidenceWorkspaceRail } from "./components/EvidenceWorkspaceRail";
 import {
   HealthResponse,
   RequestSnapshot,
@@ -71,6 +67,33 @@ const ChatMessage = lazy(() =>
   })),
 );
 
+// Secondary workspaces are route-level panels. Keep the initial chat shell
+// small and load diagnostics only when the user opens that workspace.
+const RetrievalLabPanel = lazy(() =>
+  import("./components/RetrievalLabPanel").then(({ RetrievalLabPanel }) => ({ default: RetrievalLabPanel })),
+);
+const DocumentExplorerPanel = lazy(() =>
+  import("./components/DocumentExplorerPanel").then(({ DocumentExplorerPanel }) => ({ default: DocumentExplorerPanel })),
+);
+const SystemInfoPanel = lazy(() =>
+  import("./components/SystemInfoPanel").then(({ SystemInfoPanel }) => ({ default: SystemInfoPanel })),
+);
+const EvaluationPanel = lazy(() =>
+  import("./components/EvaluationPanel").then(({ EvaluationPanel }) => ({ default: EvaluationPanel })),
+);
+const AnalyticsPanel = lazy(() =>
+  import("./components/AnalyticsPanel").then(({ AnalyticsPanel }) => ({ default: AnalyticsPanel })),
+);
+
+function WorkspacePanelFallback() {
+  return (
+    <div className="mx-auto flex w-full max-w-6xl items-center gap-2 px-3 py-8 text-sm text-[var(--text-muted)] md:px-6" role="status">
+      <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--primary)]" />
+      Loading workspace…
+    </div>
+  );
+}
+
 function isComparativeQuery(question: string): boolean {
   const lower = question.toLowerCase();
   return COMPARATIVE_KEYWORDS.some((keyword) => lower.includes(keyword));
@@ -86,7 +109,15 @@ function describeRequestError(
       ? (error as { status?: unknown }).status
       : null;
   const status = typeof candidateStatus === "number" ? candidateStatus : null;
+  const candidateCode =
+    error && typeof error === "object" && "code" in error
+      ? (error as { code?: unknown }).code
+      : null;
+  const code = typeof candidateCode === "string" ? candidateCode : null;
   if (status === 429) {
+    if (code === "client_rate_limited") {
+      return { message: "Too many requests from this client. Please wait and try again.", detail };
+    }
     return {
       message: "The provider is temporarily out of quota. Please wait and try again later.",
       detail,
@@ -1116,6 +1147,10 @@ export default function App() {
   }, [selectedSection, selectedTicker]);
 
   const hasExchanges = messages.length > 0;
+  const latestEvidenceSources = useMemo(
+    () => [...messages].reverse().find((message) => message.sender === "assistant" && message.sources?.length)?.sources ?? [],
+    [messages],
+  );
   const showContextBanner =
     activeView === "conversation" && hasExchanges &&
     (sessionContext === "checking" || isReadOnly);
@@ -1195,35 +1230,38 @@ export default function App() {
               onNewConversation={requestNewConversation}
             />
           )}
-          {activeView === "retrieval" ? (
-            <RetrievalLabPanel
-              tickers={tickers}
-              sections={sections}
-              selectedTicker={selectedTicker}
-              selectedSection={selectedSection}
-              isBackendConnected={isBackendConnected}
-              onUseQuestion={handleUseRetrievalQuestion}
-            />
-          ) : activeView === "documents" ? (
-            <DocumentExplorerPanel tickers={tickers} sections={sections} />
-          ) : activeView === "system" ? (
-            <SystemInfoPanel />
-          ) : activeView === "evaluation" ? (
-            <EvaluationPanel />
-          ) : activeView === "analytics" ? (
-            <AnalyticsPanel />
-          ) : activeView === "overview" ? (
-            <OverviewPanel
-              hasMessages={hasExchanges}
-              companyCount={healthData?.corpus?.searchable_company_count ?? (tickers.length || null)}
-              indexedChunkCount={healthData?.corpus?.indexed_chunk_count ?? null}
-              onReturnToConversation={handleReturnToConversation}
-              isBackendConnected={isBackendConnected}
-              isPipelineReady={isPipelineReady}
-              onRetryConnection={handleRetryConnection}
-              onSelectQuestion={handleSelectSample}
-            />
-          ) : (
+          <div className="workspace-main-grid">
+            <div className="workspace-primary-column">
+              <Suspense fallback={<WorkspacePanelFallback />}>
+                {activeView === "retrieval" ? (
+              <RetrievalLabPanel
+                tickers={tickers}
+                sections={sections}
+                selectedTicker={selectedTicker}
+                selectedSection={selectedSection}
+                isBackendConnected={isBackendConnected}
+                onUseQuestion={handleUseRetrievalQuestion}
+              />
+                ) : activeView === "documents" ? (
+              <DocumentExplorerPanel tickers={tickers} sections={sections} />
+                ) : activeView === "system" ? (
+              <SystemInfoPanel />
+                ) : activeView === "evaluation" ? (
+              <EvaluationPanel />
+                ) : activeView === "analytics" ? (
+              <AnalyticsPanel />
+                ) : activeView === "overview" ? (
+              <OverviewPanel
+                hasMessages={hasExchanges}
+                companyCount={healthData?.corpus?.searchable_company_count ?? (tickers.length || null)}
+                indexedChunkCount={healthData?.corpus?.indexed_chunk_count ?? null}
+                onReturnToConversation={handleReturnToConversation}
+                isBackendConnected={isBackendConnected}
+                isPipelineReady={isPipelineReady}
+                onRetryConnection={handleRetryConnection}
+                onSelectQuestion={handleSelectSample}
+              />
+                ) : (
             /* Active Chat Stream */
             <div className="flex flex-col w-full min-h-full py-4 md:py-5 pb-6 relative">
               <Suspense
@@ -1281,7 +1319,13 @@ export default function App() {
                 </button>
               )}
             </div>
-          )}
+                )}
+              </Suspense>
+            </div>
+            {activeView === "conversation" && latestEvidenceSources.length > 0 && (
+              <EvidenceWorkspaceRail sources={latestEvidenceSources} />
+            )}
+          </div>
         </main>
 
         {/* The composer is a flex sibling, so it never overlays response evidence. */}

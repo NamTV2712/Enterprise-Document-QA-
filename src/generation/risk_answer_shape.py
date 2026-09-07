@@ -275,3 +275,38 @@ def render_deterministic_risk_answer(
                 f"  - {item.label}{suffix} [Source {item.source_number}]"
             )
     return "\n".join(lines)
+
+
+_RISK_LABEL_VI = {
+    "strategic and competitive risks": "Rủi ro chiến lược và cạnh tranh",
+    "trade": "Rủi ro thương mại",
+    "cybersecurity": "Rủi ro an ninh mạng",
+    "handling of personal data": "Rủi ro xử lý dữ liệu cá nhân",
+    "issues in the development, deployment, and use of ai": "Rủi ro liên quan đến AI",
+    "operational risks": "Rủi ro vận hành",
+    "legal, regulatory, and litigation risks": "Rủi ro pháp lý, quy định và kiện tụng",
+}
+
+
+def render_deterministic_risk_answer_localized(
+    question: str,
+    evidence_context: str,
+    answer_language: str = "en",
+) -> str | None:
+    """Localize canonical risk labels while preserving evidence descriptors."""
+    rendered = render_deterministic_risk_answer(question, evidence_context)
+    if rendered is None or answer_language != "vi":
+        return rendered
+    localized_lines: list[str] = []
+    for line in rendered.splitlines():
+        if line.startswith("Additional cross-cutting risks:"):
+            localized_lines.append("Các rủi ro xuyên suốt khác:")
+            continue
+        match = re.match(r"^(\s*-\s*)([^—]+?)(\s+—|\s+\[Source)", line)
+        if match:
+            label = match.group(2).strip().casefold()
+            replacement = _RISK_LABEL_VI.get(label)
+            if replacement:
+                line = f"{match.group(1)}{replacement}{line[match.end(2):]}"
+        localized_lines.append(line)
+    return "\n".join(localized_lines)

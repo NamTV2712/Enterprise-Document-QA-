@@ -540,6 +540,38 @@ def test_query_error_does_not_leak_exception_details(client, mock_pipeline) -> N
     assert "postgres://" not in response.text
 
 
+def test_provider_quota_error_is_structured_and_distinct_from_client_limit(
+    client, mock_pipeline
+) -> None:
+    error = RuntimeError("provider quota exhausted; secret token must not leak")
+    error.status_code = 429
+    mock_pipeline.query.side_effect = error
+
+    response = client.post(
+        "/query",
+        json={"question": "Test question for quota handling"},
+    )
+
+    assert response.status_code == 429
+    assert response.json()["detail"]["code"] == "provider_quota"
+    assert response.json()["detail"]["retry_after_seconds"] == 60
+    assert "secret token" not in response.text
+
+
+def test_client_rate_limit_exposes_retry_after_without_provider_quota_label(
+    client,
+) -> None:
+    payload = {"question": "What are Apple's main risk factors?"}
+    for _ in range(10):
+        assert client.post("/query", json=payload).status_code == 200
+
+    response = client.post("/query", json=payload)
+
+    assert response.status_code == 429
+    assert response.json()["code"] == "client_rate_limited"
+    assert response.headers["retry-after"] == "60"
+
+
 def test_decomposed_error_does_not_leak_exception_details(
     client, mock_decomposer
 ) -> None:

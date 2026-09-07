@@ -71,7 +71,10 @@ describe("conversation export", () => {
     expect(imported[0].id).not.toBe(conversation.id);
     expect(imported[0].sessionId).not.toBe(conversation.sessionId);
     expect(imported[0].title).toBe(conversation.title);
-    expect(imported[0].bookmarkedMessageIds).toEqual(["a-1"]);
+    expect(imported[0].messages.map((message) => message.id)).not.toEqual(["u-1", "a-1"]);
+    expect(imported[0].bookmarkedMessageIds).toEqual([
+      imported[0].messages[1].id,
+    ]);
   });
 
   test("rejects an unsupported or malformed backup", () => {
@@ -83,6 +86,25 @@ describe("conversation export", () => {
       version: 1,
       exportedAt: new Date().toISOString(),
       conversations: [{ title: "broken", messages: [{ sender: "robot" }] }],
+    }))).toThrow("invalid conversation");
+  });
+
+  test("rejects a malformed source instead of importing unsafe evidence metadata", () => {
+    expect(() => parseConversationBackup(JSON.stringify({
+      format: "enterprise-document-qa.conversations",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      conversations: [{
+        id: "conversation-1",
+        sessionId: "session-1",
+        title: "Unsafe source",
+        messages: [{
+          id: "assistant-1",
+          sender: "assistant",
+          text: "Answer",
+          sources: [{ citation: "source", score: "not-a-number", text_preview: "preview" }],
+        }],
+      }],
     }))).toThrow("invalid conversation");
   });
 });

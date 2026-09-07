@@ -12,6 +12,7 @@ import {
   normalizeStoredMessages,
   saveConversationRecord,
   ConversationWriteResult,
+  subscribeConversationLibrary,
 } from "../lib/conversationStore";
 
 const DRAFT_PERSIST_DEBOUNCE_MS = 1000;
@@ -25,6 +26,13 @@ export type SessionContextStatus =
   | "unknown"
   | "cancelled";
 export type SaveIndicator = "idle" | "saved" | "volatile";
+
+export interface ConversationImportResult {
+  imported: number;
+  persisted: number;
+  volatile: number;
+  failed: number;
+}
 
 /**
  * Identity of one send operation: captured before the context preflight and
@@ -128,7 +136,7 @@ export interface ConversationLibraryController {
   toggleAnswerBookmark: (messageId: string) => void;
   deleteConversation: (conversationId: string) => Promise<void>;
   /** Import already validated records without overwriting existing IDs. */
-  importConversationRecords: (records: ConversationRecord[]) => Promise<number>;
+  importConversationRecords: (records: ConversationRecord[]) => Promise<ConversationImportResult>;
 }
 
 interface UseConversationLibraryOptions {
@@ -303,6 +311,30 @@ export function useConversationLibrary(
     };
     // Run once on mount; hydration must complete before backend fallbacks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeConversationLibrary(() => {
+      // Never overwrite an in-flight send or a draft that is waiting for its
+      // debounced save. The next repository sync will observe the newer
+      // revision after the local operation completes.
+      if (sendInFlightRef.current || draftTimerRef.current !== null) return;
+      void loadConversationLibrary(sessionIdRef.current, activeIdRef.current).then((library) => {
+        setConversations(library.conversations);
+        setStorageMode(library.storageMode);
+        setStorageWarning(library.warning);
+        const current = library.conversations.find(
+          (conversation) => conversation.id === activeIdRef.current,
+        );
+        if (current) {
+          conversationCreatedAtRef.current = current.createdAt;
+          setMessages(current.messages);
+          setInputText(current.draft);
+          setBookmarkedMessageIds(current.bookmarkedMessageIds);
+        }
+      });
+    });
+    return unsubscribe;
   }, []);
 
   const fetchSessionContext = useCallback(
@@ -738,15 +770,28 @@ export function useConversationLibrary(
   );
 
   const importConversationRecords = useCallback(
-    async (records: ConversationRecord[]): Promise<number> => {
-      let imported = 0;
+    async (records: ConversationRecord[]): Promise<ConversationImportResult> => {
+      const result: ConversationImportResult = {
+        imported: 0,
+        persisted: 0,
+        volatile: 0,
+        failed: 0,
+      };
       for (const record of records) {
-        const result = await saveConversationRecord(record);
-        applyWriteResult(result, { setStorageMode, setStorageWarning });
-        if (result.status !== "failed") imported += 1;
+        const writeResult = await saveConversationRecord(record);
+        applyWriteResult(writeResult, { setStorageMode, setStorageWarning });
+        if (writeResult.status === "persisted") {
+          result.imported += 1;
+          result.persisted += 1;
+        } else if (writeResult.status === "volatile") {
+          result.imported += 1;
+          result.volatile += 1;
+        } else {
+          result.failed += 1;
+        }
       }
       syncConversationsFromRepository();
-      return imported;
+      return result;
     },
     [syncConversationsFromRepository],
   );

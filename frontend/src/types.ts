@@ -41,6 +41,95 @@ export interface Source {
   filing_date?: string;
 }
 
+export type RetrievalPreset = "bm25" | "dense" | "hybrid" | "hybrid_rerank";
+
+export interface RetrievalCandidate {
+  chunk_id: string;
+  ticker?: string | null;
+  section?: string | null;
+  filing_date?: string | null;
+  citation: string;
+  text_preview: string;
+  bm25_score?: number | null;
+  bm25_rank?: number | null;
+  dense_score?: number | null;
+  dense_rank?: number | null;
+  lexical_rank?: number | null;
+  rrf_score?: number | null;
+  cross_encoder_score?: number | null;
+  final_rank?: number | null;
+  selected: boolean;
+}
+
+export interface RetrievalTrace {
+  preset: RetrievalPreset;
+  query: string;
+  filters: { ticker: string | null; section: string | null };
+  top_k: number;
+  candidate_pool: number;
+  models: {
+    embedding?: string | null;
+    reranker?: string | null;
+    rrf_k?: number;
+  };
+  stages: Array<{ name: string; elapsed_ms: number; skipped?: boolean }>;
+  candidates: RetrievalCandidate[];
+  selected_chunk_ids: string[];
+  elapsed_ms: number;
+}
+
+export interface RetrievalInspectResponse {
+  query_interpretation: QueryInterpretation;
+  trace: RetrievalTrace;
+}
+
+export interface DocumentRow {
+  document_id: string;
+  ticker: string | null;
+  filing_date: string | null;
+  accession_number: string | null;
+  sections: string[];
+  chunk_count: number;
+  source_url: string | null;
+}
+
+export interface DocumentChunk {
+  chunk_id: string | null;
+  ticker: string | null;
+  section: string | null;
+  filing_date: string | null;
+  accession_number: string | null;
+  text_preview: string;
+  text_length: number;
+  source_url: string | null;
+}
+
+export interface DocumentListResponse {
+  items: DocumentRow[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface DocumentChunkListResponse {
+  items: DocumentChunk[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface SystemInfoResponse {
+  api_version: string;
+  corpus: Record<string, unknown>;
+  retrieval: {
+    embedding_model?: string | null;
+    reranker_model?: string | null;
+    presets: RetrievalPreset[];
+    default: RetrievalPreset;
+  };
+  build: Record<string, string>;
+}
+
 export type ThemePreference = "system" | "light" | "dark";
 export type AnswerLanguage = "en" | "vi";
 export type MessageStatus = "streaming" | "stopped" | "completed" | "error";
@@ -59,6 +148,16 @@ export interface QueryResponse {
   sources: Source[];
   num_chunks_retrieved: number;
   answer_language?: AnswerLanguage;
+  query_interpretation?: QueryInterpretation;
+}
+
+export interface QueryInterpretation {
+  original_question: string;
+  retrieval_question: string;
+  translation_method: string;
+  detected_ticker?: string | null;
+  requested_periods: string[];
+  is_comparative: boolean;
 }
 
 export interface SubQuery {
@@ -76,6 +175,7 @@ export interface DecomposedResponse {
   sources: Source[];
   num_total_chunks: number;
   answer_language?: AnswerLanguage;
+  query_interpretation?: QueryInterpretation;
 }
 
 export interface SessionContextInfo {
@@ -117,4 +217,5 @@ export interface Message {
   retryText?: string;
   status?: MessageStatus;
   requestSnapshot?: RequestSnapshot;
+  queryInterpretation?: QueryInterpretation;
 }

@@ -13,6 +13,7 @@ no changes needed, just swap objects.
 import logging
 import re
 import threading
+import time
 
 from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder
@@ -197,6 +198,173 @@ class HybridRetriever:
         )
 
         return self._format_results(query, reranked)
+
+    def inspect(
+        self,
+        query: str,
+        top_k: int = 5,
+        ticker: str | None = None,
+        section: str | None = None,
+        candidate_pool: int = 10,
+        preset: str = "hybrid_rerank",
+    ) -> dict:
+        """Return a provider-free trace of the retrieval stages.
+
+        This is intentionally separate from production retrieval. It exposes
+        raw stage scores with their original scale and never labels them as a
+        confidence value. The production path remains byte-compatible because
+        this method does not alter ``retrieve_with_embedding``.
+        """
+        allowed_presets = {"bm25", "dense", "hybrid", "hybrid_rerank"}
+        if preset not in allowed_presets:
+            raise ValueError(f"unsupported retrieval preset: {preset}")
+        if not query.strip():
+            return {"preset": preset, "query": query, "candidates": [], "selected_chunk_ids": []}
+        top_k = max(1, min(top_k, 10))
+        candidate_pool = max(top_k, min(candidate_pool, 50))
+        trace_started = time.perf_counter()
+        query_embedding = self.embed_query(query)
+        embedding_ms = (time.perf_counter() - trace_started) * 1000
+
+        if ticker and section:
+            filtered_chunks = self._chunks_by_ticker_section.get((ticker, section), [])
+        elif ticker:
+            filtered_chunks = self._chunks_by_ticker.get(ticker, [])
+        elif section:
+            filtered_chunks = self._chunks_by_section.get(section, [])
+        else:
+            filtered_chunks = self._all_chunks
+
+        stage_started = time.perf_counter()
+        bm25_scores = self.bm25.get_scores(_tokenize(query))
+        bm25_candidates = sorted(
+            filtered_chunks,
+            key=lambda chunk: bm25_scores[self._chunk_index_map[chunk["chunk_id"]]],
+            reverse=True,
+        )[:candidate_pool]
+        bm25_ids = [chunk["chunk_id"] for chunk in bm25_candidates]
+        bm25_ms = (time.perf_counter() - stage_started) * 1000
+
+        stage_started = time.perf_counter()
+        semantic_results = self.store.search(
+            query_vector=query_embedding,
+            top_k=candidate_pool,
+            ticker=ticker,
+            section=section,
+        )
+        dense_scores = {
+            result["chunk_id"]: float(result.get("score", 0.0))
+            for result in semantic_results
+        }
+        dense_ids = [result["chunk_id"] for result in semantic_results]
+        dense_ms = (time.perf_counter() - stage_started) * 1000
+
+        stage_started = time.perf_counter()
+        hints = shape_retrieval_query(query)
+        lexical_ids = [
+            match.chunk["chunk_id"]
+            for match in lexical_ladder_candidates(
+                filtered_chunks,
+                ticker=ticker,
+                section=section,
+                exact_phrases=hints.exact_phrases,
+                full_terms=hints.full_terms,
+                partial_terms=hints.partial_terms,
+                fuzzy_terms=hints.fuzzy_terms,
+                max_candidates=candidate_pool,
+            )
+        ]
+        lexical_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(lexical_ids)}
+        lexical_ms = (time.perf_counter() - stage_started) * 1000
+
+        rrf_scores: dict[str, float] = {}
+        for ids in (bm25_ids, dense_ids, lexical_ids):
+            for rank, chunk_id in enumerate(ids):
+                rrf_scores[chunk_id] = rrf_scores.get(chunk_id, 0.0) + 1 / (RRF_K + rank + 1)
+        hybrid_ids = sorted(rrf_scores, key=rrf_scores.get, reverse=True)[:candidate_pool]
+        hybrid_chunks = [self._chunks_by_id[chunk_id] for chunk_id in hybrid_ids]
+
+        cross_encoder_scores: dict[str, float] = {}
+        if preset == "hybrid_rerank":
+            stage_started = time.perf_counter()
+            pairs = [(query, chunk["text"]) for chunk in hybrid_chunks]
+            with self._model_lock:
+                scores = self.cross_encoder.predict(pairs, batch_size=CROSS_ENCODER_BATCH_SIZE)
+            cross_encoder_scores = {
+                chunk["chunk_id"]: float(score)
+                for chunk, score in zip(hybrid_chunks, scores)
+            }
+            final_ids = [
+                chunk["chunk_id"]
+                for chunk in sorted(
+                    hybrid_chunks,
+                    key=lambda chunk: cross_encoder_scores[chunk["chunk_id"]],
+                    reverse=True,
+                )[:top_k]
+            ]
+            rerank_ms = (time.perf_counter() - stage_started) * 1000
+        elif preset == "bm25":
+            final_ids = bm25_ids[:top_k]
+            rerank_ms = 0.0
+        elif preset == "dense":
+            final_ids = dense_ids[:top_k]
+            rerank_ms = 0.0
+        else:
+            final_ids = hybrid_ids[:top_k]
+            rerank_ms = 0.0
+
+        all_ids = list(dict.fromkeys((*bm25_ids, *dense_ids, *lexical_ids, *hybrid_ids)))
+        bm25_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(bm25_ids)}
+        dense_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(dense_ids)}
+        final_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(final_ids)}
+        candidates = []
+        for chunk_id in all_ids[:candidate_pool]:
+            chunk = self._chunks_by_id[chunk_id]
+            candidates.append(
+                {
+                    "chunk_id": chunk_id,
+                    "ticker": chunk.get("ticker"),
+                    "section": chunk.get("section"),
+                    "filing_date": chunk.get("filing_date"),
+                    "citation": RetrievedChunk.from_raw(chunk, score=0.0).citation,
+                    "text_preview": chunk.get("text", "")[:240],
+                    "bm25_score": round(float(bm25_scores[self._chunk_index_map[chunk_id]]), 6)
+                    if chunk_id in bm25_rank else None,
+                    "bm25_rank": bm25_rank.get(chunk_id),
+                    "dense_score": round(dense_scores[chunk_id], 6)
+                    if chunk_id in dense_scores else None,
+                    "dense_rank": dense_rank.get(chunk_id),
+                    "lexical_rank": lexical_rank.get(chunk_id),
+                    "rrf_score": round(rrf_scores[chunk_id], 8) if chunk_id in rrf_scores else None,
+                    "cross_encoder_score": round(cross_encoder_scores[chunk_id], 6)
+                    if chunk_id in cross_encoder_scores else None,
+                    "final_rank": final_rank.get(chunk_id),
+                    "selected": chunk_id in final_rank,
+                }
+            )
+
+        return {
+            "preset": preset,
+            "query": query,
+            "filters": {"ticker": ticker, "section": section},
+            "top_k": top_k,
+            "candidate_pool": candidate_pool,
+            "models": {
+                "embedding": getattr(self.embedder, "model_name", None),
+                "reranker": self.cross_encoder_model if preset == "hybrid_rerank" else None,
+                "rrf_k": RRF_K,
+            },
+            "stages": [
+                {"name": "embedding", "elapsed_ms": round(embedding_ms, 3)},
+                {"name": "bm25", "elapsed_ms": round(bm25_ms, 3)},
+                {"name": "dense", "elapsed_ms": round(dense_ms, 3)},
+                {"name": "lexical_ladder", "elapsed_ms": round(lexical_ms, 3)},
+                {"name": "reranker", "elapsed_ms": round(rerank_ms, 3), "skipped": preset != "hybrid_rerank"},
+            ],
+            "candidates": candidates,
+            "selected_chunk_ids": final_ids,
+            "elapsed_ms": round((time.perf_counter() - trace_started) * 1000, 3),
+        }
 
     def _retrieve_with_embedding(
         self,

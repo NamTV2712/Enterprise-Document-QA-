@@ -19,6 +19,9 @@ import { SampleQuestion } from "./components/SampleQuestionChips";
 import { OverviewPanel } from "./components/OverviewPanel";
 import { WorkspaceHeader } from "./components/WorkspaceHeader";
 import { HelpDialog } from "./components/HelpDialog";
+import { RetrievalLabPanel } from "./components/RetrievalLabPanel";
+import { DocumentExplorerPanel } from "./components/DocumentExplorerPanel";
+import { SystemInfoPanel } from "./components/SystemInfoPanel";
 import {
   HealthResponse,
   RequestSnapshot,
@@ -136,7 +139,7 @@ export default function App() {
   const [isClearingSession, setIsClearingSession] = useState<boolean>(false);
   const [showResetDialog, setShowResetDialog] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
-  const [activeView, setActiveView] = useState<"overview" | "conversation">(
+  const [activeView, setActiveView] = useState<"overview" | "conversation" | "retrieval" | "documents" | "system">(
     "overview",
   );
   const [pendingFocusMessageId, setPendingFocusMessageId] = useState<string | null>(null);
@@ -501,6 +504,7 @@ export default function App() {
                   subQueries: response.sub_queries,
                   wasDecomposed: response.was_decomposed,
                   numChunks: response.num_total_chunks,
+                  queryInterpretation: response.query_interpretation,
                   isStreaming: false,
                   status: "completed" as const,
                 }
@@ -601,6 +605,7 @@ export default function App() {
                     ? {
                         ...m,
                         text: streamingText,
+                        queryInterpretation: event.data?.query_interpretation,
                         isStreaming: false,
                         status: "completed" as const,
                       }
@@ -812,12 +817,12 @@ export default function App() {
   }, [conversations]);
 
   const handleImportBackup = useCallback(
-    async (file: File): Promise<{ imported: number }> => {
+    async (file: File) => {
       const text = await file.text();
       const records = parseConversationBackup(text);
-      const imported = await importConversationRecords(records);
-      if (imported === 0) throw new Error("No conversation could be imported into storage.");
-      return { imported };
+      const result = await importConversationRecords(records);
+      if (result.imported === 0) throw new Error("No conversation could be imported into storage.");
+      return result;
     },
     [importConversationRecords],
   );
@@ -933,6 +938,14 @@ export default function App() {
     setActiveView("conversation");
   }, []);
 
+  const handleUseRetrievalQuestion = useCallback((question: string) => {
+    setInputText(question);
+    setActiveView("conversation");
+    window.requestAnimationFrame(() => {
+      document.getElementById("chat-textarea")?.focus();
+    });
+  }, [setInputText]);
+
   const handleRetryConnection = useCallback(async () => {
     try {
       await refreshHealth(true);
@@ -1034,7 +1047,21 @@ export default function App() {
               onRecheck={() => void recheckSessionContext()}
               onNewConversation={requestNewConversation}
             />
-          )}          {activeView === "overview" ? (
+          )}
+          {activeView === "retrieval" ? (
+            <RetrievalLabPanel
+              tickers={tickers}
+              sections={sections}
+              selectedTicker={selectedTicker}
+              selectedSection={selectedSection}
+              isBackendConnected={isBackendConnected}
+              onUseQuestion={handleUseRetrievalQuestion}
+            />
+          ) : activeView === "documents" ? (
+            <DocumentExplorerPanel tickers={tickers} sections={sections} />
+          ) : activeView === "system" ? (
+            <SystemInfoPanel />
+          ) : activeView === "overview" ? (
             <OverviewPanel
               hasMessages={hasExchanges}
               companyCount={healthData?.corpus?.searchable_company_count ?? (tickers.length || null)}
@@ -1091,7 +1118,7 @@ export default function App() {
         </main>
 
         {/* The composer is a flex sibling, so it never overlays response evidence. */}
-        <div className="composer-shell flex-shrink-0 z-10">
+        {activeView !== "retrieval" && activeView !== "documents" && activeView !== "system" && <div className="composer-shell flex-shrink-0 z-10">
           <ChatInput
             inputText={inputText}
             setInputText={setInputText}
@@ -1112,7 +1139,7 @@ export default function App() {
             showBanner={activeView === "conversation" && hasExchanges}
             scopeLabel={scopeLabel || undefined}
           />
-        </div>
+        </div>}
       </div>
 
       <HelpDialog open={isHelpOpen} onClose={() => setIsHelpOpen(false)} />

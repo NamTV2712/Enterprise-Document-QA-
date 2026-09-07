@@ -102,11 +102,44 @@ function isFiniteTimestamp(value: unknown): value is number {
 
 function isImportedMessage(value: unknown): boolean {
   if (!value || typeof value !== "object") return false;
-  const message = value as { id?: unknown; sender?: unknown; text?: unknown };
+  const message = value as {
+    id?: unknown;
+    sender?: unknown;
+    text?: unknown;
+    status?: unknown;
+    isStreaming?: unknown;
+    sources?: unknown;
+    requestSnapshot?: unknown;
+  };
+  const validSources =
+    message.sources === undefined ||
+    (Array.isArray(message.sources) &&
+      message.sources.every((source) => {
+        if (!source || typeof source !== "object") return false;
+        const item = source as { citation?: unknown; score?: unknown; text_preview?: unknown };
+        return (
+          typeof item.citation === "string" &&
+          typeof item.score === "number" &&
+          Number.isFinite(item.score) &&
+          typeof item.text_preview === "string"
+        );
+      }));
+  const validSnapshot =
+    message.requestSnapshot === undefined ||
+    (Boolean(message.requestSnapshot) && typeof message.requestSnapshot === "object");
   return (
     typeof message.id === "string" &&
+    message.id.length > 0 &&
     (message.sender === "user" || message.sender === "assistant") &&
-    typeof message.text === "string"
+    typeof message.text === "string" &&
+    (message.status === undefined ||
+      message.status === "streaming" ||
+      message.status === "stopped" ||
+      message.status === "completed" ||
+      message.status === "error") &&
+    (message.isStreaming === undefined || typeof message.isStreaming === "boolean") &&
+    validSources &&
+    validSnapshot
   );
 }
 
@@ -126,14 +159,22 @@ function normalizeImportedRecord(value: unknown): ConversationRecord | null {
     return null;
   }
 
-  const messages = normalizeStoredMessages(candidate.messages);
+  const sourceMessages = normalizeStoredMessages(candidate.messages);
+  const messageIds = new Map<string, string>();
+  const messages = sourceMessages.map((message) => {
+    const nextId = createImportId("message-import");
+    messageIds.set(message.id, nextId);
+    return { ...message, id: nextId };
+  });
   const now = Date.now();
   const createdAt = isFiniteTimestamp(candidate.createdAt) ? candidate.createdAt : now;
   const updatedAt = isFiniteTimestamp(candidate.updatedAt) ? candidate.updatedAt : createdAt;
   const title = candidate.title.trim().replace(/\s+/g, " ").slice(0, 80) || "Untitled conversation";
-  const bookmarks = (candidate.bookmarkedMessageIds ?? []).filter((id) =>
-    messages.some((message) => message.id === id && message.sender === "assistant"),
-  );
+  const bookmarks = (candidate.bookmarkedMessageIds ?? [])
+    .map((id) => messageIds.get(id))
+    .filter((id): id is string =>
+      Boolean(id && messages.some((message) => message.id === id && message.sender === "assistant")),
+    );
 
   return {
     schemaVersion: CONVERSATION_SCHEMA_VERSION,

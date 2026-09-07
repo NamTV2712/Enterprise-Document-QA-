@@ -7,6 +7,9 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   BookOpen,
   CircleHelp,
+  FileText,
+  Server,
+  FlaskConical,
   Menu,
   MessageSquare,
   Moon,
@@ -20,11 +23,13 @@ import { BrandMark } from "./BrandMark";
 import { ThemePreference } from "../types";
 import { useLocale } from "../lib/i18n";
 
+type WorkspaceView = "overview" | "conversation" | "retrieval" | "documents" | "system";
+
 interface WorkspaceHeaderProps {
   isSidebarOpen: boolean;
   onToggleSidebar: () => void;
-  activeView: "overview" | "conversation";
-  onSelectView: (view: "overview" | "conversation") => void;
+  activeView: WorkspaceView;
+  onSelectView: (view: WorkspaceView) => void;
   hasMessages: boolean;
   isBackendConnected: boolean | null;
   isPipelineReady: boolean | null;
@@ -165,6 +170,21 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
             <span className="hidden sm:inline">{t("nav.overview")}</span>
           </button>
         )}
+        <label className="lg:hidden">
+          <span className="sr-only">{t("nav.workspaceViews")}</span>
+          <select
+            value={activeView}
+            onChange={(event) => onSelectView(event.target.value as WorkspaceView)}
+            aria-label={t("nav.workspaceViews")}
+            className="control-select min-h-9 py-1 text-xs"
+          >
+            <option value="overview">{t("nav.overview")}</option>
+            <option value="conversation" disabled={!hasMessages}>{t("nav.conversation")}</option>
+            <option value="retrieval">{t("nav.retrieval")}</option>
+            <option value="documents">{t("nav.documents")}</option>
+            <option value="system">{t("nav.system")}</option>
+          </select>
+        </label>
         <nav
           className="hidden lg:flex items-center gap-1.5 ml-2 pl-3 border-l border-slate-200 dark:border-slate-800"
           aria-label={t("nav.overview")}
@@ -195,6 +215,45 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
           >
             <MessageSquare className="w-3.5 h-3.5" />
             {t("nav.conversation")}
+          </button>
+          <button
+            type="button"
+            onClick={() => onSelectView("retrieval")}
+            aria-pressed={activeView === "retrieval"}
+            className={`workspace-nav-button ${
+              activeView === "retrieval"
+                ? "workspace-nav-button--active"
+                : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+            }`}
+          >
+            <FlaskConical className="w-3.5 h-3.5" />
+            {t("nav.retrieval")}
+          </button>
+          <button
+            type="button"
+            onClick={() => onSelectView("documents")}
+            aria-pressed={activeView === "documents"}
+            className={`workspace-nav-button ${
+              activeView === "documents"
+                ? "workspace-nav-button--active"
+                : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            {t("nav.documents")}
+          </button>
+          <button
+            type="button"
+            onClick={() => onSelectView("system")}
+            aria-pressed={activeView === "system"}
+            className={`workspace-nav-button ${
+              activeView === "system"
+                ? "workspace-nav-button--active"
+                : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+            }`}
+          >
+            <Server className="w-3.5 h-3.5" />
+            {t("nav.system")}
           </button>
         </nav>
       </div>

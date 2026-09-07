@@ -25,11 +25,23 @@ Completed in the current working tree:
 - Added a versioned JSON conversation backup. Imports validate size, format,
   schema, and messages, then assign fresh local IDs and write through the
   existing repository so current records are not overwritten.
-- Expanded offline frontend coverage to `90/90` tests and backend targeted
-  coverage to `86` passed; frontend typecheck/lint is green. The complete
-  offline run then passed: backend `696 passed`, frontend `90/90`, production
-  build, contrast gate, browser matrix `94/94` across Chromium and Firefox,
-  and real HTTP/SSE integration `14/14`.
+- Added a provider-free query interpretation contract to API responses and
+  the UI, including normalized retrieval text, detected ticker, requested
+  periods, and comparison intent.
+- Added multi-tab conversation write coordination with a Web Locks writer
+  guard, BroadcastChannel refresh notifications, and test-safe fallback when
+  the browser does not expose a usable channel.
+- Added read-only `/retrieval/inspect`, `/documents`, document detail/chunk
+  previews, and `/system/info` endpoints. The new Retrieval Lab, Document
+  Explorer, and System & provenance views use only loaded metadata and never
+  rebuild the corpus/index or call an LLM.
+- Added local answer feedback controls, mobile workspace-view navigation, and
+  English/Vietnamese surfaces for the new tools.
+- The current frontend suite is `94/94` with typecheck/lint green; the new
+  retrieval/document panel tests are included. Backend targeted coverage is
+  `60 passed` for the changed API, retriever-inspection, and normalization
+  contracts, plus compileall. Full backend/browser/build gates still need to
+  be rerun after this working-tree checkpoint.
 
 The Docker release preflight is currently `BLOCKED` only because Docker
 Desktop is not running on the host; all host/artifact/config checks passed.

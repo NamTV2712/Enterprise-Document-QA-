@@ -11,6 +11,11 @@ import {
   DecomposedResponse,
   ClearSessionResponse,
   SessionHistoryResponse,
+  RetrievalInspectResponse,
+  RetrievalPreset,
+  DocumentListResponse,
+  DocumentChunkListResponse,
+  SystemInfoResponse,
 } from "../types";
 
 export class ApiError extends Error {
@@ -88,6 +93,100 @@ export async function getSupportedTickers(
   });
   if (!response.ok) {
     throw new ApiError(`Failed to fetch supported tickers: ${response.status}`, response.status);
+  }
+  return response.json();
+}
+
+export async function inspectRetrieval(
+  payload: {
+    question: string;
+    ticker: string | null;
+    section: string | null;
+    top_k: number;
+    candidate_pool: number;
+    preset: RetrievalPreset;
+  },
+  signal?: AbortSignal,
+): Promise<RetrievalInspectResponse> {
+  const baseUrl = getApiBaseUrl();
+  const response = await apiFetch(`${baseUrl}/retrieval/inspect`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(payload),
+    signal,
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new ApiError(
+      `Retrieval inspection failed with status ${response.status}: ${detail || response.statusText}`,
+      response.status,
+    );
+  }
+  return response.json();
+}
+
+export async function getDocuments(
+  params: {
+    ticker?: string | null;
+    section?: string | null;
+    search?: string;
+    page?: number;
+    page_size?: number;
+  } = {},
+  signal?: AbortSignal,
+): Promise<DocumentListResponse> {
+  const baseUrl = getApiBaseUrl();
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
+  }
+  const response = await apiFetch(`${baseUrl}/documents?${query.toString()}`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok) {
+    throw new ApiError(`Failed to fetch documents: ${response.status}`, response.status);
+  }
+  return response.json();
+}
+
+export async function getDocumentChunks(
+  documentId: string,
+  params: { section?: string | null; search?: string; page?: number; page_size?: number } = {},
+  signal?: AbortSignal,
+): Promise<DocumentChunkListResponse> {
+  const baseUrl = getApiBaseUrl();
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
+  }
+  const response = await apiFetch(`${baseUrl}/documents/${encodeURIComponent(documentId)}/chunks?${query.toString()}`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok) {
+    throw new ApiError(`Failed to fetch document chunks: ${response.status}`, response.status);
+  }
+  return response.json();
+}
+
+export async function getSystemInfo(signal?: AbortSignal): Promise<SystemInfoResponse> {
+  const baseUrl = getApiBaseUrl();
+  const response = await apiFetch(`${baseUrl}/system/info`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok) {
+    throw new ApiError(`Failed to fetch system info: ${response.status}`, response.status);
   }
   return response.json();
 }

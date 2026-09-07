@@ -16,6 +16,8 @@ import {
   Check,
   Bookmark,
   BookmarkCheck,
+  ThumbsDown,
+  ThumbsUp,
 } from "lucide-react";
 import { Message, RequestSnapshot } from "../types";
 import { SourcesPanel } from "./SourcesPanel";
@@ -177,6 +179,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
   const isUser = message.sender === "user";
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [focusSourceIndex, setFocusSourceIndex] = useState<number | null>(null);
+  const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
 
   const handleCopy = async () => {
     if (!message.text) return;
@@ -292,18 +295,42 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                     </>
                   )}
                 </button>
+                {message.status !== "error" && (
+                  <div className="ml-1 inline-flex items-center gap-0.5 rounded-md border border-transparent" role="group" aria-label={locale === "vi" ? "Đánh giá câu trả lời" : "Rate this answer"}>
+                    <button
+                      type="button"
+                      onClick={() => setFeedback((value) => value === "up" ? null : "up")}
+                      aria-label={locale === "vi" ? "Câu trả lời hữu ích" : "Helpful answer"}
+                      aria-pressed={feedback === "up"}
+                      title={locale === "vi" ? "Hữu ích" : "Helpful"}
+                      className={`rounded-md p-1.5 transition-colors ${feedback === "up" ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300" : "text-slate-400 hover:bg-slate-100 hover:text-emerald-600 dark:text-slate-500 dark:hover:bg-slate-800"}`}
+                    >
+                      <ThumbsUp className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFeedback((value) => value === "down" ? null : "down")}
+                      aria-label={locale === "vi" ? "Câu trả lời chưa hữu ích" : "Unhelpful answer"}
+                      aria-pressed={feedback === "down"}
+                      title={locale === "vi" ? "Chưa hữu ích" : "Unhelpful"}
+                      className={`rounded-md p-1.5 transition-colors ${feedback === "down" ? "bg-rose-500/15 text-rose-600 dark:text-rose-300" : "text-slate-400 hover:bg-slate-100 hover:text-rose-600 dark:text-slate-500 dark:hover:bg-slate-800"}`}
+                    >
+                      <ThumbsDown className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          {!isUser && message.rewritten_query && (
+          {!isUser && (message.queryInterpretation || message.rewritten_query) && (
             <details className="group rounded-lg border border-brand-indigo/15 bg-brand-indigo/[0.035] text-xs">
               <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 font-semibold text-slate-600 dark:text-slate-300 [&::-webkit-details-marker]:hidden">
                 <span>{locale === "vi" ? "Câu hỏi đã diễn giải" : "Interpreted query"}</span>
                 <ChevronDown className="h-4 w-4 text-brand-indigo transition-transform group-open:rotate-180" />
               </summary>
               <p className="ui-expand-enter border-t border-brand-indigo/10 px-3 py-2 font-mono text-xs italic leading-relaxed text-brand-indigo">
-                {message.rewritten_query}
+                {message.queryInterpretation?.retrieval_question || message.rewritten_query}
               </p>
             </details>
           )}

@@ -27,7 +27,7 @@ import {
   ConversationRecord,
   ConversationStorageMode,
 } from "../lib/conversationStore";
-import { SaveIndicator } from "../hooks/useConversationLibrary";
+import { ConversationImportResult, SaveIndicator } from "../hooks/useConversationLibrary";
 import {
   ALL_SECTIONS_DESCRIPTION,
   COMPANY_NAMES,
@@ -67,7 +67,7 @@ interface SidebarProps {
   onDeleteConversation: (conversationId: string) => void;
   onExportConversation: (conversation: ConversationRecord) => void;
   onExportBackup?: () => void;
-  onImportBackup?: (file: File) => Promise<{ imported: number }>;
+  onImportBackup?: (file: File) => Promise<ConversationImportResult>;
 }
 
 const SidebarBase: React.FC<SidebarProps> = ({

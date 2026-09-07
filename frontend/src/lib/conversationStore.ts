@@ -108,6 +108,24 @@ let activeStorageMode: ConversationStorageMode = "memory";
 let idbLock: BackendLock = { readable: true, writable: true, reason: null, permanent: true };
 let localLock: BackendLock = { readable: true, writable: true, reason: null, permanent: true };
 let databasePromise: Promise<IDBDatabase | null> | null = null;
+const WRITER_LOCK_NAME = "enterprise-document-qa-conversation-writer";
+const LIBRARY_CHANNEL_NAME = "enterprise-document-qa-library";
+let libraryChannel: BroadcastChannel | null = null;
+const libraryListeners = new Set<() => void>();
+
+function browserBroadcastChannel(): typeof BroadcastChannel | null {
+  // Node exposes a worker BroadcastChannel globally, but its MessageEvent is
+  // not compatible with jsdom's EventTarget. Only use the browser-owned
+  // implementation when a window exists; this keeps storage tests hermetic.
+  if (
+    import.meta.env.MODE === "test" ||
+    typeof window === "undefined" ||
+    typeof window.BroadcastChannel !== "function"
+  ) {
+    return null;
+  }
+  return window.BroadcastChannel;
+}
 
 // All durable writes are serialized so read-modify-write cycles on the
 // localStorage envelope can never interleave.
@@ -120,6 +138,34 @@ function enqueue<T>(operation: () => Promise<T>): Promise<T> {
     () => undefined,
   );
   return run;
+}
+
+async function withWriterLock<T>(operation: () => Promise<T>): Promise<T> {
+  if (typeof navigator === "undefined" || !navigator.locks) return operation();
+  return navigator.locks.request(WRITER_LOCK_NAME, { mode: "exclusive" }, operation);
+}
+
+function notifyLibraryChanged(): void {
+  for (const listener of libraryListeners) listener();
+  const Channel = browserBroadcastChannel();
+  if (!Channel) return;
+  if (!libraryChannel) libraryChannel = new Channel(LIBRARY_CHANNEL_NAME);
+  libraryChannel.postMessage({ type: "library-changed", at: Date.now() });
+}
+
+export function subscribeConversationLibrary(listener: () => void): () => void {
+  const Channel = browserBroadcastChannel();
+  if (!Channel) return () => undefined;
+  if (!libraryChannel) libraryChannel = new Channel(LIBRARY_CHANNEL_NAME);
+  libraryListeners.add(listener);
+  const handleMessage = (event: MessageEvent) => {
+    if (event.data?.type === "library-changed") listener();
+  };
+  libraryChannel.addEventListener("message", handleMessage);
+  return () => {
+    libraryListeners.delete(listener);
+    libraryChannel?.removeEventListener("message", handleMessage);
+  };
 }
 
 function sortRecords(records: ConversationRecord[]): ConversationRecord[] {
@@ -1019,7 +1065,7 @@ function rearmTransientLocks(): void {
 export async function saveConversationRecord(
   record: ConversationRecord,
 ): Promise<ConversationWriteResult> {
-  return enqueue(async () => {
+  return enqueue(() => withWriterLock(async () => {
     rearmTransientLocks();
     if (!snapshotLoaded) {
       await loadConversationLibrary(record.sessionId, record.id).catch(() => undefined);
@@ -1118,6 +1164,7 @@ export async function saveConversationRecord(
       pendingRecords.delete(full.id);
       transientWarning = null;
       libraryWarning = combineWarning(null);
+      notifyLibraryChanged();
       return { status: "persisted", storageMode: reportedMode, warning: libraryWarning };
     }
 
@@ -1126,11 +1173,11 @@ export async function saveConversationRecord(
       "Conversations could not be saved to browser storage right now; they are only kept in this tab.";
     libraryWarning = combineWarning(transientWarning);
     return { status: "volatile", storageMode: activeStorageMode, warning: libraryWarning };
-  });
+  }));
 }
 
 export async function deleteConversationRecord(id: string): Promise<ConversationWriteResult> {
-  return enqueue(async () => {
+  return enqueue(() => withWriterLock(async () => {
     rearmTransientLocks();
     if (!snapshotLoaded) {
       await loadConversationLibrary().catch(() => undefined);
@@ -1212,6 +1259,7 @@ export async function deleteConversationRecord(id: string): Promise<Conversation
       pendingRecords.delete(id);
       transientWarning = null;
       libraryWarning = combineWarning(null);
+      notifyLibraryChanged();
       return { status: "persisted", storageMode: reportedMode, warning: libraryWarning };
     }
 
@@ -1223,11 +1271,12 @@ export async function deleteConversationRecord(id: string): Promise<Conversation
     }
     pendingRecords.delete(id);
     if (anyDurable) durableTombstoneIds.add(id);
+    if (anyDurable) notifyLibraryChanged();
     transientWarning =
       "Deletion pending — one storage backend could not be updated. The conversation stays visible and exportable; retry the deletion to finish removing it.";
     libraryWarning = combineWarning(transientWarning);
     return { status: "volatile", storageMode: activeStorageMode, warning: libraryWarning };
-  });
+  }));
 }
 
 export async function replaceConversationRecord(

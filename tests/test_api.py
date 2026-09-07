@@ -283,6 +283,10 @@ def test_query_returns_answer_and_sources(client, mock_pipeline) -> None:
     assert call_kwargs["section"] == "risk_factors"
     assert call_kwargs["top_k"] == 5
     assert call_kwargs["answer_language"] == "en"
+    assert data["query_interpretation"]["retrieval_question"] == (
+        "What are Apple's main risk factors?"
+    )
+    assert data["query_interpretation"]["translation_method"] == "unchanged"
 
 
 def test_query_passes_vietnamese_answer_language_and_returns_metadata(client, mock_pipeline) -> None:
@@ -299,6 +303,63 @@ def test_query_passes_vietnamese_answer_language_and_returns_metadata(client, mo
     assert response.status_code == 200
     assert response.json()["answer_language"] == "vi"
     assert mock_pipeline.query.call_args.kwargs["answer_language"] == "vi"
+    assert response.json()["query_interpretation"]["original_question"] == (
+        "Doanh thu của Apple là bao nhiêu?"
+    )
+
+
+def test_retrieval_inspect_is_provider_free_and_returns_query_trace(client, mock_pipeline) -> None:
+    mock_pipeline.retriever.inspect.return_value = {
+        "preset": "hybrid_rerank",
+        "candidates": [],
+        "selected_chunk_ids": [],
+    }
+
+    response = client.post(
+        "/retrieval/inspect",
+        json={"question": "Doanh thu của Apple năm 2024 là bao nhiêu?", "preset": "hybrid"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["trace"]["preset"] == "hybrid_rerank"
+    assert response.json()["query_interpretation"]["requested_periods"] == ["2024"]
+    mock_pipeline.retriever.inspect.assert_called_once()
+    assert mock_pipeline.retriever.inspect.call_args.kwargs["query"] == (
+        "What was Apple's total revenue in 2024?"
+    )
+
+
+def test_document_catalog_and_chunk_preview_use_loaded_metadata(client, mock_pipeline) -> None:
+    mock_pipeline.retriever._all_chunks = [
+        {
+            "chunk_id": "AAPL-1",
+            "ticker": "AAPL",
+            "filing_date": "2024-11-01",
+            "section": "financial_table",
+            "text": "Revenue was 100 billion.",
+            "accession_number": "0001",
+        },
+        {
+            "chunk_id": "AAPL-2",
+            "ticker": "AAPL",
+            "filing_date": "2024-11-01",
+            "section": "risk_factors",
+            "text": "Competition risk.",
+            "accession_number": "0001",
+        },
+    ]
+
+    catalog = client.get("/documents", params={"ticker": "AAPL"})
+    assert catalog.status_code == 200
+    assert catalog.json()["total"] == 1
+    assert catalog.json()["items"][0]["document_id"] == "AAPL:0001"
+    assert catalog.json()["items"][0]["chunk_count"] == 2
+
+    detail = client.get("/documents/AAPL:0001/chunks", params={"section": "financial_table"})
+    assert detail.status_code == 200
+    assert detail.json()["total"] == 1
+    assert detail.json()["items"][0]["chunk_id"] == "AAPL-1"
+    assert "Revenue was 100 billion." in detail.json()["items"][0]["text_preview"]
 
 
 def test_query_strips_control_and_format_characters(client, mock_pipeline) -> None:

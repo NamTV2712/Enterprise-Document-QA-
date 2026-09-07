@@ -65,6 +65,16 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
 5b. [x] Add versioned JSON backup/restore for the local conversation Library.
        Validate format, schema, message shape, and 25 MiB size before writing;
        imports receive fresh IDs and never overwrite existing records.
+5f. [x] Add the next provider-free workspace surfaces without changing
+       production retrieval defaults: query interpretation metadata, guarded
+       multi-tab Library refreshes, Retrieval Lab stage traces, Document
+       Explorer catalog/chunk previews, System & provenance metadata, mobile
+       workspace navigation, and local answer feedback. Changed contracts have
+       targeted frontend/backend tests; no corpus or index rebuild was made.
+5g. [ ] Rerun the complete post-change offline release matrix: full backend,
+       frontend build/contrast, Chromium/Firefox browser matrix, and HTTP/SSE
+       integration. Update receipts with the actual counts; do not reuse the
+       pre-change release receipt as evidence for this checkpoint.
 5c. [~] Offline release gates for the bilingual branch are green for backend
        `696 passed` + compileall, frontend `90/90` + build/contrast, browser
        `94/94` Chromium/Firefox, and HTTP/SSE integration `14/14`. Docker

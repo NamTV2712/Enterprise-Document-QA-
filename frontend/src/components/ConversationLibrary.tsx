@@ -13,7 +13,7 @@ import {
   ConversationRecord,
   ConversationStorageMode,
 } from "../lib/conversationStore";
-import { SaveIndicator } from "../hooks/useConversationLibrary";
+import { ConversationImportResult, SaveIndicator } from "../hooks/useConversationLibrary";
 import { Locale, normalizeLocaleSearch, useLocale } from "../lib/i18n";
 
 interface ConversationLibraryProps {
@@ -28,7 +28,7 @@ interface ConversationLibraryProps {
   onDelete: (conversationId: string) => void;
   onExport: (conversation: ConversationRecord) => void;
   onExportBackup?: () => void;
-  onImportBackup?: (file: File) => Promise<{ imported: number }>;
+  onImportBackup?: (file: File) => Promise<ConversationImportResult>;
   /** Open a conversation and focus one bookmarked answer. */
   onOpenMessage?: (conversationId: string, messageId: string) => void;
   onClose: () => void;
@@ -118,8 +118,8 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
       const result = await onImportBackup(file);
       setBackupStatus(
         locale === "vi"
-          ? `Đã nhập ${result.imported} cuộc trò chuyện.`
-          : `Imported ${result.imported} conversation${result.imported === 1 ? "" : "s"}.`,
+          ? `Đã nhập ${result.imported}: lưu bền vững ${result.persisted}, chỉ trong tab ${result.volatile}, lỗi ${result.failed}.`
+          : `Imported ${result.imported}: ${result.persisted} persisted, ${result.volatile} tab-only, ${result.failed} failed.`,
       );
     } catch (error) {
       setBackupStatus(error instanceof Error ? error.message : "Could not import this backup.");

@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Callable, Literal, TypeVar
 
 import anyio.to_thread
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -81,6 +81,45 @@ def _load_supported_tickers() -> list[str]:
         if any(path.stat().st_size > 0 for path in ticker_dir.glob("*_chunks_embedded.jsonl")):
             tickers.append(ticker)
     return tickers or TICKERS
+
+
+def _loaded_retrieval_chunks() -> list[dict[str, Any]]:
+    pipeline: RAGPipeline | None = _state.get("pipeline")
+    retriever = getattr(pipeline, "retriever", None)
+    chunks = getattr(retriever, "_all_chunks", None)
+    return chunks if isinstance(chunks, list) else []
+
+
+def _document_id(chunk: dict[str, Any]) -> str:
+    accession = chunk.get("accession_number")
+    if isinstance(accession, str) and accession:
+        return f"{chunk.get('ticker', 'UNKNOWN')}:{accession}"
+    return f"{chunk.get('ticker', 'UNKNOWN')}:{chunk.get('filing_date', 'unknown')}"
+
+
+def _document_rows(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    for chunk in chunks:
+        document_id = _document_id(chunk)
+        row = grouped.setdefault(
+            document_id,
+            {
+                "document_id": document_id,
+                "ticker": chunk.get("ticker"),
+                "filing_date": chunk.get("filing_date"),
+                "accession_number": chunk.get("accession_number"),
+                "sections": set(),
+                "chunk_count": 0,
+                "source_url": chunk.get("source_url") or chunk.get("filing_url"),
+            },
+        )
+        if chunk.get("section"):
+            row["sections"].add(chunk["section"])
+        row["chunk_count"] += 1
+    return [
+        {**row, "sections": sorted(row["sections"])}
+        for row in sorted(grouped.values(), key=lambda item: (item["ticker"] or "", item["filing_date"] or ""))
+    ]
 
 
 def _embed_query_pair(
@@ -260,12 +299,24 @@ class SourceChunk(BaseModel):
     filing_date: str | None = None
 
 
+class QueryInterpretation(BaseModel):
+    """Safe, user-visible explanation of the retrieval query transformation."""
+
+    original_question: str
+    retrieval_question: str
+    translation_method: str
+    detected_ticker: str | None = None
+    requested_periods: list[str] = Field(default_factory=list)
+    is_comparative: bool = False
+
+
 class QueryResponse(BaseModel):
     answer: str
     model_used: str
     sources: list[SourceChunk]
     num_chunks_retrieved: int
     answer_language: Literal["en", "vi"] = "en"
+    query_interpretation: QueryInterpretation | None = None
 
 
 class SubQueryInfo(BaseModel):
@@ -283,11 +334,27 @@ class DecomposedQueryResponse(BaseModel):
     sources: list[SourceChunk]
     num_total_chunks: int
     answer_language: Literal["en", "vi"] = "en"
+    query_interpretation: QueryInterpretation | None = None
 
 
 class CacheTestRequest(BaseModel):
     query_a: str = Field(min_length=5)
     query_b: str = Field(min_length=5)
+
+
+class RetrievalInspectRequest(BaseModel):
+    question: str = Field(min_length=5, max_length=500)
+    ticker: str | None = Field(default=None, pattern=r"^[A-Z]{1,5}(-[A-Z])?$")
+    section: Literal[
+        "business",
+        "risk_factors",
+        "mdna",
+        "financial_statements",
+        "financial_table",
+    ] | None = None
+    top_k: int = Field(default=5, ge=1, le=10)
+    candidate_pool: int = Field(default=10, ge=10, le=50)
+    preset: Literal["bm25", "dense", "hybrid", "hybrid_rerank"] = "hybrid_rerank"
 
 
 # --- Endpoints ---
@@ -329,6 +396,18 @@ def _source_chunk_payload(chunk: Any) -> SourceChunk:
     )
 
 
+def _query_interpretation(original_question: str, normalized: Any) -> QueryInterpretation:
+    """Serialize normalization metadata without exposing internal paths/config."""
+    return QueryInterpretation(
+        original_question=original_question,
+        retrieval_question=normalized.question,
+        translation_method=normalized.translation_method,
+        detected_ticker=normalized.detected_ticker,
+        requested_periods=list(normalized.requested_periods),
+        is_comparative=normalized.is_comparative,
+    )
+
+
 @app.get("/health/live")
 async def health_live() -> dict:
     """Report whether the API process can serve HTTP requests."""
@@ -364,7 +443,8 @@ async def query(request: Request, body: QueryRequest) -> QueryResponse:
             detail="Your question contains patterns that cannot be processed. Please rephrase.",
         )
 
-    normalized = normalize_retrieval_question(_sanitize_question(body.question))
+    original_question = _sanitize_question(body.question)
+    normalized = normalize_retrieval_question(original_question)
     ticker = body.ticker or normalized.detected_ticker
     try:
         response = await _run_query_with_timeout(
@@ -391,6 +471,7 @@ async def query(request: Request, body: QueryRequest) -> QueryResponse:
         sources=sources,
         num_chunks_retrieved=len(response.retrieved_chunks),
         answer_language=response.answer_language,
+        query_interpretation=_query_interpretation(original_question, normalized),
     )
 
 
@@ -421,7 +502,8 @@ async def query_decomposed(
             detail="Your question contains patterns that cannot be processed. Please rephrase.",
         )
 
-    normalized = normalize_retrieval_question(_sanitize_question(body.question))
+    original_question = _sanitize_question(body.question)
+    normalized = normalize_retrieval_question(original_question)
     ticker = body.ticker or normalized.detected_ticker
     try:
         result = await _run_query_with_timeout(
@@ -460,6 +542,7 @@ async def query_decomposed(
         sources=[_source_chunk_payload(chunk) for chunk in result.all_chunks[:10]],
         num_total_chunks=len(result.all_chunks),
         answer_language=body.answer_language,
+        query_interpretation=_query_interpretation(original_question, normalized),
     )
 
 
@@ -470,6 +553,152 @@ async def supported_tickers() -> dict:
     return {
         "tickers": tickers,
         "sections": SUPPORTED_SECTIONS,
+    }
+
+
+@app.get("/documents")
+async def documents(
+    ticker: str | None = Query(default=None, pattern=r"^[A-Z]{1,5}(-[A-Z])?$"),
+    section: str | None = Query(default=None),
+    filing_date: str | None = Query(default=None),
+    search: str | None = Query(default=None, max_length=100),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+) -> dict:
+    """Return a paginated catalog derived from loaded retrieval metadata."""
+    if _state.get("pipeline") is None:
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    rows = _document_rows(_loaded_retrieval_chunks())
+    search_folded = search.casefold().strip() if search else ""
+    filtered = [
+        row
+        for row in rows
+        if (ticker is None or row["ticker"] == ticker)
+        and (filing_date is None or row["filing_date"] == filing_date)
+        and (section is None or section in row["sections"])
+        and (
+            not search_folded
+            or search_folded in " ".join(
+                str(row.get(field) or "")
+                for field in ("document_id", "ticker", "filing_date", "accession_number")
+            ).casefold()
+        )
+    ]
+    start = (page - 1) * page_size
+    return {
+        "items": filtered[start : start + page_size],
+        "total": len(filtered),
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@app.get("/documents/{document_id}")
+async def document_detail(document_id: str) -> dict:
+    """Return one public document record without exposing filesystem paths."""
+    if _state.get("pipeline") is None:
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    rows = _document_rows(_loaded_retrieval_chunks())
+    row = next((item for item in rows if item["document_id"] == document_id), None)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return row
+
+
+@app.get("/documents/{document_id}/chunks")
+async def document_chunks(
+    document_id: str,
+    section: str | None = Query(default=None),
+    search: str | None = Query(default=None, max_length=100),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+) -> dict:
+    """Return paginated source previews for one document."""
+    if _state.get("pipeline") is None:
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    search_folded = search.casefold().strip() if search else ""
+    matching = [
+        chunk
+        for chunk in _loaded_retrieval_chunks()
+        if _document_id(chunk) == document_id
+        and (section is None or chunk.get("section") == section)
+        and (not search_folded or search_folded in str(chunk.get("text") or "").casefold())
+    ]
+    start = (page - 1) * page_size
+    items = []
+    for chunk in matching[start : start + page_size]:
+        items.append(
+            {
+                "chunk_id": chunk.get("chunk_id"),
+                "ticker": chunk.get("ticker"),
+                "section": chunk.get("section"),
+                "filing_date": chunk.get("filing_date"),
+                "accession_number": chunk.get("accession_number"),
+                "text_preview": str(chunk.get("text") or "")[:500],
+                "text_length": len(str(chunk.get("text") or "")),
+                "source_url": chunk.get("source_url") or chunk.get("filing_url"),
+            }
+        )
+    return {"items": items, "total": len(matching), "page": page, "page_size": page_size}
+
+
+@app.get("/system/info")
+async def system_info() -> dict:
+    """Expose allowlisted build, model and corpus metadata for the workspace."""
+    pipeline: RAGPipeline | None = _state.get("pipeline")
+    if pipeline is None:
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    retriever = pipeline.retriever
+    return {
+        "api_version": app.version,
+        "corpus": dict(_state.get("corpus") or {}),
+        "retrieval": {
+            "embedding_model": getattr(getattr(retriever, "embedder", None), "model_name", None),
+            "reranker_model": getattr(retriever, "cross_encoder_model", None),
+            "presets": ["bm25", "dense", "hybrid", "hybrid_rerank"],
+            "default": "hybrid_rerank",
+        },
+        "build": {
+            key: os.environ[key]
+            for key in ("GIT_REVISION", "BUILD_VERSION")
+            if os.environ.get(key)
+        },
+    }
+
+
+@app.post("/retrieval/inspect")
+@limiter.limit("10/minute")
+async def retrieval_inspect(request: Request, body: RetrievalInspectRequest) -> dict:
+    """Inspect local retrieval stages without invoking the language model."""
+    pipeline: RAGPipeline | None = _state.get("pipeline")
+    if pipeline is None:
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    if _contains_injection_pattern(body.question):
+        raise HTTPException(
+            status_code=400,
+            detail="Your question contains patterns that cannot be processed. Please rephrase.",
+        )
+    original_question = _sanitize_question(body.question)
+    normalized = normalize_retrieval_question(original_question)
+    ticker = body.ticker or normalized.detected_ticker
+    try:
+        trace = await run_in_threadpool(
+            pipeline.retriever.inspect,
+            query=normalized.question,
+            top_k=body.top_k,
+            ticker=ticker,
+            section=body.section,
+            candidate_pool=body.candidate_pool,
+            preset=body.preset,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception:
+        logger.exception("Retrieval inspection failed")
+        raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
+    return {
+        "query_interpretation": _query_interpretation(original_question, normalized),
+        "trace": trace,
     }
 
 
@@ -673,6 +902,13 @@ async def query_stream(request: Request, request_body: QueryRequest):
                     if cancel_event.is_set():
                         break
                     safe_data = INTERNAL_ERROR_DETAIL if event_type == "error" else data
+                    if event_type == "done":
+                        safe_data = {
+                            **(data if isinstance(data, dict) else {}),
+                            "query_interpretation": _query_interpretation(
+                                request_body.question, normalized
+                            ).model_dump(),
+                        }
                     enqueue((event_type, safe_data))
                     if event_type in {"done", "error"}:
                         break

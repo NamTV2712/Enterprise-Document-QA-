@@ -1528,6 +1528,23 @@ summary {
   background: var(--surface-muted);
 }
 
+.control-select {
+  min-height: 2.5rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  color: var(--text-primary);
+  padding: 0.45rem 0.65rem;
+  font-size: 0.8125rem;
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.control-select:focus-visible {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
 .state-warning-surface {
   background: var(--state-warning-surface);
   color: var(--state-warning-text);

@@ -61,7 +61,7 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        Vietnamese UI preference, per-question answer language, localized help
        and glossary, accent-insensitive company/library/evidence search, and
        localized evidence/status surfaces. Offline frontend coverage is
-       currently 90/90 with typecheck green.
+       currently 95/95 with typecheck green.
 5b. [x] Add versioned JSON backup/restore for the local conversation Library.
        Validate format, schema, message shape, and 25 MiB size before writing;
        imports receive fresh IDs and never overwrite existing records.
@@ -76,7 +76,7 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        integration. Results and the final commit-bound receipt are recorded
        above; the prior release receipt was not reused as evidence.
 5c. [x] Offline release gates for the bilingual branch are green: backend
-       `703 passed` + compileall, frontend `94/94` + build/contrast, browser
+       `703 passed` + compileall, frontend `95/95` + build/contrast, browser
        `94/94` Chromium/Firefox, HTTP/SSE integration `14/14`, and Docker
        build/readiness/receipt PASS. The receipt is ignored at
        `data/diagnostics/local_release_receipt_bilingual.json`; no canonical

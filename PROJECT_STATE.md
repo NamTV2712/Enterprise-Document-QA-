@@ -41,7 +41,7 @@ Completed in the current working tree:
   persistence, and Markdown export; notes never enter generation prompts or
   provider requests.
 - The final offline verification for this round is green: frontend
-  typecheck/lint, `94/94` unit tests, production build, and light/dark
+  typecheck/lint, `95/95` unit tests, production build, and light/dark
   contrast; Chromium + Firefox browser matrix `94/94`; real HTTP/SSE
   integration `14/14`; and backend full suite `703 passed` + compileall.
 - Docker release preflight is `PASS`, the pinned image builds successfully,

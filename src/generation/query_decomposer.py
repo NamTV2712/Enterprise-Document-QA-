@@ -133,6 +133,20 @@ Rules:
    without presenting retrieved sources as relevant.
 9. Do not speculate or use external knowledge."""
 
+VIETNAMESE_SYNTHESIS_SYSTEM_PROMPT = (
+    SYNTHESIS_SYSTEM_PROMPT
+    + "\n10. Respond in Vietnamese. Preserve company names, values, periods, "
+    "and [Source N] citations exactly."
+)
+
+
+def synthesis_prompt_for_language(answer_language: str = "en") -> str:
+    return (
+        VIETNAMESE_SYNTHESIS_SYSTEM_PROMPT
+        if answer_language == "vi"
+        else SYNTHESIS_SYSTEM_PROMPT
+    )
+
 
 @dataclass
 class SubQuery:
@@ -180,6 +194,7 @@ class QueryDecomposer:
         ticker: str | None = None,
         section: str | None = None,
         session_id: str | None = None,
+        answer_language: str = "en",
     ) -> DecomposedResponse:
         """Entry point: Decide for yourself whether decomposition is necessary."""
         plan = self._plan(question)
@@ -192,6 +207,7 @@ class QueryDecomposer:
                 ticker=ticker,
                 section=section,
                 session_id=session_id,
+                answer_language=answer_language,
             )
             return DecomposedResponse(
                 answer=response.answer,
@@ -219,6 +235,7 @@ class QueryDecomposer:
                 ticker=ticker,
                 section=section,
                 session_id=session_id,
+                answer_language=answer_language,
             )
             return DecomposedResponse(
                 answer=response.answer,
@@ -248,7 +265,12 @@ class QueryDecomposer:
                 sorted(missing_tickers),
             )
             return DecomposedResponse(
-                answer=INSUFFICIENT_DECOMPOSED_CONTEXT_ANSWER,
+                answer=(
+                    "Tôi không tìm thấy đủ thông tin trong các tài liệu hiện có "
+                    "để trả lời câu hỏi này với độ tin cậy cần thiết."
+                    if answer_language == "vi"
+                    else INSUFFICIENT_DECOMPOSED_CONTEXT_ANSWER
+                ),
                 sub_queries=sub_queries,
                 all_chunks=all_chunks,
                 model_used=self.generator.model,
@@ -258,7 +280,7 @@ class QueryDecomposer:
         synthesis_chunks = self._select_comparative_context(
             sub_queries, all_chunks
         )
-        answer = self._synthesize(question, synthesis_chunks)
+        answer = self._synthesize(question, synthesis_chunks, answer_language)
 
         return DecomposedResponse(
             answer=answer,
@@ -442,11 +464,14 @@ class QueryDecomposer:
         self,
         original_question: str,
         all_chunks: list[RetrievedChunk],
+        answer_language: str = "en",
     ) -> str:
         """Generate a synthesized answer from all retrieved chunks."""
         if not all_chunks:
             return (
-                "I could not find sufficient information to answer this "
+                "Tôi không tìm thấy đủ thông tin để trả lời câu hỏi so sánh này."
+                if answer_language == "vi"
+                else "I could not find sufficient information to answer this "
                 "comparative question. Please ensure the companies you're "
                 "asking about are in the document corpus."
             )
@@ -480,7 +505,10 @@ class QueryDecomposer:
             response = self.generator._create_groq_chat_completion(
                 model=self.generator.model,
                 messages=[
-                    {"role": "system", "content": SYNTHESIS_SYSTEM_PROMPT},
+                    {
+                        "role": "system",
+                        "content": synthesis_prompt_for_language(answer_language),
+                    },
                     {"role": "user", "content": prompt},
                 ],
                 max_tokens=1024,
@@ -515,4 +543,9 @@ class QueryDecomposer:
                 original_question[:80],
                 len(all_chunks),
             )
-            return SYNTHESIS_ERROR_ANSWER
+            return (
+                "Đã xảy ra lỗi khi tổng hợp câu trả lời từ các nguồn đã tìm thấy. "
+                "Vui lòng diễn đạt lại câu hỏi."
+                if answer_language == "vi"
+                else SYNTHESIS_ERROR_ANSWER
+            )

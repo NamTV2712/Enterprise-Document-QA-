@@ -1,5 +1,44 @@
 # Project State
 
+## Bilingual research workspace and local portability round — OFFLINE CANDIDATE (2026-09-07)
+
+This round is being developed on `codex/bilingual-research-workspace` from
+`main` at `108e729`. The goal is to make the existing research workspace
+usable for English and Vietnamese users without changing retrieval defaults or
+rebuilding the canonical corpus/index.
+
+Completed in the current working tree:
+
+- Added an explicit `answer_language` contract (`en`/`vi`) to query requests,
+  responses, streaming metadata, the semantic-cache key, generator prompts,
+  and decomposed synthesis. English remains the default and the legacy English
+  system-prompt fingerprint is unchanged.
+- Added conservative Vietnamese retrieval normalization for labelled metrics,
+  comparisons, and accentless input. Complex questions preserve entities and
+  intent while adding lexical retrieval hints; unsupported intent is not
+  guessed.
+- Added a browser locale provider with English/Vietnamese UI controls,
+  persisted preference, system-language detection, answer-language selection,
+  localized help/glossary, and localized evidence/status/workspace surfaces.
+- Added accent-insensitive search for companies, saved conversations, and
+  evidence excerpts.
+- Added a versioned JSON conversation backup. Imports validate size, format,
+  schema, and messages, then assign fresh local IDs and write through the
+  existing repository so current records are not overwritten.
+- Expanded offline frontend coverage to `90/90` tests and backend targeted
+  coverage to `86` passed; frontend typecheck/lint is green. The complete
+  offline run then passed: backend `696 passed`, frontend `90/90`, production
+  build, contrast gate, browser matrix `94/94` across Chromium and Firefox,
+  and real HTTP/SSE integration `14/14`.
+
+The Docker release preflight is currently `BLOCKED` only because Docker
+Desktop is not running on the host; all host/artifact/config checks passed.
+Therefore no image or provider-free Docker receipt was produced. The provider
+campaign is still pending a newly authorized provider window/quota, so this
+branch is an offline candidate rather than a provider-backed GO. PR/CI is the
+next handoff step. No provider request or data/index rebuild has been made in
+this round.
+
 ## Current Milestone
 
 ### Local release readiness M3 — candidate GO, CI green (2026-09-06)

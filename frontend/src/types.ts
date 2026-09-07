@@ -27,6 +27,7 @@ export interface QueryRequest {
   section: string | null;
   top_k: number;
   session_id: string | null;
+  answer_language: AnswerLanguage;
 }
 
 export interface Source {
@@ -41,6 +42,7 @@ export interface Source {
 }
 
 export type ThemePreference = "system" | "light" | "dark";
+export type AnswerLanguage = "en" | "vi";
 export type MessageStatus = "streaming" | "stopped" | "completed" | "error";
 
 export interface RequestSnapshot {
@@ -48,6 +50,7 @@ export interface RequestSnapshot {
   section: string | null;
   topK: number;
   enableComparative: boolean;
+  answerLanguage: AnswerLanguage;
 }
 
 export interface QueryResponse {
@@ -55,6 +58,7 @@ export interface QueryResponse {
   model_used: string;
   sources: Source[];
   num_chunks_retrieved: number;
+  answer_language?: AnswerLanguage;
 }
 
 export interface SubQuery {
@@ -71,6 +75,7 @@ export interface DecomposedResponse {
   sub_queries: SubQuery[];
   sources: Source[];
   num_total_chunks: number;
+  answer_language?: AnswerLanguage;
 }
 
 export interface SessionContextInfo {

@@ -243,6 +243,10 @@ class QueryRequest(BaseModel):
         ),
         examples=["test-session-001"],
     )
+    answer_language: Literal["en", "vi"] = Field(
+        default="en",
+        description="Language for the generated answer; filing evidence remains verbatim.",
+    )
 
 
 class SourceChunk(BaseModel):
@@ -261,6 +265,7 @@ class QueryResponse(BaseModel):
     model_used: str
     sources: list[SourceChunk]
     num_chunks_retrieved: int
+    answer_language: Literal["en", "vi"] = "en"
 
 
 class SubQueryInfo(BaseModel):
@@ -277,6 +282,7 @@ class DecomposedQueryResponse(BaseModel):
     sub_queries: list[SubQueryInfo]
     sources: list[SourceChunk]
     num_total_chunks: int
+    answer_language: Literal["en", "vi"] = "en"
 
 
 class CacheTestRequest(BaseModel):
@@ -368,6 +374,7 @@ async def query(request: Request, body: QueryRequest) -> QueryResponse:
             ticker=ticker,
             section=body.section,
             session_id=body.session_id,
+            answer_language=body.answer_language,
         )
     except TimeoutError:
         logger.warning("Query timed out after %.1f seconds", QUERY_TIMEOUT_SECONDS)
@@ -383,6 +390,7 @@ async def query(request: Request, body: QueryRequest) -> QueryResponse:
         model_used=response.model_used,
         sources=sources,
         num_chunks_retrieved=len(response.retrieved_chunks),
+        answer_language=response.answer_language,
     )
 
 
@@ -424,6 +432,7 @@ async def query_decomposed(
             ticker=ticker,
             section=body.section,
             session_id=body.session_id,
+            answer_language=body.answer_language,
         )
     except TimeoutError:
         logger.warning(
@@ -450,6 +459,7 @@ async def query_decomposed(
         ],
         sources=[_source_chunk_payload(chunk) for chunk in result.all_chunks[:10]],
         num_total_chunks=len(result.all_chunks),
+        answer_language=body.answer_language,
     )
 
 
@@ -658,6 +668,7 @@ async def query_stream(request: Request, request_body: QueryRequest):
                     section=request_body.section,
                     session_id=request_body.session_id,
                     cancel_event=cancel_event,
+                    answer_language=request_body.answer_language,
                 ):
                     if cancel_event.is_set():
                         break

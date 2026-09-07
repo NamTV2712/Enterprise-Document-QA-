@@ -314,6 +314,29 @@ describe("App request cancellation", () => {
     expect(screen.getByText("Amazon — MD&A Highlights")).toBeInTheDocument();
   });
 
+  test("sends the selected answer language without changing the evidence request", async () => {
+    apiMocks.streamQuery.mockImplementation(async (_payload, onEvent) => {
+      onEvent({ type: "token", data: "Câu trả lời có nguồn [Source 1]." });
+      onEvent({ type: "done", data: { answer_language: "vi" } });
+    });
+
+    render(<App />);
+    await screen.findByText("Pipeline: Ready");
+    fireEvent.change(screen.getByRole("combobox", { name: "Answer language" }), {
+      target: { value: "vi" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Research question" }), {
+      target: { value: "Doanh thu của Apple năm 2024 là bao nhiêu?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send question" }));
+
+    await screen.findByText(/Câu trả lời có nguồn/);
+    expect(apiMocks.streamQuery.mock.calls[0][0]).toMatchObject({
+      answer_language: "vi",
+      question: "Doanh thu của Apple năm 2024 là bao nhiêu?",
+    });
+  });
+
   test("stop generating aborts the stream and preserves partial text", async () => {
     let streamSignal: AbortSignal | undefined;
     const setItemSpy = vi.spyOn(Storage.prototype, "setItem");

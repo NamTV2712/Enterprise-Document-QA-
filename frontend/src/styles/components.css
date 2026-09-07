@@ -1609,3 +1609,67 @@ summary {
   line-height: 1.45;
   text-align: left;
 }
+.locale-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: var(--surface-muted);
+}
+
+.locale-switcher__button {
+  min-height: 28px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--text-subtle);
+  background: transparent;
+  font: 700 10px/1 var(--font-mono);
+  cursor: pointer;
+}
+
+.locale-switcher__button:hover,
+.locale-switcher__button:focus-visible,
+.locale-switcher__button.is-active {
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-sm);
+}
+.library-backup-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.library-secondary-action {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.65rem;
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  padding: 0.45rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+
+.library-secondary-action:hover,
+.library-secondary-action:focus-visible {
+  border-color: var(--brand-indigo);
+  background: var(--surface-muted);
+  color: var(--text-primary);
+}
+
+.library-backup-status {
+  margin: 0.6rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}

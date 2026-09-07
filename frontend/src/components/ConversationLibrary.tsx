@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   Bookmark,
   BookmarkCheck,
@@ -14,6 +14,7 @@ import {
   ConversationStorageMode,
 } from "../lib/conversationStore";
 import { SaveIndicator } from "../hooks/useConversationLibrary";
+import { Locale, normalizeLocaleSearch, useLocale } from "../lib/i18n";
 
 interface ConversationLibraryProps {
   conversations: ConversationRecord[];
@@ -26,6 +27,8 @@ interface ConversationLibraryProps {
   onToggleBookmark: (conversationId: string, messageId: string) => void;
   onDelete: (conversationId: string) => void;
   onExport: (conversation: ConversationRecord) => void;
+  onExportBackup?: () => void;
+  onImportBackup?: (file: File) => Promise<{ imported: number }>;
   /** Open a conversation and focus one bookmarked answer. */
   onOpenMessage?: (conversationId: string, messageId: string) => void;
   onClose: () => void;
@@ -37,23 +40,22 @@ interface BookmarkedAnswer {
   excerpt: string;
 }
 
-function relativeTime(timestamp: number): string {
+function relativeTime(timestamp: number, locale: Locale): string {
   const seconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000));
-  if (seconds < 60) return "Just now";
+  if (seconds < 60) return locale === "vi" ? "Vừa xong" : "Just now";
   const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 60) return locale === "vi" ? `${minutes} phút trước` : `${minutes}m ago`;
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return locale === "vi" ? `${hours} giờ trước` : `${hours}h ago`;
   const days = Math.round(hours / 24);
-  return `${days}d ago`;
+  return locale === "vi" ? `${days} ngày trước` : `${days}d ago`;
 }
 
-function storageLabel(mode: ConversationStorageMode, saveIndicator?: SaveIndicator): string {
-  if (mode === "memory") return "Only kept in this tab";
-  if (saveIndicator === "volatile") return "Only kept in this tab";
-  if (saveIndicator === "saved") return "Saved on this device";
-  if (mode === "localstorage") return "Browser storage fallback";
-  return "Saved on this device";
+function storageLabel(mode: ConversationStorageMode, saveIndicator: SaveIndicator | undefined, locale: Locale): string {
+  if (mode === "memory" || saveIndicator === "volatile") return locale === "vi" ? "Chỉ giữ trong tab này" : "Only kept in this tab";
+  if (saveIndicator === "saved") return locale === "vi" ? "Đã lưu trên thiết bị này" : "Saved on this device";
+  if (mode === "localstorage") return locale === "vi" ? "Bộ nhớ trình duyệt dự phòng" : "Browser storage fallback";
+  return locale === "vi" ? "Đã lưu trên thiết bị này" : "Saved on this device";
 }
 
 function collectBookmarkedAnswers(
@@ -69,7 +71,7 @@ function collectBookmarkedAnswers(
       if (!message) continue;
       if (
         normalizedSearch &&
-        !`${conversation.title} ${message.text}`.toLowerCase().includes(normalizedSearch)
+        !normalizeLocaleSearch(`${conversation.title} ${message.text}`).includes(normalizedSearch)
       ) {
         continue;
       }
@@ -94,15 +96,37 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
   onToggleBookmark,
   onDelete,
   onExport,
+  onExportBackup,
+  onImportBackup,
   onOpenMessage,
   onClose,
 }) => {
+  const { locale, t } = useLocale();
   const [search, setSearch] = useState("");
   const [bookmarkedOnly, setBookmarkedOnly] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-  const normalizedSearch = search.trim().toLowerCase();
+  const [backupStatus, setBackupStatus] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const normalizedSearch = normalizeLocaleSearch(search.trim());
+
+  const handleImportBackup = async (file: File | undefined) => {
+    if (!file || !onImportBackup) return;
+    setBackupStatus(null);
+    try {
+      const result = await onImportBackup(file);
+      setBackupStatus(
+        locale === "vi"
+          ? `Đã nhập ${result.imported} cuộc trò chuyện.`
+          : `Imported ${result.imported} conversation${result.imported === 1 ? "" : "s"}.`,
+      );
+    } catch (error) {
+      setBackupStatus(error instanceof Error ? error.message : "Could not import this backup.");
+    } finally {
+      if (importInputRef.current) importInputRef.current.value = "";
+    }
+  };
 
   const filteredConversations = useMemo(
     () =>
@@ -111,7 +135,11 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
           ? `${conversation.title} ${conversation.messages
               .map((message) => message.text)
               .join(" ")}`
-              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .replace(/đ/g, "d")
+              .replace(/Đ/g, "D")
+              .toLocaleLowerCase(locale)
               .includes(normalizedSearch)
           : true;
         const matchesBookmark = bookmarkedOnly
@@ -143,7 +171,7 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
       <div className="library-heading-row">
         <div>
           <p className="library-eyebrow">Your workspace</p>
-          <h2 id="library-heading">Saved conversations</h2>
+          <h2 id="library-heading">{t("library.title")}</h2>
         </div>
         <button type="button" className="icon-button library-close" onClick={onClose} aria-label="Close conversation library">
           <X className="h-4 w-4" />
@@ -152,26 +180,27 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
 
       <div className="library-storage-status" role="status" aria-live="polite">
         <span className="library-status-dot" aria-hidden="true" />
-        <span>{storageLabel(storageMode, saveIndicator)}</span>
+        <span>{storageLabel(storageMode, saveIndicator, locale)}</span>
       </div>
       {storageMode === "memory" && (
         <p className="library-warning">
-          Only kept in this tab: browser storage is unavailable, so conversations
-          disappear when the tab closes.
+          {locale === "vi"
+            ? "Chỉ giữ trong tab này: trình duyệt không cho phép lưu trữ nên cuộc trò chuyện sẽ mất khi đóng tab."
+            : "Only kept in this tab: browser storage is unavailable, so conversations disappear when the tab closes."}
         </p>
       )}
       {storageWarning && <p className="library-warning">{storageWarning}</p>}
 
       <label className="library-search">
         <Search className="h-4 w-4" aria-hidden="true" />
-        <span className="sr-only">Search saved conversations</span>
+        <span className="sr-only">{t("library.search")}</span>
         <input
           id="library-search-input"
           type="search"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search questions and answers"
-          aria-label="Search saved conversations"
+          placeholder={t("library.search")}
+          aria-label={t("library.searchSaved")}
         />
       </label>
 
@@ -182,8 +211,39 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
         onClick={() => setBookmarkedOnly((current) => !current)}
       >
         <BookmarkCheck className="h-4 w-4" />
-        Bookmarked answers
+        {t("library.bookmarks")}
       </button>
+
+      {(onExportBackup || onImportBackup) && (
+        <div className="library-backup-actions">
+          {onExportBackup && (
+            <button type="button" className="library-secondary-action" onClick={onExportBackup}>
+              <Download className="h-4 w-4" />
+              {locale === "vi" ? "Xuất bản sao" : "Export backup"}
+            </button>
+          )}
+          {onImportBackup && (
+            <>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept="application/json,.json"
+                className="sr-only"
+                onChange={(event) => void handleImportBackup(event.target.files?.[0])}
+              />
+              <button
+                type="button"
+                className="library-secondary-action"
+                onClick={() => importInputRef.current?.click()}
+              >
+                <Download className="h-4 w-4 rotate-180" />
+                {locale === "vi" ? "Nhập bản sao" : "Import backup"}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+      {backupStatus && <p className="library-backup-status" role="status">{backupStatus}</p>}
 
       <div className="library-list" aria-live="polite">
         {bookmarkedOnly ? (
@@ -192,8 +252,8 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
               <Bookmark className="h-7 w-7" aria-hidden="true" />
               <p>
                 {conversations.some((conversation) => conversation.bookmarkedMessageIds.length > 0)
-                  ? "No bookmarked answers match this search."
-                  : "Bookmark an answer to find it quickly here."}
+                  ? t("library.noBookmarkMatch")
+                  : t("library.bookmarkHint")}
               </p>
             </div>
           ) : (
@@ -211,7 +271,7 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
                   <span className="library-item-title">{conversation.title}</span>
                   <span className="library-item-excerpt">{excerpt}</span>
                   <span className="library-item-meta">
-                    {relativeTime(conversation.updatedAt)}
+                    {relativeTime(conversation.updatedAt, locale)}
                   </span>
                 </button>
                 <div className="library-item-actions">
@@ -242,7 +302,7 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
         ) : filteredConversations.length === 0 ? (
           <div className="library-empty">
             <MessageSquare className="h-7 w-7" aria-hidden="true" />
-            <p>{conversations.length === 0 ? "Your saved conversations will appear here." : "No conversations match this search."}</p>
+            <p>{conversations.length === 0 ? t("library.empty") : t("library.noMatch")}</p>
           </div>
         ) : (
           filteredConversations.map((conversation) => (
@@ -268,7 +328,7 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
                 <button type="button" className="library-item-main" onClick={() => onSelect(conversation)}>
                   <span className="library-item-title">{conversation.title}</span>
                   <span className="library-item-meta">
-                    {conversation.messages.length} messages · {relativeTime(conversation.updatedAt)}
+                    {conversation.messages.length} messages · {relativeTime(conversation.updatedAt, locale)}
                   </span>
                 </button>
               )}

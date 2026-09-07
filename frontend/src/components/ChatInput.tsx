@@ -6,6 +6,8 @@
 import React, { useRef, useEffect, memo } from "react";
 import { Send, AlertTriangle, Loader2, Square } from "lucide-react";
 import { Tooltip } from "./Tooltip";
+import { AnswerLanguage } from "../types";
+import { useLocale } from "../lib/i18n";
 
 interface ChatInputProps {
   inputText: string;
@@ -21,6 +23,8 @@ interface ChatInputProps {
   /** Read-only saved conversations accept drafts but never send. */
   isReadOnly?: boolean;
   readOnlyMessage?: string;
+  answerLanguage?: AnswerLanguage;
+  onAnswerLanguageChange?: (language: AnswerLanguage) => void;
 }
 
 export const ConnectionBanner = memo(
@@ -31,11 +35,12 @@ export const ConnectionBanner = memo(
     isBackendConnected: boolean | null;
     isPipelineReady: boolean | null;
   }) => {
+    const { t } = useLocale();
     if (isBackendConnected === null || isPipelineReady === null) {
       return (
         <div className="flex items-center gap-2 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/20 text-slate-600 dark:text-slate-400 text-xs font-semibold font-sans" role="status" aria-live="polite">
           <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin" />
-          <span>Connecting to the FastAPI backend...</span>
+          <span>{t("connection.connecting")}</span>
         </div>
       );
     }
@@ -45,8 +50,7 @@ export const ConnectionBanner = memo(
         <div className="flex items-center gap-2 p-2.5 rounded-lg border border-red-200 dark:border-red-950/40 bg-red-50 dark:bg-red-950/20 text-red-750 dark:text-red-400 text-xs font-semibold font-sans" role="alert">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           <span>
-            The research service is unavailable. Check the connection and try
-            again.
+            {t("connection.unavailable")}
           </span>
         </div>
       );
@@ -57,8 +61,7 @@ export const ConnectionBanner = memo(
         <div className="flex items-center gap-2 p-2.5 rounded-lg border border-amber-200 dark:border-amber-950/40 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 text-xs font-semibold font-sans" role="status" aria-live="polite">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           <span>
-            System status: FastAPI pipeline state is re-loading index vectors.
-            Document retrieval currently unavailable.
+            {t("connection.loading")}
           </span>
         </div>
       );
@@ -83,7 +86,10 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
   scopeLabel,
   isReadOnly = false,
   readOnlyMessage,
+  answerLanguage = "en",
+  onAnswerLanguageChange = () => {},
 }) => {
+  const { t } = useLocale();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composingRef = useRef(false);
 
@@ -138,8 +144,8 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
     <div className="w-full max-w-full min-w-0 pt-2 pb-[calc(0.875rem+env(safe-area-inset-bottom))] md:pb-3.5 px-4 transition-colors">
       <div className="w-full max-w-4xl mx-auto space-y-3 min-w-0">
         {scopeLabel && (
-          <div className="composer-scope" aria-label={`Active search scope: ${scopeLabel}`}>
-            <span className="composer-scope__label">Scope</span>
+          <div className="composer-scope" aria-label={`${t("input.activeScope")}: ${scopeLabel}`}>
+            <span className="composer-scope__label">{t("input.scope")}</span>
             <span className="composer-scope__value">{scopeLabel}</span>
           </div>
         )}
@@ -175,11 +181,24 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
             </div>
           )}
 
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <label className="sr-only" htmlFor="answer-language-select">{t("answerLanguage.label")}</label>
+          <select
+            id="answer-language-select"
+            value={answerLanguage}
+            onChange={(event) => onAnswerLanguageChange(event.target.value as AnswerLanguage)}
+            disabled={isLoading || isReadOnly}
+            className="self-start rounded-md border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-2 py-1 text-[11px] font-semibold text-[var(--text-muted)] outline-none focus:ring-2 focus:ring-[var(--primary)]"
+            aria-label={t("answerLanguage.label")}
+          >
+            <option value="en">{t("answerLanguage.english")}</option>
+            <option value="vi">{t("answerLanguage.vietnamese")}</option>
+          </select>
           <textarea
             ref={textareaRef}
             id="chat-textarea"
             rows={1}
-            aria-label="Research question"
+            aria-label={t("input.question")}
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onCompositionStart={() => {
@@ -191,19 +210,20 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
             onKeyDown={handleKeyDown}
             placeholder={
               isReadOnly
-                ? "This saved conversation is read-only; ask follow-ups in a new conversation"
+                ? t("input.readOnly")
                 : isBackendConnected === null || isPipelineReady === null
-                ? "Connecting to the FastAPI backend..."
+                ? t("input.connecting")
                 : !isBackendConnected
-                  ? "Connect the FastAPI backend to start asking questions"
+                  ? t("input.unavailable")
                   : !isPipelineReady
-                    ? "Pipeline index loading..."
-                    : "Ask a question about 10-K filings (e.g. Compare risk factors...)"
+                    ? t("input.loading")
+                    : t("input.placeholder")
             }
             disabled={isTextareaDisabled}
             aria-describedby="chat-input-hint"
             className="flex-1 resize-none bg-transparent border-0 outline-none focus:ring-0 text-sm md:text-base text-[var(--text-primary)] py-2.5 max-h-40 min-h-[40px] pr-12 scrollbar-none font-sans"
           />
+          </div>
 
           <div className="flex items-center gap-2.5 pr-1.5 pb-1">
             {/* Character Counter */}
@@ -229,14 +249,14 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
                 className="min-h-10 px-3.5 rounded-xl flex items-center justify-center gap-2 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/60 transition-colors cursor-pointer shadow-3xs"
               >
                 <Square className="w-3 h-3 fill-current" />
-                <span className="text-xs font-semibold">Stop</span>
+                <span className="text-xs font-semibold">{t("input.stop")}</span>
               </button>
             ) : (
               <button
                 type="submit"
                 id="send-message-btn"
-                title="Ask"
-                aria-label="Send question"
+                title={t("input.ask")}
+                aria-label={t("input.sendAria")}
                 disabled={!isValidLength || isDisabled}
                 className={`min-h-10 min-w-10 sm:min-w-[4.5rem] px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all duration-200 ${
                   isValidLength && !isDisabled
@@ -245,7 +265,7 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
                 }`}
               >
                 <Send className="w-4 h-4" />
-                <span className="hidden sm:inline text-xs font-semibold">Ask</span>
+                <span className="hidden sm:inline text-xs font-semibold">{t("input.ask")}</span>
               </button>
             )}
           </div>
@@ -257,25 +277,25 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
             <>
               {isTooShort && (
                 <span className="text-rose-500 font-bold">
-                  Query must be at least 5 characters.
+                  {t("input.min")}
                 </span>
               )}
               {isTooLong && (
                 <span className="text-rose-500 font-bold">
-                  Query must not exceed 500 characters.
+                  {t("input.max")}
                 </span>
               )}
               {!isTooShort && !isTooLong && (
                 <span className="italic font-normal">
-                  Press enter to ask, shift+enter for new line.
+                  {t("input.hint")}
                 </span>
               )}
             </>
           ) : (
             <span className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1">
-              <span>↵ Enter to ask</span>
+              <span>↵ {t("input.enter")}</span>
               <span>·</span>
-              <span>Shift + ↵ for new line</span>
+              <span>{t("input.newline")}</span>
             </span>
           )}
         </div>

@@ -3,7 +3,10 @@
 Vite + React + TypeScript client for the Enterprise Document QA FastAPI backend. The frontend displays streamed answers, source citations, supported ticker filters, saved local conversations, session history, and decomposed sub-queries.
 
 The research workspace uses a warm paper/navy palette with calmer indigo action
-accents and teal verification states in both light and dark themes.
+accents and teal verification states in both light and dark themes. The UI can
+follow the browser language or be pinned to English or Vietnamese; the choice
+is stored locally and the answer language can be selected independently per
+question.
 
 The workspace keeps the primary question flow compact: advanced retrieval
 settings, interpreted queries, decomposition traces, and filing evidence are
@@ -51,10 +54,16 @@ the header documents usage and shortcuts.
 
 Answers expose a per-answer Bookmark control, and the Library's "Bookmarked
 answers" filter opens the exact message. Each evidence panel has a literal,
-case-insensitive search that filters excerpts while keeping the original
+case- and accent-insensitive search that filters excerpts while keeping the original
 `[Source N]` numbering, plus a per-excerpt copy button that includes the
 citation, company, section, and filed date. Filed dates are document metadata
 and are never presented as the fiscal period of a number.
+
+The Library also supports a versioned JSON backup. Exported records omit
+deletion tombstones and are imported with fresh local conversation/session IDs,
+so importing a file cannot overwrite an existing conversation. The import is
+limited to the repository's 25 MiB budget and validates its format before any
+record is written.
 
 ## Local Development
 
@@ -139,6 +148,7 @@ All request and response bodies are JSON except the SSE stream. Query requests u
            "financial_statements" | "financial_table" | null;
   top_k: number;             // 1-10
   session_id: string | null;
+  answer_language: "en" | "vi";
 }
 ```
 
@@ -170,3 +180,8 @@ Session history responses may include an optional `context` object
 (`status: "available" | "missing"`, `retained_turns`,
 `ttl_remaining_seconds`). Older backends without `context` are supported:
 the frontend infers availability from the turns array.
+
+Vietnamese retrieval uses a conservative lexical normalizer for labelled
+financial terms and preserves complex entities and comparative intent. The
+answer contract is selected explicitly with `answer_language`; evidence stays
+verbatim and citations retain their original `[Source N]` form.

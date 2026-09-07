@@ -48,6 +48,18 @@ STRICT RULES - violation of these rules is worse than saying "I don't know":
    unstated period.
 8. Always respond in English."""
 
+VIETNAMESE_SYSTEM_PROMPT = SYSTEM_PROMPT.replace(
+    "8. Always respond in English.",
+    "8. Always respond in Vietnamese. Keep company names, ticker symbols, "
+    "financial values, currencies, fiscal periods, and [Source N] citations "
+    "exactly as supported by the evidence.",
+)
+
+
+def system_prompt_for_language(answer_language: str = "en") -> str:
+    """Return the answer contract for a supported output language."""
+    return VIETNAMESE_SYSTEM_PROMPT if answer_language == "vi" else SYSTEM_PROMPT
+
 CONTEXT_TEMPLATE = """--- Context Section {index} ---
 Source: {citation}
 Content:
@@ -60,6 +72,7 @@ class RAGResponse:
     answer: str
     retrieved_chunks: list[RetrievedChunk]
     model_used: str
+    answer_language: str = "en"
 
 
 def _format_context(chunks: list[RetrievedChunk]) -> str:
@@ -273,12 +286,18 @@ class Generator:
         query: str,
         chunks: list[RetrievedChunk],
         conversation_history: list[dict] | None = None,
+        answer_language: str = "en",
     ) -> RAGResponse:
         if not chunks:
             return RAGResponse(
-                answer="I could not find any relevant information in the available documents.",
+                answer=(
+                    "Tôi không tìm thấy thông tin liên quan trong các tài liệu hiện có."
+                    if answer_language == "vi"
+                    else "I could not find any relevant information in the available documents."
+                ),
                 retrieved_chunks=[],
                 model_used=self.model,
+                answer_language=answer_language,
             )
 
         # Check retrieval quality before spending an LLM call.
@@ -291,9 +310,11 @@ class Generator:
 
         user_message = _build_user_message(query, chunks)
 
-        response_text = self._call_groq(user_message, conversation_history)
+        response_text = self._call_groq(
+            user_message, conversation_history, answer_language=answer_language
+        )
         response_text = self._apply_answer_completion(
-            query, chunks, response_text, conversation_history
+            query, chunks, response_text, conversation_history, answer_language
         )
 
         logger.info("Generated response (%d chars) from %s", len(response_text), self.model)
@@ -301,6 +322,7 @@ class Generator:
             answer=response_text,
             retrieved_chunks=chunks,
             model_used=self.model,
+            answer_language=answer_language,
         )
 
     def _apply_answer_completion(
@@ -309,6 +331,7 @@ class Generator:
         chunks: list[RetrievedChunk],
         draft_answer: str,
         conversation_history: list[dict] | None = None,
+        answer_language: str = "en",
     ) -> str:
         """Validate and, at most once, correct a scoped answer contract."""
         evidence_context = render_chunk_evidence(chunks)
@@ -316,7 +339,9 @@ class Generator:
             query,
             evidence_context,
             draft_answer,
-            lambda prompt: self._call_groq(prompt, conversation_history),
+            lambda prompt: self._call_groq(
+                prompt, conversation_history, answer_language=answer_language
+            ),
             validate_answer=lambda answer: validate_grounded_answer(
                 answer, evidence_context
             ),
@@ -333,8 +358,9 @@ class Generator:
         self,
         user_message: str,
         conversation_history: list[dict] | None = None,
+        answer_language: str = "en",
     ) -> str:
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages = [{"role": "system", "content": system_prompt_for_language(answer_language)}]
         if conversation_history:
             messages.extend(conversation_history)
         messages.append({"role": "user", "content": user_message})
@@ -353,13 +379,18 @@ class Generator:
         chunks: list[RetrievedChunk],
         conversation_history: list[dict] | None = None,
         cancel_event: Event | None = None,
+        answer_language: str = "en",
     ):
         """Yield each token received from the LLM."""
         if cancel_event is not None and cancel_event.is_set():
             return
 
         if not chunks:
-            yield "I could not find any relevant information in the available documents"
+            yield (
+                "Tôi không tìm thấy thông tin liên quan trong các tài liệu hiện có."
+                if answer_language == "vi"
+                else "I could not find any relevant information in the available documents"
+            )
             return
 
         best_score = max(c.score for c in chunks)
@@ -382,6 +413,7 @@ class Generator:
                 user_message,
                 conversation_history,
                 cancel_event=cancel_event,
+                answer_language=answer_language,
             )
             return
 
@@ -392,6 +424,7 @@ class Generator:
             user_message,
             conversation_history,
             cancel_event=cancel_event,
+            answer_language=answer_language,
         ):
             if cancel_event is not None and cancel_event.is_set():
                 return
@@ -403,7 +436,9 @@ class Generator:
             query,
             evidence_context,
             "".join(draft_parts),
-            lambda prompt: self._call_groq(prompt, conversation_history),
+            lambda prompt: self._call_groq(
+                prompt, conversation_history, answer_language=answer_language
+            ),
             validate_answer=lambda answer: validate_grounded_answer(
                 answer, evidence_context
             ),
@@ -422,8 +457,9 @@ class Generator:
         user_message: str,
         conversation_history: list[dict] | None = None,
         cancel_event: Event | None = None,
+        answer_language: str = "en",
     ):
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages = [{"role": "system", "content": system_prompt_for_language(answer_language)}]
         if conversation_history:
             messages.extend(conversation_history)
         messages.append({"role": "user", "content": user_message})

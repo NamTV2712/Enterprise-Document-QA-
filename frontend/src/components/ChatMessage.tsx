@@ -20,6 +20,7 @@ import {
 import { Message, RequestSnapshot } from "../types";
 import { SourcesPanel } from "./SourcesPanel";
 import { SubQueriesPanel } from "./SubQueriesPanel";
+import { useLocale } from "../lib/i18n";
 
 interface ChatMessageProps {
   message: Message;
@@ -172,6 +173,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
   onToggleBookmark,
   tabIndex,
 }) => {
+  const { locale, t } = useLocale();
   const isUser = message.sender === "user";
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [focusSourceIndex, setFocusSourceIndex] = useState<number | null>(null);
@@ -194,7 +196,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
       className="ui-message-enter w-full px-3 py-2 md:px-5 md:py-2.5"
       id={`message-${message.id}`}
       role="article"
-      aria-label={isUser ? "Your question" : "Research assistant response"}
+      aria-label={isUser ? (locale === "vi" ? "Câu hỏi của bạn" : "Your question") : locale === "vi" ? "Câu trả lời của trợ lý nghiên cứu" : "Research assistant response"}
       tabIndex={tabIndex}
     >
       <div
@@ -230,7 +232,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
           <div className={`flex flex-wrap items-center justify-between gap-2 ${isUser ? "justify-end" : ""}`}>
             <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-[var(--text-muted)] font-sans">
-                {isUser ? "Your question" : "SEC Filing Research Assistant"}
+                {isUser ? (locale === "vi" ? "Câu hỏi của bạn" : "Your question") : locale === "vi" ? "Trợ lý nghiên cứu filing SEC" : "SEC Filing Research Assistant"}
               </span>
               {!isUser && message.model_used && (
                 <span className="text-xs font-mono font-medium bg-slate-50 dark:bg-[#171D2B] border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded shadow-4xs">
@@ -257,12 +259,12 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                     {bookmarked ? (
                       <>
                         <BookmarkCheck className="w-3 h-3" />
-                        <span className="font-sans">Bookmarked</span>
+                        <span className="font-sans">{locale === "vi" ? "Đã đánh dấu" : "Bookmarked"}</span>
                       </>
                     ) : (
                       <>
                         <Bookmark className="w-3 h-3" />
-                        <span className="font-sans">Bookmark</span>
+                        <span className="font-sans">{locale === "vi" ? "Đánh dấu" : "Bookmark"}</span>
                       </>
                     )}
                   </button>
@@ -270,23 +272,23 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                 <button
                   type="button"
                   onClick={handleCopy}
-                  aria-label={copyState === "copied" ? "Copied answer" : "Copy answer"}
+                  aria-label={copyState === "copied" ? (locale === "vi" ? "Đã sao chép câu trả lời" : "Copied answer") : (locale === "vi" ? "Sao chép câu trả lời" : "Copy answer")}
                   className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-brand-indigo dark:text-slate-500 dark:hover:text-indigo-300 transition-colors py-0.5 px-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
                 >
                   {copyState === "copied" ? (
                     <>
                       <Check className="w-3 h-3 text-emerald-500" />
-                      <span className="text-emerald-500 font-sans">Copied</span>
+                        <span className="text-emerald-500 font-sans">{t("common.copied")}</span>
                     </>
                   ) : copyState === "error" ? (
                     <>
                       <AlertCircle className="w-3 h-3 text-rose-500" />
-                      <span className="text-rose-500 font-sans">Copy unavailable</span>
+                      <span className="text-rose-500 font-sans">{locale === "vi" ? "Không thể sao chép" : "Copy unavailable"}</span>
                     </>
                   ) : (
                     <>
                       <Copy className="w-3 h-3" />
-                      <span className="font-sans">Copy</span>
+                      <span className="font-sans">{t("common.copy")}</span>
                     </>
                   )}
                 </button>
@@ -297,7 +299,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
           {!isUser && message.rewritten_query && (
             <details className="group rounded-lg border border-brand-indigo/15 bg-brand-indigo/[0.035] text-xs">
               <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 font-semibold text-slate-600 dark:text-slate-300 [&::-webkit-details-marker]:hidden">
-                <span>Interpreted query</span>
+                <span>{locale === "vi" ? "Câu hỏi đã diễn giải" : "Interpreted query"}</span>
                 <ChevronDown className="h-4 w-4 text-brand-indigo transition-transform group-open:rotate-180" />
               </summary>
               <p className="ui-expand-enter border-t border-brand-indigo/10 px-3 py-2 font-mono text-xs italic leading-relaxed text-brand-indigo">

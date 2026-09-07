@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Source } from "../types";
 import { formatCompanyLabel, SECTION_METADATA } from "../lib/displayMetadata";
+import { normalizeLocaleSearch, useLocale } from "../lib/i18n";
 
 interface SourcesPanelProps {
   sources: Source[];
@@ -163,6 +164,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
   focusSourceIndex = null,
   onFocusHandled,
 }) => {
+  const { locale } = useLocale();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [copyStateIndex, setCopyStateIndex] = useState<number | null>(null);
@@ -186,14 +188,12 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
   // number always follows the original array order, so [Source N] labels
   // stay stable while excerpts are filtered.
   const visibleIndexes = useMemo(() => {
-    const needle = searchQuery.trim().toLowerCase();
+    const needle = normalizeLocaleSearch(searchQuery.trim());
     if (!needle) return sources.map((_, index) => index);
     return sources
       .map((source, index) => ({ source, index }))
       .filter(({ source }) =>
-        `${source.text || source.text_preview} ${source.citation}`
-          .toLowerCase()
-          .includes(needle),
+        normalizeLocaleSearch(`${source.text || source.text_preview} ${source.citation}`).includes(needle),
       )
       .map(({ index }) => index);
   }, [searchQuery, sources]);
@@ -247,17 +247,19 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
           <FileText className="w-4 h-4 mt-0.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
           <span className="min-w-0">
             <span className="block font-sans uppercase tracking-wider">
-              Retrieved filing evidence · {sources.length} excerpts
+              {locale === "vi" ? "Bằng chứng filing được truy xuất" : "Retrieved filing evidence"} · {sources.length} {locale === "vi" ? "đoạn trích" : "excerpts"}
             </span>
             <span className="block mt-1 text-xs font-normal text-slate-500 dark:text-slate-400 normal-case tracking-normal truncate">
               {companySummary}
               {remainingCompanies > 0 ? ` · +${remainingCompanies} more` : ""}
-              {" · "}{isOpen ? "Hide source text" : "Open source text and ranking details"}
+              {" · "}{isOpen
+                ? locale === "vi" ? "Ẩn nội dung nguồn" : "Hide source text"
+                : locale === "vi" ? "Mở nội dung nguồn và chi tiết xếp hạng" : "Open source text and ranking details"}
             </span>
           </span>
         </div>
         <span className="flex items-center gap-1.5 flex-shrink-0 text-xs font-semibold text-brand-indigo">
-          {isOpen ? "Hide" : "View"}
+          {isOpen ? (locale === "vi" ? "Ẩn" : "Hide") : (locale === "vi" ? "Xem" : "View")}
           {isOpen ? (
             <ChevronUp className="w-4 h-4" />
           ) : (
@@ -272,9 +274,9 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
             className="ui-expand-enter overflow-hidden border-t border-[var(--border-subtle)]"
           >
             <div className="px-3.5 py-3 bg-[var(--surface-muted)] border-b border-[var(--border-subtle)] text-xs text-[var(--text-muted)] leading-relaxed">
-              These are the filing excerpts used to ground the answer. Rank score
-              orders excerpts within this result set; it is not a probability or
-              confidence percentage.
+              {locale === "vi"
+                ? "Đây là các đoạn filing dùng để làm căn cứ cho câu trả lời. Điểm rank chỉ sắp xếp các đoạn trong tập kết quả, không phải xác suất hay phần trăm độ tin cậy."
+                : "These are the filing excerpts used to ground the answer. Rank score orders excerpts within this result set; it is not a probability or confidence percentage."}
             </div>
             <div className="px-3.5 py-2.5 bg-[var(--surface-muted)] border-b border-[var(--border-subtle)]">
               <div className="evidence-search flex items-center gap-2">
@@ -283,8 +285,8 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
                   type="search"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search within these excerpts"
-                  aria-label="Search within these evidence excerpts"
+                  placeholder={locale === "vi" ? "Tìm trong các đoạn trích" : "Search within these excerpts"}
+                  aria-label={locale === "vi" ? "Tìm trong bằng chứng" : "Search within these evidence excerpts"}
                   className="evidence-search__input"
                 />
                 {searchQuery && (
@@ -300,8 +302,10 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
               </div>
               <p className="mt-1.5 text-[11px] text-[var(--text-subtle)]">
                 {filterHidesResults
-                  ? "No excerpt matches this search. Clear it to see all sources."
-                  : `Showing ${visibleIndexes.length} of ${sources.length} excerpts. Source numbers follow the original order.`}
+                  ? locale === "vi" ? "Không có đoạn trích phù hợp. Xóa tìm kiếm để xem tất cả nguồn." : "No excerpt matches this search. Clear it to see all sources."
+                  : locale === "vi"
+                    ? `Hiển thị ${visibleIndexes.length}/${sources.length} đoạn trích. Số nguồn giữ theo thứ tự ban đầu.`
+                    : `Showing ${visibleIndexes.length} of ${sources.length} excerpts. Source numbers follow the original order.`}
               </p>
             </div>
             <div className="p-3.5 divide-y divide-[var(--border-subtle)] md:max-h-[min(28rem,55vh)] md:overflow-y-auto bg-[var(--surface-muted)]">
@@ -357,8 +361,8 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
                           onClick={() => void handleCopyExcerpt(index, source)}
                           aria-label={
                             copyStateIndex === index
-                              ? `Copied excerpt ${index + 1}`
-                              : `Copy excerpt ${index + 1} with citation`
+                              ? locale === "vi" ? `Đã sao chép đoạn ${index + 1}` : `Copied excerpt ${index + 1}`
+                              : locale === "vi" ? `Sao chép đoạn ${index + 1} kèm citation` : `Copy excerpt ${index + 1} with citation`
                           }
                           className="icon-button evidence-copy-button"
                         >
@@ -385,15 +389,15 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
               })}
               {filterHidesResults && (
                 <div className="py-6 text-center text-xs text-[var(--text-subtle)]">
-                  No excerpt matches this search.{" "}
+                  {locale === "vi" ? "Không có đoạn trích phù hợp." : "No excerpt matches this search."}{" "}
                   <button
                     type="button"
                     className="text-brand-indigo font-semibold"
                     onClick={() => setSearchQuery("")}
                   >
-                    Clear the search
+                    {locale === "vi" ? "Xóa tìm kiếm" : "Clear the search"}
                   </button>{" "}
-                  to see all {sources.length} sources.
+                  {locale === "vi" ? ` để xem toàn bộ ${sources.length} nguồn.` : ` to see all ${sources.length} sources.`}
                 </div>
               )}
             </div>

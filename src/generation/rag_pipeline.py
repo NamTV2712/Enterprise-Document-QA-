@@ -112,6 +112,7 @@ class RAGPipeline:
         ticker: str | None = None,
         section: str | None = None,
         session_id: str | None = None,
+        answer_language: str = "en",
     ) -> RAGResponse:
         logger.info(
             "RAG query: '%s...' (ticker=%s, section=%s, session=%s)",
@@ -131,12 +132,15 @@ class RAGPipeline:
         query_embedding = self._embed_query_once(retrieval_query)
 
         if not session_id:
-            cached = self.cache.get(query_embedding, ticker, section, top_k)
+            cached = self.cache.get(
+                query_embedding, ticker, section, top_k, answer_language
+            )
             if cached:
                 return RAGResponse(
                     answer=cached.answer,
                     retrieved_chunks=self._chunks_from_cache(cached),
                     model_used=f"{cached.model_used} (cached)",
+                    answer_language=answer_language,
                 )
 
         chunks = self._retrieve_with_optional_embedding(
@@ -150,6 +154,7 @@ class RAGPipeline:
             question,
             chunks,
             conversation_history=history_messages,
+            answer_language=answer_language,
         )
 
         if session_id:
@@ -170,6 +175,7 @@ class RAGPipeline:
                 answer=response.answer,
                 sources=self._chunks_to_dicts(chunks),
                 model_used=response.model_used,
+                answer_language=answer_language,
             )
         return response
 
@@ -182,6 +188,7 @@ class RAGPipeline:
         conversation_history: list[dict] | None = None,
         session_id: str | None = None,
         cancel_event: Event | None = None,
+        answer_language: str = "en",
     ):
         """Yield SSE-compatible event tuples.
 
@@ -208,7 +215,9 @@ class RAGPipeline:
 
             use_cache = not session_id and not history_messages
             if use_cache:
-                cached = self.cache.get(query_embedding, ticker, section, top_k)
+                cached = self.cache.get(
+                    query_embedding, ticker, section, top_k, answer_language
+                )
                 if cached:
                     logger.info("Stream cache HIT for '%s...'", question[:50])
                     yield ("sources", self._sources_for_stream(self._chunks_from_cache(cached)))
@@ -218,7 +227,7 @@ class RAGPipeline:
                             return
                         token = word if index == len(words) - 1 else f"{word} "
                         yield ("token", token)
-                    yield ("done", None)
+                    yield ("done", {"answer_language": answer_language})
                     return
 
             chunks = self._retrieve_with_optional_embedding(
@@ -240,6 +249,7 @@ class RAGPipeline:
                 chunks,
                 conversation_history=history_messages,
                 cancel_event=cancel_event,
+                answer_language=answer_language,
             ):
                 if cancel_event is not None and cancel_event.is_set():
                     return
@@ -267,9 +277,10 @@ class RAGPipeline:
                     answer=full_answer,
                     sources=self._chunks_to_dicts(chunks),
                     model_used=self.generator.model,
+                    answer_language=answer_language,
                 )
 
-            yield ("done", None)
+            yield ("done", {"answer_language": answer_language})
 
         except Exception as e:
             logger.exception("Error in query_stream: %s", e)

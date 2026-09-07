@@ -18,6 +18,7 @@ import {
 import { ConnectionStatus } from "./ConnectionStatus";
 import { BrandMark } from "./BrandMark";
 import { ThemePreference } from "../types";
+import { useLocale } from "../lib/i18n";
 
 interface WorkspaceHeaderProps {
   isSidebarOpen: boolean;
@@ -37,10 +38,6 @@ interface WorkspaceHeaderProps {
 }
 
 const THEME_OPTIONS: ThemePreference[] = ["system", "light", "dark"];
-
-function themeOptionLabel(option: ThemePreference): string {
-  return option === "system" ? "System" : option === "light" ? "Light" : "Dark";
-}
 
 function ThemeOptionIcon({ option, className }: { option: ThemePreference; className: string }) {
   if (option === "system") return <Monitor className={className} />;
@@ -64,6 +61,7 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
     onReset,
     onOpenHelp,
   }) => {
+    const { locale, setLocale, t } = useLocale();
     const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
     const themeMenuRef = useRef<HTMLDivElement>(null);
     const themeTriggerRef = useRef<HTMLButtonElement>(null);
@@ -126,7 +124,8 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
       }
     };
 
-    const themeLabel = theme === "system" ? "System" : theme === "light" ? "Light" : "Dark";
+    const themeLabel =
+      theme === "system" ? t("theme.system") : theme === "light" ? t("theme.light") : t("theme.dark");
 
     return (
     <header className="workspace-header">
@@ -138,7 +137,7 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
           aria-controls="control-sidebar"
           aria-expanded={isSidebarOpen}
           aria-label={
-            isSidebarOpen ? "Close search controls" : "Open search controls"
+            isSidebarOpen ? t("nav.closeSearch") : t("nav.openSearch")
           }
           className="min-h-9 min-w-9 p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden text-slate-600 dark:text-slate-300 transition-colors"
         >
@@ -159,16 +158,16 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
           <button
             type="button"
             onClick={() => onSelectView("overview")}
-            aria-label="Show overview"
+            aria-label={t("nav.showOverview")}
             className="lg:hidden min-h-9 inline-flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <BookOpen className="w-4 h-4" />
-            <span className="hidden sm:inline">Overview</span>
+            <span className="hidden sm:inline">{t("nav.overview")}</span>
           </button>
         )}
         <nav
           className="hidden lg:flex items-center gap-1.5 ml-2 pl-3 border-l border-slate-200 dark:border-slate-800"
-          aria-label="Workspace views"
+          aria-label={t("nav.overview")}
         >
           <button
             type="button"
@@ -181,7 +180,7 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
             }`}
           >
             <BookOpen className="w-3.5 h-3.5" />
-            Overview
+            {t("nav.overview")}
           </button>
           <button
             type="button"
@@ -195,7 +194,7 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
             } disabled:opacity-40 disabled:cursor-not-allowed`}
           >
             <MessageSquare className="w-3.5 h-3.5" />
-            Conversation
+            {t("nav.conversation")}
           </button>
         </nav>
       </div>
@@ -215,8 +214,8 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
             aria-expanded={isThemeMenuOpen}
             aria-haspopup="menu"
             className="theme-toggle"
-            title={`Theme: ${themeLabel}`}
-            aria-label={`Theme ${themeLabel}. Choose light, dark, or system theme`}
+            title={`${t("theme.system")} / ${themeLabel}`}
+            aria-label={`Theme ${themeLabel}. ${t("theme.choose")}`}
           >
             <span className="theme-toggle__icon" aria-hidden="true">
               <ThemeOptionIcon
@@ -230,7 +229,7 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
             <div
               className="theme-menu__popover"
               role="menu"
-              aria-label="Theme preference"
+              aria-label={t("theme.preference")}
               ref={themeMenuListRef}
               onKeyDown={handleMenuKeyDown}
             >
@@ -251,7 +250,9 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
                     }}
                   >
                     <ThemeOptionIcon option={option} className="h-4 w-4" />
-                    <span>{themeOptionLabel(option)}</span>
+                    <span>
+                      {option === "system" ? t("theme.system") : option === "light" ? t("theme.light") : t("theme.dark")}
+                    </span>
                     {isSelected && <Check className="ml-auto h-4 w-4" aria-hidden="true" />}
                   </button>
                 );
@@ -259,13 +260,31 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
             </div>
           )}
         </div>
+        <div className="locale-switcher" role="group" aria-label={t("language.label")}>
+          <button
+            type="button"
+            className={`locale-switcher__button ${locale === "en" ? "is-active" : ""}`}
+            aria-pressed={locale === "en"}
+            onClick={() => setLocale("en")}
+          >
+            EN
+          </button>
+          <button
+            type="button"
+            className={`locale-switcher__button ${locale === "vi" ? "is-active" : ""}`}
+            aria-pressed={locale === "vi"}
+            onClick={() => setLocale("vi")}
+          >
+            VI
+          </button>
+        </div>
         {onOpenHelp && (
           <button
             type="button"
             onClick={onOpenHelp}
             aria-haspopup="dialog"
-            aria-label="Open help"
-            title="Help and usage guide"
+            aria-label={t("nav.help")}
+            title={t("nav.help")}
             className="theme-toggle"
           >
             <CircleHelp className="w-4 h-4" aria-hidden="true" />

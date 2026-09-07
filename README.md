@@ -48,10 +48,10 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 | RAG generation | Grounded answer generation with source citations and fallback behavior |
 | API | FastAPI service with Swagger UI and SSE streaming |
 | Cache | Filter-aware semantic response cache for repeated stateless queries |
-| Memory | Multi-turn backend memory, query rewriting, and a searchable local conversation library with bookmarks and Markdown export |
+| Memory | Multi-turn backend memory, query rewriting, and a searchable local conversation library with bookmarks, Markdown export, and versioned JSON backup/restore |
 | Decomposition | Comparative and enumeration queries decomposed into focused sub-queries |
 | Evaluation | Fixed benchmark with faithfulness, relevancy, and context precision metrics |
-| Research workspace | Vite/React interface with searchable company and section controls, streaming answers, evidence inspection with per-panel search and copy, per-answer bookmarks, a reliable local conversation Library, session context status, and a help dialog with shortcuts |
+| Research workspace | Vite/React interface with searchable company and section controls, English/Vietnamese UI and answer selection, streaming answers, accent-insensitive evidence inspection with per-panel search and copy, per-answer bookmarks, a reliable local conversation Library, JSON backup/restore, session context status, glossary/help, and keyboard shortcuts |
 | Conversation UX | Separate Overview and Conversation views, bounded answer cards, interpreted-query metadata, and a resizable desktop control sidebar |
 
 ## Architecture
@@ -163,7 +163,8 @@ curl -X POST "http://localhost:8000/query" \
     "question": "What was Apple total revenue in 2024?",
     "ticker": "AAPL",
     "section": "financial_table",
-    "top_k": 5
+    "top_k": 5,
+    "answer_language": "en"
   }'
 ```
 

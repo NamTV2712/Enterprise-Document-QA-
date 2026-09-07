@@ -158,7 +158,7 @@ class FakePipeline:
     def _retrieve_with_optional_embedding(self, question, query_embedding, top_k, ticker, section):
         return self.retriever.retrieve_with_embedding(query=question, query_embedding=query_embedding, top_k=top_k, ticker=ticker, section=section)
 
-    def query(self, question: str, top_k: int = 5, ticker=None, section=None, session_id=None):
+    def query(self, question: str, top_k: int = 5, ticker=None, section=None, session_id=None, answer_language="en"):
         chunks = self.retriever.retrieve_with_embedding(
             query=question, query_embedding=[0.1] * 8, top_k=top_k, ticker=ticker, section=section
         )
@@ -170,10 +170,12 @@ class FakePipeline:
             answer=f"Harness answer for: {question} [Source 1].",
             retrieved_chunks=chunks,
             model_used=self.generator.model,
+            answer_language=answer_language,
         )
 
     def query_stream(self, question: str, top_k: int = 5, ticker=None, section=None,
-                     conversation_history=None, session_id=None, cancel_event=None):
+                     conversation_history=None, session_id=None, cancel_event=None,
+                     answer_language="en"):
         chunks = self.retriever.retrieve_with_embedding(
             query=question, query_embedding=[0.1] * 8, top_k=top_k, ticker=ticker, section=section
         )

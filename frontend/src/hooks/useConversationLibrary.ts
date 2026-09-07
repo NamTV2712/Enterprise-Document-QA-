@@ -127,6 +127,8 @@ export interface ConversationLibraryController {
   renameConversation: (conversationId: string, title: string) => void;
   toggleAnswerBookmark: (messageId: string) => void;
   deleteConversation: (conversationId: string) => Promise<void>;
+  /** Import already validated records without overwriting existing IDs. */
+  importConversationRecords: (records: ConversationRecord[]) => Promise<number>;
 }
 
 interface UseConversationLibraryOptions {
@@ -735,6 +737,20 @@ export function useConversationLibrary(
     [invalidateActiveOperation, switchToConversation, syncConversationsFromRepository],
   );
 
+  const importConversationRecords = useCallback(
+    async (records: ConversationRecord[]): Promise<number> => {
+      let imported = 0;
+      for (const record of records) {
+        const result = await saveConversationRecord(record);
+        applyWriteResult(result, { setStorageMode, setStorageWarning });
+        if (result.status !== "failed") imported += 1;
+      }
+      syncConversationsFromRepository();
+      return imported;
+    },
+    [syncConversationsFromRepository],
+  );
+
   const beginSend = useCallback(
     (_text: string): SendIdentity | null => {
       if (sendInFlightRef.current) return null;
@@ -802,5 +818,6 @@ export function useConversationLibrary(
     renameConversation,
     toggleAnswerBookmark,
     deleteConversation,
+    importConversationRecords,
   };
 }

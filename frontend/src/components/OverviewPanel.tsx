@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { Tooltip } from "./Tooltip";
 import { SAMPLE_QUESTIONS, SampleQuestion } from "./SampleQuestionChips";
+import { useLocale } from "../lib/i18n";
 
 interface OverviewPanelProps {
   hasMessages: boolean;
@@ -105,7 +106,10 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
     isPipelineReady,
     onRetryConnection,
     onSelectQuestion,
-  }) => (
+  }) => {
+    const { locale } = useLocale();
+    const vi = locale === "vi";
+    return (
     <div className="overview-panel" id="onboarding-panel">
       {/* Header & Hero Section */}
       <div className="space-y-3.5 text-center">
@@ -117,26 +121,32 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
               className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider text-brand-indigo bg-brand-indigo/10 hover:bg-brand-indigo/20 dark:bg-brand-indigo/15 dark:hover:bg-brand-indigo/25 transition-all cursor-pointer shadow-4xs"
             >
               <MessageSquare className="w-3.5 h-3.5" />
-              Return to conversation
+              {vi ? "Quay lại cuộc trò chuyện" : "Return to conversation"}
             </button>
           ) : (
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-brand-indigo/30 bg-brand-indigo/5 dark:bg-brand-indigo/10 text-brand-indigo text-xs font-semibold shadow-4xs">
               <Sparkles className="w-3.5 h-3.5 animate-pulse" />
               <span>
-                SEC EDGAR Intelligence
-                {companyCount !== null ? ` · ${companyCount} searchable companies` : " · filing research"}
+                {vi ? "Trí tuệ SEC EDGAR" : "SEC EDGAR Intelligence"}
+                {companyCount !== null
+                  ? vi ? ` · ${companyCount} công ty có thể tìm kiếm` : ` · ${companyCount} searchable companies`
+                  : vi ? " · nghiên cứu filing" : " · filing research"}
               </span>
             </div>
           )}
         </div>
 
         <h2 className="hero-title max-w-full text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight py-1 font-serif break-words">
-          Ask questions. Verify every answer.
+          {vi ? "Đặt câu hỏi. Kiểm chứng mọi câu trả lời." : "Ask questions. Verify every answer."}
         </h2>
         <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 max-w-xl mx-auto leading-relaxed font-sans">
-          Research SEC 10-K filings
-          {companyCount !== null ? ` across ${companyCount} searchable companies` : " across the available corpus"}
-          {" with cited evidence, deterministic number preservation, and a clear retrieval trail."}
+          {vi ? "Nghiên cứu filing SEC 10-K" : "Research SEC 10-K filings"}
+          {companyCount !== null
+            ? vi ? ` trên ${companyCount} công ty có thể tìm kiếm` : ` across ${companyCount} searchable companies`
+            : vi ? " trong kho dữ liệu hiện có" : " across the available corpus"}
+          {vi
+            ? " với bằng chứng có trích dẫn, số liệu được giữ nguyên và dấu vết truy xuất rõ ràng."
+            : " with cited evidence, deterministic number preservation, and a clear retrieval trail."}
         </p>
       </div>
 
@@ -160,10 +170,10 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
           </span>
           <span className="min-w-0 flex-1">
             {isBackendConnected === null || isPipelineReady === null
-              ? "Connecting to the research service…"
+              ? vi ? "Đang kết nối tới dịch vụ nghiên cứu…" : "Connecting to the research service…"
               : isBackendConnected === false
-                ? "The research service is offline. Connect the FastAPI backend to start asking questions."
-                : "The document index is still loading. Questions will be available shortly."}
+                ? vi ? "Dịch vụ nghiên cứu đang offline. Hãy kết nối backend FastAPI để bắt đầu hỏi." : "The research service is offline. Connect the FastAPI backend to start asking questions."
+                : vi ? "Chỉ mục tài liệu vẫn đang tải. Bạn sẽ có thể hỏi sau ít phút." : "The document index is still loading. Questions will be available shortly."}
           </span>
           {isBackendConnected === false && (
             <button
@@ -172,7 +182,7 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
               className="backend-notice__retry"
             >
               <RefreshCw className="h-3.5 w-3.5" />
-              Retry
+              {vi ? "Thử lại" : "Retry"}
             </button>
           )}
         </div>
@@ -182,19 +192,19 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="stat-card">
           <div className="stat-card__value">{companyCount ?? "—"}</div>
-          <div className="stat-card__label">Searchable Companies</div>
+          <div className="stat-card__label">{vi ? "Công ty có thể tìm kiếm" : "Searchable Companies"}</div>
         </div>
         <div className="stat-card">
           <div className="stat-card__value">{indexedChunkCount ?? "—"}</div>
-          <div className="stat-card__label">Indexed Chunks</div>
+          <div className="stat-card__label">{vi ? "Đoạn đã lập chỉ mục" : "Indexed Chunks"}</div>
         </div>
         <div className="stat-card">
           <div className="stat-card__value">Hybrid RRF</div>
-          <div className="stat-card__label">BM25 + Dense + CE</div>
+          <div className="stat-card__label">{vi ? "BM25 + Dense + CE" : "BM25 + Dense + CE"}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-card__value">Source trail</div>
-          <div className="stat-card__label">Cited evidence</div>
+          <div className="stat-card__value">{vi ? "Dấu vết nguồn" : "Source trail"}</div>
+          <div className="stat-card__label">{vi ? "Bằng chứng có trích dẫn" : "Cited evidence"}</div>
         </div>
       </div>
 
@@ -203,10 +213,10 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
         <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300">
           <span className="flex items-center gap-1.5 font-sans">
             <Sparkles className="w-3.5 h-3.5 text-brand-indigo" />
-            Explore sample research queries
+            {vi ? "Khám phá câu hỏi mẫu" : "Explore sample research queries"}
           </span>
           <span className="text-[11px] font-normal text-slate-400 dark:text-slate-500">
-            Click to load & search
+            {vi ? "Nhấn để nạp và tìm kiếm" : "Click to load & search"}
           </span>
         </div>
 
@@ -262,40 +272,37 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-brand-indigo [&::-webkit-details-marker]:hidden">
           <span className="flex items-center gap-2">
             <HelpCircle className="w-4 h-4" />
-            How to read the workspace
+            {vi ? "Cách đọc workspace" : "How to read the workspace"}
           </span>
           <ChevronDown className="w-4 h-4 transition-transform group-open:rotate-180" />
         </summary>
         <div className="ui-expand-enter grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-350">
           <p>
             <strong className="block text-slate-800 dark:text-slate-100">
-              1. Choose scope
+              {vi ? "1. Chọn phạm vi" : "1. Choose scope"}
             </strong>
-            Select a company and 10-K section, or leave both on All for
-            discovery and comparisons.
+            {vi ? "Chọn công ty và mục 10-K, hoặc để Tất cả để khám phá và so sánh." : "Select a company and 10-K section, or leave both on All for discovery and comparisons."}
           </p>
           <p>
             <strong className="block text-slate-800 dark:text-slate-100">
-              2. Ask naturally
+              {vi ? "2. Hỏi tự nhiên" : "2. Ask naturally"}
             </strong>
-            Comparisons can be decomposed into focused sub-queries before a
-            grounded summary is produced.
+            {vi ? "Câu hỏi so sánh có thể được tách thành các truy vấn tập trung trước khi tạo tóm tắt có căn cứ." : "Comparisons can be decomposed into focused sub-queries before a grounded summary is produced."}
           </p>
           <p>
             <strong className="block text-slate-800 dark:text-slate-100">
-              3. Verify evidence
+              {vi ? "3. Kiểm chứng bằng chứng" : "3. Verify evidence"}
             </strong>
-            Open the evidence panel to read source excerpts. Rank scores order
-            results; they are not confidence percentages.
+            {vi ? "Mở bảng bằng chứng để đọc đoạn nguồn. Điểm rank chỉ sắp xếp kết quả, không phải phần trăm tin cậy." : "Open the evidence panel to read source excerpts. Rank scores order results; they are not confidence percentages."}
           </p>
         </div>
         <p className="md:col-span-3 text-xs text-slate-500 dark:text-slate-400 border-t border-brand-indigo/10 pt-3">
-          Research demo only · Answers may be incomplete and are not financial
-          advice.
+          {vi ? "Chỉ dành cho demo nghiên cứu · Câu trả lời có thể chưa đầy đủ và không phải tư vấn tài chính." : "Research demo only · Answers may be incomplete and are not financial advice."}
         </p>
       </details>
     </div>
-  ),
+    );
+  },
 );
 
 OverviewPanel.displayName = "OverviewPanel";

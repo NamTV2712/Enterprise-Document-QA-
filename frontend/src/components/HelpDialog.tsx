@@ -5,6 +5,7 @@
 
 import React, { useEffect, useRef } from "react";
 import { X } from "lucide-react";
+import { useLocale } from "../lib/i18n";
 
 interface HelpDialogProps {
   open: boolean;
@@ -55,7 +56,69 @@ const SECTIONS: { title: string; items: string[] }[] = [
   },
 ];
 
+const SECTIONS_VI: { title: string; items: string[] }[] = [
+  {
+    title: "Đặt câu hỏi",
+    items: [
+      "Nêu công ty, chỉ tiêu và năm nếu có thể — ví dụ: “Doanh thu thuần của Apple trong năm tài chính 2024 là bao nhiêu?”",
+      "Câu hỏi dài từ 5 đến 500 ký tự. Nhấn Enter để gửi; Shift+Enter để xuống dòng.",
+      "Nếu filing không có câu trả lời, trợ lý sẽ nói rõ thay vì đoán.",
+    ],
+  },
+  {
+    title: "Bộ lọc tìm kiếm",
+    items: [
+      "Company giới hạn việc tìm kiếm vào filing của một tổ chức; để Tất cả công ty cho câu hỏi so sánh.",
+      "Mục 10-K giới hạn việc tìm kiếm vào một phần filing như Risk Factors hoặc MD&A.",
+      "Độ rộng ngữ cảnh (Top-K) quyết định số đoạn filing được giữ lại sau rerank.",
+      "Tách câu hỏi chia câu hỏi so sánh thành một truy vấn tập trung cho mỗi công ty.",
+    ],
+  },
+  {
+    title: "Giới hạn so sánh",
+    items: [
+      "Câu trả lời so sánh đặt các số liệu do từng công ty công bố cạnh nhau.",
+      "Trợ lý không tự tính thứ hạng, tỷ lệ hoặc phần trăm mà filing không nêu.",
+      "Các công ty có thể công bố chỉ tiêu khác nhau nên không phải câu hỏi nào cũng so sánh được trực tiếp.",
+    ],
+  },
+  {
+    title: "Trích dẫn và bằng chứng",
+    items: [
+      "Mọi khẳng định thực tế đều dẫn tới đoạn filing bằng dạng [Source N]. Chọn citation để mở đoạn nguồn.",
+      "Điểm rank chỉ sắp xếp các đoạn trong một câu trả lời; đây không phải xác suất hay phần trăm tin cậy.",
+      "Ngày filing là ngày tài liệu được nộp, không phải kỳ tài chính của số liệu.",
+    ],
+  },
+  {
+    title: "Lưu trữ cục bộ",
+    items: [
+      "Cuộc trò chuyện chỉ được lưu trong trình duyệt này — tối đa 100 cuộc trò chuyện và tổng 25 MB.",
+      "Backend chỉ giữ một số lượt gần nhất và hết hạn sau 30 phút.",
+      "Khi context backend hết hạn, cuộc trò chuyện đã lưu chuyển sang chỉ đọc nhưng vẫn tìm kiếm và xuất được.",
+    ],
+  },
+];
+
+const GLOSSARY = [
+  ["Top-K", "The number of retrieved filing excerpts retained before the answer is generated."],
+  ["RRF", "Reciprocal Rank Fusion: the hybrid ranking layer combining lexical and semantic retrieval."],
+  ["Citation", "A [Source N] reference pointing to the excerpt shown in the evidence panel."],
+  ["Fiscal period", "The reporting period for a number; it can differ from the date the filing was submitted."],
+  ["Read-only", "A saved local conversation whose backend session has expired; it can still be searched, read, exported, and bookmarked."],
+] as const;
+
+const GLOSSARY_VI = [
+  ["Top-K", "Số đoạn filing được giữ lại sau truy xuất và trước khi tạo câu trả lời."],
+  ["RRF", "Reciprocal Rank Fusion: lớp xếp hạng kết hợp tìm kiếm theo từ khóa và ngữ nghĩa."],
+  ["Citation", "Tham chiếu [Source N] trỏ tới đoạn nguồn hiển thị trong bảng bằng chứng."],
+  ["Kỳ tài chính", "Kỳ báo cáo của một số liệu; có thể khác ngày filing được nộp."],
+  ["Chỉ đọc", "Cuộc trò chuyện cục bộ có session backend đã hết hạn; vẫn có thể tìm, đọc, xuất và đánh dấu."],
+] as const;
+
 export const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
+  const { locale, t } = useLocale();
+  const sections = locale === "vi" ? SECTIONS_VI : SECTIONS;
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
 
@@ -112,20 +175,20 @@ export const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
       >
         <div className="flex items-start justify-between gap-3">
           <h2 id="help-dialog-title" className="text-base font-semibold text-[var(--text-primary)]">
-            How to use this research workspace
+            {t("help.title")}
           </h2>
           <button
             type="button"
             ref={closeRef}
             onClick={onClose}
-            aria-label="Close help"
+            aria-label={t("help.close")}
             className="min-h-9 min-w-9 rounded-lg p-2 text-[var(--text-subtle)] hover:surface-muted-hover"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
         <div className="mt-3 space-y-4">
-          {SECTIONS.map((section) => (
+          {sections.map((section) => (
             <section key={section.title}>
               <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
                 {section.title}
@@ -142,6 +205,19 @@ export const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
               </ul>
             </section>
           ))}
+          <section>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
+              {locale === "vi" ? "Thuật ngữ nhanh" : "Quick glossary"}
+            </h3>
+            <dl className="mt-2 space-y-2">
+              {(locale === "vi" ? GLOSSARY_VI : GLOSSARY).map(([term, definition]) => (
+                <div key={term} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3 py-2">
+                  <dt className="text-xs font-semibold text-[var(--text-primary)]">{term}</dt>
+                  <dd className="mt-0.5 text-sm leading-relaxed text-[var(--text-muted)]">{definition}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
         </div>
       </div>
     </div>

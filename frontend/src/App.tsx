@@ -23,6 +23,7 @@ import {
   HealthResponse,
   RequestSnapshot,
   ThemePreference,
+  AnswerLanguage,
 } from "./types";
 import {
   checkHealth,
@@ -33,8 +34,13 @@ import {
 import { formatCompanyLabel, SECTION_METADATA } from "./lib/displayMetadata";
 import { ConversationRecord } from "./lib/conversationStore";
 import { saveConversationRecord } from "./lib/conversationStore";
-import { downloadConversationMarkdown } from "./lib/conversationExport";
+import {
+  downloadConversationBackup,
+  downloadConversationMarkdown,
+  parseConversationBackup,
+} from "./lib/conversationExport";
 import { useConversationLibrary, SessionContextStatus } from "./hooks/useConversationLibrary";
+import { useLocale } from "./lib/i18n";
 
 const STREAM_FLUSH_INTERVAL_MS = 80;
 const HEALTH_REFRESH_INTERVAL_MS = 15_000;
@@ -101,12 +107,24 @@ function prefersReducedMotion(): boolean {
 }
 
 export default function App() {
+  const { locale } = useLocale();
   const [tickers, setTickers] = useState<string[]>([]);
   const [sections, setSections] = useState<string[]>([]);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [topK, setTopK] = useState<number>(5);
   const [enableComparative, setEnableComparative] = useState<boolean>(true);
+  const [answerLanguage, setAnswerLanguage] = useState<AnswerLanguage>(() => {
+    try {
+      const saved = localStorage.getItem("sec_qa_answer_language");
+      if (saved === "en" || saved === "vi") return saved;
+    } catch {
+      // Use English when preferences are unavailable.
+    }
+    return typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("vi")
+      ? "vi"
+      : "en";
+  });
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isBackendConnected, setIsBackendConnected] = useState<boolean | null>(
@@ -141,6 +159,24 @@ export default function App() {
     getSystemTheme,
   );
   const resolvedTheme = themePreference === "system" ? systemTheme : themePreference;
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("sec_qa_answer_language", answerLanguage);
+    } catch {
+      // The selection remains active for this tab.
+    }
+  }, [answerLanguage]);
+
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem("sec_qa_answer_language")) {
+        setAnswerLanguage(locale === "vi" ? "vi" : "en");
+      }
+    } catch {
+      setAnswerLanguage(locale === "vi" ? "vi" : "en");
+    }
+  }, [locale]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -184,6 +220,7 @@ export default function App() {
     renameConversation,
     toggleAnswerBookmark,
     deleteConversation,
+    importConversationRecords,
     recheckSessionContext,
   } = library;
   const activeConversationId = library.activeConversationId;
@@ -370,12 +407,15 @@ export default function App() {
     if (!isBackendConnected || !isPipelineReady) return;
     if (isReadOnly) return;
 
-    const requestSnapshot: RequestSnapshot = snapshot ?? {
-      ticker: selectedTicker,
-      section: selectedSection,
-      topK,
-      enableComparative,
-    };
+    const requestSnapshot: RequestSnapshot = snapshot
+      ? { ...snapshot, answerLanguage: snapshot.answerLanguage ?? answerLanguage }
+      : {
+          ticker: selectedTicker,
+          section: selectedSection,
+          topK,
+          enableComparative,
+          answerLanguage,
+        };
 
     // One identity is captured before the preflight and carried through
     // message creation, the provider request, buffering, completion, and
@@ -429,6 +469,7 @@ export default function App() {
       section: requestSnapshot.section,
       top_k: requestSnapshot.topK,
       session_id: identity.sessionId,
+      answer_language: requestSnapshot.answerLanguage,
     };
 
     try {
@@ -690,6 +731,7 @@ export default function App() {
       }
     }
   }, [
+    answerLanguage,
     beginSend,
     enableComparative,
     ensureSendable,
@@ -764,6 +806,21 @@ export default function App() {
   const handleExportConversation = useCallback((conversation: ConversationRecord) => {
     downloadConversationMarkdown(conversation);
   }, []);
+
+  const handleExportBackup = useCallback(() => {
+    downloadConversationBackup(conversations);
+  }, [conversations]);
+
+  const handleImportBackup = useCallback(
+    async (file: File): Promise<{ imported: number }> => {
+      const text = await file.text();
+      const records = parseConversationBackup(text);
+      const imported = await importConversationRecords(records);
+      if (imported === 0) throw new Error("No conversation could be imported into storage.");
+      return { imported };
+    },
+    [importConversationRecords],
+  );
 
   // Bookmark toggle that works from Library cards for any conversation,
   // not only the one currently open.
@@ -942,6 +999,8 @@ export default function App() {
           void deleteConversation(conversationId);
         }}
         onExportConversation={handleExportConversation}
+        onExportBackup={handleExportBackup}
+        onImportBackup={handleImportBackup}
       />
 
       {/* Main chat window area */}
@@ -1048,6 +1107,8 @@ export default function App() {
                 ? "The backend session for this saved conversation has expired. Start a new conversation to ask follow-up questions."
                 : "The backend could not be reached. Check the connection again before asking follow-up questions."
             }
+            answerLanguage={answerLanguage}
+            onAnswerLanguageChange={setAnswerLanguage}
             showBanner={activeView === "conversation" && hasExchanges}
             scopeLabel={scopeLabel || undefined}
           />

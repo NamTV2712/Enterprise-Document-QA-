@@ -282,6 +282,23 @@ def test_query_returns_answer_and_sources(client, mock_pipeline) -> None:
     assert call_kwargs["ticker"] == "AAPL"
     assert call_kwargs["section"] == "risk_factors"
     assert call_kwargs["top_k"] == 5
+    assert call_kwargs["answer_language"] == "en"
+
+
+def test_query_passes_vietnamese_answer_language_and_returns_metadata(client, mock_pipeline) -> None:
+    mock_pipeline.query.return_value.answer_language = "vi"
+    response = client.post(
+        "/query",
+        json={
+            "question": "Doanh thu của Apple là bao nhiêu?",
+            "ticker": "AAPL",
+            "answer_language": "vi",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["answer_language"] == "vi"
+    assert mock_pipeline.query.call_args.kwargs["answer_language"] == "vi"
 
 
 def test_query_strips_control_and_format_characters(client, mock_pipeline) -> None:
@@ -752,6 +769,7 @@ def test_health_responds_while_decomposed_query_runs(mock_pipeline) -> None:
         ticker="AAPL",
         section="financial_table",
         session_id="concurrency-test",
+        answer_language="en",
     )
 
 

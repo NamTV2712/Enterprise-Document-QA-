@@ -34,6 +34,7 @@ import {
   formatCompanyLabel,
   SECTION_METADATA,
 } from "../lib/displayMetadata";
+import { normalizeLocaleSearch, useLocale } from "../lib/i18n";
 
 interface SidebarProps {
   tickers: string[];
@@ -65,6 +66,8 @@ interface SidebarProps {
   onToggleBookmark: (conversationId: string, messageId: string) => void;
   onDeleteConversation: (conversationId: string) => void;
   onExportConversation: (conversation: ConversationRecord) => void;
+  onExportBackup?: () => void;
+  onImportBackup?: (file: File) => Promise<{ imported: number }>;
 }
 
 const SidebarBase: React.FC<SidebarProps> = ({
@@ -97,7 +100,10 @@ const SidebarBase: React.FC<SidebarProps> = ({
   onToggleBookmark,
   onDeleteConversation,
   onExportConversation,
+  onExportBackup,
+  onImportBackup,
 }) => {
+  const { locale } = useLocale();
   const minSidebarWidth = 280;
   const maxSidebarWidth = 480;
   const [tickerDropdownOpen, setTickerDropdownOpen] = useState(false);
@@ -132,7 +138,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
       ),
     [sections],
   );
-  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const normalizedSearch = normalizeLocaleSearch(searchQuery.trim());
   const filteredTickers = useMemo(
     () =>
       [...tickers]
@@ -140,8 +146,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
           (COMPANY_NAMES[a] || a).localeCompare(COMPANY_NAMES[b] || b),
         )
         .filter((ticker) =>
-          `${ticker} ${COMPANY_NAMES[ticker] || ""}`
-            .toLowerCase()
+          normalizeLocaleSearch(`${ticker} ${COMPANY_NAMES[ticker] || ""}`)
             .includes(normalizedSearch),
         ),
     [normalizedSearch, tickers],
@@ -317,7 +322,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
             onClick={() => onChangePanel("research")}
           >
             <Compass className="h-4 w-4" />
-            Research
+            {locale === "vi" ? "Nghiên cứu" : "Research"}
           </button>
           <button
             type="button"
@@ -327,7 +332,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
             onClick={() => onChangePanel("library")}
           >
             <BookOpen className="h-4 w-4" />
-            Library
+            {locale === "vi" ? "Thư viện" : "Library"}
             {conversations.length > 0 && <span className="sidebar-tab-count">{conversations.length}</span>}
           </button>
         </nav>
@@ -345,6 +350,8 @@ const SidebarBase: React.FC<SidebarProps> = ({
               onToggleBookmark={onToggleBookmark}
               onDelete={onDeleteConversation}
               onExport={onExportConversation}
+              onExportBackup={onExportBackup}
+              onImportBackup={onImportBackup}
               onOpenMessage={onOpenMessage}
               onClose={() => onChangePanel("research")}
             />
@@ -355,15 +362,15 @@ const SidebarBase: React.FC<SidebarProps> = ({
           {/* Controls Title */}
           <h2 id="search-controls-heading" className="flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300 pb-2 border-b border-slate-200 dark:border-slate-800">
             <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-            <span>Search Parameters</span>
+            <span>{locale === "vi" ? "Tham số tìm kiếm" : "Search Parameters"}</span>
           </h2>
 
           {/* Ticker Filter */}
           <div className="space-y-2 relative" ref={tickerRef}>
             <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-between">
-              <span>Company or ticker</span>
+              <span>{locale === "vi" ? "Công ty hoặc mã" : "Company or ticker"}</span>
               <span className="text-xs font-medium text-slate-400 dark:text-slate-500">
-                Optional
+                {locale === "vi" ? "Tùy chọn" : "Optional"}
               </span>
             </label>
 
@@ -387,10 +394,10 @@ const SidebarBase: React.FC<SidebarProps> = ({
                 <Building2 className="w-4 h-4 text-slate-400 dark:text-slate-500 transition-colors flex-shrink-0" />
                 <span className="truncate">
                   {tickers.length === 0
-                    ? "Connect API to load companies"
+                    ? locale === "vi" ? "Kết nối API để tải công ty" : "Connect API to load companies"
                     : selectedTicker
                       ? formatCompanyLabel(selectedTicker)
-                      : "All companies"}
+                      : locale === "vi" ? "Tất cả công ty" : "All companies"}
                 </span>
               </div>
               <ChevronDown
@@ -404,8 +411,8 @@ const SidebarBase: React.FC<SidebarProps> = ({
                     <Search className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
                     <input
                       type="text"
-                      aria-label="Search company or ticker"
-                      placeholder="Search company or ticker..."
+                      aria-label={locale === "vi" ? "Tìm công ty hoặc mã" : "Search company or ticker"}
+                      placeholder={locale === "vi" ? "Tìm công ty hoặc mã..." : "Search company or ticker..."}
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       onClick={(e) => e.stopPropagation()}
@@ -417,7 +424,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
                   <div className="overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/40 flex-1">
                     {(!searchQuery ||
                       "(all companies)".includes(
-                        searchQuery.toLowerCase(),
+                      normalizeLocaleSearch(searchQuery),
                       )) && (
                       <button
                         type="button"
@@ -427,7 +434,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
                         }}
                         className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer ${!selectedTicker ? "text-brand-indigo font-bold bg-brand-indigo/[0.03]" : "text-slate-600 dark:text-slate-300 font-medium"}`}
                       >
-                        <span>(All companies)</span>
+                        <span>({locale === "vi" ? "Tất cả công ty" : "All companies"})</span>
                         {!selectedTicker && (
                           <Check className="w-3.5 h-3.5 text-brand-indigo flex-shrink-0" />
                         )}
@@ -462,7 +469,7 @@ const SidebarBase: React.FC<SidebarProps> = ({
                     {filteredTickers.length === 0 &&
                       searchQuery && (
                         <div className="px-3 py-3 text-xs text-center text-slate-400 dark:text-slate-500 font-mono">
-                          No matching companies
+                          {locale === "vi" ? "Không có công ty phù hợp" : "No matching companies"}
                         </div>
                       )}
                   </div>

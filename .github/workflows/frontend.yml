@@ -5,10 +5,18 @@ on:
     paths:
       - ".github/workflows/frontend.yml"
       - "frontend/**"
+      - "src/**"
+      - "tests/integration/**"
+      - "requirements.txt"
+      - "Dockerfile"
   pull_request:
     paths:
       - ".github/workflows/frontend.yml"
       - "frontend/**"
+      - "src/**"
+      - "tests/integration/**"
+      - "requirements.txt"
+      - "Dockerfile"
 
 permissions:
   contents: read

@@ -52,8 +52,31 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        trusted local index; then run deterministic retrieval checks.
 4. [x] Add evaluation cases for newly searchable tickers without changing the
        official clean N=30 benchmark.
-5. [ ] Extend Vietnamese retrieval translation only from labelled EN/VI tests;
-       current support is intentionally limited to explicit financial metrics.
+5. [x] Extend Vietnamese retrieval translation only from labelled EN/VI tests;
+       current support remains conservative for explicit financial metrics,
+       comparison terms, and accentless input. Unsupported intent is preserved
+       instead of being guessed. The output language is an explicit `en`/`vi`
+       API contract and is isolated in the semantic cache.
+5a. [x] Add bilingual research-workspace support: persisted system/English/
+       Vietnamese UI preference, per-question answer language, localized help
+       and glossary, accent-insensitive company/library/evidence search, and
+       localized evidence/status surfaces. Offline frontend coverage is
+       currently 90/90 with typecheck green.
+5b. [x] Add versioned JSON backup/restore for the local conversation Library.
+       Validate format, schema, message shape, and 25 MiB size before writing;
+       imports receive fresh IDs and never overwrite existing records.
+5c. [~] Offline release gates for the bilingual branch are green for backend
+       `696 passed` + compileall, frontend `90/90` + build/contrast, browser
+       `94/94` Chromium/Firefox, and HTTP/SSE integration `14/14`. Docker
+       build/receipt remains blocked until Docker Desktop is running. Do not
+       rebuild canonical data or the index.
+5d. [ ] After offline gates pass, prepare the bounded provider campaign under
+       a new ledger/window (maximum 120 real requests, including explicit
+       retries). Keep the earlier incomplete Evidence Contract v3 ledger
+       historical and do not resume it.
+5e. [ ] Update the final round report with receipts and results, commit/push
+        the branch, create the PR, and verify CI. Merge/deploy only after an
+        explicit follow-up decision.
 6. [ ] Keep `/metrics` disabled unless the deployment protects it. Monitor
        429, 5xx, request count, and latency through aggregate telemetry.
 7. [x] Finalize the FY2026 corpus recovery and table fallback: NOW/NVDA/ORCL

@@ -67,7 +67,7 @@ green.
 | Provider A | Evidence Contract v3, max 60 calls | PASS / GO | Fresh key5-only `evidence_contract_v3_window_07_key5` completed at `48/60`; calibration passed, both replicates passed, legacy comparison completed, and `candidate_decision=GO`. `window_05_key5` was stopped at 21/60 after an accidental five-key launch; `window_06_key5` was closed at 36/60 after a runner bug, and neither is resumed. |
 | Provider B | Bilingual campaign, max 60 calls | FAIL / NO-GO | Fresh key5-only `bilingual_evaluation_v1_window_06_key5` completed `52/60` with zero transport errors, but both replicates failed semantic gates (dependency/risk and language/period cases). This is a quality NO-GO, not a quota interruption; do not spend calls selecting a better replicate. |
 | P11 | Docker candidate receipt | PASS (previous candidate) | Existing one-worker/local-Qdrant receipt is valid for its recorded source; rebuild only if backend/build inputs change. |
-| P12 | Docs, review, CI, PR handoff | IN_PROGRESS | README, plan, and journal are updated; frontend `107/107`, browser `106/106`, backend `718 passed`, compileall, lint, and production build are green. Final commit/push is still being completed in this handoff; do not merge or deploy. |
+| P12 | Docs, review, CI, PR handoff | PASS | README, plan, and journal are updated; frontend `107/107`, browser `106/106`, backend `718 passed`, compileall, lint, and production build are green. Branch `codex/bilingual-research-workspace` is pushed at the final handoff commit; Backend CI #73 and Frontend CI #44/#45 passed. PR #3 remains open; do not merge or deploy. |
 
 ## Product acceptance journeys
 
@@ -203,6 +203,11 @@ Before final handoff, record actual values rather than estimates for:
 - screenshots/accessibility evidence for EN/VI × light/dark at required widths;
 - known limitations, verified resume commands, and explicit merge/deploy/index
   state.
+
+The final local CI handoff for source `4c26727f50741777ffe8923e1e8bb843fbe1df44`
+passed Backend CI #73 and Frontend CI #44/#45. The docs-only finalization below
+does not change runtime inputs; the completion manifest is regenerated after
+that final commit.
 
 Current state: `OFFLINE WORKSPACE CLOSURE / PROVIDER VALIDATION MIXED`.
 Implementation, theme cleanup, the full 120-variant acceptance freeze, guided

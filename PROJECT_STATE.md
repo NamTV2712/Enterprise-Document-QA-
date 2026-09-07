@@ -69,6 +69,9 @@ historical entries remain unchanged for provenance.
   `data/diagnostics/workspace_completion_manifest_final.json`. It records
   `provider_calls: 0`, a clean worktree, a passing commit diff check, final
   production asset hashes, and both Library p95 values below the 200 ms gate.
+- GitHub CI passed for source `4c26727f50741777ffe8923e1e8bb843fbe1df44`:
+  Backend CI #73 and Frontend CI #44/#45. The branch remains pushed with PR #3
+  open; merge and deploy were intentionally not performed.
 
 ## Bilingual research workspace and local portability round — IMPLEMENTATION COMPLETE / OFFLINE VALIDATION GREEN (2026-09-07)
 

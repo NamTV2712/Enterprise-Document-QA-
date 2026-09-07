@@ -19,6 +19,11 @@ import { ConversationImportResult, SaveIndicator } from "../hooks/useConversatio
 import { Locale, normalizeLocaleSearch, useLocale } from "../lib/i18n";
 import { createEvidenceCollection, listEvidenceCollections, EvidenceCollection } from "../lib/evidenceCollections";
 import { searchConversationRecords } from "../lib/conversationSearch";
+import {
+  ConversationBackupBundle,
+  MAX_BACKUP_BYTES,
+  parseConversationBackupBundle,
+} from "../lib/conversationExport";
 
 interface ConversationLibraryProps {
   conversations: ConversationRecord[];
@@ -32,7 +37,7 @@ interface ConversationLibraryProps {
   onDelete: (conversationId: string) => void;
   onExport: (conversation: ConversationRecord) => void;
   onExportBackup?: () => void;
-  onImportBackup?: (file: File) => Promise<ConversationImportResult>;
+  onImportBackup?: (bundle: ConversationBackupBundle) => Promise<ConversationImportResult>;
   onUpdateMetadata?: (conversationId: string, patch: { tags?: string[]; notes?: ConversationRecord["notes"] }) => Promise<unknown>;
   writerStatus?: WriterStatus;
   onRequestWriter?: () => Promise<WriterStatus>;
@@ -118,6 +123,11 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
   const [editingTitle, setEditingTitle] = useState("");
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [backupStatus, setBackupStatus] = useState<string | null>(null);
+  const [pendingBackup, setPendingBackup] = useState<{
+    bundle: ConversationBackupBundle;
+    fileName: string;
+    byteLength: number;
+  } | null>(null);
   const [collections, setCollections] = useState<EvidenceCollection[]>(listEvidenceCollections);
   const [collectionName, setCollectionName] = useState("");
   const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({});
@@ -142,20 +152,33 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
     }
   };
 
-  const handleImportBackup = async (file: File | undefined) => {
-    if (!file || !onImportBackup) return;
+  const handlePreviewBackup = async (file: File | undefined) => {
+    if (!file) return;
     setBackupStatus(null);
     try {
-      const result = await onImportBackup(file);
+      if (file.size > MAX_BACKUP_BYTES) throw new Error("The backup is larger than the 25 MiB import limit.");
+      const bundle = parseConversationBackupBundle(await file.text());
+      setPendingBackup({ bundle, fileName: file.name, byteLength: file.size });
+    } catch (error) {
+      setBackupStatus(error instanceof Error ? error.message : "Could not import this backup.");
+    } finally {
+      if (importInputRef.current) importInputRef.current.value = "";
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    if (!pendingBackup || !onImportBackup) return;
+    setBackupStatus(null);
+    try {
+      const result = await onImportBackup(pendingBackup.bundle);
       setBackupStatus(
         locale === "vi"
           ? `Đã nhập ${result.imported}: lưu bền vững ${result.persisted}, chỉ trong tab ${result.volatile}, lỗi ${result.failed}.`
           : `Imported ${result.imported}: ${result.persisted} persisted, ${result.volatile} tab-only, ${result.failed} failed.`,
       );
+      setPendingBackup(null);
     } catch (error) {
       setBackupStatus(error instanceof Error ? error.message : "Could not import this backup.");
-    } finally {
-      if (importInputRef.current) importInputRef.current.value = "";
     }
   };
 
@@ -275,7 +298,7 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
                 type="file"
                 accept="application/json,.json"
                 className="sr-only"
-                onChange={(event) => void handleImportBackup(event.target.files?.[0])}
+                onChange={(event) => void handlePreviewBackup(event.target.files?.[0])}
               />
               <button
                 type="button"
@@ -287,6 +310,40 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
               </button>
             </>
           )}
+        </div>
+      )}
+      {pendingBackup && (
+        <div className="library-backup-preview" role="dialog" aria-labelledby="backup-preview-title" aria-modal="false">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 id="backup-preview-title" className="text-sm font-semibold text-[var(--text-primary)]">
+                {locale === "vi" ? "Xem trước bản sao" : "Review backup before import"}
+              </h3>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">{pendingBackup.fileName}</p>
+            </div>
+            <button type="button" className="icon-button" onClick={() => setPendingBackup(null)} aria-label={locale === "vi" ? "Hủy xem trước" : "Cancel backup import"}>
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-[var(--text-muted)]">
+            <div><dt className="font-semibold">{locale === "vi" ? "Phiên bản" : "Version"}</dt><dd>{pendingBackup.bundle.version}</dd></div>
+            <div><dt className="font-semibold">{locale === "vi" ? "Dung lượng" : "Size"}</dt><dd>{Math.ceil(pendingBackup.byteLength / 1024)} KiB</dd></div>
+            <div><dt className="font-semibold">{locale === "vi" ? "Cuộc trò chuyện" : "Conversations"}</dt><dd>{pendingBackup.bundle.conversations.length}</dd></div>
+            <div><dt className="font-semibold">{locale === "vi" ? "Bộ sưu tập" : "Collections"}</dt><dd>{pendingBackup.bundle.collections.length}</dd></div>
+          </dl>
+          <p className="mt-3 text-xs leading-relaxed text-[var(--text-muted)]">
+            {locale === "vi"
+              ? "Import sẽ tạo ID mới và không ghi đè cuộc trò chuyện hiện có."
+              : "Import creates fresh IDs and does not overwrite existing conversations."}
+          </p>
+          <div className="mt-3 flex flex-wrap justify-end gap-2">
+            <button type="button" className="library-secondary-action" onClick={() => setPendingBackup(null)}>
+              {locale === "vi" ? "Hủy" : "Cancel"}
+            </button>
+            <button type="button" className="primary-action-button rounded-lg px-3 py-1.5 text-xs font-semibold" onClick={() => void handleConfirmImport()} disabled={!onImportBackup}>
+              {locale === "vi" ? "Xác nhận nhập" : "Confirm import"}
+            </button>
+          </div>
         </div>
       )}
       {backupStatus && <p className="library-backup-status" role="status">{backupStatus}</p>}

@@ -1720,3 +1720,25 @@ summary {
   font-size: 0.72rem;
   line-height: 1.45;
 }
+
+.library-backup-preview {
+  margin-top: 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.8rem;
+  background: var(--surface-muted);
+  padding: 0.8rem;
+}
+
+.library-backup-preview dt {
+  color: var(--text-subtle);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.library-backup-preview dd {
+  margin-top: 0.15rem;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-weight: 700;
+}

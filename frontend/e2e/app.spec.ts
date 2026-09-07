@@ -296,6 +296,78 @@ test("conversation survives a full page reload through IndexedDB", async ({ page
   await expect(page.getByText(LONG_ANSWER.split("\n")[0]).first()).toBeVisible();
 });
 
+test("citation deep links survive reload and Markdown export keeps evidence anchors", async ({ page }) => {
+  await setup(page);
+  await askQuestion(page, "What was Apple's total net sales in fiscal year 2025?");
+  await expect(page.getByText(LONG_ANSWER.split("\n")[0]).first()).toBeVisible();
+
+  await page.getByRole("button", { name: "Open source 1" }).first().click();
+  await expect(page).toHaveURL(/#evidence=assistant-[A-Za-z0-9_-]+-0$/);
+  const deepLink = page.url();
+
+  await page.reload();
+  await expect(page).toHaveURL(deepLink);
+  await expect(
+    page.getByRole("button", { name: /Hide 2 retrieved filing evidence excerpts/i }),
+  ).toBeVisible();
+
+  await openLibrary(page);
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export conversation" }).first().click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/\.md$/);
+  const stream = await download.createReadStream();
+  let markdown = "";
+  if (stream) {
+    for await (const chunk of stream) markdown += chunk.toString();
+  }
+  expect(markdown).toContain("<a id=\"evidence-");
+});
+
+test("live evaluation fixture renders provenance and JSON/CSV exports", async ({ page }) => {
+  await installApiFixtures(page);
+  const summary = {
+    run_id: "live-fixture-v1",
+    title: "Live fixture evaluation",
+    status: "candidate",
+    created_at: "2026-09-07T00:00:00.000Z",
+    provenance: { dataset_version: "fixture-v1" },
+    aggregate: { faithfulness: 0.9, answer_relevancy: 0.8, sample_count: 1 },
+    case_count: 1,
+  };
+  const run = {
+    ...summary,
+    cases: [{
+      case_id: "fixture-case-1",
+      question: "What was Apple's total net sales?",
+      language: "en",
+      status: "OK",
+      answer: "Apple reported $391,035 million [Source 1].",
+      scores: { faithfulness: 0.9 },
+      gates: { citation_correctness: true },
+      reasons: [],
+      evidence: [{ citation: "AAPL 10-K", excerpt: "Total net sales 391,035" }],
+    }],
+    notes: ["Fixture only; not an official benchmark."],
+  };
+  await page.route(`${API_ORIGIN}/evaluation/runs?*`, async (route) => {
+    await route.fulfill({ status: 200, headers: { "access-control-allow-origin": "*", "content-type": "application/json" }, body: JSON.stringify({ items: [summary], total: 1, page: 1, page_size: 20 }) });
+  });
+  await page.route(`${API_ORIGIN}/evaluation/runs/live-fixture-v1`, async (route) => {
+    await route.fulfill({ status: 200, headers: { "access-control-allow-origin": "*", "content-type": "application/json" }, body: JSON.stringify(run) });
+  });
+  await page.goto("/?view=evaluation");
+
+  await expect(page.getByText("Live fixture evaluation").first()).toBeVisible();
+  await expect(page.getByText(/Fixture only; not an official benchmark/)).toBeVisible();
+  const jsonDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export evaluation JSON" }).click();
+  expect((await jsonDownload).suggestedFilename()).toBe("live-fixture-v1.json");
+  const csvDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export evaluation CSV" }).click();
+  expect((await csvDownload).suggestedFilename()).toBe("live-fixture-v1.csv");
+});
+
 test.describe("visual matrix", () => {
   // Each screenshot name carries browser, theme, viewport, and state so
   // Chromium and Firefox never overwrite each other's images.

@@ -1,5 +1,41 @@
 # Project State
 
+## Latest continuation — workspace closure evidence and Groq retry (2026-09-07)
+
+This section supersedes older test counts and provider-pending wording below;
+historical entries remain unchanged for provenance.
+
+- The local Library now persists answer feedback categories (`inaccurate`,
+  `incomplete`, `irrelevant`, `citation_issue`, or `other`) through schema v4
+  backup/export validation. Backup import validates and previews the bundle
+  before confirmation, then writes fresh IDs without overwriting existing
+  records.
+- Evaluation reports now support local provenance-preserving JSON and case-level
+  CSV export. Browser coverage now asserts citation deep links survive reload,
+  Markdown retains evidence anchors, the live evaluation fixture renders, and
+  both evaluation export formats download.
+- Two-context Playwright coverage proves that a second tab becomes the Library
+  writer after the first tab closes. The final browser gate is `102/102`
+  Chromium/Firefox checks with one worker; frontend unit coverage is `107/107`,
+  and the production build, lint, and typecheck are green.
+- The production-build Library performance fixture (100 conversations × 100
+  messages, 100 warmed search operations) passed the `p95 < 200 ms` gate at
+  `40.84 ms` in Chromium and `55.74 ms` in Firefox. The remaining P9 evidence
+  gap is the manual 3–5 minute guided walkthrough.
+- The updated Groq key passed isolated `window_03` and `window_04` probes
+  (2/2 HTTP 200 calls each, complete generation/judging preflight). Bounded
+  Provider B execution still stopped on rate limits: `window_03` at `24/60`
+  and `window_04` at `39/60`, both `INCOMPLETE`. A fresh Provider A
+  `evidence_contract_v3_window_04` manifest was created provider-free but not
+  executed because the continuation had used `67` of the shared `120` real
+  request slots, leaving `53`, which is insufficient for a fresh 60-call run.
+  `GROQ_API_KEY5` is configured locally and is already included in the
+  generation/judging key pools; it does not change the shared campaign cap.
+- No corpus/index rebuild, merge, deploy, or Docker receipt was performed for
+  this frontend-only continuation. The official benchmark remains unchanged;
+  production Library p95 and the full 120-variant acceptance freeze remain
+  open.
+
 ## Bilingual research workspace and local portability round — IMPLEMENTATION COMPLETE / OFFLINE VALIDATION GREEN (2026-09-07)
 
 This round is implemented on `codex/bilingual-research-workspace` from

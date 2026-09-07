@@ -3,6 +3,7 @@ import type { ComponentProps } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { ConversationLibrary } from "./ConversationLibrary";
 import { ConversationRecord } from "../lib/conversationStore";
+import { conversationsToJson } from "../lib/conversationExport";
 
 const record: ConversationRecord = {
   schemaVersion: 2,
@@ -69,5 +70,30 @@ describe("ConversationLibrary", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     expect(onDelete).toHaveBeenCalledWith("conversation-1");
+  });
+
+  test("previews a backup before calling the durable import handler", async () => {
+    const onImportBackup = vi.fn().mockResolvedValue({
+      imported: 1,
+      persisted: 1,
+      volatile: 0,
+      failed: 0,
+    });
+    const { container } = renderLibrary({ onImportBackup });
+    const backupText = conversationsToJson([record]);
+    const file = Object.assign(new File([backupText], "research-backup.json", {
+      type: "application/json",
+    }), { text: vi.fn().mockResolvedValue(backupText) });
+    const input = container.querySelector('input[type="file"]');
+    expect(input).not.toBeNull();
+
+    fireEvent.change(input as HTMLInputElement, { target: { files: [file] } });
+    expect(await screen.findByRole("dialog", { name: "Review backup before import" })).toBeInTheDocument();
+    expect(onImportBackup).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirm import" }));
+    await screen.findByText(/Imported 1/);
+    expect(onImportBackup).toHaveBeenCalledTimes(1);
+    expect(onImportBackup.mock.calls[0][0].conversations).toHaveLength(1);
   });
 });

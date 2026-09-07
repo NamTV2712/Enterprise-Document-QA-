@@ -10,7 +10,7 @@ import {
   normalizeStoredMessages,
 } from "./conversationStore";
 import { EvidenceCollection, exportEvidenceCollections, importEvidenceCollections } from "./evidenceCollections";
-import { AnswerVariant, ConversationNote, Source } from "../types";
+import { AnswerVariant, ConversationNote, MessageFeedback, Source } from "../types";
 
 function escapeMarkdown(value: string): string {
   return value.replace(/\r\n/g, "\n").trim();
@@ -147,6 +147,7 @@ function isImportedMessage(value: unknown): boolean {
     sources?: unknown;
     requestSnapshot?: unknown;
     note?: unknown;
+    feedback?: unknown;
   };
   const validSources =
     message.sources === undefined ||
@@ -164,6 +165,23 @@ function isImportedMessage(value: unknown): boolean {
   const validSnapshot =
     message.requestSnapshot === undefined ||
     isImportedRequestSnapshot(message.requestSnapshot);
+  const validFeedback =
+    message.feedback === undefined ||
+    (() => {
+      if (!message.feedback || typeof message.feedback !== "object") return false;
+      const feedback = message.feedback as Partial<MessageFeedback>;
+      return (
+        (feedback.rating === "up" || feedback.rating === "down") &&
+        (feedback.category === undefined ||
+          feedback.category === "inaccurate" ||
+          feedback.category === "incomplete" ||
+          feedback.category === "irrelevant" ||
+          feedback.category === "citation_issue" ||
+          feedback.category === "other") &&
+        typeof feedback.at === "number" &&
+        Number.isFinite(feedback.at)
+      );
+    })();
   return (
     typeof message.id === "string" &&
     message.id.length > 0 &&
@@ -177,7 +195,8 @@ function isImportedMessage(value: unknown): boolean {
     (message.isStreaming === undefined || typeof message.isStreaming === "boolean") &&
     (message.note === undefined || typeof message.note === "string") &&
     validSources &&
-    validSnapshot
+    validSnapshot &&
+    validFeedback
   );
 }
 

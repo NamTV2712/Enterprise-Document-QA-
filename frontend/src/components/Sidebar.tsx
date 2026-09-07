@@ -29,6 +29,7 @@ import {
   WriterStatus,
 } from "../lib/conversationStore";
 import { ConversationImportResult, SaveIndicator } from "../hooks/useConversationLibrary";
+import type { ConversationBackupBundle } from "../lib/conversationExport";
 import {
   ALL_SECTIONS_DESCRIPTION,
   COMPANY_NAMES,
@@ -68,7 +69,7 @@ interface SidebarProps {
   onDeleteConversation: (conversationId: string) => void;
   onExportConversation: (conversation: ConversationRecord) => void;
   onExportBackup?: () => void;
-  onImportBackup?: (file: File) => Promise<ConversationImportResult>;
+  onImportBackup?: (bundle: ConversationBackupBundle) => Promise<ConversationImportResult>;
   onUpdateMetadata?: (conversationId: string, patch: { tags?: ConversationRecord["tags"]; notes?: ConversationRecord["notes"] }) => Promise<unknown>;
   writerStatus?: WriterStatus;
   onRequestWriter?: () => Promise<WriterStatus>;

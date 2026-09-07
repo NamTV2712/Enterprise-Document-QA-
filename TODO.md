@@ -99,7 +99,11 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
 5d. [ ] After the offline gates and final source freeze, run Provider A and B
        under separate fresh ledgers (maximum 60 real requests each, maximum
        120 total including explicit retries). Keep the earlier incomplete
-       Evidence Contract v3 ledger historical and do not resume it.
+       Evidence Contract v3 ledger historical and do not resume it. The
+       2026-09-07 continuation passed both two-call Groq probes, but Provider B
+       still stopped at 24/60 (`window_03`) and 39/60 (`window_04`) on HTTP
+       429; Provider A `window_04` was preflight-only because only 53 shared
+       slots remained.
 5e. [x] Push the implementation and final status/docs commits, keep PR #3
         open, and verify green CI. Merge/deploy remains a separate explicit
         follow-up decision.

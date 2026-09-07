@@ -452,13 +452,18 @@ with Vitest and TypeScript checks.
 
 The local Library persists conversation schema v4 and exports backup JSON v2
 (v1 backups remain importable). Tags, bounded conversation notes, saved answer
-variants, bookmarks, Markdown evidence anchors, and local evidence collections
-are included with strict limits and fresh IDs on import. In browsers with Web
-Locks, only the tab owning the Library writer lock may durably write; other tabs
-remain readable and exportable until ownership is acquired. The current offline
-gate is `105/105` frontend tests, `94/94` Chromium/Firefox browser checks, and
+variants, bookmarks, Markdown evidence anchors, local evidence collections, and
+feedback categories are included with strict limits and fresh IDs on import.
+Backup import validates and previews the bundle before the user confirms it;
+existing local records are never overwritten. In browsers with Web Locks, only
+the tab owning the Library writer lock may durably write; other tabs remain
+readable and exportable until ownership is acquired. The current offline gate
+is `107/107` frontend tests, `102/102` Chromium/Firefox browser checks, and
 `716` backend tests; provider campaigns and production hosting remain separate
-from this local release candidate.
+from this local release candidate. A production-build fixture with 100
+conversations and 10,000 messages measured Library search p95 at 40.84 ms in
+Chromium and 55.74 ms in Firefox on the latest full freeze, below the 200 ms
+target.
 
 ### Evaluation, analytics, and quota-safe campaign handoff
 
@@ -469,6 +474,10 @@ demo is explicitly labelled and is provider-free; it is not an official
 benchmark. The Analytics view stores only local operational metadata (event
 kind, language, ticker, duration, and timestamp). Its export never includes
 questions, answers, source text, session IDs, or secrets.
+
+Selected evaluation reports can also be exported from the workspace as
+provenance-preserving JSON or case-level CSV. These exports are local UI
+artifacts and do not invoke a provider.
 
 The bilingual campaign is registered before execution. Its manifest freezes
 five intents in English and Vietnamese, the canonical artifact hash, and a

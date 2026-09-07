@@ -18,5 +18,7 @@ describe("EvaluationPanel", () => {
     expect((await screen.findAllByText("Recorded evaluation contract demo (provider-free)")).length).toBe(2);
     expect(screen.getByText(/Recorded mode only; not an official benchmark/i)).toBeInTheDocument();
     expect(screen.getByText("Recorded demo answer; not a live provider result.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export evaluation JSON" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export evaluation CSV" })).toBeInTheDocument();
   });
 });

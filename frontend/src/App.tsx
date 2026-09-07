@@ -32,6 +32,7 @@ import {
   AnswerLanguage,
   AnswerVariant,
   Message,
+  MessageFeedback,
 } from "./types";
 import {
   checkHealth,
@@ -45,9 +46,8 @@ import { saveConversationRecord } from "./lib/conversationStore";
 import {
   downloadConversationBackup,
   downloadConversationMarkdown,
-  MAX_BACKUP_BYTES,
-  parseConversationBackupBundle,
 } from "./lib/conversationExport";
+import type { ConversationBackupBundle } from "./lib/conversationExport";
 import { useConversationLibrary, SessionContextStatus } from "./hooks/useConversationLibrary";
 import { useLocale } from "./lib/i18n";
 import { recordAnalyticsEvent } from "./lib/analyticsStore";
@@ -902,12 +902,7 @@ export default function App() {
   }, [conversations]);
 
   const handleImportBackup = useCallback(
-    async (file: File) => {
-      if (file.size > MAX_BACKUP_BYTES) {
-        throw new Error("The backup is larger than the 25 MiB import limit.");
-      }
-      const text = await file.text();
-      const bundle = parseConversationBackupBundle(text);
+    async (bundle: ConversationBackupBundle) => {
       const result = await importConversationRecords(bundle.conversations);
       mergeEvidenceCollections(bundle.collections);
       if (result.imported === 0) throw new Error("No conversation could be imported into storage.");
@@ -941,6 +936,18 @@ export default function App() {
 
   const handleSaveMessageNote = useCallback((messageId: string, note: string) => {
     updateMessages((prev) => prev.map((message) => message.id === messageId ? { ...message, note: note || undefined } : message));
+  }, [updateMessages]);
+
+  const handleMessageFeedback = useCallback((messageId: string, feedback: MessageFeedback | undefined) => {
+    updateMessages((prev) => prev.map((message) =>
+      message.id === messageId ? { ...message, feedback } : message,
+    ));
+    recordAnalyticsEvent({
+      kind: "feedback",
+      status: feedback
+        ? `${feedback.rating}${feedback.category ? `:${feedback.category}` : ""}`
+        : "cleared",
+    });
   }, [updateMessages]);
 
   const handleSaveAnswerVariant = useCallback((message: Message) => {
@@ -1243,6 +1250,11 @@ export default function App() {
                     onSaveNote={
                       msg.sender === "assistant" && !msg.isStreaming && msg.text
                         ? (note) => handleSaveMessageNote(msg.id, note)
+                        : undefined
+                    }
+                    onFeedback={
+                      msg.sender === "assistant" && !msg.isStreaming && msg.text
+                        ? (feedback) => handleMessageFeedback(msg.id, feedback)
                         : undefined
                     }
                     variants={activeRecord?.variants?.filter((variant) => variant.originMessageId === msg.id)}

@@ -61,7 +61,12 @@ describe("conversation export", () => {
       bookmarkedMessageIds: ["a-1"],
       messages: [
         { id: "u-1", sender: "user", text: "What was revenue?" },
-        { id: "a-1", sender: "assistant", text: "Revenue was $100B." },
+        {
+          id: "a-1",
+          sender: "assistant",
+          text: "Revenue was $100B.",
+          feedback: { rating: "down", category: "incomplete", at: 3 },
+        },
       ],
     };
 
@@ -75,6 +80,10 @@ describe("conversation export", () => {
     expect(imported[0].bookmarkedMessageIds).toEqual([
       imported[0].messages[1].id,
     ]);
+    expect(imported[0].messages[1].feedback).toMatchObject({
+      rating: "down",
+      category: "incomplete",
+    });
   });
 
   test("rejects an unsupported or malformed backup", () => {

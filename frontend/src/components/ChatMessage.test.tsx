@@ -83,4 +83,23 @@ describe("ChatMessage", () => {
     expect(onSaveNote).toHaveBeenCalledWith("Verify the fiscal-year label.");
     expect(screen.getByText("Revenue was reported.")).toBeInTheDocument();
   });
+
+  test("persists a negative feedback category", () => {
+    const onFeedback = vi.fn();
+    render(
+      <ChatMessage
+        message={{ id: "assistant-feedback", sender: "assistant", text: "Revenue was reported." }}
+        onFeedback={onFeedback}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Unhelpful answer" }).at(-1)!);
+    expect(screen.getByRole("group", { name: "Why was this answer unhelpful?" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Citation issue" }));
+
+    expect(onFeedback).toHaveBeenLastCalledWith(expect.objectContaining({
+      rating: "down",
+      category: "citation_issue",
+    }));
+  });
 });

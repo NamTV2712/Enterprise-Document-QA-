@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import {
   User,
@@ -21,7 +21,13 @@ import {
   ThumbsUp,
   Layers2,
 } from "lucide-react";
-import { AnswerVariant, Message, RequestSnapshot } from "../types";
+import {
+  AnswerVariant,
+  FeedbackCategory,
+  Message,
+  MessageFeedback,
+  RequestSnapshot,
+} from "../types";
 import { SourcesPanel } from "./SourcesPanel";
 import { SubQueriesPanel } from "./SubQueriesPanel";
 import { useLocale } from "../lib/i18n";
@@ -35,6 +41,7 @@ interface ChatMessageProps {
   bookmarked?: boolean;
   onToggleBookmark?: () => void;
   onSaveNote?: (note: string) => void;
+  onFeedback?: (feedback: MessageFeedback | undefined) => void;
   variants?: AnswerVariant[];
   onSaveVariant?: () => void;
   /** The article container is focusable so Library links can land on it. */
@@ -56,6 +63,18 @@ const COMMON_TICKERS = [
   "SEC",
   "EDGAR",
   "RAG",
+];
+
+const FEEDBACK_CATEGORIES: Array<{
+  value: FeedbackCategory;
+  en: string;
+  vi: string;
+}> = [
+  { value: "inaccurate", en: "Inaccurate", vi: "Không chính xác" },
+  { value: "incomplete", en: "Incomplete", vi: "Thiếu ý" },
+  { value: "irrelevant", en: "Not relevant", vi: "Không liên quan" },
+  { value: "citation_issue", en: "Citation issue", vi: "Vấn đề trích dẫn" },
+  { value: "other", en: "Other", vi: "Khác" },
 ];
 
 // Inline content helper to parse and wrap citations, tickers, and numbers in monospace font
@@ -179,6 +198,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
   bookmarked = false,
   onToggleBookmark,
   onSaveNote,
+  onFeedback,
   variants = [],
   onSaveVariant,
   tabIndex,
@@ -187,13 +207,38 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
   const isUser = message.sender === "user";
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [focusSourceIndex, setFocusSourceIndex] = useState<number | null>(null);
-  const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
+  const [feedback, setFeedback] = useState<"up" | "down" | null>(message.feedback?.rating ?? null);
+  const [feedbackCategory, setFeedbackCategory] = useState<FeedbackCategory | null>(message.feedback?.category ?? null);
   const [isNoteOpen, setIsNoteOpen] = useState(false);
   const [noteDraft, setNoteDraft] = useState(message.note ?? "");
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const selectedVariant = variants.find((variant) => variant.id === selectedVariantId) ?? null;
   const displayedText = selectedVariant?.text ?? message.text;
   const displayedSources = selectedVariant?.sources ?? message.sources;
+
+  useEffect(() => {
+    setFeedback(message.feedback?.rating ?? null);
+    setFeedbackCategory(message.feedback?.category ?? null);
+  }, [message.feedback, message.id]);
+
+  const updateFeedback = (rating: "up" | "down") => {
+    if (feedback === rating) {
+      setFeedback(null);
+      setFeedbackCategory(null);
+      onFeedback?.(undefined);
+      return;
+    }
+    setFeedback(rating);
+    const category = rating === "down" ? feedbackCategory ?? undefined : undefined;
+    if (rating === "up") setFeedbackCategory(null);
+    onFeedback?.({ rating, ...(category ? { category } : {}), at: Date.now() });
+  };
+
+  const updateFeedbackCategory = (category: FeedbackCategory) => {
+    setFeedback("down");
+    setFeedbackCategory(category);
+    onFeedback?.({ rating: "down", category, at: Date.now() });
+  };
 
   const handleCopy = async () => {
     if (!displayedText) return;
@@ -313,7 +358,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                   <div className="ml-1 inline-flex items-center gap-0.5 rounded-md border border-transparent" role="group" aria-label={locale === "vi" ? "Đánh giá câu trả lời" : "Rate this answer"}>
                     <button
                       type="button"
-                      onClick={() => setFeedback((value) => value === "up" ? null : "up")}
+                      onClick={() => updateFeedback("up")}
                       aria-label={locale === "vi" ? "Câu trả lời hữu ích" : "Helpful answer"}
                       aria-pressed={feedback === "up"}
                       title={locale === "vi" ? "Hữu ích" : "Helpful"}
@@ -323,7 +368,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setFeedback((value) => value === "down" ? null : "down")}
+                      onClick={() => updateFeedback("down")}
                       aria-label={locale === "vi" ? "Câu trả lời chưa hữu ích" : "Unhelpful answer"}
                       aria-pressed={feedback === "down"}
                       title={locale === "vi" ? "Chưa hữu ích" : "Unhelpful"}
@@ -360,6 +405,33 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
               </div>
             )}
           </div>
+
+          {!isUser && feedback === "down" && !message.isStreaming && (
+            <div
+              className="flex flex-wrap items-center gap-1.5 rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-xs"
+              role="group"
+              aria-label={locale === "vi" ? "Lý do đánh giá chưa hữu ích" : "Why was this answer unhelpful?"}
+            >
+              <span className="font-semibold text-[var(--text-muted)]">
+                {locale === "vi" ? "Lý do:" : "Reason:"}
+              </span>
+              {FEEDBACK_CATEGORIES.map((category) => (
+                <button
+                  key={category.value}
+                  type="button"
+                  onClick={() => updateFeedbackCategory(category.value)}
+                  aria-pressed={feedbackCategory === category.value}
+                  className={`rounded-full border px-2 py-1 transition-colors ${
+                    feedbackCategory === category.value
+                      ? "border-rose-500/50 bg-rose-500/15 text-rose-700 dark:text-rose-300"
+                      : "border-[var(--border-subtle)] text-[var(--text-muted)] hover:bg-[var(--surface-muted)]"
+                  }`}
+                >
+                  {locale === "vi" ? category.vi : category.en}
+                </button>
+              ))}
+            </div>
+          )}
 
           {!isUser && isNoteOpen && onSaveNote && !message.isStreaming && (
             <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">

@@ -226,6 +226,33 @@ test("reload after a fallback failure keeps saved data and warnings", async ({ p
   expect(await page.evaluate(() => localStorage.getItem("sec_qa_library_v3"))).toBe(corrupt);
 });
 
+test("a second tab becomes the Library writer after the first tab closes", async ({ page }) => {
+  await installApiFixtures(page);
+  await page.goto("/");
+  await expect(page.getByRole("textbox", { name: "Research question" })).toBeEnabled();
+  const locksSupported = await page.evaluate(() => "locks" in navigator);
+  test.skip(!locksSupported, "Web Locks are not available in this browser.");
+
+  const second = await page.context().newPage();
+  try {
+    await installApiFixtures(second);
+    await second.goto("/");
+    await expect(second.getByRole("textbox", { name: "Research question" })).toBeEnabled();
+
+    await openLibrary(page);
+    await openLibrary(second);
+    await expect(page.getByText("Saved on this device")).toBeVisible();
+    await expect(second.getByText(/Read-only mode/i)).toBeVisible();
+    await expect(second.getByText(/Another tab currently owns the Library writer lock/i)).toBeVisible();
+
+    await page.close();
+    await expect(second.getByText(/Read-only mode/i)).not.toBeVisible({ timeout: 5_000 });
+    await expect(second.getByText("Saved on this device")).toBeVisible();
+  } finally {
+    await second.close();
+  }
+});
+
 test("closing the help dialog returns focus to its opener", async ({ page }) => {
   await setup(page);
   await page.getByRole("button", { name: "Open help" }).click();
@@ -492,3 +519,57 @@ for (const theme of ["light", "dark"] as const) {
     });
   }
 }
+
+test("production Library search stays below the 200ms p95 budget", async ({ page }) => {
+  await installApiFixtures(page);
+  await page.addInitScript(() => {
+    const records = Array.from({ length: 100 }, (_, conversationIndex) => ({
+      schemaVersion: 4,
+      id: `conversation-performance-${conversationIndex}`,
+      sessionId: `session-performance-${conversationIndex}`,
+      title: `Performance conversation ${conversationIndex}`,
+      titleMode: "auto",
+      revision: 1,
+      createdAt: conversationIndex,
+      updatedAt: conversationIndex,
+      draft: "",
+      tags: ["revenue"],
+      notes: [],
+      variants: [],
+      bookmarkedMessageIds: [],
+      messages: Array.from({ length: 100 }, (_, messageIndex) => ({
+        id: `message-performance-${conversationIndex}-${messageIndex}`,
+        sender: "user",
+        text: `Question ${messageIndex} about annual filing evidence and revenue`,
+      })),
+    }));
+    localStorage.setItem(
+      "sec_qa_library_v3",
+      JSON.stringify({ envelopeVersion: 4, records, tombstones: [] }),
+    );
+  });
+  await page.goto("/");
+  await expect(page.getByRole("textbox", { name: "Research question" })).toBeEnabled();
+  await openLibrary(page);
+  const search = page.getByRole("searchbox", { name: "Search saved conversations" });
+  const items = page.locator(".library-item");
+  await expect(search).toBeVisible();
+  await expect(items).toHaveCount(100);
+
+  for (const query of ["filing evidence", "revenue", "annual filing"]) {
+    await search.fill(query);
+    await expect(items).toHaveCount(100);
+  }
+
+  const samples: number[] = [];
+  for (let index = 0; index < 100; index += 1) {
+    const start = performance.now();
+    await search.fill(index % 2 ? "revenue" : "filing evidence");
+    await expect(items).toHaveCount(100);
+    samples.push(performance.now() - start);
+  }
+  samples.sort((left, right) => left - right);
+  const p95 = samples[Math.ceil(samples.length * 0.95) - 1];
+  console.log(`[performance] Library search p95=${p95.toFixed(2)}ms (${samples.length} samples)`);
+  expect(p95).toBeLessThan(200);
+});

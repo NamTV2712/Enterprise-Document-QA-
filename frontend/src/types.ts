@@ -189,6 +189,20 @@ export interface ConversationNote {
 
 export type AnswerVariantStatus = "completed" | "stopped" | "error";
 
+export type FeedbackRating = "up" | "down";
+export type FeedbackCategory =
+  | "inaccurate"
+  | "incomplete"
+  | "irrelevant"
+  | "citation_issue"
+  | "other";
+
+export interface MessageFeedback {
+  rating: FeedbackRating;
+  category?: FeedbackCategory;
+  at: number;
+}
+
 /** A saved answer alternative with its own evidence and request provenance. */
 export interface AnswerVariant {
   id: string;
@@ -279,4 +293,5 @@ export interface Message {
   requestSnapshot?: RequestSnapshot;
   queryInterpretation?: QueryInterpretation;
   note?: string;
+  feedback?: MessageFeedback;
 }

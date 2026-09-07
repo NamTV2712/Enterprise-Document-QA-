@@ -1,4 +1,11 @@
-import { AnswerVariant, ConversationNote, Message, RequestSnapshot, Source } from "../types";
+import {
+  AnswerVariant,
+  ConversationNote,
+  Message,
+  MessageFeedback,
+  RequestSnapshot,
+  Source,
+} from "../types";
 
 /**
  * Local conversation library repository.
@@ -407,6 +414,28 @@ function normalizeRequestSnapshot(value: unknown): RequestSnapshot | undefined |
   };
 }
 
+function normalizeMessageFeedback(value: unknown): MessageFeedback | undefined | null {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== "object") return null;
+  const feedback = value as Partial<MessageFeedback>;
+  if (
+    (feedback.rating !== "up" && feedback.rating !== "down") ||
+    (feedback.category !== undefined &&
+      feedback.category !== "inaccurate" &&
+      feedback.category !== "incomplete" &&
+      feedback.category !== "irrelevant" &&
+      feedback.category !== "citation_issue" &&
+      feedback.category !== "other") ||
+    typeof feedback.at !== "number" ||
+    !Number.isFinite(feedback.at)
+  ) return null;
+  return {
+    rating: feedback.rating,
+    ...(feedback.category ? { category: feedback.category } : {}),
+    at: feedback.at,
+  };
+}
+
 function normalizeVariants(value: unknown, messages: Message[]): AnswerVariant[] | null {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > MAX_VARIANTS_PER_CONVERSATION) return null;
@@ -451,16 +480,25 @@ function normalizeVariants(value: unknown, messages: Message[]): AnswerVariant[]
  * messages are never rewritten, and no message is ever dropped here.
  */
 export function normalizeStoredMessages(messages: Message[]): Message[] {
-  return messages.filter(isMessage).map((message) =>
-    message.isStreaming
+  return messages.filter(isMessage).map((message) => {
+    const feedback = normalizeMessageFeedback(message.feedback);
+    const normalized = feedback === null
+      ? (() => {
+          const { feedback: _ignored, ...withoutFeedback } = message;
+          return withoutFeedback;
+        })()
+      : feedback === undefined
+        ? message
+        : { ...message, feedback };
+    return normalized.isStreaming
       ? {
-          ...message,
-          text: message.text || "Generation stopped.",
+          ...normalized,
+          text: normalized.text || "Generation stopped.",
           isStreaming: false,
-          status: message.status === "error" ? "error" : "stopped",
+          status: normalized.status === "error" ? "error" : "stopped",
         }
-      : message,
-  );
+      : normalized;
+  });
 }
 
 /**

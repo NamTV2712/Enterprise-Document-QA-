@@ -39,7 +39,7 @@ evidence produced by each run.
 | Provider A | Evidence Contract v3 campaign, max 60 requests | INCOMPLETE | Prior ledger is closed after 429; create a new campaign ID only after quota is available |
 | Provider B | Bilingual campaign, max 60 requests | REGISTERED, NOT STARTED | `bilingual_evaluation_v1_window_02` manifest/runner are provider-free; execute only after quota and offline gates, then use a new campaign id if incomplete |
 | P11 | Docker candidate receipt | PASS for current offline candidate | `data/diagnostics/local_release_receipt_bilingual_workspace.json`; source-bound image receipt is PASS |
-| P12 | Docs, staged diff, PR, CI and handoff | IN_PROGRESS | Implementation commit `4e3e413` is ready; final docs/status commit and push remain; do not merge/deploy |
+| P12 | Docs, staged diff, PR, CI and handoff | PASS (merge/deploy pending) | Branch head `67a2492` is pushed; PR #3 backend/frontend/HTTP/Vercel checks are green; do not merge/deploy in this round |
 
 ## Dependency graph
 
@@ -145,7 +145,7 @@ Current handoff values:
 
 - source SHA: `4e3e413021826086245f4dfedb08ce4f77f6485a`
 - PR: `#3` (open integration path)
-- CI: rerun after pushing the final docs/status commit
+- CI: green on pushed head `67a2492` (backend, frontend, HTTP-integration, Vercel)
 - backend/frontend/browser: `716 passed` + compileall / `100/100` + typecheck
   + build / `94/94` one-worker matrix
 - HTTP/SSE: `14/14`

@@ -76,11 +76,13 @@ Completed in the current working tree:
 
 The provider campaign is still pending a newly authorized provider
 window/quota, so this branch remains an offline candidate rather than a
-provider-backed GO. PR #3 remains the integration path; this implementation
-commit is ready for push/CI review. No provider request or data/index rebuild
-has been made in this round. The earlier incomplete Evidence Contract v3
-ledger remains historical and must not be resumed; after quota recovery create
-fresh campaign IDs for Provider A and Provider B.
+provider-backed GO. The implementation and status commits are pushed through
+branch head `67a2492940e53190ccde5d090489921e7b31f35e` in PR #3; backend,
+frontend, HTTP-integration, and Vercel checks are green. No provider request or
+data/index rebuild has been made in this round. The earlier incomplete
+Evidence Contract v3 ledger remains historical and must not be resumed; after
+quota recovery create fresh campaign IDs for Provider A and Provider B, run
+the preflight first, then execute only within the registered request budget.
 
 ## Current Milestone
 

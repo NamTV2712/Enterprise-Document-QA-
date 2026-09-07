@@ -100,7 +100,7 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        under separate fresh ledgers (maximum 60 real requests each, maximum
        120 total including explicit retries). Keep the earlier incomplete
        Evidence Contract v3 ledger historical and do not resume it.
-5e. [ ] Push the implementation and final status/docs commits, keep PR #3
+5e. [x] Push the implementation and final status/docs commits, keep PR #3
         open, and verify green CI. Merge/deploy remains a separate explicit
         follow-up decision.
 6. [ ] Keep `/metrics` disabled unless the deployment protects it. Monitor

@@ -76,11 +76,12 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        integration. Results and the final commit-bound receipt are recorded
        above; the prior release receipt was not reused as evidence.
 5c. [x] Offline release gates for the bilingual branch are green: backend
-       `703 passed` + compileall, frontend `95/95` + build/contrast, browser
-       `94/94` Chromium/Firefox, HTTP/SSE integration `14/14`, and Docker
-       build/readiness/receipt PASS. The receipt is ignored at
-       `data/diagnostics/local_release_receipt_bilingual.json`; no canonical
-       data or index rebuild was made.
+       `716 passed` + compileall, frontend `100/100` + typecheck/build/contrast,
+       browser `94/94` Chromium/Firefox with one worker, HTTP/SSE integration
+       `14/14`, and Docker build/readiness/receipt PASS. The source-bound
+       receipt is ignored at
+       `data/diagnostics/local_release_receipt_bilingual_workspace.json`; no
+       canonical data or index rebuild was made.
 5h. [x] Add the provider-free evaluation workspace contract: strict public
        report publisher/API, provenance allowlist, recorded demo fixture,
        Evaluation and Analytics views, redacted local analytics export, and
@@ -99,9 +100,9 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        under separate fresh ledgers (maximum 60 real requests each, maximum
        120 total including explicit retries). Keep the earlier incomplete
        Evidence Contract v3 ledger historical and do not resume it.
-5e. [x] Update the final round report with receipts and results, commit/push
-        the branch, keep PR #3 open, and verify green CI. Merge/deploy remains
-        a separate explicit follow-up decision.
+5e. [ ] Push the implementation and final status/docs commits, keep PR #3
+        open, and verify green CI. Merge/deploy remains a separate explicit
+        follow-up decision.
 6. [ ] Keep `/metrics` disabled unless the deployment protects it. Monitor
        429, 5xx, request count, and latency through aggregate telemetry.
 7. [x] Finalize the FY2026 corpus recovery and table fallback: NOW/NVDA/ORCL

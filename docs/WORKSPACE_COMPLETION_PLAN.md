@@ -35,11 +35,11 @@ evidence produced by each run.
 | P7 | Retrieval Lab and architecture showcase | PASS (offline) | Preset comparison, timing/score-scale warning, JSON/CSV export; architecture/API docs remain a documentation polish item |
 | P8 | Evaluation dashboard and experiment comparison | PASS (offline) | Validated public report publisher/API, recorded demo fixture, live/recorded dashboard and provenance display |
 | P9 | Analytics, diagnostics and guided demo | PASS (offline) | Metadata-only local analytics, redacted export/clear, recorded evaluation mode and explicit provider-free wording |
-| P10 | Offline freeze and 120-query fixture matrix | PARTIAL | Authored 40 × EN/VI/accentless = 120 fixture matrix and tests; final full browser/HTTP/Docker freeze remains |
+| P10 | Offline freeze and 120-query fixture matrix | PASS (offline) | Authored 40 × EN/VI/accentless = 120 fixture matrix; full offline browser/HTTP/Docker freeze is green |
 | Provider A | Evidence Contract v3 campaign, max 60 requests | INCOMPLETE | Prior ledger is closed after 429; create a new campaign ID only after quota is available |
 | Provider B | Bilingual campaign, max 60 requests | REGISTERED, NOT STARTED | `bilingual_evaluation_v1_window_02` manifest/runner are provider-free; execute only after quota and offline gates, then use a new campaign id if incomplete |
-| P11 | Docker candidate receipt | PASS for current offline candidate | `data/diagnostics/local_release_receipt_bilingual.json`; rebuild if source/build inputs change |
-| P12 | Docs, staged diff, PR, CI and handoff | IN_PROGRESS | PR #3 is open and green; update description and wait for final CI; do not merge/deploy |
+| P11 | Docker candidate receipt | PASS for current offline candidate | `data/diagnostics/local_release_receipt_bilingual_workspace.json`; source-bound image receipt is PASS |
+| P12 | Docs, staged diff, PR, CI and handoff | IN_PROGRESS | Implementation commit `4e3e413` is ready; final docs/status commit and push remain; do not merge/deploy |
 
 ## Dependency graph
 
@@ -74,6 +74,12 @@ evidence produced by each run.
 - VI/EN × light/dark works at 390/768/1440px, keyboard-only primary flows work,
   IME composition is preserved, reduced motion is honoured, and axe has no
   serious/critical violation.
+
+Offline evidence for the current source freeze: backend `716 passed` plus
+`compileall`, frontend `100/100` plus typecheck/build, browser `94/94` with
+one worker, HTTP/SSE `14/14`, and Docker receipt `PASS`. Twelve browser workers
+are not a valid local gate on this Windows host because that mode produced
+connection/teardown flakes; the one-worker matrix passed.
 
 ### Provider gates
 
@@ -134,3 +140,21 @@ At source freeze update this section with the actual values, not estimates:
 - Campaign B manifest/ledger/report hashes and request count:
 - final state: `GO`, `NO-GO`, or `VALIDATION INCOMPLETE`:
 - known limitations and exact resume command:
+
+Current handoff values:
+
+- source SHA: `4e3e413021826086245f4dfedb08ce4f77f6485a`
+- PR: `#3` (open integration path)
+- CI: rerun after pushing the final docs/status commit
+- backend/frontend/browser: `716 passed` + compileall / `100/100` + typecheck
+  + build / `94/94` one-worker matrix
+- HTTP/SSE: `14/14`
+- Docker image: `edqa-api:4e3e413021826086245f4dfedb08ce4f77f6485a`
+- Docker receipt: `data/diagnostics/local_release_receipt_bilingual_workspace.json`,
+  SHA-256 `875d28878e24bf36f1ccb35ca1cfa4bdb6024cd3110507d250fcb339b8f6f23d`
+- Provider A: historical `INCOMPLETE` after quota/429; do not resume
+- Provider B: manifest `bilingual_evaluation_v1_window_02`, preflight
+  `NOT_STARTED`, provider calls `0`
+- Future execution command after a new provider window:
+  `python -m scripts.run_bilingual_evaluation_campaign --campaign-id
+  bilingual_evaluation_v1_window_03 --execute`

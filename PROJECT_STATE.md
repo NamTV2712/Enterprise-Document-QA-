@@ -1,9 +1,10 @@
 # Project State
 
-## Bilingual research workspace and local portability round — OFFLINE CANDIDATE (2026-09-07)
+## Bilingual research workspace and local portability round — IMPLEMENTATION COMPLETE / VALIDATION INCOMPLETE (2026-09-07)
 
-This round is being developed on `codex/bilingual-research-workspace` from
-`main` at `108e729`. The goal is to make the existing research workspace
+This round is implemented on `codex/bilingual-research-workspace` from
+`main` at `108e729`, source commit `4e3e413021826086245f4dfedb08ce4f77f6485a`.
+The goal is to make the existing research workspace
 usable for English and Vietnamese users without changing retrieval defaults or
 rebuilding the canonical corpus/index.
 
@@ -40,22 +41,46 @@ Completed in the current working tree:
 - Added private per-answer notes with bounded input, local conversation
   persistence, and Markdown export; notes never enter generation prompts or
   provider requests.
+- Added a strict allowlisted public evaluation report publisher and read-only
+  `/evaluation/runs` and `/evaluation/runs/{run_id}` APIs. The Evaluation view
+  separates validated published reports from a clearly labelled provider-free
+  Recorded demo; invalid schemas, missing provenance, duplicate cases, and
+  arbitrary report paths are rejected or hidden.
+- Added the Analytics view and metadata-only local event ledger. Export and
+  clear operations exclude questions, answers, excerpts, session IDs, and
+  secrets. Added twelve English/Vietnamese research templates, a command
+  palette, local evidence collections, Retrieval Lab preset comparison, and
+  JSON/CSV export.
+- Registered Provider B as a separate bilingual protocol: five authored
+  intents in English and Vietnamese, 12 calibration requests, 40 sentinel
+  generation/judging requests, eight explicit retry slots, SDK retries zero,
+  and ledger-backed append-only checkpoints. The preflight for
+  `bilingual_evaluation_v1_window_02` made zero provider calls; execution is
+  intentionally deferred until a new provider window is available.
+- Added the 40-case × English/Vietnamese/accentless authored query matrix
+  (120 variants), public report tests, campaign manifest/ledger tests, and an
+  architecture/API guide.
 - The final offline verification for this round is green: frontend
-  typecheck/lint, `95/95` unit tests, production build, and light/dark
-  contrast; Chromium + Firefox browser matrix `94/94`; real HTTP/SSE
-  integration `14/14`; and backend full suite `703 passed` + compileall.
+  typecheck/lint, `100/100` unit tests, production build, and light/dark
+  contrast; Chromium + Firefox browser matrix `94/94` using one worker per
+  browser on this Windows host; real HTTP/SSE integration `14/14`; and
+  backend full suite `716 passed` + compileall.
 - Docker release preflight is `PASS`, the pinned image builds successfully,
   Compose readiness reports 50 searchable companies and 10,053 chunks, the
   new `/documents` catalog reports 50 loaded filings, and `/system/info`
-  reports the expected `hybrid_rerank` default. The final ignored receipt is
-  `data/diagnostics/local_release_receipt_bilingual.json` with
+  reports the expected `hybrid_rerank` default. The source-bound receipt is
+  `data/diagnostics/local_release_receipt_bilingual_workspace.json`, SHA-256
+  `875d28878e24bf36f1ccb35ca1cfa4bdb6024cd3110507d250fcb339b8f6f23d`,
+  for image `edqa-api:4e3e413021826086245f4dfedb08ce4f77f6485a` with
   `provider_calls: 0` and `overall: PASS`.
 
 The provider campaign is still pending a newly authorized provider
 window/quota, so this branch remains an offline candidate rather than a
-provider-backed GO. PR #3 is open and the final pushed commit has green
-backend/frontend test and HTTP-integration checks plus Vercel preview. No
-provider request or data/index rebuild has been made in this round.
+provider-backed GO. PR #3 remains the integration path; this implementation
+commit is ready for push/CI review. No provider request or data/index rebuild
+has been made in this round. The earlier incomplete Evidence Contract v3
+ledger remains historical and must not be resumed; after quota recovery create
+fresh campaign IDs for Provider A and Provider B.
 
 ## Current Milestone
 

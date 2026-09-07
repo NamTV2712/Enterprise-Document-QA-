@@ -1,6 +1,6 @@
 # Project State
 
-## Latest continuation — workspace closure evidence and Groq retry (2026-09-07)
+## Latest continuation — final offline workspace closure and Groq validation (2026-09-07)
 
 This section supersedes older test counts and provider-pending wording below;
 historical entries remain unchanged for provenance.
@@ -15,13 +15,18 @@ historical entries remain unchanged for provenance.
   Markdown retains evidence anchors, the live evaluation fixture renders, and
   both evaluation export formats download.
 - Two-context Playwright coverage proves that a second tab becomes the Library
-  writer after the first tab closes. The final browser gate is `102/102`
+  writer after the first tab closes. The final browser gate is `106/106`
   Chromium/Firefox checks with one worker; frontend unit coverage is `107/107`,
   and the production build, lint, and typecheck are green.
 - The production-build Library performance fixture (100 conversations × 100
   messages, 100 warmed search operations) passed the `p95 < 200 ms` gate at
-  `40.84 ms` in Chromium and `55.74 ms` in Firefox. The remaining P9 evidence
-  gap is the manual 3–5 minute guided walkthrough.
+  `42.69 ms` in Chromium and `54.08 ms` in Firefox. The provider-free guided
+  portfolio route now reaches research, Retrieval Lab, Evaluation, and System
+  views in both browser engines.
+- The theme cleanup replaced shell/card/composer gradients and glow effects
+  with semantic light/dark surfaces, borders, and shadows. Legacy utility
+  color aliases now resolve through the semantic token layer, so both existing
+  and new controls follow the selected palette.
 - The updated Groq key passed isolated `window_03` and `window_04` probes
   (2/2 HTTP 200 calls each, complete generation/judging preflight). Bounded
   Provider B execution still stopped on rate limits: `window_03` at `24/60`
@@ -46,17 +51,24 @@ historical entries remain unchanged for provenance.
   and was stopped at `21/60`; its ledger is closed. A key5-only A run then
   reached `36/60` before exposing a runner `ground_truth` lookup bug; that
   ledger is also closed. The bug was fixed to use versioned Evidence Contract
-  references, regression-tested, and the full backend suite is now `717 passed`
+  references, regression-tested, and the full backend suite is now `718 passed`
   with `121` warnings plus compileall.
 - Recorded provider slots across this continuation total `226`: prior `69`,
   accidental five-key `21`, A key5-only `36`, A key5-only `48`, and B key5-only
   `52`. No corpus/index rebuild or merge/deploy was performed. The Docker
   runtime receipt remains a valid previous candidate because Docker copies
   `src/` and `configs/`, while this fix changed only campaign scripts/tests.
-- No corpus/index rebuild, merge, deploy, or Docker receipt was performed for
-  this frontend-only continuation. The official benchmark remains unchanged;
-  production Library p95 and the full 120-variant acceptance freeze remain
-  open.
+- The full 120-variant authored query matrix now executes provider-free at the
+  normalizer boundary with explicit period, language, and comparison checks.
+  The new browser backup-import and guided-portfolio routes are also included
+  in the final `106/106` freeze. No corpus/index rebuild, merge, deploy, or new
+  Docker receipt was needed: this closure changed frontend styling/tests and a
+  provider-free diagnostic script only. The official benchmark remains
+  unchanged.
+- The source-bound completion receipt is
+  `data/diagnostics/workspace_completion_manifest_final.json`. It records
+  `provider_calls: 0`, a clean worktree, a passing commit diff check, final
+  production asset hashes, and both Library p95 values below the 200 ms gate.
 
 ## Bilingual research workspace and local portability round — IMPLEMENTATION COMPLETE / OFFLINE VALIDATION GREEN (2026-09-07)
 

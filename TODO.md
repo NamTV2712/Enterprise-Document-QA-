@@ -76,10 +76,10 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        integration. Results and the final commit-bound receipt are recorded
        above; the prior release receipt was not reused as evidence.
 5c. [x] Offline release gates for the bilingual branch are green: backend
-       `716 passed` + compileall, frontend `100/100` + typecheck/build/contrast,
-       browser `94/94` Chromium/Firefox with one worker, HTTP/SSE integration
-       `14/14`, and Docker build/readiness/receipt PASS. The source-bound
-       receipt is ignored at
+       `718 passed` + compileall, frontend `107/107` + typecheck/build/contrast,
+       browser `106/106` Chromium/Firefox with one worker, HTTP/SSE integration
+       `14/14`, and the prior Docker build/readiness/receipt remain PASS. The
+       source-bound receipt is ignored at
        `data/diagnostics/local_release_receipt_bilingual_workspace.json`; no
        canonical data or index rebuild was made.
 5h. [x] Add the provider-free evaluation workspace contract: strict public
@@ -96,7 +96,7 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        `NOT_STARTED`/`INCOMPLETE` status. Preflight used zero provider calls;
        execute only after a new provider window and use a new campaign ID
        after an incomplete run.
-5d. [ ] After the offline gates and final source freeze, run Provider A and B
+5d. [x] After the offline gates and final source freeze, run Provider A and B
        under separate fresh ledgers (maximum 60 real requests each, maximum
        120 total including explicit retries). Keep the earlier incomplete
        Evidence Contract v3 ledger historical and do not resume it. The

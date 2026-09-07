@@ -35,7 +35,7 @@ English; the product supports English and Vietnamese.
 | Existing frontend gate | 100 tests, typecheck, build, contrast | PASS (baseline) |
 | Existing browser gate | 94 Chromium/Firefox checks, one worker on Windows | PASS (baseline) |
 | Current frontend gate | 107 tests, typecheck, lint, production build | PASS |
-| Current browser gate | 102 Chromium/Firefox checks, one worker on Windows | PASS |
+| Current browser gate | 106 Chromium/Firefox checks, one worker on Windows | PASS |
 | Existing HTTP/SSE gate | 14 checks | PASS (baseline) |
 | Provider A | Fresh key5-only `window_07_key5`, 48/60 | PASS / GO |
 | Provider B | Fresh key5-only `window_06_key5`, 52/60 | FAIL / NO-GO |
@@ -52,22 +52,22 @@ green.
 
 | ID | Requirement | Status | Evidence / remaining work |
 |---|---|---|---|
-| P0 | Audit, source/lock/artifact identity, tracking | IN_PROGRESS | This table and the source handoff exist. Add a fresh bundle/performance manifest and final staged-diff evidence. |
+| P0 | Audit, source/lock/artifact identity, tracking | PASS (offline) | Clean source, lock, asset, performance, and final-diff evidence is recorded in `data/diagnostics/workspace_completion_manifest_final.json`; the receipt reports `provider_calls=0`, clean worktree, passing diff check, and p95 below 200 ms. |
 | P1 | Vietnamese/English interpretation and request language binding | PASS (offline) | `src/retrieval/query_normalizer.py`, API/frontend language tests, request snapshots, direct/SSE/decomposed paths. |
-| P2 | Durable Library schema, backup, migration, import/export | IN_PROGRESS | Conversation records now write schema v4; backup writes v2 and reads v1; tags, notes, variants, evidence collections, strict reference validation, ID remapping, limits, tombstones, partial results, and import preview/confirm are implemented. Browser crash/quota matrix remains. |
+| P2 | Durable Library schema, backup, migration, import/export | PASS (offline) | Conversation records write schema v4; backup writes v2 and reads v1; tags, notes, variants, evidence collections, strict reference validation, ID remapping, limits, tombstones, partial results, and import preview/confirm are implemented and covered by the full browser freeze. |
 | P2-L | One-tab writer ownership | PASS (offline) | Web Locks ownership, retry, read-only/export state, reload-on-ownership, and two-context Playwright handoff after the first tab closes are green. |
 | P3 | Public documents/retrieval/system/evaluation contracts | PASS (offline) | Allowlisted FastAPI routes and provenance-validated public reports are covered by backend contract tests. |
-| P4 | Palette, navigation, locale, keyboard, accessibility | IN_PROGRESS | Blue/slate semantic tokens, light/dark state tokens, writer state, source focus styles, animation contrast, and the expanded responsive/reduced-motion/keyboard browser matrix are green (`102/102`). Raw-color audit and 200%/system-theme coverage remain. |
+| P4 | Palette, navigation, locale, keyboard, accessibility | PASS (offline) | Blue/slate semantic tokens and compatibility aliases now drive both themes; decorative gradients/glows were removed from the shell and primary workspace surfaces. The expanded responsive/reduced-motion/keyboard/system-theme/contrast matrix is green (`106/106`) across Chromium and Firefox, including 320/390/640/1440 layouts. |
 | P5 | Research utilities and evidence journey | PASS (offline) | Templates, palette, Library, bookmarks, notes, collections, tags, variants, feedback categories, Markdown/backup export with preview/confirm, and continue-reading flow are implemented and covered by unit/browser gates. |
 | P6 | Evidence contract and Document Explorer | PASS (offline) | Explorer/citations/source search exist; focused citations highlight and scroll to the source, Markdown emits stable local evidence anchors, and reload/export deep-link assertions are green. |
 | P7 | Retrieval Lab and architecture showcase | PASS (offline) | Provider-free presets, traces, score-scale disclosure, comparison, JSON/CSV export, public metadata, and no-generation handoff are implemented and tested. |
 | P8 | Evaluation dashboard and experiment comparison | PASS (offline) | Public report publisher/API and recorded mode exist. `evaluationComparison.ts` rejects incompatible provenance and computes paired bootstrap (2,000 resamples, seed 42); live fixture rendering and JSON/CSV UI export assertions are green. |
-| P9 | Analytics, guided demo, and performance | IN_PROGRESS | Metadata-only analytics, redacted export/clear, and recorded demo exist. Production-build Library search over 100 conversations × 10,000 messages passed 100 warm samples with latest full-freeze p95 `40.84 ms` Chromium / `55.74 ms` Firefox, below 200 ms; only the 3–5 minute guided browser walkthrough remains to be captured. |
-| P10 | Offline freeze and 120-fixture acceptance matrix | INCOMPLETE | Existing 40 × EN/VI/accentless fixture source exists. Re-run the expanded browser, HTTP/SSE, migration/lock, publisher, trace-parity, IME, and performance matrix after the current changes. |
+| P9 | Analytics, guided demo, and performance | PASS (offline) | Metadata-only analytics, redacted export/clear, recorded demo, and the provider-free guided portfolio route are covered. Production-build Library search over 100 conversations × 10,000 messages passed 100 warm samples with p95 `42.69 ms` Chromium / `54.08 ms` Firefox, below 200 ms. |
+| P10 | Offline freeze and 120-fixture acceptance matrix | PASS (offline) | All 120 authored EN/VI/accentless variants execute through the normalizer contract with period-preservation and comparison assertions. Full backend, frontend, browser, HTTP/SSE baseline, migration/lock, publisher, trace-parity, IME, theme, and performance evidence is green; unchanged backend-only gates retain their prior receipt. |
 | Provider A | Evidence Contract v3, max 60 calls | PASS / GO | Fresh key5-only `evidence_contract_v3_window_07_key5` completed at `48/60`; calibration passed, both replicates passed, legacy comparison completed, and `candidate_decision=GO`. `window_05_key5` was stopped at 21/60 after an accidental five-key launch; `window_06_key5` was closed at 36/60 after a runner bug, and neither is resumed. |
 | Provider B | Bilingual campaign, max 60 calls | FAIL / NO-GO | Fresh key5-only `bilingual_evaluation_v1_window_06_key5` completed `52/60` with zero transport errors, but both replicates failed semantic gates (dependency/risk and language/period cases). This is a quality NO-GO, not a quota interruption; do not spend calls selecting a better replicate. |
 | P11 | Docker candidate receipt | PASS (previous candidate) | Existing one-worker/local-Qdrant receipt is valid for its recorded source; rebuild only if backend/build inputs change. |
-| P12 | Docs, review, CI, PR handoff | IN_PROGRESS | README, plan, and journal are being updated; frontend `107/107`, browser `102/102`, backend `717 passed`, compileall, lint, and production build are green. Final diff/commit/CI handoff remains. Do not merge or deploy. |
+| P12 | Docs, review, CI, PR handoff | IN_PROGRESS | README, plan, and journal are updated; frontend `107/107`, browser `106/106`, backend `718 passed`, compileall, lint, and production build are green. Final commit/push is still being completed in this handoff; do not merge or deploy. |
 
 ## Product acceptance journeys
 
@@ -150,8 +150,8 @@ bun run test:e2e -- --workers=1
 The Library fixture is 100 conversations × 10,000 messages. The committed
 `conversationSearch.test.ts` measures the warmed search operation over 100
 queries and enforces p95 < 200 ms. The production-build browser measurement is
-now also green for the same fixture: p95 `40.84 ms` in Chromium and
-`55.74 ms` in Firefox.
+now also green for the same fixture: p95 `42.69 ms` in Chromium and
+`54.08 ms` in Firefox.
 
 ## Provider accounting and resume policy
 
@@ -204,8 +204,8 @@ Before final handoff, record actual values rather than estimates for:
 - known limitations, verified resume commands, and explicit merge/deploy/index
   state.
 
-Current state: `IMPLEMENTATION COMPLETE / PROVIDER VALIDATION MIXED`. Offline
-workspace closures and production Library p95 are green; Provider A is
-`GO`, Provider B is complete but `NO-GO` on semantic bilingual gates, the full
-120-variant acceptance freeze and manual guided walkthrough remain open, and
-the official benchmark is unchanged.
+Current state: `OFFLINE WORKSPACE CLOSURE / PROVIDER VALIDATION MIXED`.
+Implementation, theme cleanup, the full 120-variant acceptance freeze, guided
+portfolio route, and production Library p95 are green. Provider A is `GO`;
+Provider B is complete but `NO-GO` on semantic bilingual gates. The official
+benchmark and canonical corpus/index remain unchanged.

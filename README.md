@@ -458,12 +458,14 @@ Backup import validates and previews the bundle before the user confirms it;
 existing local records are never overwritten. In browsers with Web Locks, only
 the tab owning the Library writer lock may durably write; other tabs remain
 readable and exportable until ownership is acquired. The current offline gate
-is `107/107` frontend tests, `102/102` Chromium/Firefox browser checks, and
-`716` backend tests; provider campaigns and production hosting remain separate
-from this local release candidate. A production-build fixture with 100
-conversations and 10,000 messages measured Library search p95 at 40.84 ms in
-Chromium and 55.74 ms in Firefox on the latest full freeze, below the 200 ms
-target.
+is `107/107` frontend tests, `106/106` Chromium/Firefox browser checks, and
+`718` backend tests; provider campaigns and production hosting remain separate
+from this local release candidate. The final browser freeze includes backup
+import preview/confirm, the guided portfolio route, responsive
+Light/Dark/system-theme coverage, and the provider-free tool views. A
+production-build fixture with 100 conversations and 10,000 messages measured
+Library search p95 at 42.69 ms in Chromium and 54.08 ms in Firefox on the
+latest full freeze, below the 200 ms target.
 
 ### Evaluation, analytics, and quota-safe campaign handoff
 

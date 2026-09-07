@@ -148,6 +148,117 @@ export async function installApiFixtures(
       return;
     }
 
+    if (path === "/retrieval/inspect" && method === "POST") {
+      await route.fulfill({
+        status: 200,
+        headers: { ...CORS_HEADERS, "content-type": "application/json" },
+        body: JSON.stringify({
+          query_interpretation: {
+            original_question: "What was Apple's total revenue in 2024?",
+            retrieval_question: "What was Apple's total revenue in 2024?",
+            language: "en",
+            detected_ticker: "AAPL",
+          },
+          trace: {
+            preset: "hybrid_rerank",
+            query: "What was Apple's total revenue in 2024?",
+            filters: { ticker: null, section: null },
+            top_k: 5,
+            candidate_pool: 10,
+            models: { embedding: "fixture-embedding", reranker: "fixture-reranker", rrf_k: 60 },
+            stages: [{ name: "retrieval", elapsed_ms: 1.2 }],
+            candidates: [{
+              chunk_id: "AAPL_fixture_revenue_0",
+              citation: "AAPL 10-K, Financial Statements",
+              text_preview: "Total revenue was reported in fiscal 2024.",
+              final_rank: 1,
+              selected: true,
+              bm25_score: 1,
+              dense_score: 0.9,
+              rrf_score: 0.8,
+              cross_encoder_score: 0.7,
+            }],
+            selected_chunk_ids: ["AAPL_fixture_revenue_0"],
+            elapsed_ms: 1.2,
+          },
+        }),
+      });
+      return;
+    }
+
+    if (path === "/documents") {
+      await route.fulfill({
+        status: 200,
+        headers: { ...CORS_HEADERS, "content-type": "application/json" },
+        body: JSON.stringify({
+          items: [{
+            document_id: "AAPL:fixture",
+            ticker: "AAPL",
+            filing_date: "2025-10-31",
+            accession_number: "fixture-accession",
+            sections: ["financial_statements"],
+            chunk_count: 1,
+            source_url: "https://www.sec.gov/Archives/fixture",
+          }],
+          total: 1,
+          page: 1,
+          page_size: 12,
+        }),
+      });
+      return;
+    }
+
+    if (path.startsWith("/documents/") && path.endsWith("/chunks")) {
+      await route.fulfill({
+        status: 200,
+        headers: { ...CORS_HEADERS, "content-type": "application/json" },
+        body: JSON.stringify({
+          items: [{
+            chunk_id: "AAPL_fixture_revenue_0",
+            ticker: "AAPL",
+            section: "financial_statements",
+            filing_date: "2025-10-31",
+            accession_number: "fixture-accession",
+            text_preview: "Total revenue was reported in fiscal 2024.",
+            text_length: 47,
+            source_url: "https://www.sec.gov/Archives/fixture",
+          }],
+          total: 1,
+          page: 1,
+          page_size: 8,
+        }),
+      });
+      return;
+    }
+
+    if (path === "/system/info") {
+      await route.fulfill({
+        status: 200,
+        headers: { ...CORS_HEADERS, "content-type": "application/json" },
+        body: JSON.stringify({
+          api_version: "fixture",
+          corpus: { searchable_company_count: 3, indexed_chunk_count: 1 },
+          retrieval: {
+            embedding_model: "fixture-embedding",
+            reranker_model: "fixture-reranker",
+            presets: ["bm25", "dense", "hybrid", "hybrid_rerank"],
+            default: "hybrid_rerank",
+          },
+          build: { revision: "fixture" },
+        }),
+      });
+      return;
+    }
+
+    if (path === "/evaluation/runs" && method === "GET") {
+      await route.fulfill({
+        status: 200,
+        headers: { ...CORS_HEADERS, "content-type": "application/json" },
+        body: JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }),
+      });
+      return;
+    }
+
     if (path.startsWith("/session/") && path.endsWith("/history")) {
       await route.fulfill({
         status: 200,

@@ -11,6 +11,50 @@
   --color-verified-green-dark: #34D399;
   --color-brand-indigo: #2563EB;
 
+  /* Compatibility aliases for the generated Tailwind utilities still used
+     by the first-generation components.  The utility names remain stable,
+     but their rendered colors now follow the semantic Light/Dark tokens
+     below instead of carrying an independent palette. */
+  --color-slate-50: var(--surface-muted);
+  --color-slate-100: var(--surface-muted);
+  --color-slate-200: var(--border-subtle);
+  --color-slate-300: var(--border-default);
+  --color-slate-400: var(--text-subtle);
+  --color-slate-500: var(--text-muted);
+  --color-slate-600: var(--text-muted);
+  --color-slate-700: var(--text-primary);
+  --color-slate-800: var(--surface-3);
+  --color-slate-900: var(--surface);
+  --color-slate-950: var(--canvas);
+  --color-indigo-300: var(--accent-text);
+  --color-indigo-500: var(--primary);
+  --color-indigo-600: var(--primary-hover);
+  --color-indigo-700: var(--primary-active);
+  --color-blue-500: var(--primary);
+  --color-blue-600: var(--primary-hover);
+  --color-emerald-300: var(--success);
+  --color-emerald-500: var(--success);
+  --color-emerald-600: var(--success);
+  --color-emerald-700: var(--success);
+  --color-amber-300: var(--warning);
+  --color-amber-500: var(--warning);
+  --color-amber-600: var(--warning);
+  --color-rose-300: var(--danger);
+  --color-rose-400: var(--danger);
+  --color-rose-500: var(--danger);
+  --color-rose-600: var(--danger);
+  --color-red-400: var(--danger);
+  --color-red-500: var(--danger);
+  --color-red-600: var(--danger);
+  --color-cyan-300: var(--evidence-accent);
+  --color-cyan-400: var(--evidence-accent);
+  --color-cyan-500: var(--evidence-accent);
+  --color-cyan-600: var(--evidence-accent);
+  --color-violet-300: var(--accent-text);
+  --color-violet-500: var(--accent-text);
+  --color-violet-600: var(--accent-text);
+  --color-sky-600: var(--accent-text);
+
   --animate-shimmer-slide: shimmer-slide 2s infinite linear;
 
   @keyframes shimmer-slide {

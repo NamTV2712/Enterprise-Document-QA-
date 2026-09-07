@@ -253,6 +253,68 @@ test("a second tab becomes the Library writer after the first tab closes", async
   }
 });
 
+test("backup import previews before creating fresh local records", async ({ page }) => {
+  await setup(page);
+  await openLibrary(page);
+
+  const backup = {
+    format: "enterprise-document-qa.conversations",
+    version: 2,
+    exportedAt: "2026-09-07T00:00:00.000Z",
+    conversations: [{
+      schemaVersion: 4,
+      id: "conversation-import-source",
+      sessionId: "session-import-source",
+      title: "Imported revenue review",
+      titleMode: "custom",
+      revision: 2,
+      createdAt: 1,
+      updatedAt: 2,
+      draft: "",
+      bookmarkedMessageIds: [],
+      messages: [
+        { id: "question-import-source", sender: "user", text: "What was revenue?" },
+        { id: "answer-import-source", sender: "assistant", text: "Revenue was $100B.", status: "completed" },
+      ],
+    }],
+    collections: [],
+  };
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "research-backup.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(backup)),
+  });
+
+  await expect(page.getByRole("dialog", { name: "Review backup before import" })).toBeVisible();
+  await expect(page.getByText("Import creates fresh IDs and does not overwrite existing conversations.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Confirm import" })).toBeVisible();
+  await page.getByRole("button", { name: "Confirm import" }).click();
+
+  await expect(page.getByRole("status").filter({ hasText: "Imported 1" })).toBeVisible();
+  await expect(page.getByText("Imported revenue review")).toBeVisible();
+});
+
+test("guided portfolio route reaches research, retrieval, evaluation, and architecture views", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await setup(page);
+  await askQuestion(page, "What was Apple's total net sales in fiscal year 2025?");
+  await expect(page.getByText(LONG_ANSWER.split("\n")[0]).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open source 1" }).first()).toBeVisible();
+
+  await page.getByRole("button", { name: "Retrieval Lab", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Retrieval Lab" })).toBeVisible();
+  await expect(page.getByText("Provider-free")).toBeVisible();
+
+  await page.getByRole("button", { name: "Evaluation", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Evaluation & experiments" })).toBeVisible();
+  await page.getByRole("combobox", { name: "Evaluation mode" }).selectOption("recorded");
+  await expect(page.getByRole("heading", { name: "Recorded evaluation contract" })).toBeVisible();
+
+  await page.getByRole("button", { name: "System", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "System & provenance" })).toBeVisible();
+  await expect(page.getByText("Provider-free tools")).toBeVisible();
+});
+
 test("closing the help dialog returns focus to its opener", async ({ page }) => {
   await setup(page);
   await page.getByRole("button", { name: "Open help" }).click();

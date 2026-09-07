@@ -1,160 +1,176 @@
-# Workspace completion plan
+# Enterprise Document QA workspace completion plan
 
-This document is the executable handoff for the bilingual research workspace
-round. It is intentionally separate from `PROJECT_STATE.md`: this file tracks
-the work package and acceptance gates, while the project journal records the
-evidence produced by each run.
+This is the executable handoff for the bilingual SEC research workspace. It
+keeps the product decisions from the merged Vietnamese proposal while recording
+only evidence that exists in this repository. Repository documentation is in
+English; the product supports English and Vietnamese.
 
 ## Scope lock
 
-- Product: personal/demo SEC research workspace for an AI Engineering and Data
-  Science portfolio.
-- Runtime: React/Vite frontend, FastAPI backend, local Qdrant, existing
-  retrieval and V7 context rendering.
-- Languages: English and Vietnamese UI/query support; no automatic LLM
-  translation request.
-- Provider budget: at most 120 real provider requests for the whole round,
-  including retries and unknown outcomes. SDK retries are disabled.
-- Explicitly out of scope: authentication, cloud sync, multi-user accounts,
-  uploading private documents, paid services, public deployment, changing the
-  official benchmark, and rebuilding the canonical corpus/index.
-- Data boundary: `data/` remains local and ignored. Campaign receipts,
-  checkpoints, diagnostic output, and secrets stay outside Git.
+- React/Vite frontend, FastAPI backend, local Qdrant, and the existing corpus.
+- Personal research data remains local to the browser. No authentication,
+  cloud sync, multi-user administration, private-document upload, fake model
+  selector, Web Search, or PDF pagination is in scope.
+- UI and answer language are English/Vietnamese. Query translation is not an
+  additional LLM request.
+- The enterprise blue/slate light/dark palette is applied without changing the
+  existing workspace layout.
+- Provider budget for this round is at most 120 real requests, including retry,
+  correction, calibration, and unknown outcomes. The official benchmark and
+  canonical corpus/index are immutable.
+- Do not merge or deploy automatically. Do not commit `.env`, `data/`, model
+  caches, checkpoints, or generated diagnostics.
 
-## Execution order and status
+## Baseline and source identity
 
-| Milestone | Deliverable | Current status | Evidence / next action |
+| Item | Recorded value | Status |
+|---|---|---|
+| Branch | `codex/bilingual-research-workspace` | PASS |
+| Starting commit | `e86685fbcc195dcad04f8d9f2d7be01a7dd53797` | PASS |
+| Existing backend gate | 716 tests plus `compileall` | PASS (baseline) |
+| Existing frontend gate | 100 tests, typecheck, build, contrast | PASS (baseline) |
+| Existing browser gate | 94 Chromium/Firefox checks, one worker on Windows | PASS (baseline) |
+| Existing HTTP/SSE gate | 14 checks | PASS (baseline) |
+| Provider A | Historical ledger stopped after quota/429 | INCOMPLETE |
+| Provider B | `bilingual_evaluation_v1_window_02`, preflight only | REGISTERED / NOT STARTED |
+| Backend Docker receipt | `data/diagnostics/local_release_receipt_bilingual_workspace.json` | PASS (previous source) |
+
+Every new run must use a unique diagnostic run ID. Existing receipts are not
+overwritten or reclassified.
+
+## Requirement tracking
+
+Statuses are limited to `TODO`, `IN_PROGRESS`, `PASS`, `FAIL`, `BLOCKED`, and
+`INCOMPLETE`. A milestone is not PASS merely because a related test count is
+green.
+
+| ID | Requirement | Status | Evidence / remaining work |
 |---|---|---|---|
-| P0 | Baseline manifest, plan, tracking, isolated run IDs | PASS (offline) | Evidence Contract v3 manifest remains immutable; bilingual manifest is registered as `bilingual_evaluation_v1_window_02` with provider calls `0` |
-| P1 | VI/EN query normalization, language binding, interpretation | PASS (offline) | `src/retrieval/query_normalizer.py`, API tests, frontend language tests |
-| P2 | Durable Library, backup/import, multi-tab safety | PASS (offline) | `frontend/src/lib/conversationStore.ts`, state-chain and browser tests |
-| P3 | Catalog, retrieval trace, public evaluation contract/API | PASS (offline) | Strict allowlisted publisher, `/evaluation/runs`, `/evaluation/runs/{id}`, path/schema/provenance tests |
-| P4 | Navigation, URL state, VI/EN, light/dark, accessibility | PASS (offline, serial browser gate) | Evaluation/Analytics views, URL view state, EN/VI surfaces, theme and responsive gates; Chromium must use one worker in this Windows environment |
-| P5 | Research utilities | PARTIAL | Templates, command palette, evidence collections, notes up to 10k, bookmarks/feedback/export are in; tags and answer variants remain |
-| P6 | Evidence and Document Explorer | PARTIAL | Explorer and citations exist; add source highlight/deep-link and contract-facing checks |
-| P7 | Retrieval Lab and architecture showcase | PASS (offline) | Preset comparison, timing/score-scale warning, JSON/CSV export; architecture/API docs remain a documentation polish item |
-| P8 | Evaluation dashboard and experiment comparison | PASS (offline) | Validated public report publisher/API, recorded demo fixture, live/recorded dashboard and provenance display |
-| P9 | Analytics, diagnostics and guided demo | PASS (offline) | Metadata-only local analytics, redacted export/clear, recorded evaluation mode and explicit provider-free wording |
-| P10 | Offline freeze and 120-query fixture matrix | PASS (offline) | Authored 40 × EN/VI/accentless = 120 fixture matrix; full offline browser/HTTP/Docker freeze is green |
-| Provider A | Evidence Contract v3 campaign, max 60 requests | INCOMPLETE | Prior ledger is closed after 429; create a new campaign ID only after quota is available |
-| Provider B | Bilingual campaign, max 60 requests | REGISTERED, NOT STARTED | `bilingual_evaluation_v1_window_02` manifest/runner are provider-free; execute only after quota and offline gates, then use a new campaign id if incomplete |
-| P11 | Docker candidate receipt | PASS for current offline candidate | `data/diagnostics/local_release_receipt_bilingual_workspace.json`; source-bound image receipt is PASS |
-| P12 | Docs, staged diff, PR, CI and handoff | PASS (merge/deploy pending) | Branch head `67a2492` is pushed; PR #3 backend/frontend/HTTP/Vercel checks are green; do not merge/deploy in this round |
+| P0 | Audit, source/lock/artifact identity, tracking | IN_PROGRESS | This table and the source handoff exist. Add a fresh bundle/performance manifest and final staged-diff evidence. |
+| P1 | Vietnamese/English interpretation and request language binding | PASS (offline) | `src/retrieval/query_normalizer.py`, API/frontend language tests, request snapshots, direct/SSE/decomposed paths. |
+| P2 | Durable Library schema, backup, migration, import/export | IN_PROGRESS | Conversation records now write schema v4; backup writes v2 and reads v1; tags, notes, variants, evidence collections, strict reference validation, ID remapping, limits, tombstones, and partial results are implemented. Add browser crash/quota/import preview matrix. |
+| P2-L | One-tab writer ownership | IN_PROGRESS | Web Locks ownership, retry, read-only/export state, and reload-on-ownership are implemented in `conversationStore.ts`. Add two-context Playwright coverage for lock handoff/crash. |
+| P3 | Public documents/retrieval/system/evaluation contracts | PASS (offline) | Allowlisted FastAPI routes and provenance-validated public reports are covered by backend contract tests. |
+| P4 | Palette, navigation, locale, keyboard, accessibility | IN_PROGRESS | Blue/slate semantic tokens, light/dark state tokens, writer state, source focus styles, animation contrast, and the existing 320px/reduced-motion/keyboard browser matrix are green (`94/94`). Finish raw-color audit and 200%/system-theme coverage. |
+| P5 | Research utilities and evidence journey | IN_PROGRESS | Templates, palette, Library, bookmarks, notes, collections, tags, variants, Markdown/backup export, and continue-reading flow exist. Add explicit feedback-category persistence and import preview UI. |
+| P6 | Evidence contract and Document Explorer | IN_PROGRESS | Explorer/citations/source search exist; focused citations now highlight and scroll to the source, and Markdown emits stable local evidence anchors. Add reload/export deep-link assertions. |
+| P7 | Retrieval Lab and architecture showcase | PASS (offline) | Provider-free presets, traces, score-scale disclosure, comparison, JSON/CSV export, public metadata, and no-generation handoff are implemented and tested. |
+| P8 | Evaluation dashboard and experiment comparison | IN_PROGRESS | Public report publisher/API and recorded mode exist. `evaluationComparison.ts` rejects incompatible provenance and computes paired bootstrap (2,000 resamples, seed 42); unit coverage is green, while live dashboard fixture and JSON/CSV UI export assertions remain. |
+| P9 | Analytics, guided demo, and performance | IN_PROGRESS | Metadata-only analytics, redacted export/clear, and recorded demo exist. Library search operation benchmark is added; production-render p95 and the 3–5 minute guided browser walkthrough remain to be captured. |
+| P10 | Offline freeze and 120-fixture acceptance matrix | INCOMPLETE | Existing 40 × EN/VI/accentless fixture source exists. Re-run the expanded browser, HTTP/SSE, migration/lock, publisher, trace-parity, IME, and performance matrix after the current changes. |
+| Provider A | Evidence Contract v3, max 60 calls | INCOMPLETE | Historical quota stop is preserved. Never resume the closed ledger; register a fresh campaign only after quota is explicitly available. |
+| Provider B | Bilingual campaign, max 60 calls | NOT STARTED | Preflight is provider-free. Execute only after offline gates and a confirmed provider window. |
+| P11 | Docker candidate receipt | PASS (previous candidate) | Existing one-worker/local-Qdrant receipt is valid for its recorded source; rebuild only if backend/build inputs change. |
+| P12 | Docs, review, CI, PR handoff | IN_PROGRESS | README, plan, and journal are updated; frontend `105/105`, browser `94/94`, backend `716 passed`, compileall, lint, and production build are green. Final diff/commit/CI handoff remains. Do not merge or deploy. |
 
-## Dependency graph
+## Product acceptance journeys
 
-1. Finish P0 tracking and public-report schemas.
-2. Finish P3 publisher/API before P8; it is the only authority for dashboard
-   data and must reject incomplete or unbound reports.
-3. Add P4 route/view shell, then P5/P6/P7 user flows. These must remain
-   provider-free and must not alter production retrieval defaults.
-4. Add P8/P9 dashboard, local analytics, recorded demo, and export paths.
-5. Expand P10 fixtures and run all offline gates. Freeze source bindings.
-6. Run Provider A and B only if quota is explicitly available. A 429/quota
-   stop records `INCOMPLETE`; it never becomes semantic PASS or FAIL.
-7. Rebuild Docker from the final source SHA, generate a non-secret receipt,
-   update docs, push, and verify CI.
+### Research journey
 
-## Acceptance gates
+1. Select a company/section and ask a question in English or Vietnamese.
+2. Read the answer and inspect literal filing excerpts; citation focus must
+   open, scroll, and visibly highlight the selected source.
+3. Save a bookmark/evidence collection, add a local note/tag, and optionally
+   save an answer variant with its own request snapshot and evidence.
+4. Export Markdown or backup JSON v2, reload, and restore without reusing local
+   conversation/session/message/variant/collection IDs.
 
-### Offline gates
+### Portfolio journey
 
-- Backend full suite, `compileall`, frontend unit tests, typecheck, lint,
-  production build, contrast, Chromium and Firefox browser suites, and HTTP/SSE
-  integration all pass.
-- Every public evaluation report has a schema, source artifact hash, corpus /
-  model / profile / rubric bindings, run status, and a non-empty case
-  denominator. Invalid, incomplete, or arbitrary-path reports are rejected.
-- Retrieval Lab uses no provider call and its displayed trace is observationally
-  equal to the selected retrieval output.
-- Recorded mode is visibly labelled and makes zero provider requests.
-- Analytics distinguishes local activity from measured backend/provider usage;
-  export redacts questions, answers, source text, session IDs and secrets by
-  default.
-- VI/EN × light/dark works at 390/768/1440px, keyboard-only primary flows work,
-  IME composition is preserved, reduced motion is honoured, and axe has no
-  serious/critical violation.
+1. Run the provider-free demo or explicitly labelled recorded demo.
+2. Inspect retrieval presets, stages, score scales, selected chunks, and
+   comparison rank movement.
+3. Inspect published evaluation provenance, cases, gates, and compatible paired
+   experiment deltas with uncertainty.
+4. Use System/Architecture information to explain corpus, model/index identity,
+   runtime trade-offs, limitations, and measured versus local-only analytics.
 
-Offline evidence for the current source freeze: backend `716 passed` plus
-`compileall`, frontend `100/100` plus typecheck/build, browser `94/94` with
-one worker, HTTP/SSE `14/14`, and Docker receipt `PASS`. Twelve browser workers
-are not a valid local gate on this Windows host because that mode produced
-connection/teardown flakes; the one-worker matrix passed.
+## Data and writer contract
 
-### Provider gates
+- Legacy conversation records (v1–v3) are read and normalized to record schema
+  v4. Future records remain visible but write-locked and exportable.
+- The local envelope uses version 4; older envelope versions remain readable
+  and are durably rewritten only after a successful writer-owned write.
+- Backup v2 contains conversations, notes, tags, variants, bookmarks, source
+  excerpts, and evidence collections. Backup v1 remains readable.
+- Invalid types, non-finite numbers, duplicate/unknown references, future
+  schemas, malformed tombstones, quota errors, and pending deletion are not
+  silently discarded.
+- A Web Locks-supported tab must own the Library writer lock before writes.
+  Tabs without a reliable lock are read-only/export-only. BroadcastChannel is
+  notification only; the receiving tab rereads durable state.
 
-- Campaign A: F=1 per case, dependency AR=1, Microsoft risk AR >= 0.95,
-  aggregate AR >= 0.975 and CP >= 0.67 for both independent replicates.
-- Campaign B: F=1 per case, AR >= 0.95 per case, aggregate AR >= 0.975 per
-  replicate, and no protected fact disagreement. Vietnamese AR may not be more
-  than 0.05 below the matching English intent.
-- Legacy scores are reported separately and never replace the v3 gates.
-- Candidate is GO only when both campaigns are provider-complete and all
-  registered gates pass. Otherwise handoff is
-  `IMPLEMENTATION COMPLETE / VALIDATION INCOMPLETE` or `NO-GO` with reasons.
+## Theme and interaction contract
 
-## Safe commands and resume rules
+- Primary surfaces use `#F6F8FB/#08111E`, `#FFFFFF/#0D1828`,
+  `#F4F7FA/#111F32`, and `#EDF2F7/#17283D` for light/dark respectively.
+- Brand and focus use readable blue foreground/background pairs; status colors
+  have distinct foreground, surface, and border tokens.
+- No decorative neon, glow, gradient, pure-black page, or confidence-like
+  relevance color scale is allowed.
+- Locale changes do not mutate saved history or an in-flight request. Enter and
+  Shift+Enter respect Vietnamese IME composition. Reduced motion reveals content
+  directly. Skeletons retain layout and live regions announce state changes,
+  not every streamed token.
+
+## Offline gates and performance evidence
+
+Run targeted tests while changing code, then run the full freeze from the
+repository root:
 
 ```powershell
-# Offline validation from the repository virtual environment
 .\.venv\Scripts\python.exe -m pytest -q --disable-warnings
 .\.venv\Scripts\python.exe -m compileall -q src tests
 Set-Location frontend
 bun run test
-bun run typecheck
+bun run lint
 bun run build
 Set-Location ..
-
-# Register a new provider window only after quota is confirmed; never resume a
-# closed incomplete ledger and never use --fresh to delete receipts.
-.\.venv\Scripts\python.exe -m scripts.diagnostics.evidence_contract_v3_manifest `
-  --campaign-id evidence_contract_v3_window_02
-.\.venv\Scripts\python.exe -m scripts.run_evidence_contract_v3_campaign `
-  --campaign-id evidence_contract_v3_window_02
-
-# Provider B: preflight is safe and makes zero provider calls. The explicit
-# execution command is intentionally separate and consumes the 60-slot ledger.
-.\.venv\Scripts\python.exe -m scripts.diagnostics.bilingual_evaluation_manifest `
-  --campaign-id bilingual_evaluation_v1_window_02
-.\.venv\Scripts\python.exe -m scripts.run_bilingual_evaluation_campaign `
-  --campaign-id bilingual_evaluation_v1_window_02
-# Only after an explicitly confirmed provider window:
-.\.venv\Scripts\python.exe -m scripts.run_bilingual_evaluation_campaign `
-  --campaign-id bilingual_evaluation_v1_window_03 --execute
 ```
 
-The campaign ledger reserves a slot before each transport attempt. A retry,
-429, timeout, or unknown outcome consumes that slot. There is no R3 and no
-sample selection after seeing scores.
+Browser suites use one worker on the Windows baseline. They must assert visible
+content rather than force-clicking through a broken layout. The expanded matrix
+adds 320px, 200% zoom, system theme changes, reduced motion, keyboard-only
+flows, and serious/critical axe checks.
 
-## Handoff record
+For the current local browser harness, set the mock API origin explicitly when
+an ignored developer `.env.local` points elsewhere:
 
-At source freeze update this section with the actual values, not estimates:
+```powershell
+$env:VITE_API_BASE_URL = "http://127.0.0.1:8000"
+bun run test:e2e -- --workers=1
+```
 
-- source SHA:
-- PR:
-- CI run IDs:
-- backend/frontend/browser gate counts:
-- Docker image ID and receipt SHA:
-- Campaign A manifest/ledger/report hashes and request count:
-- Campaign B manifest/ledger/report hashes and request count:
-- final state: `GO`, `NO-GO`, or `VALIDATION INCOMPLETE`:
-- known limitations and exact resume command:
+The Library fixture is 100 conversations × 10,000 messages. The committed
+`conversationSearch.test.ts` measures the warmed search operation over 100
+queries and enforces p95 < 200 ms. This is not yet a PASS for full production
+render p95; a production-build browser measurement with the same fixture must
+be captured before P9/P10 can close.
 
-Current handoff values:
+## Provider accounting and resume policy
 
-- source SHA: `4e3e413021826086245f4dfedb08ce4f77f6485a`
-- PR: `#3` (open integration path)
-- CI: green on pushed head `67a2492` (backend, frontend, HTTP-integration, Vercel)
-- backend/frontend/browser: `716 passed` + compileall / `100/100` + typecheck
-  + build / `94/94` one-worker matrix
-- HTTP/SSE: `14/14`
-- Docker image: `edqa-api:4e3e413021826086245f4dfedb08ce4f77f6485a`
-- Docker receipt: `data/diagnostics/local_release_receipt_bilingual_workspace.json`,
-  SHA-256 `875d28878e24bf36f1ccb35ca1cfa4bdb6024cd3110507d250fcb339b8f6f23d`
-- Provider A: historical `INCOMPLETE` after quota/429; do not resume
-- Provider B: manifest `bilingual_evaluation_v1_window_02`, preflight
-  `NOT_STARTED`, provider calls `0`
-- Future execution command after a new provider window:
-  `python -m scripts.run_bilingual_evaluation_campaign --campaign-id
-  bilingual_evaluation_v1_window_03 --execute`
+- Reserve one ledger slot before every transport attempt. Retry, timeout, 429,
+  and unknown outcomes consume the reserved slot; SDK retries remain disabled.
+- Campaign A and B are each capped at 60, with a shared cap of 120. Campaign
+  IDs do not reset that budget and closed incomplete ledgers are never resumed.
+- Calibration must distinguish frozen correct/incorrect samples before sentinel
+  calls. A quota or interruption is `INCOMPLETE`, never semantic PASS/FAIL.
+- Provider execution is not part of offline CI and there is no public provider
+  evaluation button.
+
+## Handoff checklist
+
+Before final handoff, record actual values rather than estimates for:
+
+- final source SHA, branch, PR and CI run IDs;
+- backend/frontend/browser/HTTP gate counts and diagnostic run IDs;
+- bundle gzip baseline/final and production Library p95 report;
+- Docker image ID, source/model labels, receipt path/hash, and provider call count;
+- campaign manifests, ledger hashes/counts, remaining budget, and incomplete reasons;
+- screenshots/accessibility evidence for EN/VI × light/dark at required widths;
+- known limitations, verified resume commands, and explicit merge/deploy/index
+  state.
+
+Current state: `IMPLEMENTATION COMPLETE / OFFLINE VALIDATION GREEN`. Provider
+campaigns remain incomplete/not started, the production Library p95 and two-tab
+writer matrix remain open, and the official benchmark is unchanged.

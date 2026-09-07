@@ -1,6 +1,6 @@
 # Project State
 
-## Bilingual research workspace and local portability round — IMPLEMENTATION COMPLETE / VALIDATION INCOMPLETE (2026-09-07)
+## Bilingual research workspace and local portability round — IMPLEMENTATION COMPLETE / OFFLINE VALIDATION GREEN (2026-09-07)
 
 This round is implemented on `codex/bilingual-research-workspace` from
 `main` at `108e729`, source commit `4e3e413021826086245f4dfedb08ce4f77f6485a`.
@@ -60,11 +60,14 @@ Completed in the current working tree:
 - Added the 40-case × English/Vietnamese/accentless authored query matrix
   (120 variants), public report tests, campaign manifest/ledger tests, and an
   architecture/API guide.
-- The final offline verification for this round is green: frontend
-  typecheck/lint, `100/100` unit tests, production build, and light/dark
-  contrast; Chromium + Firefox browser matrix `94/94` using one worker per
-  browser on this Windows host; real HTTP/SSE integration `14/14`; and
-  backend full suite `716 passed` + compileall.
+- The pre-existing baseline for this round was `100/100` frontend tests. The
+  post-change offline verification is green: frontend typecheck/lint,
+  `105/105` unit tests across `19/19` files, production build, and light/dark
+  contrast; Chromium + Firefox browser matrix `94/94` using one worker on this
+  Windows host; backend full suite `716 passed` with `121` warnings plus
+  compileall. The provider-free browser harness required an explicit
+  `VITE_API_BASE_URL=http://127.0.0.1:8000` override because the ignored local
+  environment file points at a deployed URL.
 - Docker release preflight is `PASS`, the pinned image builds successfully,
   Compose readiness reports 50 searchable companies and 10,053 chunks, the
   new `/documents` catalog reports 50 loaded filings, and `/system/info`
@@ -83,6 +86,33 @@ data/index rebuild has been made in this round. The earlier incomplete
 Evidence Contract v3 ledger remains historical and must not be resumed; after
 quota recovery create fresh campaign IDs for Provider A and Provider B, run
 the preflight first, then execute only within the registered request budget.
+
+## Current working-tree milestone — local Library v4 and evidence UX (2026-09-07)
+
+This working tree extends the bilingual workspace without changing backend
+retrieval defaults, the canonical corpus, index artifacts, or provider ledgers.
+
+- Conversation persistence now normalizes schema v1–v3 to schema v4, adds
+  bounded tags, conversation notes, and saved answer variants, and keeps
+  malformed/future records write-locked rather than silently repairing them.
+- Backup JSON is version 2, remains compatible with version 1, validates
+  request snapshots/references/limits, remaps imported identities, and carries
+  evidence collections with fresh collection/item IDs. Markdown evidence
+  headings expose stable local source anchors for citation focus.
+- Web Locks writer ownership is required for durable Library writes in capable
+  browsers; non-owning tabs remain read/export-only and retry ownership after
+  the writer is released. BroadcastChannel remains notification-only.
+- The Light/Dark workspace palette now uses blue/slate semantic tokens and the
+  browser gate covers keyboard theme selection, reduced motion, responsive
+  widths, persistence, and WCAG serious/critical contrast.
+- Retrieval Lab experiment comparison now rejects incompatible provenance and
+  reports paired bootstrap deltas with `2,000` resamples and seed `42`.
+
+Remaining evidence gaps are deliberately not marked PASS: two-context Web Lock
+handoff/crash coverage, production-render p95 for the 100-conversation search
+fixture, the full 120-variant acceptance freeze, Provider A/B execution, and a
+new Docker receipt for this frontend-only working tree. No provider call, merge,
+deploy, or corpus/index rebuild was made.
 
 ## Current Milestone
 

@@ -13,10 +13,12 @@ import {
 import {
   ConversationRecord,
   ConversationStorageMode,
+  WriterStatus,
 } from "../lib/conversationStore";
 import { ConversationImportResult, SaveIndicator } from "../hooks/useConversationLibrary";
 import { Locale, normalizeLocaleSearch, useLocale } from "../lib/i18n";
 import { createEvidenceCollection, listEvidenceCollections, EvidenceCollection } from "../lib/evidenceCollections";
+import { searchConversationRecords } from "../lib/conversationSearch";
 
 interface ConversationLibraryProps {
   conversations: ConversationRecord[];
@@ -31,6 +33,9 @@ interface ConversationLibraryProps {
   onExport: (conversation: ConversationRecord) => void;
   onExportBackup?: () => void;
   onImportBackup?: (file: File) => Promise<ConversationImportResult>;
+  onUpdateMetadata?: (conversationId: string, patch: { tags?: string[]; notes?: ConversationRecord["notes"] }) => Promise<unknown>;
+  writerStatus?: WriterStatus;
+  onRequestWriter?: () => Promise<WriterStatus>;
   /** Open a conversation and focus one bookmarked answer. */
   onOpenMessage?: (conversationId: string, messageId: string) => void;
   onClose: () => void;
@@ -100,6 +105,9 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
   onExport,
   onExportBackup,
   onImportBackup,
+  onUpdateMetadata,
+  writerStatus,
+  onRequestWriter,
   onOpenMessage,
   onClose,
 }) => {
@@ -112,6 +120,8 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
   const [backupStatus, setBackupStatus] = useState<string | null>(null);
   const [collections, setCollections] = useState<EvidenceCollection[]>(listEvidenceCollections);
   const [collectionName, setCollectionName] = useState("");
+  const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({});
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const importInputRef = useRef<HTMLInputElement>(null);
   const normalizedSearch = normalizeLocaleSearch(search.trim());
 
@@ -150,24 +160,9 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
   };
 
   const filteredConversations = useMemo(
-    () =>
-      conversations.filter((conversation) => {
-        const matchesSearch = normalizedSearch
-          ? `${conversation.title} ${conversation.messages
-              .map((message) => message.text)
-              .join(" ")}`
-              .normalize("NFD")
-              .replace(/[\u0300-\u036f]/g, "")
-              .replace(/đ/g, "d")
-              .replace(/Đ/g, "D")
-              .toLocaleLowerCase(locale)
-              .includes(normalizedSearch)
-          : true;
-        const matchesBookmark = bookmarkedOnly
-          ? conversation.bookmarkedMessageIds.length > 0
-          : true;
-        return matchesSearch && matchesBookmark;
-      }),
+    () => searchConversationRecords(conversations, normalizedSearch).filter((conversation) =>
+      bookmarkedOnly ? conversation.bookmarkedMessageIds.length > 0 : true,
+    ),
     [bookmarkedOnly, conversations, normalizedSearch],
   );
 
@@ -185,6 +180,23 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
     const title = editingTitle.trim().replace(/\s+/g, " ").slice(0, 80);
     if (title && title !== conversation.title) onRename(conversation.id, title);
     setEditingId(null);
+  };
+
+  const commitTags = (conversation: ConversationRecord, raw: string) => {
+    if (!onUpdateMetadata) return;
+    const tags = Array.from(new Set(raw.split(",").map((tag) => tag.trim().replace(/\s+/g, " ")).filter(Boolean))).slice(0, 10);
+    void onUpdateMetadata(conversation.id, { tags });
+  };
+
+  const commitNote = (conversation: ConversationRecord, raw: string) => {
+    if (!onUpdateMetadata) return;
+    const text = raw.slice(0, 10_000);
+    const now = Date.now();
+    const existing = conversation.notes?.[0];
+    const notes = text
+      ? [{ id: existing?.id ?? `note-${now}`, text, createdAt: existing?.createdAt ?? now, updatedAt: now }]
+      : [];
+    void onUpdateMetadata(conversation.id, { notes });
   };
 
   return (
@@ -211,6 +223,19 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
         </p>
       )}
       {storageWarning && <p className="library-warning">{storageWarning}</p>}
+      {writerStatus?.readOnly && (
+        <div className="library-warning" role="status">
+          <strong>{locale === "vi" ? "Chế độ chỉ đọc" : "Read-only mode"}</strong>{" "}
+          {writerStatus.reason === "unsupported"
+            ? locale === "vi" ? "Trình duyệt không hỗ trợ Web Locks; bạn vẫn có thể đọc và xuất dữ liệu." : "This browser has no Web Locks; you can still read and export your data."
+            : locale === "vi" ? "Một tab khác đang giữ quyền ghi Library." : "Another tab currently owns the Library writer lock."}
+          {onRequestWriter && writerStatus.reason === "busy" && (
+            <button type="button" className="ml-2 underline" onClick={() => void onRequestWriter()}>
+              {locale === "vi" ? "Lấy lại quyền ghi" : "Request writer access"}
+            </button>
+          )}
+        </div>
+      )}
 
       <label className="library-search">
         <Search className="h-4 w-4" aria-hidden="true" />
@@ -364,6 +389,32 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
                     {conversation.messages.length} messages · {relativeTime(conversation.updatedAt, locale)}
                   </span>
                 </button>
+              )}
+
+              {onUpdateMetadata && !conversation.deletionPending && (
+                <div className="library-metadata-editor">
+                  <label>
+                    <span>{locale === "vi" ? "Tags" : "Tags"}</span>
+                    <input
+                      value={tagDrafts[conversation.id] ?? (conversation.tags ?? []).join(", ")}
+                      onChange={(event) => setTagDrafts((current) => ({ ...current, [conversation.id]: event.target.value }))}
+                      onBlur={(event) => commitTags(conversation, event.target.value)}
+                      placeholder={locale === "vi" ? "tag1, tag2" : "tag1, tag2"}
+                      aria-label={locale === "vi" ? `Tags cho ${conversation.title}` : `Tags for ${conversation.title}`}
+                    />
+                  </label>
+                  <label>
+                    <span>{locale === "vi" ? "Ghi chú cuộc trò chuyện" : "Conversation note"}</span>
+                    <textarea
+                      value={noteDrafts[conversation.id] ?? (conversation.notes?.[0]?.text ?? "")}
+                      onChange={(event) => setNoteDrafts((current) => ({ ...current, [conversation.id]: event.target.value.slice(0, 10_000) }))}
+                      onBlur={(event) => commitNote(conversation, event.target.value)}
+                      maxLength={10_000}
+                      rows={2}
+                      aria-label={locale === "vi" ? `Ghi chú cho ${conversation.title}` : `Note for ${conversation.title}`}
+                    />
+                  </label>
+                </div>
               )}
 
               {conversation.deletionPending && (

@@ -180,6 +180,28 @@ export interface RequestSnapshot {
   answerLanguage: AnswerLanguage;
 }
 
+export interface ConversationNote {
+  id: string;
+  text: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type AnswerVariantStatus = "completed" | "stopped" | "error";
+
+/** A saved answer alternative with its own evidence and request provenance. */
+export interface AnswerVariant {
+  id: string;
+  originMessageId: string;
+  text: string;
+  sources: Source[];
+  requestSnapshot?: RequestSnapshot;
+  answerLanguage: AnswerLanguage;
+  status: AnswerVariantStatus;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface QueryResponse {
   answer: string;
   model_used: string;

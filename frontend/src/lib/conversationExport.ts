@@ -2,8 +2,15 @@ import {
   ConversationRecord,
   CONVERSATION_SCHEMA_VERSION,
   MAX_CONVERSATIONS,
+  MAX_NOTE_LENGTH,
+  MAX_NOTES_PER_CONVERSATION,
+  MAX_TAGS_PER_CONVERSATION,
+  MAX_TAG_LENGTH,
+  MAX_VARIANTS_PER_CONVERSATION,
   normalizeStoredMessages,
 } from "./conversationStore";
+import { EvidenceCollection, exportEvidenceCollections, importEvidenceCollections } from "./evidenceCollections";
+import { AnswerVariant, ConversationNote, Source } from "../types";
 
 function escapeMarkdown(value: string): string {
   return value.replace(/\r\n/g, "\n").trim();
@@ -52,7 +59,7 @@ export function conversationToMarkdown(conversation: ConversationRecord): string
       lines.push("### Retrieved filing evidence", "");
       message.sources.forEach((source, index) => {
         lines.push(
-          `#### [Source ${index + 1}] ${escapeMarkdown(source.citation)}`,
+          `#### <a id="evidence-${message.id}-${index}"></a>[Source ${index + 1}] ${escapeMarkdown(source.citation)}`,
           "",
           `Rank score: ${source.score}`,
           "",
@@ -82,14 +89,22 @@ export function downloadConversationMarkdown(conversation: ConversationRecord): 
 }
 
 export const CONVERSATION_BACKUP_FORMAT = "enterprise-document-qa.conversations";
-export const CONVERSATION_BACKUP_VERSION = 1;
+export const CONVERSATION_BACKUP_VERSION = 2;
+export const LEGACY_CONVERSATION_BACKUP_VERSION = 1;
 export const MAX_BACKUP_BYTES = 25 * 1024 * 1024;
 
 export interface ConversationBackup {
   format: typeof CONVERSATION_BACKUP_FORMAT;
-  version: typeof CONVERSATION_BACKUP_VERSION;
+  version: typeof CONVERSATION_BACKUP_VERSION | typeof LEGACY_CONVERSATION_BACKUP_VERSION;
   exportedAt: string;
   conversations: ConversationRecord[];
+  collections?: EvidenceCollection[];
+}
+
+export interface ConversationBackupBundle {
+  conversations: ConversationRecord[];
+  collections: EvidenceCollection[];
+  version: number;
 }
 
 function createImportId(prefix: string): string {
@@ -101,6 +116,24 @@ function createImportId(prefix: string): string {
 
 function isFiniteTimestamp(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
+}
+
+function isImportedRequestSnapshot(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const snapshot = value as {
+    ticker?: unknown;
+    section?: unknown;
+    topK?: unknown;
+    enableComparative?: unknown;
+    answerLanguage?: unknown;
+  };
+  return (
+    (snapshot.ticker === null || typeof snapshot.ticker === "string") &&
+    (snapshot.section === null || typeof snapshot.section === "string") &&
+    typeof snapshot.topK === "number" && Number.isInteger(snapshot.topK) && snapshot.topK >= 1 &&
+    typeof snapshot.enableComparative === "boolean" &&
+    (snapshot.answerLanguage === "en" || snapshot.answerLanguage === "vi")
+  );
 }
 
 function isImportedMessage(value: unknown): boolean {
@@ -130,7 +163,7 @@ function isImportedMessage(value: unknown): boolean {
       }));
   const validSnapshot =
     message.requestSnapshot === undefined ||
-    (Boolean(message.requestSnapshot) && typeof message.requestSnapshot === "object");
+    isImportedRequestSnapshot(message.requestSnapshot);
   return (
     typeof message.id === "string" &&
     message.id.length > 0 &&
@@ -148,6 +181,34 @@ function isImportedMessage(value: unknown): boolean {
   );
 }
 
+function isImportedSource(value: unknown): value is Source {
+  if (!value || typeof value !== "object") return false;
+  const source = value as Partial<Source>;
+  return typeof source.citation === "string" &&
+    typeof source.text_preview === "string" &&
+    typeof source.score === "number" && Number.isFinite(source.score);
+}
+
+function isImportedNote(value: unknown): value is ConversationNote {
+  if (!value || typeof value !== "object") return false;
+  const note = value as Partial<ConversationNote>;
+  return typeof note.id === "string" && typeof note.text === "string" &&
+    note.text.length <= MAX_NOTE_LENGTH && isFiniteTimestamp(note.createdAt) &&
+    isFiniteTimestamp(note.updatedAt);
+}
+
+function isImportedVariant(value: unknown): value is AnswerVariant {
+  if (!value || typeof value !== "object") return false;
+  const variant = value as Partial<AnswerVariant>;
+  return typeof variant.id === "string" && typeof variant.originMessageId === "string" &&
+    typeof variant.text === "string" && Array.isArray(variant.sources) &&
+    variant.sources.every(isImportedSource) &&
+    (variant.answerLanguage === "en" || variant.answerLanguage === "vi") &&
+    (variant.status === "completed" || variant.status === "stopped" || variant.status === "error") &&
+    (variant.requestSnapshot === undefined || isImportedRequestSnapshot(variant.requestSnapshot)) &&
+    isFiniteTimestamp(variant.createdAt) && isFiniteTimestamp(variant.updatedAt);
+}
+
 function normalizeImportedRecord(value: unknown): ConversationRecord | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<ConversationRecord>;
@@ -159,12 +220,23 @@ function normalizeImportedRecord(value: unknown): ConversationRecord | null {
     (candidate.draft !== undefined && typeof candidate.draft !== "string") ||
     (candidate.bookmarkedMessageIds !== undefined &&
       (!Array.isArray(candidate.bookmarkedMessageIds) ||
-        !candidate.bookmarkedMessageIds.every((id) => typeof id === "string")))
+        !candidate.bookmarkedMessageIds.every((id) => typeof id === "string"))) ||
+    (candidate.tags !== undefined &&
+      (!Array.isArray(candidate.tags) || candidate.tags.length > MAX_TAGS_PER_CONVERSATION ||
+        !candidate.tags.every((tag) => typeof tag === "string" && tag.trim().length <= MAX_TAG_LENGTH))) ||
+    (candidate.notes !== undefined &&
+      (!Array.isArray(candidate.notes) || candidate.notes.length > MAX_NOTES_PER_CONVERSATION ||
+        !candidate.notes.every(isImportedNote))) ||
+    (candidate.variants !== undefined &&
+      (!Array.isArray(candidate.variants) || candidate.variants.length > MAX_VARIANTS_PER_CONVERSATION ||
+        !candidate.variants.every(isImportedVariant)))
   ) {
     return null;
   }
 
   const sourceMessages = normalizeStoredMessages(candidate.messages);
+  const sourceMessageIds = sourceMessages.map((message) => message.id);
+  if (new Set(sourceMessageIds).size !== sourceMessageIds.length) return null;
   const messageIds = new Map<string, string>();
   const messages = sourceMessages.map((message) => {
     const nextId = createImportId("message-import");
@@ -175,11 +247,20 @@ function normalizeImportedRecord(value: unknown): ConversationRecord | null {
   const createdAt = isFiniteTimestamp(candidate.createdAt) ? candidate.createdAt : now;
   const updatedAt = isFiniteTimestamp(candidate.updatedAt) ? candidate.updatedAt : createdAt;
   const title = candidate.title.trim().replace(/\s+/g, " ").slice(0, 80) || "Untitled conversation";
-  const bookmarks = (candidate.bookmarkedMessageIds ?? [])
-    .map((id) => messageIds.get(id))
-    .filter((id): id is string =>
-      Boolean(id && messages.some((message) => message.id === id && message.sender === "assistant")),
-    );
+  const assistantSourceIds = new Set(sourceMessages.filter((message) => message.sender === "assistant").map((message) => message.id));
+  if ((candidate.bookmarkedMessageIds ?? []).some((id) => !assistantSourceIds.has(id))) return null;
+  const bookmarks = (candidate.bookmarkedMessageIds ?? []).map((id) => messageIds.get(id) as string);
+  const variants: AnswerVariant[] = [];
+  for (const variant of candidate.variants ?? []) {
+    const originMessageId = messageIds.get(variant.originMessageId);
+    if (!originMessageId || !assistantSourceIds.has(variant.originMessageId)) return null;
+    variants.push({
+      ...variant,
+      id: createImportId("variant-import"),
+      originMessageId,
+      sources: variant.sources.map((source) => ({ ...source })),
+    });
+  }
 
   return {
     schemaVersion: CONVERSATION_SCHEMA_VERSION,
@@ -193,17 +274,28 @@ function normalizeImportedRecord(value: unknown): ConversationRecord | null {
     messages,
     draft: candidate.draft ?? "",
     bookmarkedMessageIds: bookmarks,
+    tags: Array.from(new Set((candidate.tags ?? []).map((tag) => tag.trim().replace(/\s+/g, " ")))).slice(0, MAX_TAGS_PER_CONVERSATION),
+    notes: (candidate.notes ?? []).map((note) => ({ ...note, id: createImportId("note-import") })),
+    variants,
   };
 }
 
-export function conversationsToJson(conversations: ConversationRecord[]): string {
+export function conversationsToJson(
+  conversations: ConversationRecord[],
+  collections: EvidenceCollection[] = exportEvidenceCollections(),
+): string {
   const backup: ConversationBackup = {
     format: CONVERSATION_BACKUP_FORMAT,
     version: CONVERSATION_BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
     conversations: conversations.map(({ deletionPending: _deletionPending, ...record }) => record),
+    collections,
   };
-  return `${JSON.stringify(backup, null, 2)}\n`;
+  const text = `${JSON.stringify(backup, null, 2)}\n`;
+  if (new TextEncoder().encode(text).byteLength > MAX_BACKUP_BYTES) {
+    throw new Error("The backup is larger than the 25 MiB export limit.");
+  }
+  return text;
 }
 
 export function downloadConversationBackup(conversations: ConversationRecord[]): void {
@@ -218,7 +310,7 @@ export function downloadConversationBackup(conversations: ConversationRecord[]):
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-export function parseConversationBackup(text: string): ConversationRecord[] {
+export function parseConversationBackupBundle(text: string): ConversationBackupBundle {
   if (new TextEncoder().encode(text).byteLength > MAX_BACKUP_BYTES) {
     throw new Error("The backup is larger than the 25 MiB import limit.");
   }
@@ -234,7 +326,7 @@ export function parseConversationBackup(text: string): ConversationRecord[] {
   const candidate = parsed as Partial<ConversationBackup>;
   if (
     candidate.format !== CONVERSATION_BACKUP_FORMAT ||
-    candidate.version !== CONVERSATION_BACKUP_VERSION ||
+    (candidate.version !== CONVERSATION_BACKUP_VERSION && candidate.version !== LEGACY_CONVERSATION_BACKUP_VERSION) ||
     typeof candidate.exportedAt !== "string"
   ) {
     throw new Error("This backup format is not supported by the current app.");
@@ -246,5 +338,15 @@ export function parseConversationBackup(text: string): ConversationRecord[] {
   if (records.some((record) => record === null)) {
     throw new Error("The backup contains an invalid conversation or message.");
   }
-  return records as ConversationRecord[];
+  return {
+    conversations: records as ConversationRecord[],
+    collections: candidate.version === CONVERSATION_BACKUP_VERSION
+      ? importEvidenceCollections(candidate.collections)
+      : [],
+    version: candidate.version,
+  };
+}
+
+export function parseConversationBackup(text: string): ConversationRecord[] {
+  return parseConversationBackupBundle(text).conversations;
 }

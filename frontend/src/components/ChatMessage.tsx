@@ -19,8 +19,9 @@ import {
   StickyNote,
   ThumbsDown,
   ThumbsUp,
+  Layers2,
 } from "lucide-react";
-import { Message, RequestSnapshot } from "../types";
+import { AnswerVariant, Message, RequestSnapshot } from "../types";
 import { SourcesPanel } from "./SourcesPanel";
 import { SubQueriesPanel } from "./SubQueriesPanel";
 import { useLocale } from "../lib/i18n";
@@ -34,6 +35,8 @@ interface ChatMessageProps {
   bookmarked?: boolean;
   onToggleBookmark?: () => void;
   onSaveNote?: (note: string) => void;
+  variants?: AnswerVariant[];
+  onSaveVariant?: () => void;
   /** The article container is focusable so Library links can land on it. */
   tabIndex?: number;
 }
@@ -95,7 +98,7 @@ const formatMonospaceInline = (
           return (
             <span
               key={idx}
-              className="inline-flex items-center font-mono font-bold px-1.5 py-0.5 bg-brand-indigo/10 text-brand-indigo dark:bg-brand-indigo/20 dark:text-indigo-300 rounded text-xs select-all border border-brand-indigo/30 shadow-4xs mx-0.5"
+              className="inline-flex items-center font-mono font-bold px-1.5 py-0.5 bg-brand-indigo/10 text-[var(--accent-text)] dark:bg-brand-indigo/20 dark:text-indigo-300 rounded text-xs select-all border border-brand-indigo/30 shadow-4xs mx-0.5"
             >
               {token}
             </span>
@@ -176,6 +179,8 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
   bookmarked = false,
   onToggleBookmark,
   onSaveNote,
+  variants = [],
+  onSaveVariant,
   tabIndex,
 }) => {
   const { locale, t } = useLocale();
@@ -185,12 +190,16 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
   const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
   const [isNoteOpen, setIsNoteOpen] = useState(false);
   const [noteDraft, setNoteDraft] = useState(message.note ?? "");
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+  const selectedVariant = variants.find((variant) => variant.id === selectedVariantId) ?? null;
+  const displayedText = selectedVariant?.text ?? message.text;
+  const displayedSources = selectedVariant?.sources ?? message.sources;
 
   const handleCopy = async () => {
-    if (!message.text) return;
+    if (!displayedText) return;
     try {
       if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
-      await navigator.clipboard.writeText(message.text);
+      await navigator.clipboard.writeText(displayedText);
       setCopyState("copied");
       window.setTimeout(() => setCopyState("idle"), 2000);
     } catch {
@@ -249,7 +258,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
               )}
             </div>
 
-            {!isUser && !message.isStreaming && message.text && (
+            {!isUser && !message.isStreaming && displayedText && (
               <div className="flex items-center gap-1">
                 {onToggleBookmark && message.status !== "error" && (
                   <button
@@ -260,8 +269,8 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                     title={bookmarked ? "Remove bookmark" : "Bookmark answer"}
                     className={`inline-flex items-center gap-1 text-[11px] font-semibold transition-colors py-0.5 px-2 rounded-md cursor-pointer border ${
                       bookmarked
-                        ? "text-brand-indigo bg-brand-indigo/10 border-brand-indigo/30"
-                        : "text-slate-400 hover:text-brand-indigo dark:text-slate-500 dark:hover:text-indigo-300 border-transparent hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-200 dark:hover:border-slate-700"
+                        ? "text-[var(--accent-text)] bg-brand-indigo/10 border-brand-indigo/30"
+                        : "text-[var(--text-muted)] hover:text-[var(--accent-text)] dark:text-[var(--text-muted)] dark:hover:text-indigo-300 border-transparent hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-200 dark:hover:border-slate-700"
                     }`}
                   >
                     {bookmarked ? (
@@ -281,7 +290,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                   type="button"
                   onClick={handleCopy}
                   aria-label={copyState === "copied" ? (locale === "vi" ? "Đã sao chép câu trả lời" : "Copied answer") : (locale === "vi" ? "Sao chép câu trả lời" : "Copy answer")}
-                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-brand-indigo dark:text-slate-500 dark:hover:text-indigo-300 transition-colors py-0.5 px-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--accent-text)] dark:text-[var(--text-muted)] dark:hover:text-indigo-300 transition-colors py-0.5 px-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
                 >
                   {copyState === "copied" ? (
                     <>
@@ -323,6 +332,18 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                       <ThumbsDown className="h-3.5 w-3.5" />
                     </button>
                   </div>
+                )}
+                {onSaveVariant && message.status !== "error" && !message.isStreaming && message.text && (
+                  <button
+                    type="button"
+                    onClick={onSaveVariant}
+                    aria-label={locale === "vi" ? "Lưu phiên bản câu trả lời" : "Save answer variant"}
+                    title={locale === "vi" ? "Lưu phiên bản" : "Save variant"}
+                    className="inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-0.5 text-[11px] font-semibold text-[var(--text-muted)] transition-colors hover:border-[var(--border-subtle)] hover:bg-[var(--surface-muted)] hover:text-[var(--accent-text)]"
+                  >
+                    <Layers2 className="h-3 w-3" />
+                    <span>{locale === "vi" ? "Lưu phiên bản" : "Save variant"}</span>
+                  </button>
                 )}
                 {onSaveNote && message.status !== "error" && (
                   <button
@@ -370,6 +391,18 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
           {!isUser && message.note && !isNoteOpen && (
             <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-[var(--text-muted)]">
               <span className="font-semibold text-amber-700 dark:text-amber-300">{locale === "vi" ? "Ghi chú:" : "Note:"}</span> {message.note}
+            </div>
+          )}
+
+          {!isUser && variants.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 text-xs" aria-label={locale === "vi" ? "Các phiên bản câu trả lời" : "Answer variants"}>
+              <span className="font-semibold text-[var(--text-muted)]">{locale === "vi" ? "Phiên bản:" : "Variants:"}</span>
+              <button type="button" onClick={() => setSelectedVariantId(null)} className={`rounded-full border px-2 py-1 ${!selectedVariantId ? "border-[var(--accent-text)] bg-[var(--accent-soft)] text-[var(--accent-text)]" : "border-[var(--border-subtle)] text-[var(--text-muted)]"}`}>{locale === "vi" ? "Gốc" : "Original"}</button>
+              {variants.map((variant, index) => (
+                <button key={variant.id} type="button" onClick={() => setSelectedVariantId(variant.id)} className={`rounded-full border px-2 py-1 ${selectedVariantId === variant.id ? "border-[var(--accent-text)] bg-[var(--accent-soft)] text-[var(--accent-text)]" : "border-[var(--border-subtle)] text-[var(--text-muted)]"}`}>
+                  {locale === "vi" ? `Bản ${index + 1}` : `Variant ${index + 1}`}
+                </button>
+              ))}
             </div>
           )}
 
@@ -430,10 +463,10 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                   </div>
                 ) : (
                   <div className="markdown-body select-text">
-                    {message.text ? (
+                    {displayedText ? (
                       message.isStreaming ? (
                           <p className="whitespace-pre-wrap text-sm md:text-base leading-relaxed text-[var(--text-primary)]">
-                          {message.text}
+                          {displayedText}
                         </p>
                       ) : (
                         <ReactMarkdown
@@ -472,22 +505,22 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                           ),
                           p: ({ children }) => (
                             <p className="mb-3.5 last:mb-0 text-sm md:text-base leading-relaxed text-[var(--text-primary)]">
-                              {renderFormattedChildren(children, (index) => setFocusSourceIndex(index), message.sources?.length || 0)}
+                              {renderFormattedChildren(children, (index) => setFocusSourceIndex(index), displayedSources?.length || 0)}
                             </p>
                           ),
                           ul: ({ children }) => (
                             <ul className="list-disc pl-5 mb-3 text-sm space-y-1.5 text-slate-800 dark:text-slate-200">
-                              {renderFormattedChildren(children, (index) => setFocusSourceIndex(index), message.sources?.length || 0)}
+                              {renderFormattedChildren(children, (index) => setFocusSourceIndex(index), displayedSources?.length || 0)}
                             </ul>
                           ),
                           ol: ({ children }) => (
                             <ol className="list-decimal pl-5 mb-3 text-sm space-y-1.5 text-slate-800 dark:text-slate-200">
-                              {renderFormattedChildren(children, (index) => setFocusSourceIndex(index), message.sources?.length || 0)}
+                              {renderFormattedChildren(children, (index) => setFocusSourceIndex(index), displayedSources?.length || 0)}
                             </ol>
                           ),
                           li: ({ children }) => (
                             <li className="text-sm md:text-base leading-relaxed">
-                              {renderFormattedChildren(children, (index) => setFocusSourceIndex(index), message.sources?.length || 0)}
+                              {renderFormattedChildren(children, (index) => setFocusSourceIndex(index), displayedSources?.length || 0)}
                             </li>
                           ),
                           strong: ({ children, ...props }) => (
@@ -495,17 +528,17 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                               className="font-bold text-[#26324A] dark:text-[#FCFBF8] font-sans"
                               {...props}
                             >
-                              {renderFormattedChildren(children, (index) => setFocusSourceIndex(index), message.sources?.length || 0)}
+                              {renderFormattedChildren(children, (index) => setFocusSourceIndex(index), displayedSources?.length || 0)}
                             </strong>
                           ),
                           em: ({ children, ...props }) => (
                             <em className="italic" {...props}>
-                              {renderFormattedChildren(children, (index) => setFocusSourceIndex(index), message.sources?.length || 0)}
+                              {renderFormattedChildren(children, (index) => setFocusSourceIndex(index), displayedSources?.length || 0)}
                             </em>
                           ),
                           }}
                         >
-                          {message.text}
+                          {displayedText}
                         </ReactMarkdown>
                       )
                     ) : (
@@ -536,10 +569,10 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
 
           {/* Collapsible Sources */}
           {!isUser &&
-            message.sources &&
-            message.sources.length > 0 && (
+            displayedSources &&
+            displayedSources.length > 0 && (
             <SourcesPanel
-              sources={message.sources}
+              sources={displayedSources}
               messageId={messageId}
               focusSourceIndex={focusSourceIndex}
               onFocusHandled={() => setFocusSourceIndex(null)}

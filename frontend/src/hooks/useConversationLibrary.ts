@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Message, RequestSnapshot, SessionHistoryResponse } from "../types";
+import { AnswerVariant, ConversationNote, Message, RequestSnapshot, SessionHistoryResponse } from "../types";
 import { getSessionHistory } from "../lib/api";
 import {
   buildConversationRecord,
@@ -13,6 +13,10 @@ import {
   saveConversationRecord,
   ConversationWriteResult,
   subscribeConversationLibrary,
+  getWriterStatus,
+  requestWriterOwnership,
+  subscribeConversationWriter,
+  WriterStatus,
 } from "../lib/conversationStore";
 
 const DRAFT_PERSIST_DEBOUNCE_MS = 1000;
@@ -137,6 +141,9 @@ export interface ConversationLibraryController {
   deleteConversation: (conversationId: string) => Promise<void>;
   /** Import already validated records without overwriting existing IDs. */
   importConversationRecords: (records: ConversationRecord[]) => Promise<ConversationImportResult>;
+  writerStatus: WriterStatus;
+  requestLibraryWriter: () => Promise<WriterStatus>;
+  updateConversationMetadata: (conversationId: string, patch: { tags?: string[]; notes?: ConversationNote[]; variants?: AnswerVariant[] }) => Promise<ConversationWriteResult>;
 }
 
 interface UseConversationLibraryOptions {
@@ -175,6 +182,7 @@ export function useConversationLibrary(
   const [saveIndicator, setSaveIndicator] = useState<SaveIndicator>("idle");
   const [sessionContext, setSessionContext] = useState<SessionContextStatus>("fresh");
   const [isPreflightRunning, setIsPreflightRunning] = useState(false);
+  const [writerStatus, setWriterStatus] = useState<WriterStatus>(() => getWriterStatus());
 
   const messagesRef = useRef<Message[]>([]);
   messagesRef.current = messages;
@@ -312,6 +320,8 @@ export function useConversationLibrary(
     // Run once on mount; hydration must complete before backend fallbacks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => subscribeConversationWriter(() => setWriterStatus(getWriterStatus())), []);
 
   useEffect(() => {
     const unsubscribe = subscribeConversationLibrary(() => {
@@ -796,6 +806,35 @@ export function useConversationLibrary(
     [syncConversationsFromRepository],
   );
 
+  const updateConversationMetadata = useCallback(
+    async (
+      conversationId: string,
+      patch: { tags?: string[]; notes?: ConversationNote[]; variants?: AnswerVariant[] },
+    ): Promise<ConversationWriteResult> => {
+      const conversation = conversationsRef.current.find((item) => item.id === conversationId);
+      if (!conversation) {
+        return { status: "failed", storageMode, warning: "Conversation not found." };
+      }
+      const result = await saveConversationRecord({ ...conversation, ...patch, updatedAt: Date.now() });
+      applyWriteResult(result, { setStorageMode, setStorageWarning });
+      syncConversationsFromRepository();
+      return result;
+    },
+    [storageMode, syncConversationsFromRepository],
+  );
+
+  const requestLibraryWriter = useCallback(async (): Promise<WriterStatus> => {
+    const next = await requestWriterOwnership();
+    setWriterStatus(next);
+    if (next.owned) {
+      const library = await loadConversationLibrary(sessionIdRef.current, activeIdRef.current);
+      setConversations(library.conversations);
+      setStorageMode(library.storageMode);
+      setStorageWarning(library.warning);
+    }
+    return next;
+  }, []);
+
   const beginSend = useCallback(
     (_text: string): SendIdentity | null => {
       if (sendInFlightRef.current) return null;
@@ -864,5 +903,8 @@ export function useConversationLibrary(
     toggleAnswerBookmark,
     deleteConversation,
     importConversationRecords,
+    writerStatus,
+    requestLibraryWriter,
+    updateConversationMetadata,
   };
 }

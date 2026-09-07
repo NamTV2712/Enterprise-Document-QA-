@@ -107,4 +107,38 @@ describe("conversation export", () => {
       }],
     }))).toThrow("invalid conversation");
   });
+
+  test("rejects unknown answer references and malformed evidence collections", () => {
+    const validConversation = {
+      id: "conversation-1",
+      sessionId: "session-1",
+      title: "Reference validation",
+      messages: [{ id: "assistant-1", sender: "assistant", text: "Answer" }],
+    };
+    expect(() => parseConversationBackup(JSON.stringify({
+      format: "enterprise-document-qa.conversations",
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      conversations: [{
+        ...validConversation,
+        variants: [{
+          id: "variant-1",
+          originMessageId: "missing-message",
+          text: "Alternative",
+          sources: [],
+          answerLanguage: "en",
+          status: "completed",
+          createdAt: 1,
+          updatedAt: 1,
+        }],
+      }],
+    }))).toThrow("invalid conversation");
+    expect(() => parseConversationBackup(JSON.stringify({
+      format: "enterprise-document-qa.conversations",
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      conversations: [validConversation],
+      collections: [{ name: "Broken", items: [null] }],
+    }))).toThrow("invalid evidence item");
+  });
 });

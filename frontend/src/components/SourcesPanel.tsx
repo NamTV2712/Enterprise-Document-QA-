@@ -171,6 +171,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [copyStateIndex, setCopyStateIndex] = useState<number | null>(null);
   const [savedStateIndex, setSavedStateIndex] = useState<number | null>(null);
+  const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
   const panelId = `sources-panel-${useId().replace(/:/g, "")}`;
   const safeMessageId = messageId.replace(/[^a-zA-Z0-9_-]/g, "-");
 
@@ -209,6 +210,13 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
       setSearchQuery("");
     }
     setIsOpen(true);
+    setHighlightedIndex(focusSourceIndex);
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}${window.location.search}#evidence=${safeMessageId}-${focusSourceIndex}`,
+    );
+    const clearHighlight = window.setTimeout(() => setHighlightedIndex(null), 1800);
     const frame = window.requestAnimationFrame(() => {
       const source = document.getElementById(
         `${safeMessageId}-source-${focusSourceIndex}`,
@@ -217,9 +225,28 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
       source?.focus({ preventScroll: true });
       onFocusHandled?.();
     });
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(clearHighlight);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusSourceIndex, onFocusHandled, safeMessageId]);
+
+  // A citation link can be copied or restored after a reload without putting
+  // question text or answer content in the URL.
+  useEffect(() => {
+    const match = window.location.hash.match(new RegExp(`^#evidence=${safeMessageId}-(\\d+)$`));
+    const index = match ? Number(match[1]) : -1;
+    if (index < 0 || index >= sources.length || focusSourceIndex !== null) return;
+    setIsOpen(true);
+    setHighlightedIndex(index);
+    const frame = window.requestAnimationFrame(() => {
+      const source = document.getElementById(`${safeMessageId}-source-${index}`);
+      source?.scrollIntoView({ behavior: "auto", block: "nearest" });
+      source?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusSourceIndex, safeMessageId, sources.length]);
 
   const handleCopyExcerpt = async (index: number, source: Source) => {
     try {
@@ -262,7 +289,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
             <span className="block font-sans uppercase tracking-wider">
               {locale === "vi" ? "Bằng chứng filing được truy xuất" : "Retrieved filing evidence"} · {sources.length} {locale === "vi" ? "đoạn trích" : "excerpts"}
             </span>
-            <span className="block mt-1 text-xs font-normal text-slate-500 dark:text-slate-400 normal-case tracking-normal truncate">
+            <span className="block mt-1 text-xs font-normal text-[var(--text-muted)] normal-case tracking-normal truncate">
               {companySummary}
               {remainingCompanies > 0 ? ` · +${remainingCompanies} more` : ""}
               {" · "}{isOpen
@@ -271,7 +298,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
             </span>
           </span>
         </div>
-        <span className="flex items-center gap-1.5 flex-shrink-0 text-xs font-semibold text-brand-indigo">
+        <span className="flex items-center gap-1.5 flex-shrink-0 text-xs font-semibold text-[var(--accent-text)]">
           {isOpen ? (locale === "vi" ? "Ẩn" : "Hide") : (locale === "vi" ? "Xem" : "View")}
           {isOpen ? (
             <ChevronUp className="w-4 h-4" />
@@ -313,7 +340,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
                   </button>
                 )}
               </div>
-              <p className="mt-1.5 text-[11px] text-[var(--text-subtle)]">
+              <p className="mt-1.5 text-[11px] text-[var(--text-muted)]">
                 {filterHidesResults
                   ? locale === "vi" ? "Không có đoạn trích phù hợp. Xóa tìm kiếm để xem tất cả nguồn." : "No excerpt matches this search. Clear it to see all sources."
                   : locale === "vi"
@@ -342,7 +369,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
                 return (
                   <div
                     key={index}
-                    className="source-item py-3 first:pt-0 last:pb-0"
+                    className={`source-item py-3 first:pt-0 last:pb-0 ${highlightedIndex === index ? "source-item--focused" : ""}`}
                     id={`${safeMessageId}-source-item-${index}`}
                     tabIndex={-1}
                     data-source-index={index}
@@ -362,10 +389,10 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
 
                       <div className="flex items-center gap-2">
                         <div className="flex items-center gap-1.5 font-mono">
-                          <span className="text-xs text-slate-400 dark:text-slate-500 font-semibold">
+                          <span className="text-xs text-[var(--text-muted)] font-semibold">
                             Rank score
                           </span>
-                          <span className="text-xs font-bold text-brand-indigo bg-brand-indigo/10 dark:bg-brand-indigo/20 border border-brand-indigo/30 px-2 py-0.5 rounded shadow-4xs">
+                          <span className="text-xs font-bold text-[var(--accent-text)] bg-brand-indigo/10 dark:bg-brand-indigo/20 border border-brand-indigo/30 px-2 py-0.5 rounded shadow-4xs">
                             {displayScore}
                           </span>
                         </div>
@@ -413,7 +440,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
                   {locale === "vi" ? "Không có đoạn trích phù hợp." : "No excerpt matches this search."}{" "}
                   <button
                     type="button"
-                    className="text-brand-indigo font-semibold"
+                    className="text-[var(--accent-text)] font-semibold"
                     onClick={() => setSearchQuery("")}
                   >
                     {locale === "vi" ? "Xóa tìm kiếm" : "Clear the search"}

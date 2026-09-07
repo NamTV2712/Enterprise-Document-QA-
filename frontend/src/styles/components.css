@@ -2,31 +2,11 @@
 .app-shell {
   position: relative;
   isolation: isolate;
-  background-color: #FAF9F6;
-  background-image:
-    radial-gradient(circle at 85% -10%, rgba(79, 70, 229, 0.08), transparent 36%),
-    radial-gradient(circle at 10% 105%, rgba(13, 148, 136, 0.07), transparent 32%);
-}
-
-.app-shell::before {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  content: "";
-  background: linear-gradient(120deg, rgba(255, 255, 255, 0.45), transparent 45%);
+  background-color: var(--canvas);
 }
 
 .dark .app-shell {
-  background-color: #090D16;
-  background-image:
-    radial-gradient(circle at 85% -10%, rgba(129, 140, 248, 0.22), transparent 40%),
-    radial-gradient(circle at 10% 105%, rgba(20, 184, 166, 0.16), transparent 35%),
-    radial-gradient(circle at 50% 50%, rgba(6, 182, 212, 0.04), transparent 55%);
-}
-
-.dark .app-shell::before {
-  background: radial-gradient(circle at 50% 0%, rgba(129, 140, 248, 0.06), transparent 60%);
+  background-color: var(--canvas);
 }
 
 .workspace-header {
@@ -38,16 +18,15 @@
   gap: 1rem;
   z-index: 20;
   padding: 0 1rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
-  background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 1px 3px rgba(30, 41, 59, 0.03);
-  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--divider);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .dark .workspace-header {
-  border-color: rgba(34, 47, 71, 0.85);
-  background: rgba(13, 17, 28, 0.88);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35), 0 1px 0 rgba(129, 140, 248, 0.1) inset;
+  border-color: var(--divider);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .workspace-nav-button {
@@ -68,15 +47,15 @@
 }
 
 .workspace-nav-button--active {
-  background: rgba(79, 70, 229, 0.1);
-  color: #4338CA;
-  box-shadow: 0 1px 2px rgba(79, 70, 229, 0.06);
+  background: var(--surface-selected);
+  color: var(--accent-text);
+  box-shadow: 0 1px 2px rgb(37 99 235 / 0.08);
 }
 
 .dark .workspace-nav-button--active {
-  background: rgba(129, 140, 248, 0.18);
-  color: #C7D2FE;
-  box-shadow: 0 0 12px rgba(99, 102, 241, 0.25), 0 0 0 1px rgba(129, 140, 248, 0.35);
+  background: var(--surface-selected);
+  color: var(--accent-text);
+  box-shadow: 0 0 0 1px var(--border-strong);
 }
 
 .theme-toggle,
@@ -86,10 +65,10 @@
   min-width: 2.25rem;
   align-items: center;
   justify-content: center;
-  border: 1px solid #CBD5E1;
+  border: 1px solid var(--border-strong);
   border-radius: 0.625rem;
-  color: #475569;
-  background: #F8FAFC;
+  color: var(--text-muted);
+  background: var(--surface-muted);
   transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
   cursor: pointer;
 }
@@ -97,26 +76,26 @@
 .theme-toggle:hover,
 .quick-reset-button:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: #818CF8;
-  background: #EEF2FF;
-  color: #4338CA;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.12);
+  border-color: var(--primary);
+  background: var(--surface-hover);
+  color: var(--accent-text);
+  box-shadow: var(--shadow-sm);
 }
 
 .dark .theme-toggle,
 .dark .quick-reset-button {
-  border-color: rgba(34, 47, 71, 0.9);
-  background: rgba(18, 24, 38, 0.8);
-  color: #FBBF24;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+  border-color: var(--border-strong);
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  box-shadow: var(--shadow-sm);
 }
 
 .dark .theme-toggle:hover,
 .dark .quick-reset-button:hover:not(:disabled) {
-  border-color: rgba(251, 191, 36, 0.6);
-  background: rgba(30, 41, 65, 0.95);
-  color: #FDE68A;
-  box-shadow: 0 0 16px rgba(251, 191, 36, 0.3), 0 0 0 1px rgba(251, 191, 36, 0.25);
+  border-color: var(--primary-hover);
+  background: var(--surface-hover);
+  color: var(--accent-text);
+  box-shadow: var(--shadow-sm);
 }
 
 .theme-toggle__icon {
@@ -141,14 +120,14 @@
   place-items: center;
   isolation: isolate;
   border-radius: 0.8rem;
-  background: linear-gradient(135deg, #727bf0 0%, #5b63d3 48%, #3d9a83 100%);
-  box-shadow: 0 7px 18px rgb(91 99 211 / 0.24), 0 0 0 1px rgb(255 255 255 / 0.3) inset;
+  background: var(--primary);
+  box-shadow: var(--shadow-sm);
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
 
 .brand-mark:hover {
   transform: translateY(-1px) rotate(-2deg);
-  box-shadow: 0 10px 22px rgb(91 99 211 / 0.3), 0 0 0 1px rgb(255 255 255 / 0.38) inset;
+  box-shadow: var(--shadow-md);
 }
 
 .brand-mark__glow {
@@ -156,9 +135,8 @@
   inset: 16%;
   z-index: -1;
   border-radius: inherit;
-  background: rgb(91 99 211 / 0.45);
-  filter: blur(10px);
-  opacity: 0.6;
+  background: var(--primary);
+  opacity: 0;
 }
 
 .brand-mark__surface {
@@ -168,9 +146,9 @@
   place-items: center;
   border: 1px solid rgb(255 255 255 / 0.34);
   border-radius: 0.58rem;
-  background: linear-gradient(145deg, rgb(23 29 43 / 0.22), rgb(23 29 43 / 0.52));
-  color: #fffdf8;
-  box-shadow: 0 1px 0 rgb(255 255 255 / 0.16) inset;
+  background: var(--primary-active);
+  color: var(--accent-button-text);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.16);
 }
 
 .brand-mark--sm {
@@ -1526,6 +1504,58 @@ summary {
 
 .surface-muted-hover:hover {
   background: var(--surface-muted);
+}
+
+.library-metadata-editor {
+  display: grid;
+  gap: .55rem;
+  padding: .65rem .8rem 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.library-metadata-editor label {
+  display: grid;
+  gap: .25rem;
+  color: var(--text-subtle);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.library-metadata-editor input,
+.library-metadata-editor textarea {
+  width: 100%;
+  border: 1px solid var(--border-subtle);
+  border-radius: .55rem;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: .75rem;
+  padding: .45rem .55rem;
+  text-transform: none;
+}
+
+.library-metadata-editor textarea {
+  resize: vertical;
+}
+
+.library-metadata-editor input:focus-visible,
+.library-metadata-editor textarea:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.source-item--focused {
+  border-radius: .75rem;
+  background: var(--state-warning-surface);
+  box-shadow: 0 0 0 2px var(--state-warning-border);
+  scroll-margin-block: 1rem;
+  animation: evidence-focus 180ms ease-out both;
+}
+
+@keyframes evidence-focus {
+  from { outline-offset: 6px; opacity: .78; }
+  to { outline-offset: 0; opacity: 1; }
 }
 
 .control-select {

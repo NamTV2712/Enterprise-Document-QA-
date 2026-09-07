@@ -26,6 +26,7 @@ import { ConversationLibrary } from "./ConversationLibrary";
 import {
   ConversationRecord,
   ConversationStorageMode,
+  WriterStatus,
 } from "../lib/conversationStore";
 import { ConversationImportResult, SaveIndicator } from "../hooks/useConversationLibrary";
 import {
@@ -68,6 +69,9 @@ interface SidebarProps {
   onExportConversation: (conversation: ConversationRecord) => void;
   onExportBackup?: () => void;
   onImportBackup?: (file: File) => Promise<ConversationImportResult>;
+  onUpdateMetadata?: (conversationId: string, patch: { tags?: ConversationRecord["tags"]; notes?: ConversationRecord["notes"] }) => Promise<unknown>;
+  writerStatus?: WriterStatus;
+  onRequestWriter?: () => Promise<WriterStatus>;
 }
 
 const SidebarBase: React.FC<SidebarProps> = ({
@@ -102,6 +106,9 @@ const SidebarBase: React.FC<SidebarProps> = ({
   onExportConversation,
   onExportBackup,
   onImportBackup,
+  onUpdateMetadata,
+  writerStatus,
+  onRequestWriter,
 }) => {
   const { locale } = useLocale();
   const minSidebarWidth = 280;
@@ -352,6 +359,9 @@ const SidebarBase: React.FC<SidebarProps> = ({
               onExport={onExportConversation}
               onExportBackup={onExportBackup}
               onImportBackup={onImportBackup}
+              onUpdateMetadata={onUpdateMetadata}
+              writerStatus={writerStatus}
+              onRequestWriter={onRequestWriter}
               onOpenMessage={onOpenMessage}
               onClose={() => onChangePanel("research")}
             />

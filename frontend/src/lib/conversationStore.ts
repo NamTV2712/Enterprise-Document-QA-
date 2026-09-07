@@ -1,12 +1,12 @@
-import { Message } from "../types";
+import { AnswerVariant, ConversationNote, Message, RequestSnapshot, Source } from "../types";
 
 /**
  * Local conversation library repository.
  *
  * Storage model:
- * - IndexedDB holds `conversations` (schema-v2 records) and `tombstones` in
+ * - IndexedDB holds `conversations` (schema-v4 records) and `tombstones` in
  *   one transaction per write.
- * - localStorage holds one v3 envelope key (`records` + `tombstones`) so a
+ * - localStorage holds one v4 envelope key (`records` + `tombstones`) so a
  *   mirror write is a single atomic setItem. The older v1/v2 keys are read
  *   as migration inputs and never rewritten in this cycle.
  * - A backend whose payload cannot be fully read (corrupt JSON, malformed
@@ -19,15 +19,21 @@ import { Message } from "../types";
  *   their own autosave or by another conversation's save.
  */
 
-export const CONVERSATION_SCHEMA_VERSION = 2;
-export const LIBRARY_ENVELOPE_VERSION = 3;
+export const CONVERSATION_SCHEMA_VERSION = 4;
+export const LIBRARY_ENVELOPE_VERSION = 4;
 export const MAX_CONVERSATIONS = 100;
 export const MAX_LIBRARY_BYTES = 25 * 1024 * 1024;
+export const MAX_TAGS_PER_CONVERSATION = 10;
+export const MAX_TAG_LENGTH = 32;
+export const MAX_NOTES_PER_CONVERSATION = 50;
+export const MAX_NOTE_LENGTH = 10_000;
+export const MAX_VARIANTS_PER_CONVERSATION = 100;
 
 const DATABASE_NAME = "enterprise-document-qa";
 const DATABASE_VERSION = 2;
 const STORE_NAME = "conversations";
 const TOMBSTONE_STORE_NAME = "tombstones";
+// The key is intentionally stable; `envelopeVersion` carries the migration.
 const LOCAL_ENVELOPE_KEY = "sec_qa_library_v3";
 // Legacy inputs: read for migration and merge, never rewritten here.
 const LOCAL_STORAGE_V1_KEY = "sec_qa_conversations_v1";
@@ -53,6 +59,12 @@ export interface ConversationRecord {
   messages: Message[];
   draft: string;
   bookmarkedMessageIds: string[];
+  /** User-controlled labels used by Library search and filtering. */
+  tags?: string[];
+  /** Plain-text research notes owned by this conversation. */
+  notes?: ConversationNote[];
+  /** Saved answer alternatives with independent evidence provenance. */
+  variants?: AnswerVariant[];
   /**
    * Set by the repository for records that a durable tombstone suppresses
    * while a writable backend still holds a copy. Never persisted.
@@ -112,6 +124,12 @@ const WRITER_LOCK_NAME = "enterprise-document-qa-conversation-writer";
 const LIBRARY_CHANNEL_NAME = "enterprise-document-qa-library";
 let libraryChannel: BroadcastChannel | null = null;
 const libraryListeners = new Set<() => void>();
+const writerListeners = new Set<() => void>();
+let writerOwned = false;
+let writerSupported = false;
+let writerAcquisitionStarted = false;
+let writerRelease: (() => void) | null = null;
+let writerRetryTimer: number | null = null;
 
 function browserBroadcastChannel(): typeof BroadcastChannel | null {
   // Node exposes a worker BroadcastChannel globally, but its MessageEvent is
@@ -127,6 +145,53 @@ function browserBroadcastChannel(): typeof BroadcastChannel | null {
   return window.BroadcastChannel;
 }
 
+export interface WriterStatus {
+  supported: boolean;
+  owned: boolean;
+  readOnly: boolean;
+  reason: "unsupported" | "busy" | "unavailable" | null;
+}
+
+function isTestRuntime(): boolean {
+  return import.meta.env.MODE === "test";
+}
+
+function currentWriterStatus(): WriterStatus {
+  if (isTestRuntime()) {
+    return { supported: true, owned: true, readOnly: false, reason: null };
+  }
+  if (!writerSupported) {
+    return { supported: false, owned: false, readOnly: true, reason: "unsupported" };
+  }
+  return writerOwned
+    ? { supported: true, owned: true, readOnly: false, reason: null }
+    : {
+        supported: true,
+        owned: false,
+        readOnly: true,
+        reason: writerAcquisitionStarted ? "busy" : "unavailable",
+      };
+}
+
+function notifyWriterChanged(): void {
+  for (const listener of writerListeners) listener();
+  const Channel = browserBroadcastChannel();
+  if (Channel) {
+    if (!libraryChannel) libraryChannel = new Channel(LIBRARY_CHANNEL_NAME);
+    libraryChannel.postMessage({ type: "writer-changed", at: Date.now() });
+  }
+}
+
+/** Subscribe to writer ownership changes so the UI can explain read-only tabs. */
+export function subscribeConversationWriter(listener: () => void): () => void {
+  writerListeners.add(listener);
+  return () => writerListeners.delete(listener);
+}
+
+export function getWriterStatus(): WriterStatus {
+  return currentWriterStatus();
+}
+
 // All durable writes are serialized so read-modify-write cycles on the
 // localStorage envelope can never interleave.
 let writeQueue: Promise<unknown> = Promise.resolve();
@@ -140,9 +205,76 @@ function enqueue<T>(operation: () => Promise<T>): Promise<T> {
   return run;
 }
 
+async function acquireWriterOwnership(): Promise<boolean> {
+  if (isTestRuntime()) {
+    writerSupported = true;
+    writerOwned = true;
+    return true;
+  }
+  if (writerOwned) return true;
+  if (typeof navigator === "undefined" || !navigator.locks) {
+    writerSupported = false;
+    writerAcquisitionStarted = true;
+    notifyWriterChanged();
+    return false;
+  }
+  writerSupported = true;
+  writerAcquisitionStarted = true;
+  let acquired = false;
+  const result = new Promise<boolean>((resolve) => {
+    void navigator.locks
+      .request(
+        WRITER_LOCK_NAME,
+        { mode: "exclusive", ifAvailable: true },
+        (lock) => {
+          if (!lock) {
+            resolve(false);
+            return undefined;
+          }
+          acquired = true;
+          writerOwned = true;
+          notifyWriterChanged();
+          resolve(true);
+          return new Promise<void>((releaseLock) => {
+            writerRelease = () => {
+              writerRelease = null;
+              writerOwned = false;
+              notifyWriterChanged();
+              releaseLock();
+            };
+          });
+        },
+      )
+      .catch(() => {
+        writerSupported = true;
+        writerOwned = false;
+        resolve(false);
+      });
+  });
+  await result;
+  if (!acquired) {
+    writerOwned = false;
+    if (writerRetryTimer === null && typeof window !== "undefined") {
+      writerRetryTimer = window.setTimeout(() => {
+        writerRetryTimer = null;
+        void acquireWriterOwnership().then((owned) => {
+          if (owned) notifyLibraryChanged();
+        });
+      }, 3_000);
+    }
+    notifyWriterChanged();
+  }
+  return acquired;
+}
+
+/** Ask the browser for the Library writer lock again after another tab closes. */
+export async function requestWriterOwnership(): Promise<WriterStatus> {
+  await acquireWriterOwnership();
+  return currentWriterStatus();
+}
+
 async function withWriterLock<T>(operation: () => Promise<T>): Promise<T> {
-  if (typeof navigator === "undefined" || !navigator.locks) return operation();
-  return navigator.locks.request(WRITER_LOCK_NAME, { mode: "exclusive" }, operation);
+  return operation();
 }
 
 function notifyLibraryChanged(): void {
@@ -154,15 +286,17 @@ function notifyLibraryChanged(): void {
 }
 
 export function subscribeConversationLibrary(listener: () => void): () => void {
+  writerListeners.add(listener);
   const Channel = browserBroadcastChannel();
-  if (!Channel) return () => undefined;
+  if (!Channel) return () => writerListeners.delete(listener);
   if (!libraryChannel) libraryChannel = new Channel(LIBRARY_CHANNEL_NAME);
   libraryListeners.add(listener);
   const handleMessage = (event: MessageEvent) => {
-    if (event.data?.type === "library-changed") listener();
+    if (event.data?.type === "library-changed" || event.data?.type === "writer-changed") listener();
   };
   libraryChannel.addEventListener("message", handleMessage);
   return () => {
+    writerListeners.delete(listener);
     libraryListeners.delete(listener);
     libraryChannel?.removeEventListener("message", handleMessage);
   };
@@ -186,6 +320,131 @@ function isMessage(value: unknown): value is Message {
   );
 }
 
+function normalizeTags(value: unknown): string[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+  const tags: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") return null;
+    const tag = item.trim().replace(/\s+/g, " ");
+    if (tag.length > MAX_TAG_LENGTH) return null;
+    if (!tag || tags.includes(tag)) continue;
+    tags.push(tag);
+    if (tags.length > MAX_TAGS_PER_CONVERSATION) return null;
+  }
+  return tags;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function normalizeNotes(value: unknown): ConversationNote[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+  const notes: ConversationNote[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") return null;
+    const candidate = item as Partial<ConversationNote>;
+    if (
+      typeof candidate.id !== "string" ||
+      typeof candidate.text !== "string" ||
+      candidate.text.length > MAX_NOTE_LENGTH ||
+      !isFiniteNumber(candidate.createdAt) ||
+      !isFiniteNumber(candidate.updatedAt)
+    ) return null;
+    notes.push({
+      id: candidate.id,
+      text: candidate.text,
+      createdAt: candidate.createdAt,
+      updatedAt: candidate.updatedAt,
+    });
+    if (notes.length > MAX_NOTES_PER_CONVERSATION) return null;
+  }
+  return notes;
+}
+
+function normalizeSource(value: unknown): Source | null {
+  if (!value || typeof value !== "object") return null;
+  const source = value as Partial<Source>;
+  if (
+    typeof source.citation !== "string" ||
+    typeof source.text_preview !== "string" ||
+    typeof source.score !== "number" ||
+    !Number.isFinite(source.score)
+  ) return null;
+  return {
+    citation: source.citation,
+    score: source.score,
+    text_preview: source.text_preview,
+    ...(typeof source.text === "string" ? { text: source.text } : {}),
+    ...(typeof source.chunk_id === "string" ? { chunk_id: source.chunk_id } : {}),
+    ...(typeof source.ticker === "string" ? { ticker: source.ticker } : {}),
+    ...(typeof source.section === "string" ? { section: source.section } : {}),
+    ...(typeof source.filing_date === "string" ? { filing_date: source.filing_date } : {}),
+  };
+}
+
+function normalizeRequestSnapshot(value: unknown): RequestSnapshot | undefined | null {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== "object") return null;
+  const snapshot = value as Partial<RequestSnapshot>;
+  if (
+    (snapshot.ticker !== null && typeof snapshot.ticker !== "string") ||
+    (snapshot.section !== null && typeof snapshot.section !== "string") ||
+    typeof snapshot.topK !== "number" ||
+    !Number.isInteger(snapshot.topK) ||
+    snapshot.topK < 1 ||
+    typeof snapshot.enableComparative !== "boolean" ||
+    (snapshot.answerLanguage !== "en" && snapshot.answerLanguage !== "vi")
+  ) return null;
+  return {
+    ticker: snapshot.ticker ?? null,
+    section: snapshot.section ?? null,
+    topK: snapshot.topK,
+    enableComparative: snapshot.enableComparative,
+    answerLanguage: snapshot.answerLanguage,
+  };
+}
+
+function normalizeVariants(value: unknown, messages: Message[]): AnswerVariant[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > MAX_VARIANTS_PER_CONVERSATION) return null;
+  const messageIds = new Set(messages.map((message) => message.id));
+  const assistantMessageIds = new Set(messages.filter((message) => message.sender === "assistant").map((message) => message.id));
+  const variants: AnswerVariant[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") return null;
+    const candidate = item as Partial<AnswerVariant>;
+    if (
+      typeof candidate.id !== "string" ||
+      typeof candidate.originMessageId !== "string" ||
+      !messageIds.has(candidate.originMessageId) ||
+      !assistantMessageIds.has(candidate.originMessageId) ||
+      typeof candidate.text !== "string" ||
+      !Array.isArray(candidate.sources) ||
+      !candidate.sources.every((source) => normalizeSource(source) !== null) ||
+      (candidate.answerLanguage !== "en" && candidate.answerLanguage !== "vi") ||
+      (candidate.status !== "completed" && candidate.status !== "stopped" && candidate.status !== "error") ||
+      !isFiniteNumber(candidate.createdAt) ||
+      !isFiniteNumber(candidate.updatedAt) ||
+      normalizeRequestSnapshot(candidate.requestSnapshot) === null
+    ) return null;
+    variants.push({
+      id: candidate.id,
+      originMessageId: candidate.originMessageId,
+      text: candidate.text,
+      sources: candidate.sources.map((source) => normalizeSource(source) as Source),
+      requestSnapshot: normalizeRequestSnapshot(candidate.requestSnapshot) as RequestSnapshot | undefined,
+      answerLanguage: candidate.answerLanguage,
+      status: candidate.status,
+      createdAt: candidate.createdAt,
+      updatedAt: candidate.updatedAt,
+    });
+  }
+  return variants;
+}
+
 /**
  * Convert any in-flight streaming message into its durable stopped form so
  * partial answers are never stored (or shown) as still-streaming. Completed
@@ -205,7 +464,7 @@ export function normalizeStoredMessages(messages: Message[]): Message[] {
 }
 
 /**
- * Normalize an unknown persisted payload into a schema-v2 record. Returns
+ * Normalize an unknown persisted payload into a schema-v4 record. Returns
  * null for shapes that cannot be trusted and "future" for records that a
  * newer app version wrote; callers use the distinction to write-lock the
  * backend that holds them.
@@ -229,7 +488,25 @@ function normalizeRecord(value: unknown): ConversationRecord | null | "future" {
   if (schemaVersion > CONVERSATION_SCHEMA_VERSION) return "future";
 
   const now = Date.now();
+  if (!candidate.messages.every(isMessage)) return null;
+  const messageIds = candidate.messages.map((message) => message.id);
+  if (new Set(messageIds).size !== messageIds.length) return null;
   const messages = normalizeStoredMessages(candidate.messages as Message[]);
+  if (messages.length !== candidate.messages.length) return null;
+  if (messages.some((message) => normalizeRequestSnapshot(message.requestSnapshot) === null)) return null;
+  const tags = normalizeTags(candidate.tags);
+  const notes = normalizeNotes(candidate.notes);
+  const variants = normalizeVariants(candidate.variants, messages);
+  if (!tags || !notes || !variants) return null;
+  let bookmarkedMessageIds: string[] = [];
+  if (candidate.bookmarkedMessageIds !== undefined) {
+    if (!Array.isArray(candidate.bookmarkedMessageIds) || !candidate.bookmarkedMessageIds.every((id) => typeof id === "string")) return null;
+    const assistantIds = new Set(messages.filter((message) => message.sender === "assistant").map((message) => message.id));
+    // Legacy records may contain a stale bookmark; preserve that historical
+    // payload while requiring schema-v4 records to reference an answer.
+    if (schemaVersion >= 4 && candidate.bookmarkedMessageIds.some((id) => !assistantIds.has(id))) return null;
+    bookmarkedMessageIds = [...candidate.bookmarkedMessageIds];
+  }
   const generatedTitle = conversationTitle(messages);
   const title = candidate.title.slice(0, 80) || "Untitled conversation";
   const titleMode: TitleMode =
@@ -253,9 +530,10 @@ function normalizeRecord(value: unknown): ConversationRecord | null | "future" {
     updatedAt: typeof candidate.updatedAt === "number" ? candidate.updatedAt : now,
     messages,
     draft: typeof candidate.draft === "string" ? candidate.draft : "",
-    bookmarkedMessageIds: Array.isArray(candidate.bookmarkedMessageIds)
-      ? candidate.bookmarkedMessageIds.filter((id): id is string => typeof id === "string")
-      : [],
+    bookmarkedMessageIds,
+    tags,
+    notes,
+    variants,
   };
 }
 
@@ -288,10 +566,6 @@ function parseRecordPayload(raw: unknown): ParsedRecords {
  */
 function isPositiveFiniteInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value > 0 && Number.isFinite(value);
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
 }
 
 function parseTombstones(raw: unknown): { tombstones: TombstoneRecord[]; hasUnreadable: boolean } {
@@ -344,6 +618,9 @@ export function createConversationRecord(
     messages,
     draft,
     bookmarkedMessageIds,
+    tags: [],
+    notes: [],
+    variants: [],
   };
 }
 
@@ -354,6 +631,9 @@ export interface BuildRecordInput {
   draft: string;
   bookmarkedMessageIds: string[];
   createdAt: number;
+  tags?: string[];
+  notes?: ConversationNote[];
+  variants?: AnswerVariant[];
 }
 
 /**
@@ -381,6 +661,9 @@ export function buildConversationRecord(
     messages: input.messages,
     draft: input.draft,
     bookmarkedMessageIds: input.bookmarkedMessageIds,
+    tags: input.tags ?? existing?.tags ?? [],
+    notes: input.notes ?? existing?.notes ?? [],
+    variants: input.variants ?? existing?.variants ?? [],
   };
 }
 
@@ -392,6 +675,9 @@ function recordFingerprint(record: ConversationRecord): string {
     messages: record.messages,
     draft: record.draft,
     bookmarkedMessageIds: record.bookmarkedMessageIds,
+    tags: record.tags ?? [],
+    notes: record.notes ?? [],
+    variants: record.variants ?? [],
     createdAt: record.createdAt,
   });
 }
@@ -820,11 +1106,19 @@ export async function loadConversationLibrary(
   sessionId?: string,
   conversationId?: string,
 ): Promise<ConversationLibraryState> {
+  const hasWriter = await acquireWriterOwnership();
   const resolvedSessionId = sessionId ?? legacySessionId() ?? "session";
   const resolvedConversationId =
     conversationId ?? createConversationIdFor(resolvedSessionId);
   const legacy = readLegacyRecord(resolvedSessionId, resolvedConversationId);
   const warnings: string[] = [];
+  if (!hasWriter) {
+    warnings.push(
+      currentWriterStatus().reason === "unsupported"
+        ? "This browser does not provide Web Locks; the Library is read-only and can still be exported."
+        : "Another tab owns the Library writer lock; this tab is read-only until the lock is released.",
+    );
+  }
 
   // --- Read IndexedDB ---
   let idbSnapshot: IndexedDbSnapshot | null = null;
@@ -975,7 +1269,7 @@ export async function loadConversationLibrary(
   const mergedRecords = merge.records;
   let idbDurable = false;
   let localDurable = false;
-  if (idbSnapshot !== null && idbLock.writable) {
+  if (hasWriter && idbSnapshot !== null && idbLock.writable) {
     try {
       await writeIndexedDbSnapshot(mergedRecords, Array.from(tombstones.values()));
       idbDurable = true;
@@ -984,7 +1278,7 @@ export async function loadConversationLibrary(
       console.warn("Could not write merged snapshot to IndexedDB:", error);
     }
   }
-  if (localLock.writable) {
+  if (hasWriter && localLock.writable) {
     try {
       writeLocalEnvelope(mergedRecords, Array.from(tombstones.values()));
       localDurable = true;
@@ -1009,8 +1303,8 @@ export async function loadConversationLibrary(
     migrationMarked = markMigrationComplete();
   }
 
-  const idbUsable = Boolean(idbSnapshot) && idbLock.writable;
-  const localUsable = localLock.writable;
+  const idbUsable = hasWriter && Boolean(idbSnapshot) && idbLock.writable;
+  const localUsable = hasWriter && localLock.writable;
   const localHasData =
     localLock.readable &&
     (localSnapshot.records.length > 0 || localSnapshot.tombstones.length > 0);
@@ -1076,6 +1370,14 @@ export async function saveConversationRecord(
       transientWarning = "The conversation could not be saved because its data was invalid.";
       libraryWarning = combineWarning(transientWarning);
       return { status: "failed", storageMode: activeStorageMode, warning: libraryWarning };
+    }
+
+    if (!currentWriterStatus().owned) {
+      pendingRecords.set(normalized.id, { ...normalized, deletionPending: undefined });
+      transientWarning =
+        "This tab is read-only because it does not own the Library writer lock. Export the Library or take ownership in the other tab before editing it.";
+      libraryWarning = combineWarning(transientWarning);
+      return { status: "volatile", storageMode: activeStorageMode, warning: libraryWarning };
     }
 
     const existingPersisted = persistedRecords.get(normalized.id);
@@ -1181,6 +1483,13 @@ export async function deleteConversationRecord(id: string): Promise<Conversation
     rearmTransientLocks();
     if (!snapshotLoaded) {
       await loadConversationLibrary().catch(() => undefined);
+    }
+
+    if (!currentWriterStatus().owned) {
+      transientWarning =
+        "This tab is read-only because it does not own the Library writer lock. The conversation was not deleted.";
+      libraryWarning = combineWarning(transientWarning);
+      return { status: "failed", storageMode: activeStorageMode, warning: libraryWarning };
     }
 
     const persisted = persistedRecords.get(id);

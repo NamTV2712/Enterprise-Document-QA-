@@ -450,6 +450,16 @@ length validation. Mobile sidebar focus is trapped while open and restored on
 close. Frontend verification covers both theme behavior and evidence navigation
 with Vitest and TypeScript checks.
 
+The local Library persists conversation schema v4 and exports backup JSON v2
+(v1 backups remain importable). Tags, bounded conversation notes, saved answer
+variants, bookmarks, Markdown evidence anchors, and local evidence collections
+are included with strict limits and fresh IDs on import. In browsers with Web
+Locks, only the tab owning the Library writer lock may durably write; other tabs
+remain readable and exportable until ownership is acquired. The current offline
+gate is `105/105` frontend tests, `94/94` Chromium/Firefox browser checks, and
+`716` backend tests; provider campaigns and production hosting remain separate
+from this local release candidate.
+
 ### Evaluation, analytics, and quota-safe campaign handoff
 
 The Evaluation view reads only reports published through the allowlisted
@@ -1308,11 +1318,16 @@ Demo frontend: `https://frontend-one-gamma-f9jf11u8ec.vercel.app`
 The workspace supports full legal company names, professional section labels,
 streamed conversation cards, collapsible filing evidence, a desktop evidence
 side panel, Overview/Conversation navigation, a searchable local Library with
-bookmarks, feedback, private answer notes, and Markdown export, provider-free Retrieval Lab and
-Document Explorer views, safe System & provenance metadata, viewport-safe help
-tooltips, and a desktop sidebar that can be resized from `280` to `480` pixels.
-Light, dark, and system theme choices share the same semantic token system;
-reduced-motion preferences disable nonessential effects.
+bookmarks, feedback, private notes, tags, saved answer variants, evidence
+collections, schema-versioned Markdown/JSON backup export, provider-free
+Retrieval Lab and Document Explorer views, safe System & provenance metadata,
+viewport-safe help tooltips, and a desktop sidebar that can be resized from
+`280` to `480` pixels. Library records write schema v4 and backup exports use
+format v2 while reading older records/backups. Browsers with Web Locks give one
+tab write ownership; secondary or unsupported-lock tabs remain read-only but
+can still read and export local research. Light, dark, and system theme choices
+share the same semantic blue/slate token system; reduced-motion preferences
+disable nonessential effects.
 
 ```powershell
 .\scripts\start_demo.ps1

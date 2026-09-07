@@ -30,6 +30,8 @@ import {
   RequestSnapshot,
   ThemePreference,
   AnswerLanguage,
+  AnswerVariant,
+  Message,
 } from "./types";
 import {
   checkHealth,
@@ -43,12 +45,14 @@ import { saveConversationRecord } from "./lib/conversationStore";
 import {
   downloadConversationBackup,
   downloadConversationMarkdown,
-  parseConversationBackup,
+  MAX_BACKUP_BYTES,
+  parseConversationBackupBundle,
 } from "./lib/conversationExport";
 import { useConversationLibrary, SessionContextStatus } from "./hooks/useConversationLibrary";
 import { useLocale } from "./lib/i18n";
 import { recordAnalyticsEvent } from "./lib/analyticsStore";
 import { ResearchTemplate } from "./lib/researchTemplates";
+import { mergeEvidenceCollections } from "./lib/evidenceCollections";
 
 const STREAM_FLUSH_INTERVAL_MS = 80;
 const HEALTH_REFRESH_INTERVAL_MS = 15_000;
@@ -231,6 +235,7 @@ export default function App() {
   });
   const {
     conversations,
+    activeRecord,
     messages,
     inputText,
     bookmarkedMessageIds,
@@ -254,6 +259,9 @@ export default function App() {
     deleteConversation,
     importConversationRecords,
     recheckSessionContext,
+    writerStatus,
+    requestLibraryWriter,
+    updateConversationMetadata,
   } = library;
   const activeConversationId = library.activeConversationId;
 
@@ -895,9 +903,13 @@ export default function App() {
 
   const handleImportBackup = useCallback(
     async (file: File) => {
+      if (file.size > MAX_BACKUP_BYTES) {
+        throw new Error("The backup is larger than the 25 MiB import limit.");
+      }
       const text = await file.text();
-      const records = parseConversationBackup(text);
-      const result = await importConversationRecords(records);
+      const bundle = parseConversationBackupBundle(text);
+      const result = await importConversationRecords(bundle.conversations);
+      mergeEvidenceCollections(bundle.collections);
       if (result.imported === 0) throw new Error("No conversation could be imported into storage.");
       return result;
     },
@@ -930,6 +942,25 @@ export default function App() {
   const handleSaveMessageNote = useCallback((messageId: string, note: string) => {
     updateMessages((prev) => prev.map((message) => message.id === messageId ? { ...message, note: note || undefined } : message));
   }, [updateMessages]);
+
+  const handleSaveAnswerVariant = useCallback((message: Message) => {
+    if (!activeRecord || message.sender !== "assistant" || !message.text) return;
+    const now = Date.now();
+    const variant: AnswerVariant = {
+      id: `variant-${now}-${Math.random().toString(36).slice(2, 8)}`,
+      originMessageId: message.id,
+      text: message.text,
+      sources: (message.sources ?? []).map((source) => ({ ...source })),
+      requestSnapshot: message.requestSnapshot,
+      answerLanguage: message.requestSnapshot?.answerLanguage ?? answerLanguage,
+      status: message.status === "error" ? "error" : message.status === "stopped" ? "stopped" : "completed",
+      createdAt: now,
+      updatedAt: now,
+    };
+    void updateConversationMetadata(activeRecord.id, {
+      variants: [...(activeRecord.variants ?? []), variant],
+    });
+  }, [activeRecord, answerLanguage, updateConversationMetadata]);
 
   useEffect(() => {
     if (!showResetDialog) return;
@@ -1119,6 +1150,9 @@ export default function App() {
         onExportConversation={handleExportConversation}
         onExportBackup={handleExportBackup}
         onImportBackup={handleImportBackup}
+        onUpdateMetadata={updateConversationMetadata}
+        writerStatus={writerStatus}
+        onRequestWriter={requestLibraryWriter}
       />
 
       {/* Main chat window area */}
@@ -1209,6 +1243,12 @@ export default function App() {
                     onSaveNote={
                       msg.sender === "assistant" && !msg.isStreaming && msg.text
                         ? (note) => handleSaveMessageNote(msg.id, note)
+                        : undefined
+                    }
+                    variants={activeRecord?.variants?.filter((variant) => variant.originMessageId === msg.id)}
+                    onSaveVariant={
+                      msg.sender === "assistant" && !msg.isStreaming && msg.text
+                        ? () => handleSaveAnswerVariant(msg)
                         : undefined
                     }
                     tabIndex={0}

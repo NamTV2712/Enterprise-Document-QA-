@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { ChatMessage } from "./ChatMessage";
 
@@ -63,5 +63,24 @@ describe("ChatMessage", () => {
       expect(document.activeElement?.id).toBe("assistant-42-source-0");
     });
     expect(screen.getByText("[Source 2]")).toHaveClass("citation-button--unavailable");
+  });
+
+  test("saves a private note without changing the answer text", () => {
+    const onSaveNote = vi.fn();
+    render(
+      <ChatMessage
+        message={{ id: "assistant-note", sender: "assistant", text: "Revenue was reported." }}
+        onSaveNote={onSaveNote}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add note to answer" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Private device note" }), {
+      target: { value: "Verify the fiscal-year label." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save note" }));
+
+    expect(onSaveNote).toHaveBeenCalledWith("Verify the fiscal-year label.");
+    expect(screen.getByText("Revenue was reported.")).toBeInTheDocument();
   });
 });

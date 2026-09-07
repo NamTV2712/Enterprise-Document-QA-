@@ -51,7 +51,7 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 | Memory | Multi-turn backend memory, query rewriting, and a searchable local conversation library with bookmarks, Markdown export, and versioned JSON backup/restore |
 | Decomposition | Comparative and enumeration queries decomposed into focused sub-queries |
 | Evaluation | Fixed benchmark with faithfulness, relevancy, and context precision metrics |
-| Research workspace | Vite/React interface with searchable company and section controls, English/Vietnamese UI and answer selection, streaming answers, accent-insensitive evidence inspection with per-panel search and copy, per-answer bookmarks and feedback, a reliable local conversation Library, JSON backup/restore, session context status, glossary/help, and keyboard shortcuts |
+| Research workspace | Vite/React interface with searchable company and section controls, English/Vietnamese UI and answer selection, streaming answers, accent-insensitive evidence inspection with per-panel search and copy, per-answer bookmarks, feedback, and private notes, a reliable local conversation Library, JSON backup/restore, session context status, glossary/help, and keyboard shortcuts |
 | Research tools | Provider-free Retrieval Lab for BM25/dense/RRF/reranker trace inspection, read-only Document Explorer with filing/chunk search, and System & provenance metadata without filesystem paths or secrets |
 | Conversation UX | Separate Overview and Conversation views, mobile workspace navigation, bounded answer cards, interpreted-query metadata, and a resizable desktop control sidebar |
 
@@ -1285,7 +1285,7 @@ Demo frontend: `https://frontend-one-gamma-f9jf11u8ec.vercel.app`
 The workspace supports full legal company names, professional section labels,
 streamed conversation cards, collapsible filing evidence, a desktop evidence
 side panel, Overview/Conversation navigation, a searchable local Library with
-bookmarks, feedback, and Markdown export, provider-free Retrieval Lab and
+bookmarks, feedback, private answer notes, and Markdown export, provider-free Retrieval Lab and
 Document Explorer views, safe System & provenance metadata, viewport-safe help
 tooltips, and a desktop sidebar that can be resized from `280` to `480` pixels.
 Light, dark, and system theme choices share the same semantic token system;

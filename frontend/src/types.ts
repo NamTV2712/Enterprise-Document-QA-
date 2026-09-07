@@ -218,4 +218,5 @@ export interface Message {
   status?: MessageStatus;
   requestSnapshot?: RequestSnapshot;
   queryInterpretation?: QueryInterpretation;
+  note?: string;
 }

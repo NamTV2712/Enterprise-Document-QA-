@@ -69,7 +69,7 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        production retrieval defaults: query interpretation metadata, guarded
        multi-tab Library refreshes, Retrieval Lab stage traces, Document
        Explorer catalog/chunk previews, System & provenance metadata, mobile
-       workspace navigation, and local answer feedback. Changed contracts have
+       workspace navigation, local answer feedback, and private answer notes. Changed contracts have
        targeted frontend/backend tests; no corpus or index rebuild was made.
 5g. [x] Rerun the complete post-change offline release matrix: full backend,
        frontend build/contrast, Chromium/Firefox browser matrix, and HTTP/SSE

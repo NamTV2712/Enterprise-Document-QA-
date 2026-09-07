@@ -37,6 +37,9 @@ Completed in the current working tree:
   rebuild the corpus/index or call an LLM.
 - Added local answer feedback controls, mobile workspace-view navigation, and
   English/Vietnamese surfaces for the new tools.
+- Added private per-answer notes with bounded input, local conversation
+  persistence, and Markdown export; notes never enter generation prompts or
+  provider requests.
 - The final offline verification for this round is green: frontend
   typecheck/lint, `94/94` unit tests, production build, and light/dark
   contrast; Chromium + Firefox browser matrix `94/94`; real HTTP/SSE

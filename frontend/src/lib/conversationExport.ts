@@ -28,6 +28,9 @@ export function conversationToMarkdown(conversation: ConversationRecord): string
 
     lines.push("## Question", "", escapeMarkdown(question || "Question unavailable"), "");
     lines.push("## Answer", "", escapeMarkdown(message.text), "");
+    if (message.note) {
+      lines.push("### Private note", "", escapeMarkdown(message.note), "");
+    }
     if (message.status === "stopped" || message.status === "error") {
       lines.push(
         `> Status: ${message.status === "stopped" ? "partial answer; generation stopped" : "answer ended with an error"}.`,
@@ -110,6 +113,7 @@ function isImportedMessage(value: unknown): boolean {
     isStreaming?: unknown;
     sources?: unknown;
     requestSnapshot?: unknown;
+    note?: unknown;
   };
   const validSources =
     message.sources === undefined ||
@@ -138,6 +142,7 @@ function isImportedMessage(value: unknown): boolean {
       message.status === "completed" ||
       message.status === "error") &&
     (message.isStreaming === undefined || typeof message.isStreaming === "boolean") &&
+    (message.note === undefined || typeof message.note === "string") &&
     validSources &&
     validSnapshot
   );

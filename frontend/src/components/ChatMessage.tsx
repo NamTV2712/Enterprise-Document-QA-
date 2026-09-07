@@ -16,6 +16,7 @@ import {
   Check,
   Bookmark,
   BookmarkCheck,
+  StickyNote,
   ThumbsDown,
   ThumbsUp,
 } from "lucide-react";
@@ -32,6 +33,7 @@ interface ChatMessageProps {
   /** Bookmarked answers can be reopened from the Library filter. */
   bookmarked?: boolean;
   onToggleBookmark?: () => void;
+  onSaveNote?: (note: string) => void;
   /** The article container is focusable so Library links can land on it. */
   tabIndex?: number;
 }
@@ -173,6 +175,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
   onRetry,
   bookmarked = false,
   onToggleBookmark,
+  onSaveNote,
   tabIndex,
 }) => {
   const { locale, t } = useLocale();
@@ -180,6 +183,8 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [focusSourceIndex, setFocusSourceIndex] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
+  const [isNoteOpen, setIsNoteOpen] = useState(false);
+  const [noteDraft, setNoteDraft] = useState(message.note ?? "");
 
   const handleCopy = async () => {
     if (!message.text) return;
@@ -319,9 +324,53 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                     </button>
                   </div>
                 )}
+                {onSaveNote && message.status !== "error" && (
+                  <button
+                    type="button"
+                    onClick={() => setIsNoteOpen((open) => !open)}
+                    aria-label={locale === "vi" ? "Ghi chú cho câu trả lời" : "Add note to answer"}
+                    aria-pressed={isNoteOpen || Boolean(message.note)}
+                    title={locale === "vi" ? "Ghi chú" : "Add note"}
+                    className={`rounded-md p-1.5 transition-colors ${message.note ? "bg-amber-500/15 text-amber-600 dark:text-amber-300" : "text-slate-400 hover:bg-slate-100 hover:text-amber-600 dark:text-slate-500 dark:hover:bg-slate-800"}`}
+                  >
+                    <StickyNote className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             )}
           </div>
+
+          {!isUser && isNoteOpen && onSaveNote && !message.isStreaming && (
+            <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
+              <label className="block text-xs font-semibold text-[var(--text-muted)]" htmlFor={`note-${message.id}`}>
+                {locale === "vi" ? "Ghi chú riêng trên thiết bị" : "Private device note"}
+              </label>
+              <textarea
+                id={`note-${message.id}`}
+                value={noteDraft}
+                onChange={(event) => setNoteDraft(event.target.value.slice(0, 2000))}
+                rows={3}
+                placeholder={locale === "vi" ? "Lưu ý, giả định hoặc việc cần kiểm tra…" : "Save an observation, assumption, or follow-up…"}
+                className="mt-2 w-full resize-y rounded-lg border border-[var(--border-strong)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-amber-500"
+              />
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <span className="text-[11px] text-[var(--text-muted)]">{noteDraft.length}/2000</span>
+                <button
+                  type="button"
+                  onClick={() => { onSaveNote(noteDraft.trim()); setIsNoteOpen(false); }}
+                  className="rounded-lg bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-500/25 dark:text-amber-300"
+                >
+                  {locale === "vi" ? "Lưu ghi chú" : "Save note"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!isUser && message.note && !isNoteOpen && (
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-[var(--text-muted)]">
+              <span className="font-semibold text-amber-700 dark:text-amber-300">{locale === "vi" ? "Ghi chú:" : "Note:"}</span> {message.note}
+            </div>
+          )}
 
           {!isUser && (message.queryInterpretation || message.rewritten_query) && (
             <details className="group rounded-lg border border-brand-indigo/15 bg-brand-indigo/[0.035] text-xs">

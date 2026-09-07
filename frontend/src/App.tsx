@@ -850,6 +850,10 @@ export default function App() {
     [activeConversationId, conversations, toggleAnswerBookmark],
   );
 
+  const handleSaveMessageNote = useCallback((messageId: string, note: string) => {
+    updateMessages((prev) => prev.map((message) => message.id === messageId ? { ...message, note: note || undefined } : message));
+  }, [updateMessages]);
+
   useEffect(() => {
     if (!showResetDialog) return;
     const handleDialogKeyDown = (event: KeyboardEvent) => {
@@ -1094,6 +1098,11 @@ export default function App() {
                     onToggleBookmark={
                       msg.sender === "assistant" && !msg.isStreaming && msg.text
                         ? () => toggleAnswerBookmark(msg.id)
+                        : undefined
+                    }
+                    onSaveNote={
+                      msg.sender === "assistant" && !msg.isStreaming && msg.text
+                        ? (note) => handleSaveMessageNote(msg.id, note)
                         : undefined
                     }
                     tabIndex={0}

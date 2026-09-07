@@ -103,7 +103,11 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        2026-09-07 continuation passed both two-call Groq probes, but Provider B
        still stopped at 24/60 (`window_03`) and 39/60 (`window_04`) on HTTP
        429; Provider A `window_04` was preflight-only because only 53 shared
-       slots remained.
+       slots remained. The later explicit key5-only continuation completed
+       Provider A `window_07_key5` as `GO` (`48/60`) and Provider B
+       `window_06_key5` as `NO-GO` (`52/60`, semantic gate failure with zero
+       transport errors). The original 120-call cap was explicitly overridden
+       for this key5-only continuation; old incomplete ledgers remain closed.
 5e. [x] Push the implementation and final status/docs commits, keep PR #3
         open, and verify green CI. Merge/deploy remains a separate explicit
         follow-up decision.

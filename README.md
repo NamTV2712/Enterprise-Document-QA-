@@ -494,6 +494,13 @@ judging with HTTP 200. This confirms the key is accepted, but does not increase
 the campaign-wide request budget or prove that a full A/B campaign can bypass
 account-level rate limits.
 
+The subsequent key5-only bounded receipts are: Provider A
+`evidence_contract_v3_window_07_key5` `GO` (`48/60` requests, both replicates
+passed), and Provider B `bilingual_evaluation_v1_window_06_key5` `NO-GO`
+(`52/60` requests, zero transport errors but semantic bilingual gates failed).
+The Provider B result is a quality decision, not a quota interruption; the
+runner does not select a better-of retry.
+
 ### Historical evaluation log
 
 Admission audits are clean: the promoted-official self-check reports zero

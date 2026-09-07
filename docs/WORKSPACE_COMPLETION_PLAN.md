@@ -18,6 +18,10 @@ English; the product supports English and Vietnamese.
 - Provider budget for this round is at most 120 real requests, including retry,
   correction, calibration, and unknown outcomes. The official benchmark and
   canonical corpus/index are immutable.
+- On 2026-09-07 the user explicitly authorized a key5-only continuation until
+  the key/provider quota is exhausted. This is recorded as an execution
+  override to the earlier 120-request round cap; every fresh campaign still
+  uses its own bounded ledger and incomplete ledgers remain closed.
 - Do not merge or deploy automatically. Do not commit `.env`, `data/`, model
   caches, checkpoints, or generated diagnostics.
 
@@ -33,8 +37,8 @@ English; the product supports English and Vietnamese.
 | Current frontend gate | 107 tests, typecheck, lint, production build | PASS |
 | Current browser gate | 102 Chromium/Firefox checks, one worker on Windows | PASS |
 | Existing HTTP/SSE gate | 14 checks | PASS (baseline) |
-| Provider A | Historical ledger stopped after quota/429 | INCOMPLETE |
-| Provider B | `window_03` stopped at 24/60 and `window_04` stopped at 39/60 after 429 | INCOMPLETE |
+| Provider A | Fresh key5-only `window_07_key5`, 48/60 | PASS / GO |
+| Provider B | Fresh key5-only `window_06_key5`, 52/60 | FAIL / NO-GO |
 | Backend Docker receipt | `data/diagnostics/local_release_receipt_bilingual_workspace.json` | PASS (previous source) |
 
 Every new run must use a unique diagnostic run ID. Existing receipts are not
@@ -60,10 +64,10 @@ green.
 | P8 | Evaluation dashboard and experiment comparison | PASS (offline) | Public report publisher/API and recorded mode exist. `evaluationComparison.ts` rejects incompatible provenance and computes paired bootstrap (2,000 resamples, seed 42); live fixture rendering and JSON/CSV UI export assertions are green. |
 | P9 | Analytics, guided demo, and performance | IN_PROGRESS | Metadata-only analytics, redacted export/clear, and recorded demo exist. Production-build Library search over 100 conversations × 10,000 messages passed 100 warm samples with latest full-freeze p95 `40.84 ms` Chromium / `55.74 ms` Firefox, below 200 ms; only the 3–5 minute guided browser walkthrough remains to be captured. |
 | P10 | Offline freeze and 120-fixture acceptance matrix | INCOMPLETE | Existing 40 × EN/VI/accentless fixture source exists. Re-run the expanded browser, HTTP/SSE, migration/lock, publisher, trace-parity, IME, and performance matrix after the current changes. |
-| Provider A | Evidence Contract v3, max 60 calls | INCOMPLETE | Historical quota stop is preserved. Fresh `evidence_contract_v3_window_04` preflight passed with zero calls, but execution was not started because only 53 shared slots remained after Provider B retries. |
-| Provider B | Bilingual campaign, max 60 calls | INCOMPLETE | Fresh `window_03` stopped at 24/60 and fresh `window_04` stopped at 39/60 with `RateLimitError`/HTTP 429, even after the updated key was accepted by the two-call probe. Never resume either incomplete ledger. |
+| Provider A | Evidence Contract v3, max 60 calls | PASS / GO | Fresh key5-only `evidence_contract_v3_window_07_key5` completed at `48/60`; calibration passed, both replicates passed, legacy comparison completed, and `candidate_decision=GO`. `window_05_key5` was stopped at 21/60 after an accidental five-key launch; `window_06_key5` was closed at 36/60 after a runner bug, and neither is resumed. |
+| Provider B | Bilingual campaign, max 60 calls | FAIL / NO-GO | Fresh key5-only `bilingual_evaluation_v1_window_06_key5` completed `52/60` with zero transport errors, but both replicates failed semantic gates (dependency/risk and language/period cases). This is a quality NO-GO, not a quota interruption; do not spend calls selecting a better replicate. |
 | P11 | Docker candidate receipt | PASS (previous candidate) | Existing one-worker/local-Qdrant receipt is valid for its recorded source; rebuild only if backend/build inputs change. |
-| P12 | Docs, review, CI, PR handoff | IN_PROGRESS | README, plan, and journal are being updated; frontend `107/107`, browser `102/102`, backend `716 passed`, compileall, lint, and production build are green. Final diff/commit/CI handoff remains. Do not merge or deploy. |
+| P12 | Docs, review, CI, PR handoff | IN_PROGRESS | README, plan, and journal are being updated; frontend `107/107`, browser `102/102`, backend `717 passed`, compileall, lint, and production build are green. Final diff/commit/CI handoff remains. Do not merge or deploy. |
 
 ## Product acceptance journeys
 
@@ -145,16 +149,18 @@ bun run test:e2e -- --workers=1
 
 The Library fixture is 100 conversations × 10,000 messages. The committed
 `conversationSearch.test.ts` measures the warmed search operation over 100
-queries and enforces p95 < 200 ms. This is not yet a PASS for full production
-render p95; a production-build browser measurement with the same fixture must
-be captured before P9/P10 can close.
+queries and enforces p95 < 200 ms. The production-build browser measurement is
+now also green for the same fixture: p95 `40.84 ms` in Chromium and
+`55.74 ms` in Firefox.
 
 ## Provider accounting and resume policy
 
 - Reserve one ledger slot before every transport attempt. Retry, timeout, 429,
   and unknown outcomes consume the reserved slot; SDK retries remain disabled.
-- Campaign A and B are each capped at 60, with a shared cap of 120. Campaign
-  IDs do not reset that budget and closed incomplete ledgers are never resumed.
+- Campaign A and B are each capped at 60, with the original round shared cap of
+  120. The explicit 2026-09-07 user override permits fresh key5-only campaigns
+  beyond that historical cap until provider quota stops them; campaign IDs do
+  not reset a ledger and closed incomplete ledgers are never resumed.
 - Calibration must distinguish frozen correct/incorrect samples before sentinel
   calls. A quota or interruption is `INCOMPLETE`, never semantic PASS/FAIL.
 - Provider execution is not part of offline CI and there is no public provider
@@ -171,15 +177,19 @@ be captured before P9/P10 can close.
 - A controlled key5-only probe (`window_05_key5`) completed generation and
   judging with HTTP 200, `provider_calls_complete=true`, and both quality and
   acceptance preflight passing. It consumed two additional requests.
-- Fresh Provider B execution was attempted only through its bounded runner:
-  `bilingual_evaluation_v1_window_03` stopped at `24/60`, and
-  `bilingual_evaluation_v1_window_04` stopped at `39/60`, both on provider
-  rate limits. The latest status is `INCOMPLETE`, not a semantic result.
-- This continuation used `69` real requests (`2 + 24 + 2 + 39 + 2`) out of the
-  shared `120` request cap. The fresh Provider A `window_04` manifest was
-  registered provider-free but was not executed because a complete 60-call
-  campaign would exceed the remaining `51` slots. No provider retry is safe
-  without a newly authorized budget/window.
+- Fresh key5-only Provider A `evidence_contract_v3_window_07_key5` completed
+  `48/60` calls with calibration, two replicates, legacy comparison, and
+  reproducibility all complete; its candidate decision is `GO`. Earlier
+  `window_05_key5` was stopped at `21/60` after an accidental five-key launch,
+  and `window_06_key5` was closed at `36/60` after the legacy runner bug; neither
+  incomplete ledger is resumed.
+- Fresh key5-only Provider B `bilingual_evaluation_v1_window_06_key5`
+  completed `52/60` calls with zero transport errors, but its two replicates
+  failed semantic bilingual gates, so its candidate decision is `NO-GO`. This
+  is a quality result, not a quota stop; no best-of retry was made.
+- Across this continuation, the recorded provider slots are `226`: the prior
+  `69` slots, accidental five-key `21`, Provider A `window_06_key5` `36`,
+  Provider A `window_07_key5` `48`, and Provider B `window_06_key5` `52`.
 
 ## Handoff checklist
 
@@ -194,8 +204,8 @@ Before final handoff, record actual values rather than estimates for:
 - known limitations, verified resume commands, and explicit merge/deploy/index
   state.
 
-Current state: `IMPLEMENTATION COMPLETE / OFFLINE VALIDATION GREEN`. The
-offline workspace closures and two-tab lock evidence are green; Provider B is
-incomplete after rate limits, Provider A has only a fresh preflight, production
-Library p95 and the full 120-variant freeze remain open, and the official
-benchmark is unchanged.
+Current state: `IMPLEMENTATION COMPLETE / PROVIDER VALIDATION MIXED`. Offline
+workspace closures and production Library p95 are green; Provider A is
+`GO`, Provider B is complete but `NO-GO` on semantic bilingual gates, the full
+120-variant acceptance freeze and manual guided walkthrough remain open, and
+the official benchmark is unchanged.

@@ -35,6 +35,24 @@ historical entries remain unchanged for provenance.
   quality/acceptance preflight, so there is no evidence that key5 itself is out
   of quota. The probe used two more slots, bringing the continuation total to
   `69/120` and leaving `51`.
+- Following the explicit user override to continue with key5 until provider
+  quota stops the work, fresh bounded campaigns were run without resuming old
+  ledgers. Provider A `evidence_contract_v3_window_07_key5` completed at
+  `48/60` with both replicates, legacy comparison, and reproducibility green;
+  its decision is `GO`. Provider B `bilingual_evaluation_v1_window_06_key5`
+  completed at `52/60` with zero transport errors, but both replicates failed
+  semantic bilingual gates, so its decision is `NO-GO`.
+- A runner invocation was initially started without the key5-only environment
+  and was stopped at `21/60`; its ledger is closed. A key5-only A run then
+  reached `36/60` before exposing a runner `ground_truth` lookup bug; that
+  ledger is also closed. The bug was fixed to use versioned Evidence Contract
+  references, regression-tested, and the full backend suite is now `717 passed`
+  with `121` warnings plus compileall.
+- Recorded provider slots across this continuation total `226`: prior `69`,
+  accidental five-key `21`, A key5-only `36`, A key5-only `48`, and B key5-only
+  `52`. No corpus/index rebuild or merge/deploy was performed. The Docker
+  runtime receipt remains a valid previous candidate because Docker copies
+  `src/` and `configs/`, while this fix changed only campaign scripts/tests.
 - No corpus/index rebuild, merge, deploy, or Docker receipt was performed for
   this frontend-only continuation. The official benchmark remains unchanged;
   production Library p95 and the full 120-variant acceptance freeze remain

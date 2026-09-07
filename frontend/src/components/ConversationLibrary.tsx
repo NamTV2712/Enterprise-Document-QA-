@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bookmark,
   BookmarkCheck,
@@ -8,6 +8,7 @@ import {
   Search,
   Trash2,
   X,
+  Plus,
 } from "lucide-react";
 import {
   ConversationRecord,
@@ -15,6 +16,7 @@ import {
 } from "../lib/conversationStore";
 import { ConversationImportResult, SaveIndicator } from "../hooks/useConversationLibrary";
 import { Locale, normalizeLocaleSearch, useLocale } from "../lib/i18n";
+import { createEvidenceCollection, listEvidenceCollections, EvidenceCollection } from "../lib/evidenceCollections";
 
 interface ConversationLibraryProps {
   conversations: ConversationRecord[];
@@ -108,8 +110,27 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
   const [editingTitle, setEditingTitle] = useState("");
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [backupStatus, setBackupStatus] = useState<string | null>(null);
+  const [collections, setCollections] = useState<EvidenceCollection[]>(listEvidenceCollections);
+  const [collectionName, setCollectionName] = useState("");
   const importInputRef = useRef<HTMLInputElement>(null);
   const normalizedSearch = normalizeLocaleSearch(search.trim());
+
+  useEffect(() => {
+    const refresh = () => setCollections(listEvidenceCollections());
+    window.addEventListener("sec-qa-evidence-updated", refresh);
+    return () => window.removeEventListener("sec-qa-evidence-updated", refresh);
+  }, []);
+
+  const handleCreateCollection = () => {
+    if (!collectionName.trim()) return;
+    try {
+      createEvidenceCollection(collectionName);
+      setCollectionName("");
+      setCollections(listEvidenceCollections());
+    } catch (error) {
+      setBackupStatus(error instanceof Error ? error.message : "Could not create collection.");
+    }
+  };
 
   const handleImportBackup = async (file: File | undefined) => {
     if (!file || !onImportBackup) return;
@@ -244,6 +265,18 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
         </div>
       )}
       {backupStatus && <p className="library-backup-status" role="status">{backupStatus}</p>}
+
+      <div className="library-collections" aria-label={locale === "vi" ? "Bộ sưu tập evidence" : "Evidence collections"}>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">{locale === "vi" ? "Bộ sưu tập evidence" : "Evidence collections"}</span>
+          <span className="text-[10px] text-[var(--text-subtle)]">{collections.reduce((total, collection) => total + collection.items.length, 0)} {locale === "vi" ? "mục" : "items"}</span>
+        </div>
+        <div className="mt-2 flex gap-2">
+          <input value={collectionName} onChange={(event) => setCollectionName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") handleCreateCollection(); }} placeholder={locale === "vi" ? "Tên bộ sưu tập mới" : "New collection name"} aria-label={locale === "vi" ? "Tên bộ sưu tập mới" : "New collection name"} className="min-w-0 flex-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] px-2 py-1.5 text-xs text-[var(--text-primary)]" />
+          <button type="button" onClick={handleCreateCollection} aria-label={locale === "vi" ? "Tạo bộ sưu tập" : "Create collection"} className="icon-button"><Plus className="h-4 w-4" /></button>
+        </div>
+        {collections.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{collections.map((collection) => <span key={collection.id} className="rounded-full border border-[var(--border-subtle)] px-2 py-1 text-[10px] text-[var(--text-muted)]">{collection.name} · {collection.items.length}</span>)}</div>}
+      </div>
 
       <div className="library-list" aria-live="polite">
         {bookmarkedOnly ? (

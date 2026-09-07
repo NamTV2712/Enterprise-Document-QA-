@@ -348,13 +348,14 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
               <textarea
                 id={`note-${message.id}`}
                 value={noteDraft}
-                onChange={(event) => setNoteDraft(event.target.value.slice(0, 2000))}
+                onChange={(event) => setNoteDraft(event.target.value.slice(0, 10000))}
+                maxLength={10000}
                 rows={3}
                 placeholder={locale === "vi" ? "Lưu ý, giả định hoặc việc cần kiểm tra…" : "Save an observation, assumption, or follow-up…"}
                 className="mt-2 w-full resize-y rounded-lg border border-[var(--border-strong)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-amber-500"
               />
               <div className="mt-2 flex items-center justify-between gap-2">
-                <span className="text-[11px] text-[var(--text-muted)]">{noteDraft.length}/2000</span>
+                <span className="text-[11px] text-[var(--text-muted)]">{noteDraft.length}/10000</span>
                 <button
                   type="button"
                   onClick={() => { onSaveNote(noteDraft.trim()); setIsNoteOpen(false); }}

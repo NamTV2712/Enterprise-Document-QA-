@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     # Data path (relative path to run on any machine)
     data_raw_dir: Path = Path("data/raw")
     data_processed_dir: Path = Path("data/processed")
+    data_public_evaluations_dir: Path = Path("data/public_evaluations")
 
     # Qdrant configuration. Keep local as the safe default until cloud migration is verified.
     qdrant_mode: str = "local"

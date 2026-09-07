@@ -16,6 +16,9 @@ import {
   DocumentListResponse,
   DocumentChunkListResponse,
   SystemInfoResponse,
+  EvaluationRun,
+  EvaluationRunListResponse,
+  EvaluationRunStatus,
 } from "../types";
 
 export class ApiError extends Error {
@@ -187,6 +190,49 @@ export async function getSystemInfo(signal?: AbortSignal): Promise<SystemInfoRes
   });
   if (!response.ok) {
     throw new ApiError(`Failed to fetch system info: ${response.status}`, response.status);
+  }
+  return response.json();
+}
+
+export async function getEvaluationRuns(
+  params: {
+    status?: EvaluationRunStatus | null;
+    language?: "en" | "vi" | null;
+    intent?: string | null;
+    ticker?: string | null;
+    gate?: string | null;
+    page?: number;
+    page_size?: number;
+  } = {},
+  signal?: AbortSignal,
+): Promise<EvaluationRunListResponse> {
+  const baseUrl = getApiBaseUrl();
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
+  }
+  const response = await apiFetch(`${baseUrl}/evaluation/runs?${query.toString()}`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok) {
+    throw new ApiError(`Failed to fetch evaluation runs: ${response.status}`, response.status);
+  }
+  return response.json();
+}
+
+export async function getEvaluationRun(runId: string, signal?: AbortSignal): Promise<EvaluationRun> {
+  const baseUrl = getApiBaseUrl();
+  const response = await apiFetch(`${baseUrl}/evaluation/runs/${encodeURIComponent(runId)}`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok) {
+    throw new ApiError(`Failed to fetch evaluation run: ${response.status}`, response.status);
   }
   return response.json();
 }

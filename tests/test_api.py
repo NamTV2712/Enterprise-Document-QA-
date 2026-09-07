@@ -88,6 +88,32 @@ def test_health_returns_ok_when_pipeline_ready(client) -> None:
     assert data["memory"] == {"active_sessions": 0, "total_turns": 0}
 
 
+def test_evaluation_runs_are_empty_when_no_public_reports_are_published(client, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(app_module.settings, "data_public_evaluations_dir", tmp_path)
+
+    response = client.get("/evaluation/runs")
+
+    assert response.status_code == 200
+    assert response.json() == {"items": [], "total": 0, "page": 1, "page_size": 20}
+
+
+def test_evaluation_run_reads_only_a_validated_public_report(client, tmp_path, monkeypatch) -> None:
+    from src.evaluation.public_report import example_report, publish_public_report
+
+    monkeypatch.setattr(app_module.settings, "data_public_evaluations_dir", tmp_path)
+    publish_public_report(example_report("api-visible"), root=tmp_path)
+
+    listing = client.get("/evaluation/runs", params={"language": "vi"})
+    detail = client.get("/evaluation/runs/api-visible")
+    missing = client.get("/evaluation/runs/../../secret")
+
+    assert listing.status_code == 200
+    assert listing.json()["total"] == 1
+    assert detail.status_code == 200
+    assert detail.json()["run_id"] == "api-visible"
+    assert missing.status_code in {404, 422}
+
+
 def test_health_exposes_corpus_counts_when_available(client) -> None:
     app_module._state["corpus"] = {
         "searchable_company_count": 12,

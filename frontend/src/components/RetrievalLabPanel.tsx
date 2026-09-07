@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Activity, ArrowRight, FlaskConical, Search, ShieldCheck } from "lucide-react";
+import { Activity, ArrowRight, Download, FlaskConical, GitCompare, Search, ShieldCheck } from "lucide-react";
 import { inspectRetrieval } from "../lib/api";
 import { RetrievalPreset, RetrievalTrace } from "../types";
 import { useLocale } from "../lib/i18n";
@@ -43,6 +43,9 @@ export function RetrievalLabPanel({
   const [topK, setTopK] = useState(5);
   const [candidatePool, setCandidatePool] = useState(10);
   const [trace, setTrace] = useState<RetrievalTrace | null>(null);
+  const [comparisonTrace, setComparisonTrace] = useState<RetrievalTrace | null>(null);
+  const [compareEnabled, setCompareEnabled] = useState(false);
+  const [comparePreset, setComparePreset] = useState<RetrievalPreset>("bm25");
   const [interpretation, setInterpretation] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -74,13 +77,31 @@ export function RetrievalLabPanel({
         preset,
       });
       setTrace(response.trace);
+      setComparisonTrace(null);
       setInterpretation(response.query_interpretation.retrieval_question);
+      if (compareEnabled && comparePreset !== preset) {
+        const comparison = await inspectRetrieval({
+          question: question.trim(), ticker: ticker || null, section: section || null,
+          top_k: topK, candidate_pool: Math.max(candidatePool, topK), preset: comparePreset,
+        });
+        setComparisonTrace(comparison.trace);
+      }
     } catch (inspectionError) {
       setError(inspectionError instanceof Error ? inspectionError.message : "Retrieval inspection failed.");
       setTrace(null);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const downloadTrace = (format: "json" | "csv") => {
+    if (!trace) return;
+    const traces = comparisonTrace ? [trace, comparisonTrace] : [trace];
+    const content = format === "json"
+      ? JSON.stringify({ query: question, traces }, null, 2)
+      : ["preset,chunk_id,final_rank,selected,bm25_score,dense_score,rrf_score,cross_encoder_score", ...traces.flatMap((item) => item.candidates.map((candidate) => [item.preset, candidate.chunk_id, candidate.final_rank ?? "", candidate.selected, candidate.bm25_score ?? "", candidate.dense_score ?? "", candidate.rrf_score ?? "", candidate.cross_encoder_score ?? ""].join(",")))].join("\n");
+    const url = URL.createObjectURL(new Blob([content], { type: format === "json" ? "application/json" : "text/csv" }));
+    const anchor = document.createElement("a"); anchor.href = url; anchor.download = `retrieval-trace.${format}`; anchor.click(); URL.revokeObjectURL(url);
   };
 
   return (
@@ -172,9 +193,19 @@ export function RetrievalLabPanel({
         <label className="space-y-1 text-xs font-semibold text-[var(--text-muted)]">
           <span>{vi ? "Candidate pool" : "Candidate pool"}</span>
           <select value={candidatePool} onChange={(event) => setCandidatePool(Number(event.target.value))} className="control-select w-full">
-            {[10, 20, 50].map((item) => <option key={item} value={item}>{item}</option>)}
-          </select>
+          {[10, 20, 50].map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
         </label>
+        <label className="flex items-center gap-2 text-xs font-semibold text-[var(--text-muted)] sm:col-span-2 lg:col-span-1">
+          <input type="checkbox" checked={compareEnabled} onChange={(event) => setCompareEnabled(event.target.checked)} />
+          <span>{vi ? "So sánh preset" : "Compare preset"}</span>
+        </label>
+        {compareEnabled && <label className="space-y-1 text-xs font-semibold text-[var(--text-muted)]">
+          <span>{vi ? "Preset thứ hai" : "Second preset"}</span>
+          <select value={comparePreset} onChange={(event) => setComparePreset(event.target.value as RetrievalPreset)} className="control-select w-full">
+            {PRESETS.map((item) => <option key={item.value} value={item.value}>{vi ? item.vi : item.label}</option>)}
+          </select>
+        </label>}
       </div>
 
       {error && <div className="rounded-xl border border-rose-300/60 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300" role="alert">{error}</div>}
@@ -197,7 +228,7 @@ export function RetrievalLabPanel({
           <div className="overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-raised)]">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border-subtle)] px-4 py-3">
               <div className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]"><Activity className="h-4 w-4 text-cyan-600 dark:text-cyan-300" />{presetLabel}</div>
-              <span className="text-xs text-[var(--text-muted)]">{trace.candidates.length} candidates · {trace.elapsed_ms.toFixed(1)} ms</span>
+              <div className="flex flex-wrap items-center gap-2"><span className="text-xs text-[var(--text-muted)]">{trace.candidates.length} candidates · {trace.elapsed_ms.toFixed(1)} ms</span><button type="button" onClick={() => downloadTrace("json")} className="inline-flex items-center gap-1 rounded border border-[var(--border-subtle)] px-2 py-1 text-[10px] font-semibold text-[var(--text-primary)]"><Download className="h-3 w-3" />JSON</button><button type="button" onClick={() => downloadTrace("csv")} className="inline-flex items-center gap-1 rounded border border-[var(--border-subtle)] px-2 py-1 text-[10px] font-semibold text-[var(--text-primary)]"><Download className="h-3 w-3" />CSV</button></div>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-[900px] w-full text-left text-xs">
@@ -220,6 +251,7 @@ export function RetrievalLabPanel({
               </table>
             </div>
           </div>
+          {comparisonTrace && <div className="mt-3 rounded-2xl border border-violet-400/30 bg-violet-500/10 p-4"><div className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]"><GitCompare className="h-4 w-4 text-violet-600 dark:text-violet-300" />{vi ? `So sánh với ${comparisonTrace.preset}` : `Compared with ${comparisonTrace.preset}`}</div><div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{comparisonTrace.stages.map((stage) => <div key={stage.name} className="rounded-lg bg-[var(--surface-raised)] p-2 text-xs"><div className="text-[var(--text-muted)]">{stage.name}</div><div className="mt-1 font-semibold text-[var(--text-primary)]">{stage.skipped ? "—" : `${stage.elapsed_ms.toFixed(1)} ms`}</div></div>)}</div><p className="mt-3 text-xs text-[var(--text-muted)]">{vi ? "Các trace dùng cùng câu hỏi và filter; score của các stage khác thang đo nên không được so sánh trực tiếp." : "Both traces use the same question and filters; stage scores have different scales and are not directly comparable."}</p></div>}
         </>
       ) : (
         <div className="rounded-2xl border border-dashed border-[var(--border-strong)] px-5 py-12 text-center text-sm text-[var(--text-muted)]">

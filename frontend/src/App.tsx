@@ -22,6 +22,9 @@ import { HelpDialog } from "./components/HelpDialog";
 import { RetrievalLabPanel } from "./components/RetrievalLabPanel";
 import { DocumentExplorerPanel } from "./components/DocumentExplorerPanel";
 import { SystemInfoPanel } from "./components/SystemInfoPanel";
+import { EvaluationPanel } from "./components/EvaluationPanel";
+import { AnalyticsPanel } from "./components/AnalyticsPanel";
+import { CommandPalette, PaletteView } from "./components/CommandPalette";
 import {
   HealthResponse,
   RequestSnapshot,
@@ -44,6 +47,8 @@ import {
 } from "./lib/conversationExport";
 import { useConversationLibrary, SessionContextStatus } from "./hooks/useConversationLibrary";
 import { useLocale } from "./lib/i18n";
+import { recordAnalyticsEvent } from "./lib/analyticsStore";
+import { ResearchTemplate } from "./lib/researchTemplates";
 
 const STREAM_FLUSH_INTERVAL_MS = 80;
 const HEALTH_REFRESH_INTERVAL_MS = 15_000;
@@ -109,6 +114,17 @@ function prefersReducedMotion(): boolean {
   );
 }
 
+type WorkspaceView = "overview" | "conversation" | "retrieval" | "documents" | "evaluation" | "analytics" | "system";
+
+function initialWorkspaceView(): WorkspaceView {
+  if (typeof window === "undefined") return "overview";
+  if (import.meta.env.MODE === "test") return "overview";
+  const value = new URLSearchParams(window.location.search).get("view");
+  return ["overview", "conversation", "retrieval", "documents", "evaluation", "analytics", "system"].includes(value ?? "")
+    ? (value as WorkspaceView)
+    : "overview";
+}
+
 export default function App() {
   const { locale } = useLocale();
   const [tickers, setTickers] = useState<string[]>([]);
@@ -139,9 +155,8 @@ export default function App() {
   const [isClearingSession, setIsClearingSession] = useState<boolean>(false);
   const [showResetDialog, setShowResetDialog] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
-  const [activeView, setActiveView] = useState<"overview" | "conversation" | "retrieval" | "documents" | "system">(
-    "overview",
-  );
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
+  const [activeView, setActiveView] = useState<WorkspaceView>(initialWorkspaceView);
   const [pendingFocusMessageId, setPendingFocusMessageId] = useState<string | null>(null);
   const [activeSidebarPanel, setActiveSidebarPanel] = useState<"research" | "library">("research");
 
@@ -162,6 +177,20 @@ export default function App() {
     getSystemTheme,
   );
   const resolvedTheme = themePreference === "system" ? systemTheme : themePreference;
+
+  useEffect(() => {
+    const handlePopState = () => setActiveView(initialWorkspaceView());
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (import.meta.env.MODE === "test") return;
+    const url = new URL(window.location.href);
+    if (activeView === "overview") url.searchParams.delete("view");
+    else url.searchParams.set("view", activeView);
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [activeView]);
 
   useEffect(() => {
     try {
@@ -425,6 +454,12 @@ export default function App() {
     // the final save. Duplicate sends are blocked while one is in flight.
     const identity = beginSend(text);
     if (!identity) return;
+    const analyticsStartedAt = Date.now();
+    recordAnalyticsEvent({
+      kind: "query_started",
+      ticker: requestSnapshot.ticker,
+      language: requestSnapshot.answerLanguage,
+    });
 
     // Re-check a saved conversation's backend session before spending the
     // question; the session can expire while the user is reading. A
@@ -512,6 +547,13 @@ export default function App() {
           ),
         );
         registerBackendExchange();
+        recordAnalyticsEvent({
+          kind: "query_completed",
+          ticker: requestSnapshot.ticker,
+          language: requestSnapshot.answerLanguage,
+          durationMs: Date.now() - analyticsStartedAt,
+          status: "completed",
+        });
       } catch (err: any) {
         if (!isCurrentRequest()) return;
         const requestError = describeRequestError(
@@ -533,6 +575,13 @@ export default function App() {
               : m,
           ),
         );
+        recordAnalyticsEvent({
+          kind: "query_error",
+          ticker: requestSnapshot.ticker,
+          language: requestSnapshot.answerLanguage,
+          durationMs: Date.now() - analyticsStartedAt,
+          status: "error",
+        });
       } finally {
         if (requestAbortRef.current === controller) {
           requestAbortRef.current = null;
@@ -613,6 +662,13 @@ export default function App() {
                 ),
               );
               registerBackendExchange();
+              recordAnalyticsEvent({
+                kind: "query_completed",
+                ticker: requestSnapshot.ticker,
+                language: requestSnapshot.answerLanguage,
+                durationMs: Date.now() - analyticsStartedAt,
+                status: "completed",
+              });
               setIsLoading(false);
             } else if (event.type === "error") {
               cancelPendingFlush();
@@ -636,6 +692,13 @@ export default function App() {
                 ),
               );
               setIsLoading(false);
+              recordAnalyticsEvent({
+                kind: "query_error",
+                ticker: requestSnapshot.ticker,
+                language: requestSnapshot.answerLanguage,
+                durationMs: Date.now() - analyticsStartedAt,
+                status: "error",
+              });
             }
           },
           (error) => {
@@ -662,6 +725,13 @@ export default function App() {
               ),
             );
             setIsLoading(false);
+            recordAnalyticsEvent({
+              kind: "query_error",
+              ticker: requestSnapshot.ticker,
+              language: requestSnapshot.answerLanguage,
+              durationMs: Date.now() - analyticsStartedAt,
+              status: "connection_closed",
+            });
           },
           controller.signal,
         );
@@ -689,6 +759,13 @@ export default function App() {
           ),
         );
         setIsLoading(false);
+        recordAnalyticsEvent({
+          kind: "query_error",
+          ticker: requestSnapshot.ticker,
+          language: requestSnapshot.answerLanguage,
+          durationMs: Date.now() - analyticsStartedAt,
+          status: "error",
+        });
       } finally {
         cancelPendingFlush();
         if (requestAbortRef.current === controller) {
@@ -877,7 +954,16 @@ export default function App() {
         });
         return;
       }
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        setIsCommandPaletteOpen(true);
+        return;
+      }
       if (event.key === "Escape") {
+        if (isCommandPaletteOpen) {
+          setIsCommandPaletteOpen(false);
+          return;
+        }
         if (isHelpOpen) {
           setIsHelpOpen(false);
           return;
@@ -889,7 +975,7 @@ export default function App() {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isHelpOpen, showResetDialog]);
+  }, [isCommandPaletteOpen, isHelpOpen, showResetDialog]);
 
   const handleStopGenerating = useCallback(() => {
     const controller = requestAbortRef.current;
@@ -948,6 +1034,21 @@ export default function App() {
     window.requestAnimationFrame(() => {
       document.getElementById("chat-textarea")?.focus();
     });
+  }, [setInputText]);
+
+  const handlePaletteNavigate = useCallback((view: PaletteView) => {
+    setActiveView(view);
+    if (view === "conversation") {
+      window.requestAnimationFrame(() => document.getElementById("chat-textarea")?.focus());
+    }
+  }, []);
+
+  const handlePaletteTemplate = useCallback((template: ResearchTemplate) => {
+    setInputText(template.question);
+    if (template.section) setSelectedSection(template.section);
+    setAnswerLanguage(template.language);
+    setActiveView("conversation");
+    window.requestAnimationFrame(() => document.getElementById("chat-textarea")?.focus());
   }, [setInputText]);
 
   const handleRetryConnection = useCallback(async () => {
@@ -1038,6 +1139,7 @@ export default function App() {
           isClearingSession={isClearingSession}
           onReset={requestNewConversation}
           onOpenHelp={() => setIsHelpOpen(true)}
+          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         />
         {/* Content stream area */}
         <main
@@ -1065,6 +1167,10 @@ export default function App() {
             <DocumentExplorerPanel tickers={tickers} sections={sections} />
           ) : activeView === "system" ? (
             <SystemInfoPanel />
+          ) : activeView === "evaluation" ? (
+            <EvaluationPanel />
+          ) : activeView === "analytics" ? (
+            <AnalyticsPanel />
           ) : activeView === "overview" ? (
             <OverviewPanel
               hasMessages={hasExchanges}
@@ -1127,7 +1233,7 @@ export default function App() {
         </main>
 
         {/* The composer is a flex sibling, so it never overlays response evidence. */}
-        {activeView !== "retrieval" && activeView !== "documents" && activeView !== "system" && <div className="composer-shell flex-shrink-0 z-10">
+        {activeView !== "retrieval" && activeView !== "documents" && activeView !== "evaluation" && activeView !== "analytics" && activeView !== "system" && <div className="composer-shell flex-shrink-0 z-10">
           <ChatInput
             inputText={inputText}
             setInputText={setInputText}
@@ -1152,6 +1258,14 @@ export default function App() {
       </div>
 
       <HelpDialog open={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+      <CommandPalette
+        open={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onNavigate={handlePaletteNavigate}
+        onTemplate={handlePaletteTemplate}
+        onHelp={() => setIsHelpOpen(true)}
+        onNewConversation={requestNewConversation}
+      />
 
       {showResetDialog && (
         <div

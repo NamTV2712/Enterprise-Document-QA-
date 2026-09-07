@@ -81,10 +81,24 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        build/readiness/receipt PASS. The receipt is ignored at
        `data/diagnostics/local_release_receipt_bilingual.json`; no canonical
        data or index rebuild was made.
-5d. [ ] After offline gates pass, prepare the bounded provider campaign under
-       a new ledger/window (maximum 120 real requests, including explicit
-       retries). Keep the earlier incomplete Evidence Contract v3 ledger
-       historical and do not resume it.
+5h. [x] Add the provider-free evaluation workspace contract: strict public
+       report publisher/API, provenance allowlist, recorded demo fixture,
+       Evaluation and Analytics views, redacted local analytics export, and
+       tests for invalid/arbitrary-path reports.
+5i. [x] Add offline research utilities: EN/VI templates, command palette,
+       local evidence collections, Retrieval Lab preset comparison with
+       JSON/CSV export, 10,000-character private-note limit, and a 40-case
+       EN/VI/accentless matrix (120 authored query variants).
+5j. [x] Register the quota-safe bilingual campaign protocol: five intents x
+       two languages, 12 calibration + 40 sentinel operations + 8 retry
+       reserve, SDK retries disabled, append-only checkpoints, and explicit
+       `NOT_STARTED`/`INCOMPLETE` status. Preflight used zero provider calls;
+       execute only after a new provider window and use a new campaign ID
+       after an incomplete run.
+5d. [ ] After the offline gates and final source freeze, run Provider A and B
+       under separate fresh ledgers (maximum 60 real requests each, maximum
+       120 total including explicit retries). Keep the earlier incomplete
+       Evidence Contract v3 ledger historical and do not resume it.
 5e. [x] Update the final round report with receipts and results, commit/push
         the branch, keep PR #3 open, and verify green CI. Merge/deploy remains
         a separate explicit follow-up decision.

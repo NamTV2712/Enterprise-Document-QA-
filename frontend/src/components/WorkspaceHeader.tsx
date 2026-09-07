@@ -12,18 +12,21 @@ import {
   FlaskConical,
   Menu,
   MessageSquare,
+  BarChart3,
+  Activity,
   Moon,
   Monitor,
   RefreshCw,
   Sun,
   Check,
+  Search,
 } from "lucide-react";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { BrandMark } from "./BrandMark";
 import { ThemePreference } from "../types";
 import { useLocale } from "../lib/i18n";
 
-type WorkspaceView = "overview" | "conversation" | "retrieval" | "documents" | "system";
+export type WorkspaceView = "overview" | "conversation" | "retrieval" | "documents" | "evaluation" | "analytics" | "system";
 
 interface WorkspaceHeaderProps {
   isSidebarOpen: boolean;
@@ -40,6 +43,7 @@ interface WorkspaceHeaderProps {
   isClearingSession: boolean;
   onReset: () => void;
   onOpenHelp?: () => void;
+  onOpenCommandPalette?: () => void;
 }
 
 const THEME_OPTIONS: ThemePreference[] = ["system", "light", "dark"];
@@ -65,6 +69,7 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
     isClearingSession,
     onReset,
     onOpenHelp,
+    onOpenCommandPalette,
   }) => {
     const { locale, setLocale, t } = useLocale();
     const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
@@ -182,6 +187,8 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
             <option value="conversation" disabled={!hasMessages}>{t("nav.conversation")}</option>
             <option value="retrieval">{t("nav.retrieval")}</option>
             <option value="documents">{t("nav.documents")}</option>
+            <option value="evaluation">{t("nav.evaluation")}</option>
+            <option value="analytics">{t("nav.analytics")}</option>
             <option value="system">{t("nav.system")}</option>
           </select>
         </label>
@@ -244,6 +251,32 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
           </button>
           <button
             type="button"
+            onClick={() => onSelectView("evaluation")}
+            aria-pressed={activeView === "evaluation"}
+            className={`workspace-nav-button ${
+              activeView === "evaluation"
+                ? "workspace-nav-button--active"
+                : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            {t("nav.evaluation")}
+          </button>
+          <button
+            type="button"
+            onClick={() => onSelectView("analytics")}
+            aria-pressed={activeView === "analytics"}
+            className={`workspace-nav-button ${
+              activeView === "analytics"
+                ? "workspace-nav-button--active"
+                : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+            }`}
+          >
+            <Activity className="w-3.5 h-3.5" />
+            {t("nav.analytics")}
+          </button>
+          <button
+            type="button"
             onClick={() => onSelectView("system")}
             aria-pressed={activeView === "system"}
             className={`workspace-nav-button ${
@@ -264,6 +297,7 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
           isPipelineReady={isPipelineReady}
           companyCount={companyCount}
         />
+        {onOpenCommandPalette && <button type="button" onClick={onOpenCommandPalette} className="hidden min-h-9 items-center gap-2 rounded-lg border border-[var(--border-subtle)] px-2.5 text-xs font-semibold text-[var(--text-muted)] hover:surface-muted-hover md:inline-flex" aria-label="Open command palette" title="Open command palette (Ctrl+Shift+P)"><Search className="h-3.5 w-3.5" /><span className="hidden xl:inline">{locale === "vi" ? "Lệnh" : "Command"}</span><kbd className="hidden rounded border border-[var(--border-subtle)] px-1 py-0.5 text-[10px] xl:inline">Ctrl+Shift+P</kbd></button>}
         <div className="theme-menu" ref={themeMenuRef}>
           <button
             type="button"

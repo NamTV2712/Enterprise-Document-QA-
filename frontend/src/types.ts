@@ -130,6 +130,44 @@ export interface SystemInfoResponse {
   build: Record<string, string>;
 }
 
+export type EvaluationRunStatus = "official" | "candidate" | "historical" | "incomplete";
+
+export interface EvaluationCase {
+  case_id: string;
+  question: string;
+  language: AnswerLanguage;
+  intent?: string | null;
+  ticker?: string | null;
+  status: "OK" | "ERROR" | "MISSING";
+  answer?: string | null;
+  scores: Record<string, number>;
+  gates: Record<string, boolean | number | string>;
+  reasons: string[];
+  evidence: Array<{ citation: string; excerpt: string }>;
+}
+
+export interface EvaluationRunSummary {
+  run_id: string;
+  title: string;
+  status: EvaluationRunStatus;
+  created_at: string;
+  provenance: Record<string, string>;
+  aggregate: Record<string, number>;
+  case_count: number;
+}
+
+export interface EvaluationRun extends Omit<EvaluationRunSummary, "case_count"> {
+  cases: EvaluationCase[];
+  notes: string[];
+}
+
+export interface EvaluationRunListResponse {
+  items: EvaluationRunSummary[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export type ThemePreference = "system" | "light" | "dark";
 export type AnswerLanguage = "en" | "vi";
 export type MessageStatus = "streaming" | "stopped" | "completed" | "error";

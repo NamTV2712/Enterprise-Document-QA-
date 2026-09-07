@@ -13,10 +13,12 @@ import {
   ArrowUpRight,
   Search,
   X,
+  BookmarkPlus,
 } from "lucide-react";
 import { Source } from "../types";
 import { formatCompanyLabel, SECTION_METADATA } from "../lib/displayMetadata";
 import { normalizeLocaleSearch, useLocale } from "../lib/i18n";
+import { saveEvidence } from "../lib/evidenceCollections";
 
 interface SourcesPanelProps {
   sources: Source[];
@@ -168,6 +170,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [copyStateIndex, setCopyStateIndex] = useState<number | null>(null);
+  const [savedStateIndex, setSavedStateIndex] = useState<number | null>(null);
   const panelId = `sources-panel-${useId().replace(/:/g, "")}`;
   const safeMessageId = messageId.replace(/[^a-zA-Z0-9_-]/g, "-");
 
@@ -226,6 +229,16 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
       window.setTimeout(() => setCopyStateIndex((current) => (current === index ? null : current)), 2000);
     } catch {
       setCopyStateIndex(null);
+    }
+  };
+
+  const handleSaveEvidence = (index: number, source: Source) => {
+    try {
+      saveEvidence(source, { messageId });
+      setSavedStateIndex(index);
+      window.setTimeout(() => setSavedStateIndex((current) => (current === index ? null : current)), 2000);
+    } catch {
+      setSavedStateIndex(null);
     }
   };
 
@@ -371,6 +384,14 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
                           ) : (
                             <Copy className="w-3.5 h-3.5" />
                           )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSaveEvidence(index, source)}
+                          aria-label={savedStateIndex === index ? (locale === "vi" ? `Đã lưu đoạn ${index + 1}` : `Saved excerpt ${index + 1}`) : (locale === "vi" ? `Lưu đoạn ${index + 1} vào bộ sưu tập` : `Save excerpt ${index + 1} to collection`)}
+                          className="icon-button evidence-copy-button"
+                        >
+                          <BookmarkPlus className={`w-3.5 h-3.5 ${savedStateIndex === index ? "text-emerald-500" : ""}`} />
                         </button>
                       </div>
                     </div>

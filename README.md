@@ -33,6 +33,7 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 | [`AGENTS.md`](AGENTS.md) | Stable repository rules and operational traps for coding agents |
 | [`frontend/README.md`](frontend/README.md) | Frontend-specific local development, Vercel setup, and API usage |
 | [`docs/LOCAL_RELEASE_RUNBOOK.md`](docs/LOCAL_RELEASE_RUNBOOK.md) | Provider-free local Docker build, smoke test, provenance, and receipt |
+| [`docs/ARCHITECTURE_API_GUIDE.md`](docs/ARCHITECTURE_API_GUIDE.md) | Retrieval flow, read-only API surfaces, and frontend state boundaries |
 
 ## Key Features
 
@@ -51,8 +52,8 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 | Memory | Multi-turn backend memory, query rewriting, and a searchable local conversation library with bookmarks, Markdown export, and versioned JSON backup/restore |
 | Decomposition | Comparative and enumeration queries decomposed into focused sub-queries |
 | Evaluation | Fixed benchmark with faithfulness, relevancy, and context precision metrics |
-| Research workspace | Vite/React interface with searchable company and section controls, English/Vietnamese UI and answer selection, streaming answers, accent-insensitive evidence inspection with per-panel search and copy, per-answer bookmarks, feedback, and private notes, a reliable local conversation Library, JSON backup/restore, session context status, glossary/help, and keyboard shortcuts |
-| Research tools | Provider-free Retrieval Lab for BM25/dense/RRF/reranker trace inspection, read-only Document Explorer with filing/chunk search, and System & provenance metadata without filesystem paths or secrets |
+| Research workspace | Vite/React interface with searchable company and section controls, English/Vietnamese UI and answer selection, streaming answers, accent-insensitive evidence inspection with per-panel search and copy, per-answer bookmarks, feedback, private notes, local evidence collections, a reliable conversation Library, JSON backup/restore, session context status, glossary/help, research templates, command palette, and keyboard shortcuts |
+| Research tools | Provider-free Retrieval Lab for BM25/dense/RRF/reranker trace inspection with preset comparison and JSON/CSV export, read-only Document Explorer with filing/chunk search, Evaluation & experiments with validated/recorded modes, local Analytics, and System & provenance metadata without filesystem paths or secrets |
 | Conversation UX | Separate Overview and Conversation views, mobile workspace navigation, bounded answer cards, interpreted-query metadata, and a resizable desktop control sidebar |
 
 ## Architecture
@@ -146,6 +147,8 @@ http://localhost:8000/docs
 | `GET` | `/documents/{document_id}` | One safe document metadata record |
 | `GET` | `/documents/{document_id}/chunks` | Paginated source previews for a loaded filing |
 | `GET` | `/system/info` | Allowlisted corpus, retrieval, and build metadata |
+| `GET` | `/evaluation/runs` | List validated public evaluation summaries with safe filters |
+| `GET` | `/evaluation/runs/{run_id}` | Read one validated public evaluation report |
 | `GET` | `/cache/stats` | Semantic cache metrics |
 | `POST` | `/cache/clear` | Clear semantic cache when explicitly enabled |
 | `POST` | `/cache/test` | Rate-limited query embedding comparison |
@@ -446,6 +449,26 @@ failures are reported, and the composer handles IME composition and trimmed
 length validation. Mobile sidebar focus is trapped while open and restored on
 close. Frontend verification covers both theme behavior and evidence navigation
 with Vitest and TypeScript checks.
+
+### Evaluation, analytics, and quota-safe campaign handoff
+
+The Evaluation view reads only reports published through the allowlisted
+`data/public_evaluations/` contract. It exposes provenance, case evidence, and
+aggregate scores without browsing arbitrary diagnostic files. The Recorded
+demo is explicitly labelled and is provider-free; it is not an official
+benchmark. The Analytics view stores only local operational metadata (event
+kind, language, ticker, duration, and timestamp). Its export never includes
+questions, answers, source text, session IDs, or secrets.
+
+The bilingual campaign is registered before execution. Its manifest freezes
+five intents in English and Vietnamese, the canonical artifact hash, and a
+60-request ledger (12 calibration, 40 sentinel generation/judging, and an
+8-request explicit retry reserve). SDK retries are disabled. When quota is
+unavailable, the safe preflight still runs with zero provider calls and the
+campaign remains `NOT_STARTED`; a provider interruption is recorded as
+`INCOMPLETE`. After a new provider window is granted, start a new campaign ID
+and use `--execute`; do not mutate an incomplete ledger or select a best-of
+replicate.
 
 ### Historical evaluation log
 

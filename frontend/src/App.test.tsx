@@ -330,7 +330,13 @@ describe("App request cancellation", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Send question" }));
 
-    await screen.findByText(/Câu trả lời có nguồn/);
+    // The citation formatter wraps [Source 1] in a button, so assert the
+    // answer's accessible article text rather than requiring one DOM text node.
+    await waitFor(() =>
+      expect(
+        screen.getByRole("article", { name: "Research assistant response" }),
+      ).toHaveTextContent("Câu trả lời có nguồn"),
+    );
     expect(apiMocks.streamQuery.mock.calls[0][0]).toMatchObject({
       answer_language: "vi",
       question: "Doanh thu của Apple năm 2024 là bao nhiêu?",

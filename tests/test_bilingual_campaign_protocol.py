@@ -18,7 +18,7 @@ from src.evaluation.request_ledger import RequestLedger
 
 
 def test_bilingual_manifest_freezes_ten_language_cases_and_budget() -> None:
-    artifact = Path("data/eval_artifacts/phase1_priority2_financial_table_units.json")
+    artifact = Path("tests/fixtures/bilingual_artifact_identity.json")
     manifest = build_manifest(artifact, "bilingual_test")
     assert manifest["passed"] is True
     assert len(BILINGUAL_CASES) == 5
@@ -35,23 +35,15 @@ def test_bilingual_manifest_freezes_ten_language_cases_and_budget() -> None:
     assert len(set(campaign_output_paths("bilingual_test"))) == 8
 
 
-def test_bilingual_manifest_detects_changed_case() -> None:
-    artifact = Path("data/eval_artifacts/phase1_priority2_financial_table_units.json")
-    manifest_path = Path("data/diagnostics/bilingual_test_manifest.json")
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    original = manifest_path.read_text(encoding="utf-8") if manifest_path.exists() else None
-    try:
-        manifest_path.write_text(json.dumps(build_manifest(artifact, "bilingual_test")), encoding="utf-8")
-        assert verify_manifest(manifest_path, artifact, "bilingual_test") == ()
-        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-        payload["cases"][0]["question"] = "tampered"
-        manifest_path.write_text(json.dumps(payload), encoding="utf-8")
-        assert "manifest field changed: cases" in verify_manifest(manifest_path, artifact, "bilingual_test")
-    finally:
-        if original is None:
-            manifest_path.unlink(missing_ok=True)
-        else:
-            manifest_path.write_text(original, encoding="utf-8")
+def test_bilingual_manifest_detects_changed_case(tmp_path: Path) -> None:
+    artifact = Path("tests/fixtures/bilingual_artifact_identity.json")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(json.dumps(build_manifest(artifact, "bilingual_test")), encoding="utf-8")
+    assert verify_manifest(manifest_path, artifact, "bilingual_test") == ()
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    payload["cases"][0]["question"] = "tampered"
+    manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+    assert "manifest field changed: cases" in verify_manifest(manifest_path, artifact, "bilingual_test")
 
 
 def test_bilingual_retry_reserve_caps_provider_slots(tmp_path: Path) -> None:

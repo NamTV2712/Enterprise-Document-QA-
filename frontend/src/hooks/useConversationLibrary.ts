@@ -733,6 +733,14 @@ export function useConversationLibrary(
         bookmarkedMessageIds: next,
         updatedAt: Date.now(),
       };
+      // Keep Library filters responsive while the durable write completes.
+      // The repository sync below remains authoritative and rolls the
+      // optimistic record back if persistence fails.
+      const optimisticConversations = conversationsRef.current.map((record) =>
+        record.id === conversationId ? updated : record,
+      );
+      conversationsRef.current = optimisticConversations;
+      setConversations(optimisticConversations);
       void saveConversationRecord(updated).then((result) => {
         applyWriteResult(result, { setStorageMode, setStorageWarning });
         syncConversationsFromRepository();

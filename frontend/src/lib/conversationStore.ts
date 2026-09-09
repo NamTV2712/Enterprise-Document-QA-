@@ -5,6 +5,8 @@ import {
   MessageFeedback,
   RequestSnapshot,
   Source,
+  ExecutionTrace,
+  VisualAnswer,
 } from "../types";
 
 /**
@@ -377,18 +379,37 @@ function normalizeSource(value: unknown): Source | null {
   if (
     typeof source.citation !== "string" ||
     typeof source.text_preview !== "string" ||
-    typeof source.score !== "number" ||
-    !Number.isFinite(source.score)
+    (source.score !== undefined && source.score !== null &&
+      (typeof source.score !== "number" || !Number.isFinite(source.score))) ||
+    (source.reranker_score !== undefined && source.reranker_score !== null &&
+      (typeof source.reranker_score !== "number" || !Number.isFinite(source.reranker_score))) ||
+    (source.chunk_index !== undefined && source.chunk_index !== null &&
+      (!Number.isInteger(source.chunk_index) || source.chunk_index < 0)) ||
+    (source.rank !== undefined && source.rank !== null &&
+      (!Number.isInteger(source.rank) || source.rank < 0)) ||
+    (source.score_kind !== undefined && source.score_kind !== null &&
+      source.score_kind !== "retrieval" &&
+      source.score_kind !== "cross_encoder" &&
+      source.score_kind !== "rrf" &&
+      source.score_kind !== "unknown")
   ) return null;
   return {
     citation: source.citation,
-    score: source.score,
     text_preview: source.text_preview,
+    ...(source.score === null ? { score: null } : typeof source.score === "number" ? { score: source.score } : {}),
     ...(typeof source.text === "string" ? { text: source.text } : {}),
     ...(typeof source.chunk_id === "string" ? { chunk_id: source.chunk_id } : {}),
+    ...(typeof source.document_id === "string" ? { document_id: source.document_id } : {}),
     ...(typeof source.ticker === "string" ? { ticker: source.ticker } : {}),
+    ...(typeof source.filing_type === "string" ? { filing_type: source.filing_type } : {}),
     ...(typeof source.section === "string" ? { section: source.section } : {}),
     ...(typeof source.filing_date === "string" ? { filing_date: source.filing_date } : {}),
+    ...(typeof source.report_date === "string" ? { report_date: source.report_date } : {}),
+    ...(source.chunk_index === null ? { chunk_index: null } : typeof source.chunk_index === "number" ? { chunk_index: source.chunk_index } : {}),
+    ...(typeof source.source_url === "string" ? { source_url: source.source_url } : {}),
+    ...(source.rank === null ? { rank: null } : typeof source.rank === "number" ? { rank: source.rank } : {}),
+    ...(source.score_kind === null ? { score_kind: null } : source.score_kind ? { score_kind: source.score_kind } : {}),
+    ...(source.reranker_score === null ? { reranker_score: null } : typeof source.reranker_score === "number" ? { reranker_score: source.reranker_score } : {}),
   };
 }
 
@@ -436,6 +457,45 @@ function normalizeMessageFeedback(value: unknown): MessageFeedback | undefined |
   };
 }
 
+function normalizeExecutionTrace(value: unknown): ExecutionTrace | undefined | null {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== "object") return null;
+  const trace = value as Partial<ExecutionTrace>;
+  if (!isFiniteNumber(trace.elapsed_ms) || trace.elapsed_ms < 0 || !Array.isArray(trace.stages) || trace.stages.length > 32) return null;
+  const stages: ExecutionTrace["stages"] = [];
+  for (const stage of trace.stages) {
+    if (!stage || typeof stage !== "object") return null;
+    const candidate = stage as { name?: unknown; elapsed_ms?: unknown; status?: unknown };
+    if (
+      typeof candidate.name !== "string" || !candidate.name || candidate.name.length > 80 ||
+      !isFiniteNumber(candidate.elapsed_ms) || candidate.elapsed_ms < 0 ||
+      typeof candidate.status !== "string" || !candidate.status || candidate.status.length > 40
+    ) return null;
+    stages.push({ name: candidate.name, elapsed_ms: candidate.elapsed_ms, status: candidate.status });
+  }
+  return { elapsed_ms: trace.elapsed_ms, stages };
+}
+
+function normalizeVisualAnswer(value: unknown, sources: Source[]): VisualAnswer | undefined | null {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== "object") return null;
+  const fact = value as Partial<VisualAnswer>;
+  if (
+    fact.kind !== "metric" || typeof fact.metric !== "string" || typeof fact.label !== "string" ||
+    typeof fact.value !== "string" || typeof fact.display_value !== "string" || typeof fact.unit !== "string" ||
+    typeof fact.period !== "string" || !Number.isInteger(fact.source_index) || fact.source_index < 0 ||
+    typeof fact.source_chunk_id !== "string" || typeof fact.citation !== "string" || typeof fact.evidence_quote !== "string"
+  ) return null;
+  const source = sources[fact.source_index];
+  if (!source || source.chunk_id !== fact.source_chunk_id || source.citation !== fact.citation) return null;
+  return {
+    kind: "metric", metric: fact.metric, label: fact.label, value: fact.value,
+    display_value: fact.display_value, unit: fact.unit, period: fact.period,
+    source_index: fact.source_index, source_chunk_id: fact.source_chunk_id,
+    citation: fact.citation, evidence_quote: fact.evidence_quote,
+  };
+}
+
 function normalizeVariants(value: unknown, messages: Message[]): AnswerVariant[] | null {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > MAX_VARIANTS_PER_CONVERSATION) return null;
@@ -445,28 +505,34 @@ function normalizeVariants(value: unknown, messages: Message[]): AnswerVariant[]
   for (const item of value) {
     if (!item || typeof item !== "object") return null;
     const candidate = item as Partial<AnswerVariant>;
+    const sources = Array.isArray(candidate.sources)
+      ? candidate.sources.map((source) => normalizeSource(source))
+      : null;
     if (
       typeof candidate.id !== "string" ||
       typeof candidate.originMessageId !== "string" ||
       !messageIds.has(candidate.originMessageId) ||
       !assistantMessageIds.has(candidate.originMessageId) ||
       typeof candidate.text !== "string" ||
-      !Array.isArray(candidate.sources) ||
-      !candidate.sources.every((source) => normalizeSource(source) !== null) ||
+      sources === null || sources.some((source) => source === null) ||
       (candidate.answerLanguage !== "en" && candidate.answerLanguage !== "vi") ||
       (candidate.status !== "completed" && candidate.status !== "stopped" && candidate.status !== "error") ||
       !isFiniteNumber(candidate.createdAt) ||
       !isFiniteNumber(candidate.updatedAt) ||
-      normalizeRequestSnapshot(candidate.requestSnapshot) === null
+      normalizeRequestSnapshot(candidate.requestSnapshot) === null ||
+      normalizeExecutionTrace(candidate.execution) === null ||
+      normalizeVisualAnswer(candidate.visualAnswer, sources as Source[]) === null
     ) return null;
     variants.push({
       id: candidate.id,
       originMessageId: candidate.originMessageId,
       text: candidate.text,
-      sources: candidate.sources.map((source) => normalizeSource(source) as Source),
+      sources: sources as Source[],
       requestSnapshot: normalizeRequestSnapshot(candidate.requestSnapshot) as RequestSnapshot | undefined,
       answerLanguage: candidate.answerLanguage,
       status: candidate.status,
+      ...(normalizeExecutionTrace(candidate.execution) ? { execution: normalizeExecutionTrace(candidate.execution) as ExecutionTrace } : {}),
+      ...(normalizeVisualAnswer(candidate.visualAnswer, sources as Source[]) ? { visualAnswer: normalizeVisualAnswer(candidate.visualAnswer, sources as Source[]) as VisualAnswer } : {}),
       createdAt: candidate.createdAt,
       updatedAt: candidate.updatedAt,
     });
@@ -490,14 +556,23 @@ export function normalizeStoredMessages(messages: Message[]): Message[] {
       : feedback === undefined
         ? message
         : { ...message, feedback };
-    return normalized.isStreaming
+    const execution = normalizeExecutionTrace(normalized.execution);
+    const visualAnswer = normalizeVisualAnswer(normalized.visualAnswer, normalized.sources ?? []);
+    const metadataNormalized = {
+      ...normalized,
+      ...(execution ? { execution } : {}),
+      ...(visualAnswer ? { visualAnswer } : {}),
+    };
+    if (execution === null) delete metadataNormalized.execution;
+    if (visualAnswer === null) delete metadataNormalized.visualAnswer;
+    return metadataNormalized.isStreaming
       ? {
-          ...normalized,
-          text: normalized.text || "Generation stopped.",
+          ...metadataNormalized,
+          text: metadataNormalized.text || "Generation stopped.",
           isStreaming: false,
-          status: normalized.status === "error" ? "error" : "stopped",
+          status: metadataNormalized.status === "error" ? "error" : "stopped",
         }
-      : normalized;
+      : metadataNormalized;
   });
 }
 

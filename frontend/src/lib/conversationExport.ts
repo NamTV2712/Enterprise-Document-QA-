@@ -205,7 +205,7 @@ function isImportedSource(value: unknown): value is Source {
   const source = value as Partial<Source>;
   return typeof source.citation === "string" &&
     typeof source.text_preview === "string" &&
-    typeof source.score === "number" && Number.isFinite(source.score);
+    (source.score === undefined || source.score === null || (typeof source.score === "number" && Number.isFinite(source.score)));
 }
 
 function isImportedNote(value: unknown): value is ConversationNote {

@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "SEC Research Query Flow",
+    "subtitle": "A single question becomes ranked evidence and a cited answer.",
+    "quality_profile": "showcase",
+    "viewBox": [1080, 650],
+    "views": [
+      { "id": "question-to-retrieval", "label": "Question to retrieval", "focus": ["question", "normalize", "retrieve"], "note": "Start with the user's question and the local retrieval boundary." },
+      { "id": "ranking-to-context", "label": "Ranking to context", "focus": ["retrieve", "rerank", "context"], "note": "Follow how candidate chunks become bounded generation context." },
+      { "id": "answer-to-evidence", "label": "Answer and evidence", "focus": ["context", "answer", "reader"], "note": "Keep the generated answer connected to inspectable citations." }
+    ]
+  },
+  "stages": [
+    { "label": "Question" },
+    { "label": "Retrieve" },
+    { "label": "Rank" },
+    { "label": "Generate" },
+    { "label": "Read" }
+  ],
+  "nodes": [
+    { "id": "question", "type": "external", "label": "Research question", "sublabel": "plain language", "stage": 0, "row": 1 },
+    { "id": "normalize", "type": "backend", "label": "Normalize", "sublabel": "ticker + section", "stage": 1, "row": 1, "tag": "deterministic" },
+    { "id": "retrieve", "type": "backend", "label": "Hybrid retrieve", "sublabel": "BM25 + dense", "stage": 1, "row": 3 },
+    { "id": "rerank", "type": "backend", "label": "Rerank", "sublabel": "cross-encoder", "stage": 2, "row": 2 },
+    { "id": "context", "type": "security", "label": "Evidence context", "sublabel": "bounded excerpts", "stage": 3, "row": 2, "tag": "grounded" },
+    { "id": "answer", "type": "cloud", "label": "Cited answer", "sublabel": "Groq generation", "stage": 3, "row": 3 },
+    { "id": "reader", "type": "frontend", "label": "Evidence reader", "sublabel": "source + citation", "stage": 4, "row": 3 }
+  ],
+  "flows": [
+    { "id": "question-normalize", "from": "question", "to": "normalize", "label": "question + scope", "variant": "emphasis" },
+    { "id": "normalize-retrieve", "from": "normalize", "to": "retrieve", "label": "normalized query", "labelDy": 24 },
+    { "id": "retrieve-rerank", "from": "retrieve", "to": "rerank", "label": "candidate chunks", "variant": "emphasis" },
+    { "id": "rank-context", "from": "rerank", "to": "context", "label": "top-k evidence", "variant": "security" },
+    { "id": "context-answer", "from": "context", "to": "answer", "label": "grounded prompt", "variant": "security", "labelDy": 24 },
+    { "id": "answer-reader", "from": "answer", "to": "reader", "label": "answer + citations", "variant": "emphasis", "route": "straight", "labelDx": 80, "labelDy": -30 },
+    { "id": "evidence-reader", "from": "context", "to": "reader", "label": "source excerpts", "variant": "dashed" }
+  ]
+}

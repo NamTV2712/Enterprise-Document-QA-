@@ -35,6 +35,7 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 | [`docs/LOCAL_RELEASE_RUNBOOK.md`](docs/LOCAL_RELEASE_RUNBOOK.md) | Provider-free local Docker build, smoke test, provenance, and receipt |
 | [`docs/ARCHITECTURE_API_GUIDE.md`](docs/ARCHITECTURE_API_GUIDE.md) | Retrieval flow, read-only API surfaces, and frontend state boundaries |
 | [`docs/IMPROVEMENT_ROUND_REPORT.md`](docs/IMPROVEMENT_ROUND_REPORT.md) | M0-M11 improvement receipt, provider accounting, and final verification gates |
+| [`docs/UX_IMPROVEMENT_ROUND_REPORT.md`](docs/UX_IMPROVEMENT_ROUND_REPORT.md) | P0-P14 SEC Research Workspace UX, performance, Archify, and KEY5 receipt |
 
 ## Key Features
 
@@ -53,15 +54,28 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 | Memory | Multi-turn backend memory, query rewriting, and a searchable local conversation library with bookmarks, Markdown export, and versioned JSON backup/restore |
 | Decomposition | Comparative and enumeration queries decomposed into focused sub-queries |
 | Evaluation | Fixed benchmark with faithfulness, relevancy, and context precision metrics |
-| Research workspace | Vite/React interface with searchable company and section controls, English/Vietnamese UI and answer selection, streaming answers, an existing-evidence source rail/reader, accent-insensitive evidence inspection with per-panel search and copy, per-answer bookmarks, feedback, private notes, local evidence collections, a reliable conversation Library, JSON backup/restore, session context status, glossary/help, research templates, command palette, keyboard shortcuts, lazy tool panels, and responsive Light/Dark themes |
-| Research tools | Provider-free Retrieval Lab for BM25/dense/RRF/reranker trace inspection with preset comparison and JSON/CSV export, read-only Document Explorer with filing/chunk search, Evaluation & experiments with validated/recorded modes, local Analytics, and System & provenance metadata without filesystem paths or secrets |
-| Conversation UX | Separate Overview and Conversation views, mobile workspace navigation, bounded answer cards, interpreted-query metadata, and a resizable desktop control sidebar |
+| Research workspace | Vite/React interface with searchable company and section controls, English/Vietnamese UI and answer selection, streaming answers, measured request-stage traces when the backend provides them, conservative source-bound financial metric cards when the retrieved evidence supports them, a resizable existing-evidence source rail/reader backed by indexed excerpts, accent-insensitive evidence inspection with per-panel search and copy, per-answer bookmarks, feedback, private notes, local evidence collections, a reliable conversation Library, JSON backup/restore, session context status, glossary/help, research templates, command palette, keyboard shortcuts, lazy tool panels, and responsive Light/Dark themes |
+| Research tools | Provider-free Retrieval Lab for BM25/dense/RRF/reranker trace inspection with preset comparison and JSON/CSV export, read-only Document Explorer with filing/chunk search, Search workspace, Evaluation & experiments with validated/recorded modes, local Analytics, System & provenance metadata without filesystem paths or secrets, and three lazy-loaded Archify diagrams under Architecture |
+| Conversation UX | Separate Overview and Conversation views, a fixed 216px desktop navigation rail, mobile workspace navigation, bounded answer cards, contextual scope controls beside the composer, and interpreted-query metadata |
+
+The frontend's document reader caches indexed chunk details for five minutes
+with in-flight deduplication and a 100-entry bound. The production browser
+gate covers Chromium and Firefox responsive states from 320px through desktop,
+reduced-motion behavior, keyboard/focus flows, color contrast, and measured
+input/search performance against the local fixture API.
 
 ## Architecture
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for component boundaries, request flows,
 state ownership, reliability controls, deployment constraints, and extension
-paths.
+paths. The source-controlled diagrams below are rendered from Archify IR and
+are also available as standalone interactive viewers:
+
+- [System architecture](docs/architecture/sec-research-workspace.html)
+- [Query data flow](docs/architecture/sec-research-query.html)
+- [Research workflow](docs/architecture/sec-research-workflow.html)
+
+[![System architecture: browser request, FastAPI, hybrid retrieval, evidence stores, and Groq generation](docs/architecture/sec-research-workspace.visual-check.1440x900.light.png)](docs/architecture/sec-research-workspace.html)
 
 ```text
 SEC 10-K Filing
@@ -147,6 +161,7 @@ http://localhost:8000/docs
 | `GET` | `/documents` | Paginated loaded-filing catalog with safe filters |
 | `GET` | `/documents/{document_id}` | One safe document metadata record |
 | `GET` | `/documents/{document_id}/chunks` | Paginated source previews for a loaded filing |
+| `GET` | `/chunks/{chunk_id}` | Full safe source text and metadata for one indexed chunk; filesystem paths are never returned |
 | `GET` | `/system/info` | Allowlisted corpus, retrieval, and build metadata |
 | `GET` | `/evaluation/runs` | List validated public evaluation summaries with safe filters |
 | `GET` | `/evaluation/runs/{run_id}` | Read one validated public evaluation report |
@@ -459,14 +474,14 @@ Backup import validates and previews the bundle before the user confirms it;
 existing local records are never overwritten. In browsers with Web Locks, only
 the tab owning the Library writer lock may durably write; other tabs remain
 readable and exportable until ownership is acquired. The current offline gate
-is `107/107` frontend tests, `106/106` Chromium/Firefox browser checks, and
+is `108/108` frontend tests, `106/106` Chromium/Firefox browser checks, and
 `727` backend tests; provider campaigns and production hosting remain separate
 from this local release candidate. The final browser freeze includes backup
 import preview/confirm, the guided portfolio route, responsive
 Light/Dark/system-theme coverage, and the provider-free tool views. A
 production-build fixture with 100 conversations and 10,000 messages measured
-Library search p95 at 70.31 ms in Chromium and 66.93 ms in Firefox on the
-latest full freeze, below the 200 ms target.
+Library search p95 at 40.49 ms in Chromium and 80.02 ms in Firefox on the
+latest one-worker freeze, below the 200 ms target.
 
 ### Evaluation, analytics, and quota-safe campaign handoff
 

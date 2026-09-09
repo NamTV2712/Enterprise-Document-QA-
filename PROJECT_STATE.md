@@ -1,5 +1,44 @@
 # Project State
 
+## Current SEC Research Workspace UX closure — P0–P14 (2026-09-08)
+
+The P0–P14 UX, utility, performance, architecture, and KEY5 smoke plan is
+implemented on `codex/bilingual-research-workspace`. The detailed receipt is in
+[`docs/UX_IMPROVEMENT_ROUND_REPORT.md`](docs/UX_IMPROVEMENT_ROUND_REPORT.md).
+
+- The project-local `.agents/skills/rag-ui-ux` skill coordinates the four
+  external UI/UX reference layers and was validated with the skill creator
+  checker. `AGENTS.md` points future UI work to that skill and the frontend
+  design/contract documents.
+- The frontend now has explicit Overview, Conversation, Documents, Search,
+  Library, Retrieval Lab, Architecture, Evaluation, Analytics, and System
+  destinations. Search and Architecture are lazy-loaded; the Tools group keeps
+  advanced RAG diagnostics available without crowding the primary research
+  journey.
+- A safe `GET /chunks/{chunk_id}` reader endpoint returns full indexed source
+  text plus allowlisted metadata without filesystem paths. The evidence reader
+  uses abortable loading and explicit loading/fallback/error states.
+- Archify revision
+  `06bd6fea5752bc06b8170a1f09085c798df5aa13` generated three source-backed
+  diagrams under `docs/architecture/`, with standalone copies under
+  `frontend/public/architecture/`. All three passed showcase validation with
+  zero errors and warnings; final Light/Dark visual checks reported no overflow.
+- The generator now honors the effective `GROQ_KEY_POLICY` when selecting keys;
+  `key5_only` no longer accidentally constructs a multi-key pool. A six-case
+  live smoke ran with `GROQ_API_KEY5` only and is recorded in
+  [`docs/KEY5_SMOKE_RECEIPT.json`](docs/KEY5_SMOKE_RECEIPT.json). No secret
+  values were recorded.
+- Frontend lint, unit tests, production build, backend compile/API/key-policy
+  tests, and the local Chromium/Firefox browser matrix were run. The final
+  frontend unit suite passed `108/108`, and the stateful browser gate passed
+  all `106/106` checks with `--workers=1`; the
+  parallel exploratory run exposed timing sensitivity in IndexedDB/Web Locks,
+  which is why the documented gate remains one worker. This does not change the
+  documented official benchmark or campaign results.
+- No corpus, embedding, Qdrant, benchmark, deployment, or Vercel state was
+  changed. The local `frontend/.env.local` remains configured for the ngrok demo
+  origin; loopback browser verification used an explicit build-time override.
+
 ## Latest improvement round — M0-M11 complete (2026-09-07)
 
 The full improvement plan is implemented and verified on
@@ -3280,3 +3319,89 @@ new in-app browser smoke attempt was blocked by the local browser surface with
 hermetic behavioral suite and production build rather than an unverified
 visual screenshot. No provider request, canonical artifact, index, official
 benchmark, or production default was changed in this improvement.
+
+### UX recovery correction pass (2026-09-08)
+
+The screenshots collected after the prior UI round exposed material defects
+that the earlier completion claim did not cover: tool views inherited the
+conversation evidence-rail geometry, saved sidebar width could consume the
+workspace, mobile header controls overlapped, and browser tests were silently
+building against a developer-specific ngrok URL instead of their local API
+fixtures. This correction pass replaces the resizable control sidebar with a
+fixed 216px navigation rail, reserves the evidence rail for conversations
+with evidence only, moves scope/retrieval settings to the composer or tool
+that owns them, and makes tool grids responsive at their own breakpoints.
+
+Documents now distinguish transport failure from an empty result and offer a
+local retry. Retrieval, Search, Documents, Evaluation, and query flows share
+safe action-oriented error presentation; raw browser text such as `Failed to
+fetch` is no longer the user-facing state. The chat view has a genuine empty
+research start state, the composer preserves drafts while offline, and the
+mobile header uses a clear current-view picker rather than overlapping product
+text. Tool-only Architecture now launches validated standalone Archify
+viewers instead of embedding a heavy iframe.
+
+Frontend verification on this binding: `bun run lint`, `bun run test`
+(`110/110`), and `bun run build` passed. Chromium browser checks passed for
+the 320px/640px responsive smokes, keyboard theme menu, guided tool journey,
+wide-tool geometry, and Library-search p95 (`40.59 ms`, budget `<200 ms`).
+Archify architecture delivery passed 9/9 showcase checks; its artifact-bound
+browser visual check passed in Light/Dark through 2048×1320, and the rendered
+light viewer was manually inspected. This pass made no provider, Groq,
+corpus, index, evaluation, or deployment request; `GROQ_API_KEY5` therefore
+was not invoked.
+
+### Evidence-bound execution transparency follow-up (2026-09-09)
+
+The streaming RAG path now emits measured request-local execution stages for
+query preparation, embedding, cache lookup, retrieval, generation, and cached
+answer replay. The frontend renders this payload only when it is returned by
+the backend; it does not infer timings or fabricate pipeline stages. A narrow
+structured metric sidecar is also available only for direct total-net-sales
+questions where one retrieved chunk contains the exact table value, an explicit
+millions unit, and a local evidence quote. Both cache hits and fresh responses
+recompute that sidecar from their own displayed sources, so the evidence action
+continues to open the matching source rather than a guessed document location.
+
+This is additive presentation metadata: retrieval ranking, generation prompts,
+evaluation defaults, corpus data, embeddings, Qdrant data, and official
+benchmark artifacts remain unchanged. Focused backend tests passed `62/62`;
+frontend typecheck, `131/131` Vitest tests, production build, and five updated
+Chromium regression scenarios passed. The intentional storage fault-injection
+warnings in Vitest were retained as assertions of recovery behavior. No live
+provider request, deployment, or secret exposure occurred.
+
+### Verification addendum (2026-09-09)
+
+The current working tree was re-verified after migrating the last four direct
+component color utilities to the semantic token layer and updating one stale
+HTTP/SSE integration selector for the scope popover/listbox contract. Frontend
+typecheck/lint, `131/131` Vitest, and production build passed; the existing
+one-worker production browser matrix remains `108/108`. The real local
+FastAPI/fragmented-SSE integration suite passed `14/14` across Chromium and
+Firefox, and the full hermetic backend suite passed `730` tests with the same
+121 parser warnings. No provider call, corpus/index operation, deployment, or
+secret exposure occurred. The redacted 2026-09-08 six-case `key5_only` receipt
+remains the current live-provider evidence; no new provider run is claimed.
+
+### Plan V2 implementation closure (2026-09-09)
+
+The remaining P2.4-P4.2 execution gates are now implemented. The workspace has
+a citation-ordered indexed ContextPanel with exact chunk/document identity,
+abortable detail loading, pagination/search, verified SEC links, and a bounded
+five-minute/100-entry document cache. Ordinary and comparative requests expose
+request-scoped measured stage events over bounded SSE queues with cancellation;
+the frontend renders those stages without fabricated timing or progress.
+
+Conversation evidence width is keyboard/pointer resizable and persisted, local
+evidence imports preserve provenance, command actions share one typed registry,
+and the final performance/a11y browser coverage includes responsive layouts,
+reduced motion, 200-message input, indexed reader behavior, and contrast.
+
+Final provider-free verification: frontend Vitest `162/162`, typecheck/lint,
+production build, backend `737 passed`, Firefox browser matrix `58/58`, and
+Chromium coverage of all 58 scenarios with the two stateful IndexedDB/Web Locks
+cases passing on isolated reruns. Performance p95 was `51.67 ms` for 100-item
+Library search and `43.30 ms` for 200-message composer input in Chromium; the
+Firefox measurements were `79.08 ms` and `30.00 ms`. No provider, corpus,
+embedding, index, deployment, or secret state was changed.

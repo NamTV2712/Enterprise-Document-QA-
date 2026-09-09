@@ -11,6 +11,7 @@ import re
 import time
 import asyncio
 import functools
+import inspect
 import threading
 import unicodedata
 import uuid
@@ -29,7 +30,7 @@ from configs.settings import settings
 from configs.logging_config import setup_logging
 from configs.tickers import TICKERS
 from src.generation.generator import Generator
-from src.generation.query_decomposer import QueryDecomposer
+from src.generation.query_decomposer import QueryCancelled, QueryDecomposer
 from src.generation.rag_pipeline import RAGPipeline
 from src.retrieval.chunk_loader import load_retrieval_chunks
 from src.retrieval.embedder import Embedder
@@ -164,8 +165,58 @@ def _document_rows(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
         row["chunk_count"] += 1
     return [
         {**row, "sections": sorted(row["sections"])}
-        for row in sorted(grouped.values(), key=lambda item: (item["ticker"] or "", item["filing_date"] or ""))
+        for row in sorted(
+            grouped.values(),
+            key=lambda item: (
+                item["ticker"] or "",
+                item["filing_date"] or "",
+                item["document_id"],
+            ),
+        )
     ]
+
+
+def _chunk_sort_key(chunk: dict[str, Any]) -> tuple[Any, ...]:
+    section = str(chunk.get("section") or "")
+    try:
+        section_order = SUPPORTED_SECTIONS.index(section)
+    except ValueError:
+        section_order = len(SUPPORTED_SECTIONS)
+    chunk_index = chunk.get("chunk_index")
+    has_index = isinstance(chunk_index, int) and chunk_index >= 0
+    return (
+        section_order,
+        section,
+        0 if has_index else 1,
+        chunk_index if has_index else 0,
+        str(chunk.get("chunk_id") or ""),
+        str(chunk.get("text") or ""),
+    )
+
+
+def _build_document_chunk_indexes(
+    chunks: list[dict[str, Any]],
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, list[tuple[str, dict[str, Any]]]]]:
+    """Build stable document lists and a direct chunk lookup map.
+
+    Missing chunk IDs remain visible in document lists but cannot be addressed
+    by the direct detail route. Duplicate IDs are retained in the lookup so
+    the detail route can return an explicit ambiguity error instead of
+    silently opening one arbitrary chunk.
+    """
+    chunks_by_document: dict[str, list[dict[str, Any]]] = {}
+    for chunk in chunks:
+        chunks_by_document.setdefault(_document_id(chunk), []).append(chunk)
+    for document_id, document_chunks in chunks_by_document.items():
+        chunks_by_document[document_id] = sorted(document_chunks, key=_chunk_sort_key)
+
+    chunks_by_id: dict[str, list[tuple[str, dict[str, Any]]]] = {}
+    for document_id in sorted(chunks_by_document):
+        for chunk in chunks_by_document[document_id]:
+            chunk_id = chunk.get("chunk_id")
+            if isinstance(chunk_id, str) and chunk_id:
+                chunks_by_id.setdefault(chunk_id, []).append((document_id, chunk))
+    return chunks_by_document, chunks_by_id
 
 
 def _document_catalog() -> list[dict[str, Any]]:
@@ -183,11 +234,19 @@ def _document_chunks_index() -> dict[str, list[dict[str, Any]]]:
     cached = _state.get("document_chunks_by_id")
     if isinstance(cached, dict):
         return cached
-    index: dict[str, list[dict[str, Any]]] = {}
-    for chunk in _loaded_retrieval_chunks():
-        index.setdefault(_document_id(chunk), []).append(chunk)
+    index, chunks_by_id = _build_document_chunk_indexes(_loaded_retrieval_chunks())
     _state["document_chunks_by_id"] = index
+    _state["chunk_records_by_id"] = chunks_by_id
     return index
+
+
+def _chunk_records_index() -> dict[str, list[tuple[str, dict[str, Any]]]]:
+    """Return direct chunk lookup records, preserving duplicate ambiguity."""
+    cached = _state.get("chunk_records_by_id")
+    if isinstance(cached, dict):
+        return cached
+    _document_chunks_index()
+    return _state.get("chunk_records_by_id", {})
 
 
 def _embed_query_pair(
@@ -257,10 +316,9 @@ async def lifespan(app: FastAPI):
     _state["decomposer"] = QueryDecomposer(pipeline=pipeline)
     _state["store"] = store
     _state["document_rows"] = _document_rows(all_chunks)
-    chunks_by_document: dict[str, list[dict[str, Any]]] = {}
-    for chunk in all_chunks:
-        chunks_by_document.setdefault(_document_id(chunk), []).append(chunk)
+    chunks_by_document, chunks_by_id = _build_document_chunk_indexes(all_chunks)
     _state["document_chunks_by_id"] = chunks_by_document
+    _state["chunk_records_by_id"] = chunks_by_id
     searchable_tickers = {chunk["ticker"] for chunk in all_chunks}
     _state["corpus"] = {
         "searchable_company_count": len(searchable_tickers),
@@ -297,6 +355,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 async def record_request_telemetry(request: Request, call_next: Callable) -> Any:
     """Log request lifecycle metadata without recording question or session content."""
     request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+    request.state.request_id = request_id
     started_at = time.perf_counter()
     try:
         response = await call_next(request)
@@ -367,9 +426,17 @@ class SourceChunk(BaseModel):
     text_preview: str  # First 200 characters for collapsed evidence previews.
     text: str | None = None
     chunk_id: str | None = None
+    document_id: str | None = None
     ticker: str | None = None
+    filing_type: str | None = None
     section: str | None = None
     filing_date: str | None = None
+    report_date: str | None = None
+    chunk_index: int | None = None
+    source_url: str | None = None
+    rank: int | None = None
+    score_kind: Literal["retrieval", "cross_encoder", "rrf", "unknown"] | None = None
+    reranker_score: float | None = None
 
 
 class QueryInterpretation(BaseModel):
@@ -390,6 +457,7 @@ class QueryResponse(BaseModel):
     num_chunks_retrieved: int
     answer_language: Literal["en", "vi"] = "en"
     query_interpretation: QueryInterpretation | None = None
+    visual_answer: dict | None = None
 
 
 class SubQueryInfo(BaseModel):
@@ -455,7 +523,7 @@ def _health_payload() -> dict:
     return payload
 
 
-def _source_chunk_payload(chunk: Any) -> SourceChunk:
+def _source_chunk_payload(chunk: Any, rank: int | None = None) -> SourceChunk:
     """Serialize one retrieved chunk consistently across all query routes."""
     return SourceChunk(
         citation=chunk.citation,
@@ -463,9 +531,17 @@ def _source_chunk_payload(chunk: Any) -> SourceChunk:
         text_preview=chunk.text[:200],
         text=chunk.text,
         chunk_id=chunk.chunk_id,
+        document_id=getattr(chunk, "document_id", None),
         ticker=chunk.ticker,
+        filing_type=getattr(chunk, "filing_type", None),
         section=chunk.section,
         filing_date=chunk.filing_date,
+        report_date=getattr(chunk, "report_date", None),
+        chunk_index=getattr(chunk, "chunk_index", None),
+        source_url=getattr(chunk, "source_url", None),
+        rank=rank,
+        score_kind=getattr(chunk, "score_kind", None),
+        reranker_score=getattr(chunk, "reranker_score", None),
     )
 
 
@@ -544,7 +620,10 @@ async def query(request: Request, body: QueryRequest) -> QueryResponse:
         logger.exception("Error occurred while processing query: %s", e)
         raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
 
-    sources = [_source_chunk_payload(chunk) for chunk in response.retrieved_chunks]
+    sources = [
+        _source_chunk_payload(chunk, rank=index + 1)
+        for index, chunk in enumerate(response.retrieved_chunks)
+    ]
 
     return QueryResponse(
         answer=response.answer,
@@ -553,6 +632,7 @@ async def query(request: Request, body: QueryRequest) -> QueryResponse:
         num_chunks_retrieved=len(response.retrieved_chunks),
         answer_language=response.answer_language,
         query_interpretation=_query_interpretation(original_question, normalized),
+        visual_answer=response.visual_answer,
     )
 
 
@@ -628,10 +708,178 @@ async def query_decomposed(
             )
             for sub_query in result.sub_queries
         ],
-        sources=[_source_chunk_payload(chunk) for chunk in result.all_chunks[:10]],
+        sources=[
+            _source_chunk_payload(chunk, rank=index + 1)
+            for index, chunk in enumerate(result.all_chunks[:10])
+        ],
         num_total_chunks=len(result.all_chunks),
         answer_language=body.answer_language,
         query_interpretation=_query_interpretation(original_question, normalized),
+    )
+
+
+@app.post("/query/decomposed/stream")
+@limiter.shared_limit(settings.llm_rate_limit_burst, scope="llm-query-burst")
+@limiter.shared_limit(settings.llm_rate_limit_daily, scope="llm-query-daily")
+@limiter.limit(settings.decomposed_rate_limit)
+async def query_decomposed_stream(request: Request, request_body: QueryRequest):
+    """Stream comparative/decomposed work without removing the JSON endpoint."""
+    decomposer: QueryDecomposer | None = _state.get("decomposer")
+    if decomposer is None:
+        raise HTTPException(status_code=503, detail="The decomposer is not ready yet")
+    if _contains_injection_pattern(request_body.question):
+        logger.warning("Potential injection attempt blocked: %s", request_body.question[:50])
+        raise HTTPException(
+            status_code=400,
+            detail="Your question contains patterns that cannot be processed. Please rephrase.",
+        )
+
+    telemetry.record_decomposed_request()
+    request_body.question = _sanitize_question(request_body.question)
+    request_id = getattr(request.state, "request_id", None) or str(uuid.uuid4())
+
+    async def event_generator():
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[tuple[str, Any] | None] = asyncio.Queue(maxsize=128)
+        cancel_event = threading.Event()
+        sequence_lock = threading.Lock()
+        sequence = 0
+
+        def enqueue(event: tuple[str, Any] | None) -> None:
+            if cancel_event.is_set() and event is not None:
+                return
+
+            def put_event() -> None:
+                try:
+                    queue.put_nowait(event)
+                except asyncio.QueueFull:
+                    cancel_event.set()
+
+            try:
+                loop.call_soon_threadsafe(put_event)
+            except RuntimeError:
+                cancel_event.set()
+
+        def stage_callback(
+            stage_id: str,
+            status: str,
+            elapsed_ms: float | None,
+            counters: dict[str, Any] | None,
+            metadata: dict[str, Any] | None,
+        ) -> None:
+            nonlocal sequence
+            with sequence_lock:
+                sequence += 1
+                event = {
+                    "version": 1,
+                    "request_id": request_id,
+                    "sequence": sequence,
+                    "stage_id": stage_id,
+                    "status": status,
+                }
+            if elapsed_ms is not None:
+                event["elapsed_ms"] = round(elapsed_ms, 3)
+            if counters:
+                event["counters"] = counters
+            if metadata:
+                event["metadata"] = metadata
+            enqueue(("stage", event))
+
+        def run_stream() -> None:
+            normalized = normalize_retrieval_question(request_body.question)
+            ticker = request_body.ticker or normalized.detected_ticker
+            try:
+                result = decomposer.run(
+                    question=normalized.question,
+                    top_k=request_body.top_k,
+                    ticker=ticker,
+                    section=request_body.section,
+                    session_id=request_body.session_id,
+                    answer_language=request_body.answer_language,
+                    stage_callback=stage_callback,
+                    cancel_event=cancel_event,
+                )
+                if cancel_event.is_set():
+                    return
+                sources = [
+                    _source_chunk_payload(chunk, rank=index + 1).model_dump()
+                    for index, chunk in enumerate(result.all_chunks[:10])
+                ]
+                enqueue(("sources", sources))
+                answer = result.answer
+                for start in range(0, len(answer), 160):
+                    if cancel_event.is_set():
+                        return
+                    enqueue(("token", answer[start : start + 160]))
+                enqueue((
+                    "done",
+                    {
+                        "request_id": request_id,
+                        "request_status": "completed",
+                        "model_used": result.model_used,
+                        "was_decomposed": result.was_decomposed,
+                        "sub_queries": [
+                            {
+                                "query": sub_query.query,
+                                "ticker": sub_query.ticker,
+                                "section": sub_query.section,
+                                "num_chunks": len(sub_query.retrieved_chunks),
+                            }
+                            for sub_query in result.sub_queries
+                        ],
+                        "num_total_chunks": len(result.all_chunks),
+                        "query_interpretation": _query_interpretation(
+                            request_body.question, normalized
+                        ).model_dump(),
+                    },
+                ))
+                telemetry.record_provider_event("completed")
+            except QueryCancelled:
+                logger.info("Comparative stream cancelled by client")
+            except Exception as error:
+                provider_failure = _provider_failure_detail(error)
+                if provider_failure is not None:
+                    telemetry.record_provider_event(
+                        "quota" if provider_failure[1]["code"] == "provider_quota" else "transport_error"
+                    )
+                else:
+                    logger.exception("Unhandled comparative streaming endpoint error")
+                if not cancel_event.is_set():
+                    enqueue(("error", provider_failure[1] if provider_failure else INTERNAL_ERROR_DETAIL))
+            finally:
+                enqueue(None)
+
+        threading.Thread(target=run_stream, daemon=True).start()
+        started_at = time.monotonic()
+        while True:
+            if await request.is_disconnected():
+                cancel_event.set()
+                logger.info("Comparative streaming client disconnected; cancelling query")
+                break
+            elapsed = time.monotonic() - started_at
+            if elapsed >= DECOMPOSED_TIMEOUT_SECONDS:
+                cancel_event.set()
+                yield f"data: {json_lib.dumps({'type': 'error', 'data': DECOMPOSED_TIMEOUT_DETAIL})}\n\n"
+                break
+            try:
+                event = await asyncio.wait_for(
+                    queue.get(),
+                    timeout=min(STREAM_QUEUE_POLL_SECONDS, DECOMPOSED_TIMEOUT_SECONDS - elapsed),
+                )
+            except asyncio.TimeoutError:
+                continue
+            if event is None:
+                break
+            event_type, data = event
+            payload = json_lib.dumps({"type": event_type, "data": data}, ensure_ascii=False)
+            yield f"data: {payload}\n\n"
+            if event_type in {"done", "error"}:
+                break
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
@@ -722,13 +970,43 @@ async def document_chunks(
                 "ticker": chunk.get("ticker"),
                 "section": chunk.get("section"),
                 "filing_date": chunk.get("filing_date"),
+                "report_date": chunk.get("report_date"),
                 "accession_number": chunk.get("accession_number"),
+                "chunk_index": chunk.get("chunk_index"),
                 "text_preview": str(chunk.get("text") or "")[:500],
                 "text_length": len(str(chunk.get("text") or "")),
                 "source_url": chunk.get("source_url") or chunk.get("filing_url"),
             }
         )
     return {"items": items, "total": len(matching), "page": page, "page_size": page_size}
+
+
+@app.get("/chunks/{chunk_id}")
+async def chunk_detail(chunk_id: str) -> dict:
+    """Return one full source excerpt for the evidence reader."""
+    if _state.get("pipeline") is None:
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    records = _chunk_records_index().get(chunk_id, [])
+    if not records:
+        raise HTTPException(status_code=404, detail="Chunk not found")
+    if len(records) > 1:
+        raise HTTPException(status_code=409, detail="Chunk ID is ambiguous")
+    document_id, chunk = records[0]
+    text = str(chunk.get("text") or "")
+    return {
+        "chunk_id": chunk.get("chunk_id"),
+        "document_id": document_id,
+        "ticker": chunk.get("ticker"),
+        "section": chunk.get("section"),
+        "filing_date": chunk.get("filing_date"),
+        "report_date": chunk.get("report_date"),
+        "accession_number": chunk.get("accession_number"),
+        "chunk_index": chunk.get("chunk_index"),
+        "text": text,
+        "text_preview": text[:500],
+        "text_length": len(text),
+        "source_url": chunk.get("source_url") or chunk.get("filing_url"),
+    }
 
 
 @app.get("/system/info")
@@ -746,6 +1024,11 @@ async def system_info() -> dict:
             "reranker_model": getattr(retriever, "cross_encoder_model", None),
             "presets": ["bm25", "dense", "hybrid", "hybrid_rerank"],
             "default": "hybrid_rerank",
+        },
+        "capabilities": {
+            "stage_events": True,
+            "comparative_stream": True,
+            "document_indexed_viewer": True,
         },
         "build": {
             key: os.environ[key]
@@ -1014,14 +1297,21 @@ async def query_stream(request: Request, request_body: QueryRequest):
 
     async def event_generator():
         loop = asyncio.get_running_loop()
-        queue: asyncio.Queue[tuple[str, Any] | None] = asyncio.Queue()
+        queue: asyncio.Queue[tuple[str, Any] | None] = asyncio.Queue(maxsize=128)
         cancel_event = threading.Event()
 
         def enqueue(event: tuple[str, Any] | None) -> None:
-            if cancel_event.is_set():
+            if cancel_event.is_set() and event is not None:
                 return
+
+            def put_event() -> None:
+                try:
+                    queue.put_nowait(event)
+                except asyncio.QueueFull:
+                    cancel_event.set()
+
             try:
-                loop.call_soon_threadsafe(queue.put_nowait, event)
+                loop.call_soon_threadsafe(put_event)
             except RuntimeError:
                 cancel_event.set()
 
@@ -1029,15 +1319,26 @@ async def query_stream(request: Request, request_body: QueryRequest):
             normalized = normalize_retrieval_question(request_body.question)
             ticker = request_body.ticker or normalized.detected_ticker
             try:
-                for event_type, data in pipeline.query_stream(
-                    question=normalized.question,
-                    top_k=request_body.top_k,
-                    ticker=ticker,
-                    section=request_body.section,
-                    session_id=request_body.session_id,
-                    cancel_event=cancel_event,
-                    answer_language=request_body.answer_language,
+                stream_kwargs: dict[str, Any] = {
+                    "question": normalized.question,
+                    "top_k": request_body.top_k,
+                    "ticker": ticker,
+                    "section": request_body.section,
+                    "session_id": request_body.session_id,
+                    "cancel_event": cancel_event,
+                    "answer_language": request_body.answer_language,
+                }
+                try:
+                    stream_parameters = inspect.signature(pipeline.query_stream).parameters
+                except (TypeError, ValueError):
+                    stream_parameters = {}
+                if "request_id" in stream_parameters or any(
+                    parameter.kind is inspect.Parameter.VAR_KEYWORD
+                    for parameter in stream_parameters.values()
                 ):
+                    stream_kwargs["request_id"] = getattr(request.state, "request_id", None) or str(uuid.uuid4())
+
+                for event_type, data in pipeline.query_stream(**stream_kwargs):
                     if cancel_event.is_set():
                         break
                     safe_data = INTERNAL_ERROR_DETAIL if event_type == "error" else data

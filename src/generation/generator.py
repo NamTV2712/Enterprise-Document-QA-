@@ -21,6 +21,7 @@ from src.generation.period_value_completeness import (
     validate_grounded_answer,
 )
 from src.generation.provider_policy import (
+    configured_groq_keys,
     key_alias,
     normalize_groq_key_policy,
     validate_explicit_keys,
@@ -78,6 +79,7 @@ class RAGResponse:
     retrieved_chunks: list[RetrievedChunk]
     model_used: str
     answer_language: str = "en"
+    visual_answer: dict[str, Any] | None = None
 
 
 def _format_context(chunks: list[RetrievedChunk]) -> str:
@@ -147,13 +149,7 @@ class Generator:
             else (
                 [api_key]
                 if api_key
-                else [
-                    settings.groq_api_key,
-                    settings.groq_api_key2,
-                    settings.groq_api_key3,
-                    settings.groq_api_key4,
-                    settings.groq_api_key5,
-                ]
+                else configured_groq_keys(settings, policy=effective_policy)
             )
         )
         selected_keys = validate_explicit_keys(

@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import App from "./App";
+import { LocaleProvider } from "./lib/i18n";
 
 const apiMocks = vi.hoisted(() => ({
   checkHealth: vi.fn(),
@@ -120,7 +121,7 @@ describe("App request cancellation", () => {
 
     expect(await screen.findByText(longAnswer)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Research" }));
     expect(
       await screen.findByText("Ask questions. Verify every answer."),
     ).toBeInTheDocument();
@@ -129,7 +130,7 @@ describe("App request cancellation", () => {
       screen.getByRole("button", { name: "Return to conversation" }),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Conversation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Current conversation" }));
     expect(await screen.findByText(longAnswer)).toBeInTheDocument();
   });
 
@@ -220,8 +221,7 @@ describe("App request cancellation", () => {
     expect(
       screen.getByText(/Rank scores order results; they are not confidence percentages/i),
     ).toBeInTheDocument();
-    expect(screen.getByText("In-memory conversations")).toBeInTheDocument();
-    expect(screen.getByText("Retained messages")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Scope · All companies · All sections · Top 5/ })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Explain active sessions" }),
     ).not.toBeInTheDocument();
@@ -255,86 +255,61 @@ describe("App request cancellation", () => {
     expect(themeButton).toHaveAccessibleName("Theme System. Choose light, dark, or system theme");
   });
 
-  test("sidebar width can be adjusted with the resize separator", async () => {
+  test("sidebar is a stable navigation surface without a resizer or duplicate Library", async () => {
     render(<App />);
     await screen.findByText("Pipeline: Ready");
 
-    const resizeHandle = screen.getByRole("separator", {
-      name: "Resize search controls",
-    });
-    expect(resizeHandle).toHaveAttribute("aria-valuenow", "320");
-
-    fireEvent.keyDown(resizeHandle, { key: "ArrowRight" });
-
-    expect(resizeHandle).toHaveAttribute("aria-valuenow", "336");
-    expect(document.getElementById("control-sidebar")).toHaveStyle({
-      width: "min(336px, calc(100vw - 2rem))",
-    });
+    expect(screen.queryByRole("separator", { name: /Resize/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Library/i })).toHaveLength(1);
   });
 
-  test("ticker picker shows and searches company names", async () => {
+  test("research scope is controlled next to the composer", async () => {
     render(<App />);
     await screen.findByText("Pipeline: Ready");
 
-    fireEvent.click(screen.getByRole("button", { name: /All companies/i }));
-    expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
-    expect(screen.getByText("Microsoft Corporation")).toBeInTheDocument();
-
-    fireEvent.change(
-      screen.getByPlaceholderText("Search company or ticker..."),
-      { target: { value: "Microsoft" } },
-    );
-    fireEvent.click(
-      screen.getByRole("button", { name: /Microsoft Corporation MSFT/i }),
-    );
-    expect(screen.getByText("Microsoft Corporation (MSFT)")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Scope · All companies/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Company" }));
+    fireEvent.click(screen.getByRole("option", { name: "Microsoft Corporation (MSFT)" }));
+    expect(screen.getByRole("button", { name: /Scope · Microsoft Corporation \(MSFT\) · All sections · Top 5/ })).toBeInTheDocument();
   });
 
-  test("section picker explains filing scope", async () => {
+  test("research scope keeps selected filing section visible", async () => {
     render(<App />);
     await screen.findByText("Pipeline: Ready");
 
-    fireEvent.click(screen.getByRole("button", { name: /All sections/i }));
-    expect(screen.getByText("Risk Factors")).toBeInTheDocument();
-    expect(screen.queryByText(/Item 1A/)).not.toBeInTheDocument();
-    expect(
-      screen.getByText("Material risks disclosed by company management."),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("Extracted rows optimized for exact numeric retrieval."),
-    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Scope · All companies/ }));
+    fireEvent.click(screen.getByRole("button", { name: "10-K section" }));
+    fireEvent.click(screen.getByRole("option", { name: "Risk Factors" }));
+    expect(screen.getAllByText(/^Risk Factors$/).length).toBeGreaterThan(0);
   });
 
-  test("suggested questions use readable company names", async () => {
+  test("sidebar keeps retrieval and diagnostics grouped", async () => {
     render(<App />);
-
-    expect(
-      await screen.findByText("Apple vs Microsoft — Risk Factors"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Amazon — MD&A Highlights")).toBeInTheDocument();
+    await screen.findByText("Pipeline: Ready");
+    expect(screen.getByText("Retrieval")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retrieval Lab" })).toBeInTheDocument();
   });
 
-  test("sends the selected answer language without changing the evidence request", async () => {
+  test("sends the shared interface language without changing the evidence request", async () => {
     apiMocks.streamQuery.mockImplementation(async (_payload, onEvent) => {
       onEvent({ type: "token", data: "Câu trả lời có nguồn [Source 1]." });
       onEvent({ type: "done", data: { answer_language: "vi" } });
     });
 
-    render(<App />);
+    render(<LocaleProvider><App /></LocaleProvider>);
     await screen.findByText("Pipeline: Ready");
-    fireEvent.change(screen.getByRole("combobox", { name: "Answer language" }), {
-      target: { value: "vi" },
-    });
-    fireEvent.change(screen.getByRole("textbox", { name: "Research question" }), {
+    fireEvent.click(screen.getByRole("button", { name: "VI" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "VI" })).toHaveAttribute("aria-pressed", "true"));
+    fireEvent.change(document.getElementById("chat-textarea")!, {
       target: { value: "Doanh thu của Apple năm 2024 là bao nhiêu?" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Send question" }));
+    fireEvent.click(document.getElementById("send-message-btn")!);
 
     // The citation formatter wraps [Source 1] in a button, so assert the
     // answer's accessible article text rather than requiring one DOM text node.
     await waitFor(() =>
       expect(
-        screen.getByRole("article", { name: "Research assistant response" }),
+        screen.getByRole("article", { name: /Research assistant response|Câu trả lời của trợ lý nghiên cứu/ }),
       ).toHaveTextContent("Câu trả lời có nguồn"),
     );
     expect(apiMocks.streamQuery.mock.calls[0][0]).toMatchObject({

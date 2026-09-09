@@ -11,30 +11,36 @@ import {
   useRef,
   useCallback,
   useMemo,
+  type CSSProperties,
 } from "react";
 import { AlertTriangle, BookMarked, ChevronDown, RefreshCw, X } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { ChatInput } from "./components/ChatInput";
-import { SampleQuestion } from "./components/SampleQuestionChips";
+import { SampleQuestion, SampleQuestionChips } from "./components/SampleQuestionChips";
 import { OverviewPanel } from "./components/OverviewPanel";
 import { WorkspaceHeader } from "./components/WorkspaceHeader";
+import { ConversationLibrary } from "./components/ConversationLibrary";
 import { HelpDialog } from "./components/HelpDialog";
+import { ModalDialog } from "./components/ui/ModalDialog";
 import { CommandPalette, PaletteView } from "./components/CommandPalette";
 import { EvidenceWorkspaceRail } from "./components/EvidenceWorkspaceRail";
 import {
   HealthResponse,
   RequestSnapshot,
   ThemePreference,
-  AnswerLanguage,
   AnswerVariant,
+  EvidenceSelection,
   Message,
   MessageFeedback,
+  Source,
+  StageEvent,
 } from "./types";
 import {
   checkHealth,
   getSupportedTickers,
   queryDecomposed,
   streamQuery,
+  streamDecomposedQuery,
 } from "./lib/api";
 import { formatCompanyLabel, SECTION_METADATA } from "./lib/displayMetadata";
 import { ConversationRecord } from "./lib/conversationStore";
@@ -45,13 +51,25 @@ import {
 } from "./lib/conversationExport";
 import type { ConversationBackupBundle } from "./lib/conversationExport";
 import { useConversationLibrary, SessionContextStatus } from "./hooks/useConversationLibrary";
+import { useResearchDraft } from "./hooks/useResearchDraft";
+import type { ResearchScope } from "./hooks/useResearchDraft";
+import { useEvidenceSelection } from "./hooks/useEvidenceSelection";
+import { useResearchSession } from "./hooks/useResearchSession";
 import { useLocale } from "./lib/i18n";
 import { recordAnalyticsEvent } from "./lib/analyticsStore";
-import { ResearchTemplate } from "./lib/researchTemplates";
+import { getResearchTemplateCopy, RESEARCH_TEMPLATES, ResearchTemplate } from "./lib/researchTemplates";
 import { mergeEvidenceCollections } from "./lib/evidenceCollections";
+import { isWorkspaceView } from "./lib/workspace";
+import type { WorkspaceView } from "./lib/workspace";
+import { describeRequestError } from "./lib/requestError";
+import { createEvidenceSelection, sourceMatchesSelection } from "./lib/sourceIdentity";
+import { appendStageEvent, isStageEvent } from "./lib/stageEvents";
 
 const STREAM_FLUSH_INTERVAL_MS = 80;
 const HEALTH_REFRESH_INTERVAL_MS = 15_000;
+const CONTEXT_RAIL_MIN_WIDTH = 360;
+const CONTEXT_RAIL_MAX_WIDTH = 560;
+const CONTEXT_RAIL_STORAGE_KEY = "sec_qa_context_rail_width_v1";
 const COMPARATIVE_KEYWORDS = [
   "compare",
   "vs",
@@ -84,6 +102,12 @@ const EvaluationPanel = lazy(() =>
 const AnalyticsPanel = lazy(() =>
   import("./components/AnalyticsPanel").then(({ AnalyticsPanel }) => ({ default: AnalyticsPanel })),
 );
+const SearchWorkspace = lazy(() =>
+  import("./components/SearchWorkspace").then(({ SearchWorkspace }) => ({ default: SearchWorkspace })),
+);
+const ArchitecturePanel = lazy(() =>
+  import("./components/ArchitecturePanel").then(({ ArchitecturePanel }) => ({ default: ArchitecturePanel })),
+);
 
 function WorkspacePanelFallback() {
   return (
@@ -97,42 +121,6 @@ function WorkspacePanelFallback() {
 function isComparativeQuery(question: string): boolean {
   const lower = question.toLowerCase();
   return COMPARATIVE_KEYWORDS.some((keyword) => lower.includes(keyword));
-}
-
-function describeRequestError(
-  error: unknown,
-  fallback: string,
-): { message: string; detail: string } {
-  const detail = error instanceof Error ? error.message : String(error);
-  const candidateStatus =
-    error && typeof error === "object" && "status" in error
-      ? (error as { status?: unknown }).status
-      : null;
-  const status = typeof candidateStatus === "number" ? candidateStatus : null;
-  const candidateCode =
-    error && typeof error === "object" && "code" in error
-      ? (error as { code?: unknown }).code
-      : null;
-  const code = typeof candidateCode === "string" ? candidateCode : null;
-  if (status === 429) {
-    if (code === "client_rate_limited") {
-      return { message: "Too many requests from this client. Please wait and try again.", detail };
-    }
-    return {
-      message: "The provider is temporarily out of quota. Please wait and try again later.",
-      detail,
-    };
-  }
-  if (status === 408 || status === 504) {
-    return { message: "The request timed out. Try a narrower question or try again.", detail };
-  }
-  if (status !== null && status >= 500) {
-    return { message: "The research service is temporarily unavailable. Please try again.", detail };
-  }
-  if (error instanceof TypeError) {
-    return { message: "The backend could not be reached. Check the connection and try again.", detail };
-  }
-  return { message: fallback, detail };
 }
 
 function getSystemTheme(): "light" | "dark" {
@@ -149,14 +137,50 @@ function prefersReducedMotion(): boolean {
   );
 }
 
-type WorkspaceView = "overview" | "conversation" | "retrieval" | "documents" | "evaluation" | "analytics" | "system";
+function readContextRailWidth(): number {
+  try {
+    const parsed = Number(localStorage.getItem(CONTEXT_RAIL_STORAGE_KEY));
+    if (Number.isFinite(parsed)) return Math.min(CONTEXT_RAIL_MAX_WIDTH, Math.max(CONTEXT_RAIL_MIN_WIDTH, Math.round(parsed)));
+  } catch {
+    // Layout preference is optional and must never block the workspace.
+  }
+  return 384;
+}
+
+function scopeFromRequestSnapshot(snapshot: RequestSnapshot): ResearchScope {
+  return {
+    ticker: snapshot.ticker,
+    section: snapshot.section,
+    topK: snapshot.topK,
+    enableComparative: snapshot.enableComparative,
+  };
+}
+
+function scopeForConversationDraft(record: ConversationRecord | null): Partial<ResearchScope> | null {
+  if (!record) return null;
+
+  const draft = record.draft.trim();
+  if (draft) {
+    const matchingTemplate = RESEARCH_TEMPLATES.find((template) =>
+      (["en", "vi"] as const).some(
+        (locale) => getResearchTemplateCopy(template, locale).question === draft,
+      ),
+    );
+    if (matchingTemplate) return matchingTemplate.scope;
+  }
+
+  const latestSnapshot = [...record.messages]
+    .reverse()
+    .find((message) => message.sender === "user" && message.requestSnapshot)?.requestSnapshot;
+  return latestSnapshot ? scopeFromRequestSnapshot(latestSnapshot) : null;
+}
 
 function initialWorkspaceView(): WorkspaceView {
   if (typeof window === "undefined") return "overview";
   if (import.meta.env.MODE === "test") return "overview";
   const value = new URLSearchParams(window.location.search).get("view");
-  return ["overview", "conversation", "retrieval", "documents", "evaluation", "analytics", "system"].includes(value ?? "")
-    ? (value as WorkspaceView)
+  return isWorkspaceView(value)
+    ? value
     : "overview";
 }
 
@@ -164,23 +188,6 @@ export default function App() {
   const { locale } = useLocale();
   const [tickers, setTickers] = useState<string[]>([]);
   const [sections, setSections] = useState<string[]>([]);
-  const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
-  const [selectedSection, setSelectedSection] = useState<string | null>(null);
-  const [topK, setTopK] = useState<number>(5);
-  const [enableComparative, setEnableComparative] = useState<boolean>(true);
-  const [answerLanguage, setAnswerLanguage] = useState<AnswerLanguage>(() => {
-    try {
-      const saved = localStorage.getItem("sec_qa_answer_language");
-      if (saved === "en" || saved === "vi") return saved;
-    } catch {
-      // Use English when preferences are unavailable.
-    }
-    return typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("vi")
-      ? "vi"
-      : "en";
-  });
-
-  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isBackendConnected, setIsBackendConnected] = useState<boolean | null>(
     null,
   );
@@ -193,7 +200,18 @@ export default function App() {
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
   const [activeView, setActiveView] = useState<WorkspaceView>(initialWorkspaceView);
   const [pendingFocusMessageId, setPendingFocusMessageId] = useState<string | null>(null);
+  const [shouldFocusLibrarySearch, setShouldFocusLibrarySearch] = useState(false);
   const [activeSidebarPanel, setActiveSidebarPanel] = useState<"research" | "library">("research");
+  const [stageEventsByMessage, setStageEventsByMessage] = useState<Record<string, StageEvent[]>>({});
+  const [contextRailWidth, setContextRailWidth] = useState(readContextRailWidth);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CONTEXT_RAIL_STORAGE_KEY, String(contextRailWidth));
+    } catch {
+      // A blocked preference store does not affect citation reading.
+    }
+  }, [contextRailWidth]);
 
   // Theme state. Keep the preference separate from the resolved color so a
   // system preference can follow OS changes without overwriting user choice.
@@ -227,35 +245,13 @@ export default function App() {
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
   }, [activeView]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem("sec_qa_answer_language", answerLanguage);
-    } catch {
-      // The selection remains active for this tab.
-    }
-  }, [answerLanguage]);
-
-  useEffect(() => {
-    try {
-      if (!localStorage.getItem("sec_qa_answer_language")) {
-        setAnswerLanguage(locale === "vi" ? "vi" : "en");
-      }
-    } catch {
-      setAnswerLanguage(locale === "vi" ? "vi" : "en");
-    }
-  }, [locale]);
-
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const requestAbortRef = useRef<AbortController | null>(null);
-  // Buffered SSE text that has not been flushed to the message yet. The
-  // cancel path flushes it so switching conversations never loses the last
-  // buffered tokens of a partial answer.
-  const streamingBufferRef = useRef<{ messageId: string; text: string } | null>(null);
   const resetCancelRef = useRef<HTMLButtonElement>(null);
   const healthRequestRef = useRef<Promise<HealthResponse> | null>(null);
   const lastHealthRefreshRef = useRef(0);
   const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
+  const isNearConversationBottomRef = useRef(true);
 
   // Indirection so the library hook can trigger the cancel path (which
   // needs updateMessages) before that function is declared below.
@@ -295,24 +291,45 @@ export default function App() {
     updateConversationMetadata,
   } = library;
   const activeConversationId = library.activeConversationId;
-
-  const cancelActiveRequest = useCallback(() => {
-    const buffer = streamingBufferRef.current;
-    if (buffer && buffer.text) {
-      updateMessages((prev) =>
-        prev.map((message) =>
-          message.id === buffer.messageId && message.isStreaming
-            ? { ...message, text: buffer.text }
-            : message,
-        ),
-      );
-    }
-    streamingBufferRef.current = null;
-    const controller = requestAbortRef.current;
-    requestAbortRef.current = null;
-    controller?.abort();
-    setIsLoading(false);
-  }, [updateMessages]);
+  const previousScopeRef = useRef<ResearchScope | null>(null);
+  const draftScopeFallback = useMemo(
+    () => scopeForConversationDraft(activeRecord) ?? previousScopeRef.current ?? {},
+    [activeRecord],
+  );
+  const {
+    scope: { ticker: selectedTicker, section: selectedSection, topK, enableComparative },
+    patchScope,
+    setTicker: setSelectedTicker,
+    setSection: setSelectedSection,
+    setTopK,
+    setEnableComparative,
+  } = useResearchDraft(activeConversationId, draftScopeFallback, isLibraryReady);
+  previousScopeRef.current = { ticker: selectedTicker, section: selectedSection, topK, enableComparative };
+  const recentConversations = useMemo(
+    () => conversations
+      .filter((conversation) => conversation.messages.length > 0)
+      .sort((left, right) => right.updatedAt - left.updatedAt)
+      .slice(0, 3),
+    [conversations],
+  );
+  const [evidenceSelection, setEvidenceSelection] = useEvidenceSelection(activeConversationId);
+  const handleInspectSource = useCallback(
+    (selection: Omit<EvidenceSelection, "conversationId">) => {
+      setEvidenceSelection({ conversationId: activeConversationId, ...selection });
+    },
+    [activeConversationId, setEvidenceSelection],
+  );
+  const researchSession = useResearchSession({ updateMessages });
+  const {
+    isLoading,
+    streamingBufferRef,
+    beginRequest,
+    isCurrentRequest: isCurrentResearchRequest,
+    markRequestIdle,
+    finishRequest,
+    cancelActiveRequest,
+    stopGenerating,
+  } = researchSession;
   cancelActiveRequestRef.current = cancelActiveRequest;
 
   const applyHealth = useCallback((health: HealthResponse) => {
@@ -399,14 +416,6 @@ export default function App() {
     return () => controller.abort();
   }, [applyHealth]);
 
-  useEffect(() => {
-    return () => {
-      const controller = requestAbortRef.current;
-      requestAbortRef.current = null;
-      controller?.abort();
-    };
-  }, []);
-
   // Adopted backend history moves the user into the conversation view once.
   const historyAdoptedRef = useRef(false);
   useEffect(() => {
@@ -424,10 +433,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (activeView !== "conversation") return;
+    if (activeView !== "conversation" || !isNearConversationBottomRef.current) return;
 
-    // Repeated smooth-scroll animations overlap while tokens arrive every
-    // 80ms. Batch the layout read/write to the next animation frame.
+    // Follow a live answer only while the reader is already at the end. A
+    // user inspecting an older answer must never be pulled away by stream
+    // updates.
     const scroll = () => {
       scrollToBottom(isLoading ? "auto" : "smooth");
     };
@@ -444,6 +454,17 @@ export default function App() {
     };
   }, [activeView, isLoading, messages, scrollToBottom]);
 
+  useEffect(() => {
+    if (activeView === "conversation") return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    if (typeof container.scrollTo === "function") {
+      container.scrollTo({ top: 0, behavior: "auto" });
+    } else {
+      container.scrollTop = 0;
+    }
+  }, [activeView]);
+
   // Focus a bookmarked message opened from the Library.
   useEffect(() => {
     if (!pendingFocusMessageId) return;
@@ -459,6 +480,17 @@ export default function App() {
     return () => window.cancelAnimationFrame(frame);
   }, [pendingFocusMessageId, activeView, messages.length]);
 
+  // Library is rendered lazily with the workspace view. Wait for the view
+  // transition before focusing its search input so Ctrl/Cmd+K is dependable.
+  useEffect(() => {
+    if (!shouldFocusLibrarySearch || activeView !== "library") return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById("library-search-input")?.focus();
+      setShouldFocusLibrarySearch(false);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeView, shouldFocusLibrarySearch]);
+
   // Detect scroll position to show/hide scroll-to-bottom button
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current;
@@ -467,6 +499,7 @@ export default function App() {
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
       const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+      isNearConversationBottomRef.current = isNearBottom;
       setShowScrollButton(!isNearBottom && messages.length > 0);
     };
 
@@ -479,13 +512,13 @@ export default function App() {
     if (isReadOnly) return;
 
     const requestSnapshot: RequestSnapshot = snapshot
-      ? { ...snapshot, answerLanguage: snapshot.answerLanguage ?? answerLanguage }
+      ? { ...snapshot, answerLanguage: snapshot.answerLanguage ?? locale }
       : {
           ticker: selectedTicker,
           section: selectedSection,
           topK,
           enableComparative,
-          answerLanguage,
+          answerLanguage: locale,
         };
 
     // One identity is captured before the preflight and carried through
@@ -517,11 +550,8 @@ export default function App() {
     }
 
     setActiveView("conversation");
-    requestAbortRef.current?.abort();
-    const controller = new AbortController();
-    requestAbortRef.current = controller;
-    const isCurrentRequest = () =>
-      requestAbortRef.current === controller && !controller.signal.aborted;
+    const controller = beginRequest();
+    const isCurrentRequest = () => isCurrentResearchRequest(controller);
 
     const userMessage = {
       id: "user-" + Date.now(),
@@ -531,8 +561,6 @@ export default function App() {
     };
 
     updateMessages((prev) => [...prev, userMessage]);
-    setIsLoading(true);
-
     const isComparative =
       requestSnapshot.enableComparative && isComparativeQuery(text);
     const assistantMsgId = "assistant-" + Date.now();
@@ -564,47 +592,21 @@ export default function App() {
       };
       updateMessages((prev) => [...prev, placeholder]);
 
-      try {
-        const response = await queryDecomposed(payload, controller.signal);
-        if (!isCurrentRequest()) return;
-        updateMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMsgId
-              ? {
-                  ...m,
-                  text: response.answer,
-                  model_used: response.model_used,
-                  sources: response.sources,
-                  subQueries: response.sub_queries,
-                  wasDecomposed: response.was_decomposed,
-                  numChunks: response.num_total_chunks,
-                  queryInterpretation: response.query_interpretation,
-                  isStreaming: false,
-                  status: "completed" as const,
-                }
-              : m,
-          ),
-        );
-        registerBackendExchange();
-        recordAnalyticsEvent({
-          kind: "query_completed",
-          ticker: requestSnapshot.ticker,
-          language: requestSnapshot.answerLanguage,
-          durationMs: Date.now() - analyticsStartedAt,
-          status: "completed",
-        });
-      } catch (err: any) {
+      setStageEventsByMessage((prev) => ({ ...prev, [assistantMsgId]: [] }));
+      let comparativeText = "";
+      const finishComparativeError = (error: unknown) => {
         if (!isCurrentRequest()) return;
         const requestError = describeRequestError(
-          err,
+          error,
           "We couldn't complete this comparison. Check the connection and try again.",
+          locale,
         );
         updateMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
               ? {
                   ...m,
-                  text: requestError.message,
+                  text: comparativeText + (comparativeText ? "\n\n" : "") + requestError.message,
                   error: true,
                   isStreaming: false,
                   status: "error" as const,
@@ -614,6 +616,7 @@ export default function App() {
               : m,
           ),
         );
+        markRequestIdle();
         recordAnalyticsEvent({
           kind: "query_error",
           ticker: requestSnapshot.ticker,
@@ -621,11 +624,91 @@ export default function App() {
           durationMs: Date.now() - analyticsStartedAt,
           status: "error",
         });
-      } finally {
-        if (requestAbortRef.current === controller) {
-          requestAbortRef.current = null;
-          setIsLoading(false);
+      };
+
+      try {
+        const useComparativeStream = import.meta.env.MODE !== "test" && typeof streamDecomposedQuery === "function";
+        if (!useComparativeStream) {
+          // Compatibility for older embedders that only provide the JSON
+          // client; the backend JSON route remains supported by contract.
+          const response = await queryDecomposed(payload, controller.signal);
+          if (!isCurrentRequest()) return;
+          comparativeText = response.answer;
+          updateMessages((prev) => prev.map((m) => m.id === assistantMsgId ? {
+            ...m,
+            text: response.answer,
+            model_used: response.model_used,
+            sources: response.sources,
+            subQueries: response.sub_queries,
+            wasDecomposed: response.was_decomposed,
+            numChunks: response.num_total_chunks,
+            queryInterpretation: response.query_interpretation,
+            isStreaming: false,
+            status: "completed" as const,
+          } : m));
+          registerBackendExchange();
+          markRequestIdle();
+          recordAnalyticsEvent({
+            kind: "query_completed",
+            ticker: requestSnapshot.ticker,
+            language: requestSnapshot.answerLanguage,
+            durationMs: Date.now() - analyticsStartedAt,
+            status: "completed",
+          });
+        } else {
+          await streamDecomposedQuery(
+            payload,
+            (event) => {
+            if (!isCurrentRequest()) return;
+            if (event.type === "stage" && isStageEvent(event.data)) {
+              setStageEventsByMessage((prev) => ({
+                ...prev,
+                [assistantMsgId]: appendStageEvent(prev[assistantMsgId] ?? [], event.data),
+              }));
+            } else if (event.type === "sources") {
+              updateMessages((prev) => prev.map((m) => m.id === assistantMsgId ? { ...m, sources: event.data || [] } : m));
+            } else if (event.type === "token") {
+              comparativeText += typeof event.data === "string" ? event.data : "";
+              updateMessages((prev) => prev.map((m) => m.id === assistantMsgId ? { ...m, text: comparativeText } : m));
+            } else if (event.type === "done") {
+              updateMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId
+                    ? {
+                        ...m,
+                        text: comparativeText,
+                        model_used: event.data?.model_used,
+                        subQueries: event.data?.sub_queries,
+                        wasDecomposed: event.data?.was_decomposed,
+                        numChunks: event.data?.num_total_chunks,
+                        queryInterpretation: event.data?.query_interpretation,
+                        isStreaming: false,
+                        status: "completed" as const,
+                      }
+                    : m,
+                ),
+              );
+              registerBackendExchange();
+              markRequestIdle();
+              recordAnalyticsEvent({
+                kind: "query_completed",
+                ticker: requestSnapshot.ticker,
+                language: requestSnapshot.answerLanguage,
+                durationMs: Date.now() - analyticsStartedAt,
+                status: "completed",
+              });
+            } else if (event.type === "error") {
+              finishComparativeError(event.data);
+            }
+            },
+            finishComparativeError,
+            controller.signal,
+          );
         }
+      } catch (error) {
+        finishComparativeError(error);
+      } finally {
+        finishRequest(controller);
       }
     } else {
       // Streamed query over POST EventStream
@@ -638,6 +721,8 @@ export default function App() {
         requestSnapshot,
       };
       updateMessages((prev) => [...prev, placeholder]);
+
+      setStageEventsByMessage((prev) => ({ ...prev, [assistantMsgId]: [] }));
 
       let streamingText = "";
       let pendingFlush: ReturnType<typeof setTimeout> | null = null;
@@ -668,7 +753,12 @@ export default function App() {
           payload,
           (event) => {
             if (!isCurrentRequest()) return;
-            if (event.type === "sources") {
+            if (event.type === "stage" && isStageEvent(event.data)) {
+              setStageEventsByMessage((prev) => ({
+                ...prev,
+                [assistantMsgId]: appendStageEvent(prev[assistantMsgId] ?? [], event.data),
+              }));
+            } else if (event.type === "sources") {
               const sourcesList = event.data || [];
               updateMessages((prev) =>
                 prev.map((m) =>
@@ -694,6 +784,8 @@ export default function App() {
                         ...m,
                         text: streamingText,
                         queryInterpretation: event.data?.query_interpretation,
+                        execution: event.data?.execution,
+                        visualAnswer: event.data?.visual_answer,
                         isStreaming: false,
                         status: "completed" as const,
                       }
@@ -708,7 +800,7 @@ export default function App() {
                 durationMs: Date.now() - analyticsStartedAt,
                 status: "completed",
               });
-              setIsLoading(false);
+              markRequestIdle();
             } else if (event.type === "error") {
               cancelPendingFlush();
               streamingBufferRef.current = null;
@@ -730,7 +822,7 @@ export default function App() {
                     : m,
                 ),
               );
-              setIsLoading(false);
+              markRequestIdle();
               recordAnalyticsEvent({
                 kind: "query_error",
                 ticker: requestSnapshot.ticker,
@@ -745,6 +837,7 @@ export default function App() {
             const requestError = describeRequestError(
               error,
               "The connection closed before the answer finished. Please try again.",
+              locale,
             );
             cancelPendingFlush();
             streamingBufferRef.current = null;
@@ -763,7 +856,7 @@ export default function App() {
                   : m,
               ),
             );
-            setIsLoading(false);
+            markRequestIdle();
             recordAnalyticsEvent({
               kind: "query_error",
               ticker: requestSnapshot.ticker,
@@ -776,9 +869,10 @@ export default function App() {
         );
       } catch (err: any) {
         if (!isCurrentRequest()) return;
-        const requestError = describeRequestError(
-          err,
-          "We couldn't complete this answer. Please try again.",
+          const requestError = describeRequestError(
+            err,
+            "We couldn't complete this answer. Please try again.",
+            locale,
         );
         cancelPendingFlush();
         streamingBufferRef.current = null;
@@ -797,7 +891,7 @@ export default function App() {
               : m,
           ),
         );
-        setIsLoading(false);
+        markRequestIdle();
         recordAnalyticsEvent({
           kind: "query_error",
           ticker: requestSnapshot.ticker,
@@ -807,10 +901,7 @@ export default function App() {
         });
       } finally {
         cancelPendingFlush();
-        if (requestAbortRef.current === controller) {
-          requestAbortRef.current = null;
-          setIsLoading(false);
-        }
+        finishRequest(controller);
       }
 
       // The connection closed. If the server never sent a done or error
@@ -852,15 +943,19 @@ export default function App() {
       }
     }
   }, [
-    answerLanguage,
+    beginRequest,
     beginSend,
     enableComparative,
     ensureSendable,
     finishSend,
+    finishRequest,
     isBackendConnected,
     isIdentityActive,
+    isCurrentResearchRequest,
     isPipelineReady,
     isReadOnly,
+    locale,
+    markRequestIdle,
     registerBackendExchange,
     selectedSection,
     selectedTicker,
@@ -990,15 +1085,17 @@ export default function App() {
       text: message.text,
       sources: (message.sources ?? []).map((source) => ({ ...source })),
       requestSnapshot: message.requestSnapshot,
-      answerLanguage: message.requestSnapshot?.answerLanguage ?? answerLanguage,
+      answerLanguage: message.requestSnapshot?.answerLanguage ?? locale,
       status: message.status === "error" ? "error" : message.status === "stopped" ? "stopped" : "completed",
+      execution: message.execution,
+      visualAnswer: message.visualAnswer,
       createdAt: now,
       updatedAt: now,
     };
     void updateConversationMetadata(activeRecord.id, {
       variants: [...(activeRecord.variants ?? []), variant],
     });
-  }, [activeRecord, answerLanguage, updateConversationMetadata]);
+  }, [activeRecord, locale, updateConversationMetadata]);
 
   useEffect(() => {
     if (!showResetDialog) return;
@@ -1016,11 +1113,8 @@ export default function App() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setActiveSidebarPanel("library");
-        setIsSidebarOpen(true);
-        window.requestAnimationFrame(() => {
-          document.getElementById("library-search-input")?.focus();
-        });
+        setShouldFocusLibrarySearch(true);
+        handleSelectWorkspaceView("library");
         return;
       }
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "p") {
@@ -1046,40 +1140,24 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isCommandPaletteOpen, isHelpOpen, showResetDialog]);
 
-  const handleStopGenerating = useCallback(() => {
-    const controller = requestAbortRef.current;
-    if (!controller) return;
+  const handleStopGenerating = stopGenerating;
 
-    requestAbortRef.current = null;
-    controller.abort();
-    setIsLoading(false);
-    updateMessages((prev) =>
-      prev.map((message) =>
-        message.isStreaming
-          ? {
-              ...message,
-              text: message.text || "Generation stopped.",
-              isStreaming: false,
-              status: "stopped" as const,
-            }
-          : message,
-      ),
-    );
-  }, [updateMessages]);
-
-  const handleSelectSample = useCallback((sample: SampleQuestion) => {
-    if (sample.ticker !== undefined) {
-      setSelectedTicker(sample.ticker || null);
+  const handleSelectSample = useCallback((sample: ResearchTemplate | SampleQuestion) => {
+    if ("id" in sample) {
+      patchScope(sample.scope);
+      setInputText(getResearchTemplateCopy(sample, locale).question);
+    } else {
+      patchScope({
+        ...(sample.ticker !== undefined ? { ticker: sample.ticker || null } : {}),
+        ...(sample.section !== undefined ? { section: sample.section || null } : {}),
+      });
+      setInputText(sample.text);
     }
-    if (sample.section !== undefined) {
-      setSelectedSection(sample.section || null);
-    }
-    setInputText(sample.text);
     setIsSidebarOpen(false); // Close sidebar on mobile if clicked
     window.requestAnimationFrame(() => {
       document.getElementById("chat-textarea")?.focus();
     });
-  }, [setInputText]);
+  }, [locale, patchScope, setInputText]);
 
   const handleCloseSidebar = useCallback(() => {
     setIsSidebarOpen(false);
@@ -1087,6 +1165,15 @@ export default function App() {
 
   const handleToggleSidebar = useCallback(() => {
     setIsSidebarOpen((open) => !open);
+  }, []);
+
+  const handleSelectWorkspaceView = useCallback((view: WorkspaceView) => {
+    setActiveView(view);
+    setIsSidebarOpen(false);
+    if (view === "library") setActiveSidebarPanel("library");
+    if (view === "overview" || view === "conversation" || view === "search" || view === "documents" || view === "retrieval" || view === "architecture") {
+      setActiveSidebarPanel("research");
+    }
   }, []);
 
   const handleSelectTheme = useCallback((nextTheme: ThemePreference) => {
@@ -1097,28 +1184,31 @@ export default function App() {
     setActiveView("conversation");
   }, []);
 
-  const handleUseRetrievalQuestion = useCallback((question: string) => {
+  const handleUseRetrievalQuestion = useCallback((question: string, scope?: { ticker: string | null; section: string | null }) => {
+    if (scope) {
+      patchScope(scope);
+    }
     setInputText(question);
     setActiveView("conversation");
     window.requestAnimationFrame(() => {
       document.getElementById("chat-textarea")?.focus();
     });
-  }, [setInputText]);
+  }, [patchScope, setInputText]);
 
   const handlePaletteNavigate = useCallback((view: PaletteView) => {
-    setActiveView(view);
+    handleSelectWorkspaceView(view);
     if (view === "conversation") {
       window.requestAnimationFrame(() => document.getElementById("chat-textarea")?.focus());
     }
-  }, []);
+  }, [handleSelectWorkspaceView]);
 
   const handlePaletteTemplate = useCallback((template: ResearchTemplate) => {
-    setInputText(template.question);
-    if (template.section) setSelectedSection(template.section);
-    setAnswerLanguage(template.language);
+    const copy = getResearchTemplateCopy(template, locale);
+    setInputText(copy.question);
+    patchScope(template.scope);
     setActiveView("conversation");
     window.requestAnimationFrame(() => document.getElementById("chat-textarea")?.focus());
-  }, [setInputText]);
+  }, [locale, patchScope, setInputText]);
 
   const handleRetryConnection = useCallback(async () => {
     try {
@@ -1138,19 +1228,40 @@ export default function App() {
     [messages],
   );
   const scopeLabel = useMemo(() => {
-    const labels: string[] = [];
-    if (selectedTicker) labels.push(`Company: ${formatCompanyLabel(selectedTicker)}`);
-    if (selectedSection) {
-      labels.push(SECTION_METADATA[selectedSection]?.shortLabel || selectedSection);
-    }
+    const labels = [
+      selectedTicker ? formatCompanyLabel(selectedTicker) : (locale === "vi" ? "Tất cả công ty" : "All companies"),
+      selectedSection ? (SECTION_METADATA[selectedSection]?.shortLabel || selectedSection) : (locale === "vi" ? "Tất cả mục" : "All sections"),
+      `Top ${topK}`,
+    ];
+    if (enableComparative) labels.push(locale === "vi" ? "So sánh" : "Comparison");
     return labels.join(" · ");
-  }, [selectedSection, selectedTicker]);
+  }, [enableComparative, locale, selectedSection, selectedTicker, topK]);
 
   const hasExchanges = messages.length > 0;
-  const latestEvidenceSources = useMemo(
-    () => [...messages].reverse().find((message) => message.sender === "assistant" && message.sources?.length)?.sources ?? [],
-    [messages],
-  );
+  const evidenceTarget = useMemo(() => {
+    if (evidenceSelection) {
+      if (evidenceSelection.conversationId !== activeConversationId) return null;
+      const message = messages.find((candidate) => candidate.id === evidenceSelection.messageId);
+      const variant = evidenceSelection.variantId
+        ? activeRecord?.variants?.find((candidate) => candidate.id === evidenceSelection.variantId && candidate.originMessageId === message?.id)
+        : null;
+      const sources = evidenceSelection.variantId ? variant?.sources : message?.sources;
+      const selectedSource = sources?.[evidenceSelection.citationIndex];
+      if (sources?.length && sourceMatchesSelection(selectedSource, evidenceSelection, evidenceSelection.citationIndex)) {
+        return { sources, selectedIndex: evidenceSelection.citationIndex, selection: evidenceSelection, unavailable: false };
+      }
+      return { sources: [] as Source[], selectedIndex: -1, selection: evidenceSelection, unavailable: true };
+    }
+    const latestMessage = [...messages].reverse().find((message) => message.sender === "assistant" && message.sources?.length);
+    return latestMessage?.sources?.length && latestMessage.sources[0]
+      ? {
+          sources: latestMessage.sources,
+          selectedIndex: 0,
+          selection: createEvidenceSelection(activeConversationId, latestMessage.id, 0, latestMessage.sources[0]),
+          unavailable: false,
+        }
+      : null;
+  }, [activeConversationId, activeRecord?.variants, evidenceSelection, messages]);
   const showContextBanner =
     activeView === "conversation" && hasExchanges &&
     (sessionContext === "checking" || isReadOnly);
@@ -1177,6 +1288,9 @@ export default function App() {
         isClearingSession={isClearingSession}
         activePanel={activeSidebarPanel}
         onChangePanel={setActiveSidebarPanel}
+        activeView={activeView}
+        onSelectView={handleSelectWorkspaceView}
+        hasMessages={hasExchanges}
         conversations={conversations}
         activeConversationId={activeConversationId}
         storageMode={storageMode}
@@ -1204,7 +1318,7 @@ export default function App() {
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={handleToggleSidebar}
           activeView={activeView}
-          onSelectView={setActiveView}
+          onSelectView={handleSelectWorkspaceView}
           hasMessages={hasExchanges}
           isBackendConnected={isBackendConnected}
           isPipelineReady={isPipelineReady}
@@ -1230,10 +1344,22 @@ export default function App() {
               onNewConversation={requestNewConversation}
             />
           )}
-          <div className="workspace-main-grid">
+          <div
+            className={`workspace-main-grid ${activeView === "conversation" && evidenceTarget ? "workspace-main-grid--with-evidence" : ""}`}
+            style={{ "--context-rail-width": `${contextRailWidth}px` } as CSSProperties}
+          >
             <div className="workspace-primary-column">
               <Suspense fallback={<WorkspacePanelFallback />}>
-                {activeView === "retrieval" ? (
+                {activeView === "search" ? (
+              <SearchWorkspace
+                selectedTicker={selectedTicker}
+                selectedSection={selectedSection}
+                isBackendConnected={isBackendConnected}
+                onUseQuestion={handleUseRetrievalQuestion}
+              />
+                ) : activeView === "architecture" ? (
+              <ArchitecturePanel />
+                ) : activeView === "retrieval" ? (
               <RetrievalLabPanel
                 tickers={tickers}
                 sections={sections}
@@ -1244,6 +1370,37 @@ export default function App() {
               />
                 ) : activeView === "documents" ? (
               <DocumentExplorerPanel tickers={tickers} sections={sections} />
+                ) : activeView === "library" ? (
+              <section className="workspace-page" aria-labelledby="library-workspace-title">
+                <div className="workspace-page__intro">
+                  <div>
+                    <div className="workspace-eyebrow"><BookMarked className="h-3.5 w-3.5" />{locale === "vi" ? "Kho nghiên cứu" : "Research library"}</div>
+                    <h1 id="library-workspace-title">{locale === "vi" ? "Thư viện cuộc trò chuyện" : "Conversation library"}</h1>
+                    <p>{locale === "vi" ? "Lưu, tìm và mở lại các câu hỏi cùng câu trả lời đã được kiểm chứng." : "Save, search, and reopen questions with their grounded answers."}</p>
+                  </div>
+                </div>
+                <div className="library-workspace-surface">
+                  <ConversationLibrary
+                    conversations={conversations}
+                    activeConversationId={activeConversationId}
+                    storageMode={storageMode}
+                    storageWarning={storageWarning}
+                    saveIndicator={saveIndicator}
+                    onSelect={handleSelectConversation}
+                    onRename={renameConversation}
+                    onToggleBookmark={handleSidebarToggleBookmark}
+                    onDelete={(conversationId) => void deleteConversation(conversationId)}
+                    onExport={handleExportConversation}
+                    onExportBackup={handleExportBackup}
+                    onImportBackup={handleImportBackup}
+                    onUpdateMetadata={updateConversationMetadata}
+                    writerStatus={writerStatus}
+                    onRequestWriter={requestLibraryWriter}
+                    onOpenMessage={handleOpenMessage}
+                    onClose={() => setActiveView("overview")}
+                  />
+                </div>
+              </section>
                 ) : activeView === "system" ? (
               <SystemInfoPanel />
                 ) : activeView === "evaluation" ? (
@@ -1259,7 +1416,10 @@ export default function App() {
                 isBackendConnected={isBackendConnected}
                 isPipelineReady={isPipelineReady}
                 onRetryConnection={handleRetryConnection}
-                onSelectQuestion={handleSelectSample}
+                scopeLabel={scopeLabel}
+                recentConversations={recentConversations}
+                onSelectTemplate={handlePaletteTemplate}
+                onSelectConversation={handleSelectConversation}
               />
                 ) : (
             /* Active Chat Stream */
@@ -1272,7 +1432,16 @@ export default function App() {
                   </div>
                 }
               >
-                {messages.map((msg, index) => (
+                {messages.length === 0 ? (
+                  <section className="research-empty-state max-w-2xl mx-auto w-full px-4 py-10 md:py-16" aria-labelledby="research-empty-title">
+                    <p className="research-empty-state__eyebrow">New research</p>
+                    <h1 id="research-empty-title">Start with a filing question</h1>
+                    <p>
+                      Choose a focused example or write your own question below. The answer will stay grounded in retrieved 10-K evidence.
+                    </p>
+                    <SampleQuestionChips onSelect={handleSelectSample} />
+                  </section>
+                ) : messages.map((msg, index) => (
                   <ChatMessage
                     key={msg.id}
                     message={msg}
@@ -1301,6 +1470,8 @@ export default function App() {
                         ? () => handleSaveAnswerVariant(msg)
                         : undefined
                     }
+                    onInspectSource={handleInspectSource}
+                    pipelineStages={stageEventsByMessage[msg.id]}
                     tabIndex={0}
                   />
                 ))}
@@ -1322,14 +1493,35 @@ export default function App() {
                 )}
               </Suspense>
             </div>
-            {activeView === "conversation" && latestEvidenceSources.length > 0 && (
-              <EvidenceWorkspaceRail sources={latestEvidenceSources} />
+            {activeView === "conversation" && evidenceTarget && (
+              <EvidenceWorkspaceRail
+                sources={evidenceTarget.sources}
+                selectedIndex={evidenceTarget.selectedIndex}
+                unavailable={evidenceTarget.unavailable}
+                messageId={evidenceTarget.selection.messageId}
+                conversationId={evidenceTarget.selection.conversationId}
+                railWidth={contextRailWidth}
+                onRailWidthChange={setContextRailWidth}
+                onSelectIndex={(citationIndex) => {
+                  const source = evidenceTarget.sources[citationIndex];
+                  if (!source) return;
+                  setEvidenceSelection(
+                    createEvidenceSelection(
+                      activeConversationId,
+                      evidenceTarget.selection.messageId,
+                      citationIndex,
+                      source,
+                      evidenceTarget.selection.variantId,
+                    ),
+                  );
+                }}
+              />
             )}
           </div>
         </main>
 
         {/* The composer is a flex sibling, so it never overlays response evidence. */}
-        {activeView !== "retrieval" && activeView !== "documents" && activeView !== "evaluation" && activeView !== "analytics" && activeView !== "system" && <div className="composer-shell flex-shrink-0 z-10">
+        {activeView !== "retrieval" && activeView !== "documents" && activeView !== "library" && activeView !== "search" && activeView !== "architecture" && activeView !== "evaluation" && activeView !== "analytics" && activeView !== "system" && <div className="composer-shell flex-shrink-0 z-10">
           <ChatInput
             inputText={inputText}
             setInputText={setInputText}
@@ -1345,10 +1537,18 @@ export default function App() {
                 ? "The backend session for this saved conversation has expired. Start a new conversation to ask follow-up questions."
                 : "The backend could not be reached. Check the connection again before asking follow-up questions."
             }
-            answerLanguage={answerLanguage}
-            onAnswerLanguageChange={setAnswerLanguage}
             showBanner={activeView === "conversation" && hasExchanges}
             scopeLabel={scopeLabel || undefined}
+            tickers={tickers}
+            sections={sections}
+            selectedTicker={selectedTicker}
+            onSelectTicker={setSelectedTicker}
+            selectedSection={selectedSection}
+            onSelectSection={setSelectedSection}
+            topK={topK}
+            onChangeTopK={setTopK}
+            enableComparative={enableComparative}
+            onToggleComparative={setEnableComparative}
           />
         </div>}
       </div>
@@ -1363,20 +1563,13 @@ export default function App() {
         onNewConversation={requestNewConversation}
       />
 
-      {showResetDialog && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center overlay-backdrop p-4"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setShowResetDialog(false);
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="reset-dialog-title"
-            className="w-full max-w-md rounded-2xl surface-raised border-[var(--border-subtle)] p-5 shadow-2xl"
-          >
+      <ModalDialog
+        open={showResetDialog}
+        onClose={() => setShowResetDialog(false)}
+        labelledBy="reset-dialog-title"
+        initialFocusRef={resetCancelRef}
+        className="w-full max-w-md rounded-2xl surface-raised border-[var(--border-subtle)] p-5 shadow-2xl"
+      >
             <div className="flex items-start gap-3">
               <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full state-warning-surface">
                 <AlertTriangle className="h-5 w-5" />
@@ -1420,9 +1613,7 @@ export default function App() {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+      </ModalDialog>
     </div>
   );
 }

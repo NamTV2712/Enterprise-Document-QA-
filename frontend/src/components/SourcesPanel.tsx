@@ -29,7 +29,7 @@ interface SourcesPanelProps {
 
 export function getSectionDisplay(
   citation: string,
-  sectionField?: string,
+  sectionField?: string | null,
 ): { section: string; ticker: string; year: string } {
   const citationLower = citation.toLowerCase();
 
@@ -359,9 +359,9 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
                 const evidenceText = source.text || source.text_preview;
                 const isPreviewOnly = !source.text;
                 const displayScore =
-                  typeof source.score === "number"
-                    ? source.score.toFixed(4)
-                    : source.score;
+                  source.score_kind && typeof source.score === "number"
+                    ? `${source.score_kind} · ${source.score.toFixed(4)}`
+                    : null;
                 // The filing date describes the document, not the fiscal
                 // period of any number inside the excerpt.
                 const filedLabel = source.filing_date || (year ? `20${year.slice(-2)} filing year` : "");
@@ -388,14 +388,16 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1.5 font-mono">
-                          <span className="text-xs text-[var(--text-muted)] font-semibold">
-                            Rank score
-                          </span>
-                          <span className="text-xs font-bold text-[var(--accent-text)] bg-brand-indigo/10 dark:bg-brand-indigo/20 border border-brand-indigo/30 px-2 py-0.5 rounded shadow-4xs">
-                            {displayScore}
-                          </span>
-                        </div>
+                        {displayScore && (
+                          <div className="flex items-center gap-1.5 font-mono">
+                            <span className="text-xs text-[var(--text-muted)] font-semibold">
+                              Score kind
+                            </span>
+                            <span className="text-xs font-bold text-[var(--accent-text)] bg-brand-indigo/10 dark:bg-brand-indigo/20 border border-brand-indigo/30 px-2 py-0.5 rounded shadow-4xs">
+                              {displayScore}
+                            </span>
+                          </div>
+                        )}
                         <button
                           type="button"
                           onClick={() => void handleCopyExcerpt(index, source)}

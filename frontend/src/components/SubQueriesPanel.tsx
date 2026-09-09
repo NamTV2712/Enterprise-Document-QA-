@@ -103,7 +103,7 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
   }, [isFullyDone, isLatest]);
 
   return (
-    <div className="border border-slate-200 dark:border-slate-800 rounded-xl bg-[#FCFBF8] dark:bg-[#171D2B] overflow-hidden my-4 shadow-3xs transition-all font-sans">
+    <div className="border border-slate-200 dark:border-slate-800 rounded-xl bg-[var(--surface)] overflow-hidden my-4 shadow-3xs transition-all font-sans">
       <button
         type="button"
         id={`${panelId}-toggle`}
@@ -134,7 +134,7 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
       </button>
 
       {isOpen && (
-          <div id={panelId} className="ui-expand-enter overflow-hidden border-t border-slate-200 dark:border-slate-800 bg-[#F3F5FA] dark:bg-[#101625]">
+          <div id={panelId} className="ui-expand-enter overflow-hidden border-t border-slate-200 dark:border-slate-800 bg-[var(--surface-muted)]">
             <div className="p-3.5 space-y-3 text-sm">
               <div className="text-slate-500 dark:text-slate-400 font-medium border-b border-slate-250 dark:border-slate-800 pb-2 flex items-center justify-between" role="status" aria-live="polite">
                 <span>
@@ -147,7 +147,7 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
 
               <div className="space-y-3">
                 {subQueries.length === 0 ? (
-                  <div className="p-3.5 rounded-lg border border-slate-200 dark:border-slate-800/60 bg-white/50 dark:bg-[#171D2B]/30 text-slate-500 dark:text-slate-400 flex items-center gap-2.5 animate-pulse">
+                  <div className="p-3.5 rounded-lg border border-slate-200 dark:border-slate-800/60 bg-white/50 dark:bg-[var(--surface)]/30 text-slate-500 dark:text-slate-400 flex items-center gap-2.5 animate-pulse">
                     <RefreshCw className="w-3.5 h-3.5 animate-spin text-brand-indigo flex-shrink-0" />
                     <span>Preparing the focused retrieval summary…</span>
                   </div>
@@ -171,8 +171,8 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
                         key={index}
                         className={`ui-stagger-enter p-3 rounded-lg border transition-all ${
                           isLastRow && !isFullyDone
-                            ? "border-brand-indigo/40 bg-brand-indigo/5 text-slate-900 dark:text-white shadow-3xs"
-                            : "border-slate-200 dark:border-slate-800 bg-white dark:bg-[#171D2B]/60 text-slate-700 dark:text-slate-300"
+                            ? "border-brand-indigo/40 bg-brand-indigo/5 text-[var(--text-primary)] shadow-3xs"
+                            : "border-slate-200 dark:border-slate-800 bg-white dark:bg-[var(--surface)]/60 text-slate-700 dark:text-slate-300"
                         }`}
                         id={`subquery-item-${index}`}
                       >
@@ -209,7 +209,7 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
                                 <span>Preparing result…</span>
                               </span>
                             ) : (
-                              <span className="text-verified-green dark:text-[#53B89A] flex items-center gap-1 font-bold">
+                            <span className="text-verified-green dark:text-[var(--success)] flex items-center gap-1 font-bold">
                                 <Check className="w-3.5 h-3.5" />
                                 <span>Ready</span>
                               </span>
@@ -225,7 +225,7 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
                         {(index < visibleCount - 1 || isFullyDone) && (
                           <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/50 flex items-center justify-between text-xs text-slate-400">
                             <span>Retrieval complete</span>
-                            <span className="text-verified-green dark:text-[#53B89A] font-bold flex items-center gap-0.5">
+                            <span className="text-verified-green dark:text-[var(--success)] font-bold flex items-center gap-0.5">
                               <Hash className="w-3 h-3" />
                               {sub.num_chunks} chunks indexed
                             </span>

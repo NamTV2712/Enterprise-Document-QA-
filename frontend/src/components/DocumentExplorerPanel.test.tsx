@@ -54,4 +54,24 @@ describe("DocumentExplorerPanel", () => {
     await waitFor(() => expect(getChunksMock).toHaveBeenCalledWith("AAPL:0001", expect.any(Object), expect.any(AbortSignal)));
     expect(await screen.findByText("Revenue was $100B.")).toBeInTheDocument();
   });
+
+  test("separates an empty search result from an empty catalog", async () => {
+    getDocumentsMock.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 12 });
+    render(<LocaleProvider><DocumentExplorerPanel tickers={["AAPL"]} sections={["financial_table"]} /></LocaleProvider>);
+
+    expect(await screen.findByText("No documents")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Search documents" }), { target: { value: "MSFT" } });
+    expect(await screen.findByText("No matching documents.")).toBeInTheDocument();
+  });
+
+  test("keeps the error state distinct and retries without losing the list", async () => {
+    getDocumentsMock.mockRejectedValueOnce(Object.assign(new Error("server unavailable"), { status: 503 }));
+    render(<LocaleProvider><DocumentExplorerPanel tickers={["AAPL"]} sections={["financial_table"]} /></LocaleProvider>);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("research service is temporarily unavailable");
+    expect(screen.queryByText("No documents")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("AAPL · 2024-11-01")).toBeInTheDocument();
+  });
 });

@@ -69,7 +69,10 @@ describe("RetrievalLabPanel", () => {
     renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Run retrieval" }));
 
-    await waitFor(() => expect(inspectMock).toHaveBeenCalledWith(expect.objectContaining({ preset: "hybrid_rerank" })));
+    await waitFor(() => expect(inspectMock).toHaveBeenCalledWith(
+      expect.objectContaining({ preset: "hybrid_rerank" }),
+      expect.any(AbortSignal),
+    ));
     expect(await screen.findByText("AAPL 10-K p. 1")).toBeInTheDocument();
     expect(screen.getByText("bm25")).toBeInTheDocument();
   });
@@ -78,6 +81,46 @@ describe("RetrievalLabPanel", () => {
     const onUseQuestion = vi.fn();
     renderPanel(onUseQuestion);
     fireEvent.click(screen.getByRole("button", { name: "Use in Research" }));
-    expect(onUseQuestion).toHaveBeenCalledWith("What was Apple's total revenue in 2024?");
+    expect(onUseQuestion).toHaveBeenCalledWith("What was Apple's total revenue in 2024?", { ticker: null, section: null });
+  });
+
+  test("uses the shared listbox control for retrieval presets", () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: "Preset" }));
+    fireEvent.click(screen.getByRole("option", { name: "BM25" }));
+
+    expect(screen.getByRole("button", { name: "Preset" })).toHaveTextContent("BM25");
+  });
+
+  test("clears inherited filters when the shared scope is reset", () => {
+    const { rerender } = render(
+      <LocaleProvider>
+        <RetrievalLabPanel
+          tickers={["AAPL"]}
+          sections={["financial_table"]}
+          selectedTicker="AAPL"
+          selectedSection="financial_table"
+          isBackendConnected={true}
+          onUseQuestion={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+    expect(screen.getByRole("button", { name: "Company" })).toHaveTextContent("AAPL");
+    expect(screen.getByRole("button", { name: "Section" })).toHaveTextContent("financial_table");
+
+    rerender(
+      <LocaleProvider>
+        <RetrievalLabPanel
+          tickers={["AAPL"]}
+          sections={["financial_table"]}
+          selectedTicker={null}
+          selectedSection={null}
+          isBackendConnected={true}
+          onUseQuestion={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+    expect(screen.getByRole("button", { name: "Company" })).toHaveTextContent("All");
+    expect(screen.getByRole("button", { name: "Section" })).toHaveTextContent("All");
   });
 });

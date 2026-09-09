@@ -3,6 +3,8 @@ import { BookOpen, ExternalLink, FileText, Search, X } from "lucide-react";
 import { getDocumentChunks, getDocuments } from "../lib/api";
 import { DocumentChunk, DocumentRow } from "../types";
 import { useLocale } from "../lib/i18n";
+import { describeRequestError } from "../lib/requestError";
+import { SelectField } from "./ui/SelectField";
 
 interface DocumentExplorerPanelProps {
   tickers: string[];
@@ -36,7 +38,10 @@ export function DocumentExplorerPanel({ tickers, sections }: DocumentExplorerPan
   const [chunkPage, setChunkPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingChunks, setIsLoadingChunks] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
+  const [chunkError, setChunkError] = useState<string | null>(null);
+  const [requestNonce, setRequestNonce] = useState(0);
+  const [chunkRequestNonce, setChunkRequestNonce] = useState(0);
   const debouncedSearch = useDebouncedValue(search);
   const debouncedChunkSearch = useDebouncedValue(chunkSearch);
   const documentCache = useRef(new Map<string, { items: DocumentRow[]; total: number }>());
@@ -53,11 +58,11 @@ export function DocumentExplorerPanel({ tickers, sections }: DocumentExplorerPan
       setDocuments(cached.items);
       setTotal(cached.total);
       setIsLoading(false);
-      setError(null);
+      setListError(null);
       return () => controller.abort();
     }
     setIsLoading(true);
-    setError(null);
+    setListError(null);
     void getDocuments({ ticker: ticker || null, section: section || null, search: debouncedSearch, page, page_size: PAGE_SIZE }, controller.signal)
       .then((response) => {
         if (requestId !== documentRequestId.current) return;
@@ -68,13 +73,13 @@ export function DocumentExplorerPanel({ tickers, sections }: DocumentExplorerPan
       .catch((reason) => {
         if (requestId !== documentRequestId.current) return;
         if (reason instanceof DOMException && reason.name === "AbortError") return;
-        setError(reason instanceof Error ? reason.message : "Could not load documents.");
+        setListError(describeRequestError(reason, vi ? "Không thể tải tài liệu." : "Could not load documents.", vi ? "vi" : "en").message);
       })
       .finally(() => {
         if (requestId === documentRequestId.current) setIsLoading(false);
       });
     return () => controller.abort();
-  }, [page, debouncedSearch, section, ticker]);
+  }, [page, debouncedSearch, section, ticker, requestNonce]);
 
   useEffect(() => {
     if (!selected) return;
@@ -88,6 +93,7 @@ export function DocumentExplorerPanel({ tickers, sections }: DocumentExplorerPan
       return () => controller.abort();
     }
     setIsLoadingChunks(true);
+    setChunkError(null);
     void getDocumentChunks(selected.document_id, { search: debouncedChunkSearch, page: chunkPage, page_size: 8 }, controller.signal)
       .then((response) => {
         if (requestId !== chunkRequestId.current) return;
@@ -97,21 +103,40 @@ export function DocumentExplorerPanel({ tickers, sections }: DocumentExplorerPan
       .catch((reason) => {
         if (requestId !== chunkRequestId.current) return;
         if (reason instanceof DOMException && reason.name === "AbortError") return;
-        setError(reason instanceof Error ? reason.message : "Could not load document excerpts.");
+        setChunkError(describeRequestError(reason, vi ? "Không thể tải đoạn nguồn." : "Could not load document excerpts.", vi ? "vi" : "en").message);
       })
       .finally(() => {
         if (requestId === chunkRequestId.current) setIsLoadingChunks(false);
       });
     return () => controller.abort();
-  }, [chunkPage, debouncedChunkSearch, selected?.document_id]);
+  }, [chunkPage, debouncedChunkSearch, selected?.document_id, chunkRequestNonce]);
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const tickerOptions = useMemo(
+    () => [{ value: "", label: vi ? "Tất cả công ty" : "All companies" }, ...tickers.map((item) => ({ value: item, label: item }))],
+    [tickers, vi],
+  );
+  const sectionOptions = useMemo(
+    () => [{ value: "", label: vi ? "Tất cả mục" : "All sections" }, ...sections.map((item) => ({ value: item, label: item }))],
+    [sections, vi],
+  );
   const rangeLabel = useMemo(() => {
-    if (total === 0) return vi ? "Không có tài liệu" : "No documents";
+    if (total === 0) {
+      const hasFilters = Boolean(debouncedSearch.trim() || ticker || section);
+      return hasFilters
+        ? (vi ? "Không tìm thấy tài liệu phù hợp" : "No matching documents")
+        : (vi ? "Không có tài liệu" : "No documents");
+    }
     const start = (page - 1) * PAGE_SIZE + 1;
     const end = Math.min(page * PAGE_SIZE, total);
     return vi ? `${start}–${end} trên ${total}` : `${start}–${end} of ${total}`;
-  }, [page, total, vi]);
+  }, [debouncedSearch, page, section, ticker, total, vi]);
+
+  const listStatusLabel = isLoading
+    ? (vi ? "Đang tải…" : "Loading…")
+    : listError
+      ? (vi ? "Không khả dụng" : "Unavailable")
+      : rangeLabel;
 
   const selectDocument = (document: DocumentRow) => {
     setSelected(document);
@@ -120,7 +145,7 @@ export function DocumentExplorerPanel({ tickers, sections }: DocumentExplorerPan
   };
 
   return (
-    <section className="mx-auto w-full max-w-6xl space-y-5 px-3 py-5 md:px-6" aria-labelledby="document-explorer-title">
+    <section className="workspace-page workspace-page--standard document-explorer space-y-5" aria-labelledby="document-explorer-title">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-700 dark:text-violet-300">
@@ -136,39 +161,28 @@ export function DocumentExplorerPanel({ tickers, sections }: DocumentExplorerPan
         </div>
       </div>
 
-      <div className="grid gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-4 md:grid-cols-[minmax(0,1fr)_180px_220px]">
-        <label className="relative block">
-          <span className="sr-only">{vi ? "Tìm tài liệu" : "Search documents"}</span>
-          <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-[var(--text-muted)]" aria-hidden="true" />
+      <div className="documents-filter-grid rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-4">
+        <label className="select-field relative block">
+          <span className="select-field__label">{vi ? "Tìm tài liệu" : "Search documents"}</span>
+          <Search className="documents-filter-search-icon pointer-events-none absolute left-3 h-4 w-4 text-[var(--text-muted)]" aria-hidden="true" />
           <input
+            aria-label={vi ? "Tìm tài liệu" : "Search documents"}
             value={search}
             onChange={(event) => { setSearch(event.target.value); setPage(1); }}
             placeholder={vi ? "Tìm ticker, ngày filing, accession…" : "Search ticker, filing date, accession…"}
             className="min-h-10 w-full rounded-xl border border-[var(--border-strong)] bg-[var(--surface)] pl-9 pr-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20"
           />
         </label>
-        <label>
-          <span className="sr-only">{vi ? "Công ty" : "Company"}</span>
-          <select value={ticker} onChange={(event) => { setTicker(event.target.value); setPage(1); }} className="control-select w-full" aria-label={vi ? "Công ty" : "Company"}>
-            <option value="">{vi ? "Tất cả công ty" : "All companies"}</option>
-            {tickers.map((item) => <option key={item} value={item}>{item}</option>)}
-          </select>
-        </label>
-        <label>
-          <span className="sr-only">{vi ? "Mục" : "Section"}</span>
-          <select value={section} onChange={(event) => { setSection(event.target.value); setPage(1); }} className="control-select w-full" aria-label={vi ? "Mục" : "Section"}>
-            <option value="">{vi ? "Tất cả mục" : "All sections"}</option>
-            {sections.map((item) => <option key={item} value={item}>{item}</option>)}
-          </select>
-        </label>
+        <SelectField label={vi ? "Công ty" : "Company"} value={ticker} options={tickerOptions} onValueChange={(value) => { setTicker(value); setPage(1); }} />
+        <SelectField label={vi ? "Mục" : "Section"} value={section} options={sectionOptions} onValueChange={(value) => { setSection(value); setPage(1); }} />
       </div>
 
-      {error && <div className="rounded-xl border border-rose-300/60 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300" role="alert">{error}</div>}
+      {listError && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-300/60 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300" role="alert"><span>{listError}</span><button type="button" onClick={() => setRequestNonce((value) => value + 1)} className="rounded-lg border border-current px-3 py-1.5 text-xs font-semibold">{vi ? "Thử lại" : "Retry"}</button></div>}
 
       <div className="overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-raised)]">
-        <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-4 py-3">
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-4 py-3" aria-busy={isLoading}>
           <div className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]"><BookOpen className="h-4 w-4 text-violet-600 dark:text-violet-300" />{vi ? "Filing đã nạp" : "Loaded filings"}</div>
-          <span className="text-xs text-[var(--text-muted)]" aria-live="polite">{isLoading ? (vi ? "Đang tải…" : "Loading…") : rangeLabel}</span>
+          <span className="text-xs text-[var(--text-muted)]" aria-live="polite">{listStatusLabel}</span>
         </div>
         <div className="divide-y divide-[var(--border-subtle)]">
           {documents.map((document) => (
@@ -177,13 +191,13 @@ export function DocumentExplorerPanel({ tickers, sections }: DocumentExplorerPan
               <span className="flex items-center gap-3 text-xs text-[var(--text-muted)]"><span>{document.chunk_count} chunks</span><span>{document.sections.length} sections</span><ExternalLink className="h-4 w-4" aria-hidden="true" /></span>
             </button>
           ))}
-          {!isLoading && documents.length === 0 && <div className="px-5 py-12 text-center text-sm text-[var(--text-muted)]">{vi ? "Không tìm thấy tài liệu phù hợp." : "No matching documents."}</div>}
+          {!isLoading && !listError && documents.length === 0 && <div className="px-5 py-12 text-center text-sm text-[var(--text-muted)]">{vi ? "Không tìm thấy tài liệu phù hợp." : "No matching documents."}</div>}
         </div>
-        <div className="flex items-center justify-between border-t border-[var(--border-subtle)] px-4 py-3">
+        {!listError && <div className="flex items-center justify-between border-t border-[var(--border-subtle)] px-4 py-3">
           <button type="button" disabled={page <= 1 || isLoading} onClick={() => setPage((value) => value - 1)} className="rounded-lg border border-[var(--border-strong)] px-3 py-1.5 text-xs font-semibold disabled:opacity-40">{vi ? "Trước" : "Previous"}</button>
           <span className="text-xs text-[var(--text-muted)]">{page} / {pageCount}</span>
           <button type="button" disabled={page >= pageCount || isLoading} onClick={() => setPage((value) => value + 1)} className="rounded-lg border border-[var(--border-strong)] px-3 py-1.5 text-xs font-semibold disabled:opacity-40">{vi ? "Sau" : "Next"}</button>
-        </div>
+        </div>}
       </div>
 
       {selected && (
@@ -197,8 +211,9 @@ export function DocumentExplorerPanel({ tickers, sections }: DocumentExplorerPan
             <div className="flex items-center justify-end text-xs text-[var(--text-muted)]">{isLoadingChunks ? (vi ? "Đang tải…" : "Loading…") : `${chunks.length} ${vi ? "đoạn" : "excerpts"}`}</div>
           </div>
           <div className="space-y-3 p-4">
+            {chunkError && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg state-warning-surface p-3 text-xs" role="alert"><span>{chunkError}</span><button type="button" onClick={() => setChunkRequestNonce((value) => value + 1)} className="rounded border border-current px-2 py-1 font-semibold">{vi ? "Thử lại" : "Retry"}</button></div>}
             {chunks.map((chunk) => <article key={chunk.chunk_id} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] p-3"><div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-muted)]"><span className="font-semibold text-[var(--text-primary)]">{chunk.section ?? "Unknown section"}</span><span>{chunk.chunk_id} · {chunk.text_length} chars</span></div><p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--text-primary)]">{chunk.text_preview}</p>{chunk.source_url && <a href={chunk.source_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[var(--primary)] hover:underline">{vi ? "Mở nguồn SEC" : "Open SEC source"}<ExternalLink className="h-3 w-3" /></a>}</article>)}
-            {!isLoadingChunks && chunks.length === 0 && <p className="py-5 text-center text-sm text-[var(--text-muted)]">{vi ? "Không có đoạn phù hợp." : "No matching excerpts."}</p>}
+            {!isLoadingChunks && !chunkError && chunks.length === 0 && <p className="py-5 text-center text-sm text-[var(--text-muted)]">{vi ? "Không có đoạn phù hợp." : "No matching excerpts."}</p>}
           </div>
           <div className="flex items-center justify-between border-t border-[var(--border-subtle)] px-4 py-3"><button type="button" disabled={chunkPage <= 1 || isLoadingChunks} onClick={() => setChunkPage((value) => value - 1)} className="rounded-lg border border-[var(--border-strong)] px-3 py-1.5 text-xs font-semibold disabled:opacity-40">{vi ? "Trước" : "Previous"}</button><span className="text-xs text-[var(--text-muted)]">Page {chunkPage}</span><button type="button" disabled={chunks.length < 8 || isLoadingChunks} onClick={() => setChunkPage((value) => value + 1)} className="rounded-lg border border-[var(--border-strong)] px-3 py-1.5 text-xs font-semibold disabled:opacity-40">{vi ? "Sau" : "Next"}</button></div>
         </div>

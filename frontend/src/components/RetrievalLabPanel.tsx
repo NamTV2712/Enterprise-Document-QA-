@@ -1,8 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Activity, ArrowRight, Download, FlaskConical, GitCompare, Search, ShieldCheck } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Activity, ArrowRight, Download, FlaskConical, GitCompare, Search, ShieldAlert, ShieldCheck } from "lucide-react";
 import { inspectRetrieval } from "../lib/api";
 import { RetrievalPreset, RetrievalTrace } from "../types";
 import { useLocale } from "../lib/i18n";
+import { describeRequestError } from "../lib/requestError";
+import { NumberRangeField } from "./NumberRangeField";
+import { SelectField } from "./ui/SelectField";
 
 interface RetrievalLabPanelProps {
   tickers: string[];
@@ -10,7 +13,7 @@ interface RetrievalLabPanelProps {
   selectedTicker: string | null;
   selectedSection: string | null;
   isBackendConnected: boolean | null;
-  onUseQuestion: (question: string) => void;
+  onUseQuestion: (question: string, scope?: { ticker: string | null; section: string | null }) => void;
 }
 
 const PRESETS: Array<{ value: RetrievalPreset; label: string; vi: string }> = [
@@ -49,22 +52,42 @@ export function RetrievalLabPanel({
   const [interpretation, setInterpretation] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const inspectionAbortRef = useRef<AbortController | null>(null);
+  const inspectionRequestId = useRef(0);
 
   useEffect(() => {
-    if (selectedTicker) setTicker(selectedTicker);
+    setTicker(selectedTicker ?? "");
   }, [selectedTicker]);
 
   useEffect(() => {
-    if (selectedSection) setSection(selectedSection);
+    setSection(selectedSection ?? "");
   }, [selectedSection]);
+
+  useEffect(() => () => inspectionAbortRef.current?.abort(), []);
 
   const presetLabel = useMemo(
     () => PRESETS.find((item) => item.value === preset)?.[vi ? "vi" : "label"] ?? preset,
     [preset, vi],
   );
+  const presetOptions = useMemo(
+    () => PRESETS.map((item) => ({ value: item.value, label: vi ? item.vi : item.label })),
+    [vi],
+  );
+  const tickerOptions = useMemo(
+    () => [{ value: "", label: vi ? "Tất cả" : "All" }, ...tickers.map((item) => ({ value: item, label: item }))],
+    [tickers, vi],
+  );
+  const sectionOptions = useMemo(
+    () => [{ value: "", label: vi ? "Tất cả" : "All" }, ...sections.map((item) => ({ value: item, label: item }))],
+    [sections, vi],
+  );
 
   const runInspection = async () => {
     if (question.trim().length < 5 || isLoading) return;
+    inspectionAbortRef.current?.abort();
+    const controller = new AbortController();
+    inspectionAbortRef.current = controller;
+    const requestId = ++inspectionRequestId.current;
     setIsLoading(true);
     setError(null);
     try {
@@ -75,7 +98,8 @@ export function RetrievalLabPanel({
         top_k: topK,
         candidate_pool: Math.max(candidatePool, topK),
         preset,
-      });
+      }, controller.signal);
+      if (requestId !== inspectionRequestId.current) return;
       setTrace(response.trace);
       setComparisonTrace(null);
       setInterpretation(response.query_interpretation.retrieval_question);
@@ -83,14 +107,16 @@ export function RetrievalLabPanel({
         const comparison = await inspectRetrieval({
           question: question.trim(), ticker: ticker || null, section: section || null,
           top_k: topK, candidate_pool: Math.max(candidatePool, topK), preset: comparePreset,
-        });
+        }, controller.signal);
+        if (requestId !== inspectionRequestId.current) return;
         setComparisonTrace(comparison.trace);
       }
     } catch (inspectionError) {
-      setError(inspectionError instanceof Error ? inspectionError.message : "Retrieval inspection failed.");
+      if (requestId !== inspectionRequestId.current || (inspectionError instanceof DOMException && inspectionError.name === "AbortError")) return;
+      setError(describeRequestError(inspectionError, vi ? "Không thể kiểm tra retrieval." : "Retrieval inspection failed.", vi ? "vi" : "en").message);
       setTrace(null);
     } finally {
-      setIsLoading(false);
+      if (requestId === inspectionRequestId.current) setIsLoading(false);
     }
   };
 
@@ -105,7 +131,7 @@ export function RetrievalLabPanel({
   };
 
   return (
-    <section className="mx-auto w-full max-w-6xl space-y-5 px-3 py-5 md:px-6" aria-labelledby="retrieval-lab-title">
+    <section className="workspace-page workspace-page--wide retrieval-lab space-y-5" aria-labelledby="retrieval-lab-title">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-700 dark:text-cyan-300">
@@ -122,14 +148,16 @@ export function RetrievalLabPanel({
           </p>
         </div>
         <div className="inline-flex items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-raised)] px-3 py-2 text-xs text-[var(--text-muted)]">
-          <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-300" aria-hidden="true" />
+          {isBackendConnected === false
+            ? <ShieldAlert className="h-4 w-4 text-rose-600 dark:text-rose-300" aria-hidden="true" />
+            : <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-300" aria-hidden="true" />}
           {isBackendConnected === false
             ? vi ? "Backend offline" : "Backend offline"
             : vi ? "Provider-free" : "Provider-free"}
         </div>
       </div>
 
-      <div className="grid gap-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-4 shadow-sm md:grid-cols-[minmax(0,1fr)_220px]">
+      <div className="grid gap-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_220px]">
         <label className="space-y-2">
           <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
             {vi ? "Câu hỏi retrieval" : "Retrieval question"}
@@ -154,7 +182,7 @@ export function RetrievalLabPanel({
           </button>
           <button
             type="button"
-            onClick={() => onUseQuestion(question)}
+            onClick={() => onUseQuestion(question, { ticker: ticker || null, section: section || null })}
             className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[var(--border-strong)] px-4 py-2 text-sm font-semibold text-[var(--text-primary)] hover:surface-muted-hover"
           >
             {vi ? "Đưa sang Research" : "Use in Research"}
@@ -163,49 +191,34 @@ export function RetrievalLabPanel({
         </div>
       </div>
 
-      <div className="grid gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-4 sm:grid-cols-2 lg:grid-cols-5">
-        <label className="space-y-1 text-xs font-semibold text-[var(--text-muted)]">
-          <span>{vi ? "Preset" : "Preset"}</span>
-          <select value={preset} onChange={(event) => setPreset(event.target.value as RetrievalPreset)} className="control-select w-full">
-            {PRESETS.map((item) => <option key={item.value} value={item.value}>{vi ? item.vi : item.label}</option>)}
-          </select>
-        </label>
-        <label className="space-y-1 text-xs font-semibold text-[var(--text-muted)]">
-          <span>{vi ? "Công ty" : "Company"}</span>
-          <select value={ticker} onChange={(event) => setTicker(event.target.value)} className="control-select w-full">
-            <option value="">{vi ? "Tất cả" : "All"}</option>
-            {tickers.map((item) => <option key={item} value={item}>{item}</option>)}
-          </select>
-        </label>
-        <label className="space-y-1 text-xs font-semibold text-[var(--text-muted)]">
-          <span>{vi ? "Mục" : "Section"}</span>
-          <select value={section} onChange={(event) => setSection(event.target.value)} className="control-select w-full">
-            <option value="">{vi ? "Tất cả" : "All"}</option>
-            {sections.map((item) => <option key={item} value={item}>{item}</option>)}
-          </select>
-        </label>
-        <label className="space-y-1 text-xs font-semibold text-[var(--text-muted)]">
-          <span>Top K</span>
-          <select value={topK} onChange={(event) => setTopK(Number(event.target.value))} className="control-select w-full">
-            {[3, 5, 10].map((item) => <option key={item} value={item}>{item}</option>)}
-          </select>
-        </label>
-        <label className="space-y-1 text-xs font-semibold text-[var(--text-muted)]">
-          <span>{vi ? "Candidate pool" : "Candidate pool"}</span>
-          <select value={candidatePool} onChange={(event) => setCandidatePool(Number(event.target.value))} className="control-select w-full">
-          {[10, 20, 50].map((item) => <option key={item} value={item}>{item}</option>)}
-        </select>
-        </label>
-        <label className="flex items-center gap-2 text-xs font-semibold text-[var(--text-muted)] sm:col-span-2 lg:col-span-1">
+      <div className="retrieval-settings-grid rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-4">
+        <SelectField label="Preset" value={preset} options={presetOptions} onValueChange={(value) => setPreset(value as RetrievalPreset)} />
+        <SelectField label={vi ? "Công ty" : "Company"} value={ticker} options={tickerOptions} onValueChange={setTicker} />
+        <SelectField label={vi ? "Mục" : "Section"} value={section} options={sectionOptions} onValueChange={setSection} />
+        <NumberRangeField
+          id="retrieval-top-k"
+          label="Top K"
+          value={topK}
+          min={1}
+          max={10}
+          onChange={setTopK}
+          hint={vi ? "Kết quả cuối cùng" : "Final results"}
+        />
+        <NumberRangeField
+          id="retrieval-candidate-pool"
+          label={vi ? "Candidate pool" : "Candidate pool"}
+          value={candidatePool}
+          min={10}
+          max={50}
+          step={5}
+          onChange={setCandidatePool}
+          hint={vi ? "Ứng viên trước khi xếp hạng cuối" : "Candidates before final ranking"}
+        />
+        <label className="flex min-h-10 items-center gap-2 text-xs font-semibold text-[var(--text-muted)]">
           <input type="checkbox" checked={compareEnabled} onChange={(event) => setCompareEnabled(event.target.checked)} />
           <span>{vi ? "So sánh preset" : "Compare preset"}</span>
         </label>
-        {compareEnabled && <label className="space-y-1 text-xs font-semibold text-[var(--text-muted)]">
-          <span>{vi ? "Preset thứ hai" : "Second preset"}</span>
-          <select value={comparePreset} onChange={(event) => setComparePreset(event.target.value as RetrievalPreset)} className="control-select w-full">
-            {PRESETS.map((item) => <option key={item.value} value={item.value}>{vi ? item.vi : item.label}</option>)}
-          </select>
-        </label>}
+        {compareEnabled && <SelectField label={vi ? "Preset thứ hai" : "Second preset"} value={comparePreset} options={presetOptions} onValueChange={(value) => setComparePreset(value as RetrievalPreset)} />}
       </div>
 
       {error && <div className="rounded-xl border border-rose-300/60 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300" role="alert">{error}</div>}
@@ -217,7 +230,7 @@ export function RetrievalLabPanel({
 
       {trace ? (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="retrieval-settings-grid">
             {trace.stages.map((stage) => (
               <div key={stage.name} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-3">
                 <div className="text-xs font-semibold text-[var(--text-muted)]">{stage.name}</div>

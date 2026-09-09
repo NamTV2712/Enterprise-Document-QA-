@@ -16,14 +16,11 @@ import {
   RefreshCw,
   Sparkles,
   ArrowRight,
-  ShieldAlert,
-  PieChart,
-  FileSpreadsheet,
-  TrendingUp,
 } from "lucide-react";
 import { Tooltip } from "./Tooltip";
-import { SAMPLE_QUESTIONS, SampleQuestion } from "./SampleQuestionChips";
 import { useLocale } from "../lib/i18n";
+import { RESEARCH_TEMPLATES, getResearchTemplateCopy, type ResearchTemplate } from "../lib/researchTemplates";
+import type { ConversationRecord } from "../lib/conversationStore";
 
 interface OverviewPanelProps {
   hasMessages: boolean;
@@ -33,7 +30,10 @@ interface OverviewPanelProps {
   isBackendConnected: boolean | null;
   isPipelineReady: boolean | null;
   onRetryConnection: () => void;
-  onSelectQuestion?: (question: SampleQuestion) => void;
+  scopeLabel: string;
+  recentConversations: ConversationRecord[];
+  onSelectTemplate?: (template: ResearchTemplate) => void;
+  onSelectConversation?: (conversation: ConversationRecord) => void;
 }
 
 const features = [
@@ -69,33 +69,6 @@ const features = [
   },
 ] as const;
 
-const PROMPT_CARDS = [
-  {
-    topic: "Comparative Risks",
-    target: "Apple & Microsoft 10-K disclosures",
-    question: SAMPLE_QUESTIONS[0],
-    Icon: ShieldAlert,
-  },
-  {
-    topic: "Revenue Segments",
-    target: "Alphabet (Google) business lines",
-    question: SAMPLE_QUESTIONS[1],
-    Icon: PieChart,
-  },
-  {
-    topic: "MD&A Analysis",
-    target: "Amazon performance & outlook",
-    question: SAMPLE_QUESTIONS[2],
-    Icon: FileSpreadsheet,
-  },
-  {
-    topic: "Statement Trends",
-    target: "Tesla financial reporting data",
-    question: SAMPLE_QUESTIONS[3],
-    Icon: TrendingUp,
-  },
-];
-
 export const OverviewPanel = React.memo<OverviewPanelProps>(
   ({
     hasMessages,
@@ -105,7 +78,10 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
     isBackendConnected,
     isPipelineReady,
     onRetryConnection,
-    onSelectQuestion,
+    scopeLabel,
+    recentConversations,
+    onSelectTemplate,
+    onSelectConversation,
   }) => {
     const { locale } = useLocale();
     const vi = locale === "vi";
@@ -139,7 +115,7 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
         <h2 className="hero-title max-w-full text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight py-1 font-serif break-words">
           {vi ? "Đặt câu hỏi. Kiểm chứng mọi câu trả lời." : "Ask questions. Verify every answer."}
         </h2>
-        <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 max-w-xl mx-auto leading-relaxed font-sans">
+        <p className="mx-auto max-w-xl text-sm leading-relaxed text-[var(--text-muted)] font-sans md:text-base">
           {vi ? "Nghiên cứu filing SEC 10-K" : "Research SEC 10-K filings"}
           {companyCount !== null
             ? vi ? ` trên ${companyCount} công ty có thể tìm kiếm` : ` across ${companyCount} searchable companies`
@@ -148,6 +124,10 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
             ? " với bằng chứng có trích dẫn, số liệu được giữ nguyên và dấu vết truy xuất rõ ràng."
             : " with cited evidence, deterministic number preservation, and a clear retrieval trail."}
         </p>
+        <div className="overview-scope" aria-label={vi ? `Phạm vi hiện tại: ${scopeLabel}` : `Current scope: ${scopeLabel}`}>
+          <span>{vi ? "Phạm vi hiện tại" : "Current scope"}</span>
+          <strong>{scopeLabel}</strong>
+        </div>
       </div>
 
       {/* Backend Connection Status Notice if offline/checking */}
@@ -188,84 +168,115 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
         </div>
       ) : null}
 
-      {/* System Telemetry & Capability Stat Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="stat-card">
-          <div className="stat-card__value">{companyCount ?? "—"}</div>
-          <div className="stat-card__label">{vi ? "Công ty có thể tìm kiếm" : "Searchable Companies"}</div>
+      {/* Only backend-reported corpus facts belong in the start state. */}
+      {(companyCount !== null || indexedChunkCount != null) && (
+        <div className="overview-facts" aria-label={vi ? "Thông tin kho dữ liệu" : "Corpus facts"}>
+          {companyCount !== null && (
+            <div className="stat-card">
+              <div className="stat-card__value">{companyCount}</div>
+              <div className="stat-card__label">{vi ? "Công ty có thể tìm kiếm" : "Searchable Companies"}</div>
+            </div>
+          )}
+          {indexedChunkCount != null && (
+            <div className="stat-card">
+              <div className="stat-card__value">{indexedChunkCount}</div>
+              <div className="stat-card__label">{vi ? "Đoạn đã lập chỉ mục" : "Indexed Chunks"}</div>
+            </div>
+          )}
         </div>
-        <div className="stat-card">
-          <div className="stat-card__value">{indexedChunkCount ?? "—"}</div>
-          <div className="stat-card__label">{vi ? "Đoạn đã lập chỉ mục" : "Indexed Chunks"}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-card__value">Hybrid RRF</div>
-          <div className="stat-card__label">{vi ? "BM25 + Dense + CE" : "BM25 + Dense + CE"}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-card__value">{vi ? "Dấu vết nguồn" : "Source trail"}</div>
-          <div className="stat-card__label">{vi ? "Bằng chứng có trích dẫn" : "Cited evidence"}</div>
-        </div>
-      </div>
+      )}
 
       {/* Interactive Quick-Start Prompts */}
       <div className="space-y-2.5">
-        <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300">
+        <div className="flex items-center justify-between text-xs font-semibold text-[var(--text-primary)]">
           <span className="flex items-center gap-1.5 font-sans">
             <Sparkles className="w-3.5 h-3.5 text-brand-indigo" />
             {vi ? "Khám phá câu hỏi mẫu" : "Explore sample research queries"}
           </span>
-          <span className="text-[11px] font-normal text-slate-400 dark:text-slate-500">
+          <span className="text-[11px] font-normal text-[var(--text-subtle)]">
             {vi ? "Nhấn để nạp và tìm kiếm" : "Click to load & search"}
           </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-          {PROMPT_CARDS.map(({ topic, target, question, Icon }, idx) => (
+          {RESEARCH_TEMPLATES.slice(0, 4).map((template) => {
+            const copy = getResearchTemplateCopy(template, locale);
+            return (
             <button
-              key={idx}
+              key={template.id}
               type="button"
-              onClick={() => onSelectQuestion?.(question)}
+              onClick={() => onSelectTemplate?.(template)}
               className="prompt-card group"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-6 h-6 rounded-md bg-brand-indigo/10 dark:bg-brand-indigo/20 text-brand-indigo flex items-center justify-center flex-shrink-0">
-                    <Icon className="w-3.5 h-3.5" />
+                  <div className="prompt-card__icon">
+                    <Sparkles className="w-3.5 h-3.5" />
                   </div>
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-brand-indigo transition-colors">
-                    {topic}
+                  <span className="text-xs font-bold text-[var(--text-primary)] truncate group-hover:text-[var(--accent-text)] transition-colors">
+                    {copy.label}
                   </span>
                 </div>
-                <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-brand-indigo group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-[var(--text-subtle)] transition-[color,transform] duration-150 group-hover:translate-x-0.5 group-hover:text-[var(--accent-text)]" aria-hidden="true" />
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 leading-relaxed">
-                {target}
+              <p className="line-clamp-2 text-xs leading-relaxed text-[var(--text-muted)]">
+                {copy.description}
               </p>
             </button>
-          ))}
+            );
+          })}
         </div>
       </div>
 
+      {recentConversations.length > 0 && (
+        <section className="overview-recent" aria-labelledby="recent-conversations-title">
+          <div className="overview-section-heading">
+            <span className="flex items-center gap-1.5">
+              <MessageSquare className="h-3.5 w-3.5" />
+              <span id="recent-conversations-title">{vi ? "Cuộc trò chuyện gần đây" : "Recent conversations"}</span>
+            </span>
+            <span>{vi ? "Từ thư viện trên thiết bị" : "From your local library"}</span>
+          </div>
+          <div className="overview-recent__list">
+            {recentConversations.slice(0, 3).map((conversation) => (
+              <button
+                key={conversation.id}
+                type="button"
+                className="overview-recent__item"
+                onClick={() => onSelectConversation?.(conversation)}
+              >
+                <span className="overview-recent__title">{conversation.title}</span>
+                <span className="overview-recent__meta">
+                  {conversation.messages.length} {vi ? "tin nhắn" : "messages"} · {new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" }).format(conversation.updatedAt)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Feature Architecture Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5" id="features-cards">
-        {features.map(({ title, description, tooltip, Icon, badge, colorClass }) => (
-          <article className="feature-card" key={title}>
-            <div className="flex items-center justify-between mb-2">
-              <Tooltip content={tooltip}>
-                <div className={`feature-card__icon ${colorClass}`}>
-                  <Icon className="w-4 h-4" />
-                </div>
-              </Tooltip>
-              <span className="text-[10px] font-mono font-semibold uppercase px-2 py-0.5 rounded border border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400">
-                {badge}
-              </span>
-            </div>
-            <h3 className="feature-card__title">{title}</h3>
-            <p className="feature-card__description">{description}</p>
-          </article>
-        ))}
-      </div>
+      <details className="overview-capabilities">
+        <summary>{vi ? "Cách hệ thống truy xuất bằng chứng" : "How the evidence workflow works"}</summary>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5" id="features-cards">
+          {features.map(({ title, description, tooltip, Icon, badge, colorClass }) => (
+            <article className="feature-card" key={title}>
+              <div className="flex items-center justify-between mb-2">
+                <Tooltip content={tooltip}>
+                  <div className={`feature-card__icon ${colorClass}`}>
+                    <Icon className="w-4 h-4" />
+                  </div>
+                </Tooltip>
+                <span className="rounded border border-[var(--border-subtle)] px-2 py-0.5 font-mono text-[10px] font-semibold uppercase text-[var(--text-muted)]">
+                  {badge}
+                </span>
+              </div>
+              <h3 className="feature-card__title">{title}</h3>
+              <p className="feature-card__description">{description}</p>
+            </article>
+          ))}
+        </div>
+      </details>
 
       {/* Workspace Guide Collapsible */}
       <details className="workspace-guide group">
@@ -276,27 +287,27 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
           </span>
           <ChevronDown className="w-4 h-4 transition-transform group-open:rotate-180" />
         </summary>
-        <div className="ui-expand-enter grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-350">
+        <div className="ui-expand-enter grid grid-cols-1 gap-4 pt-4 text-sm leading-relaxed text-[var(--text-muted)] md:grid-cols-3">
           <p>
-            <strong className="block text-slate-800 dark:text-slate-100">
+            <strong className="block text-[var(--text-primary)]">
               {vi ? "1. Chọn phạm vi" : "1. Choose scope"}
             </strong>
             {vi ? "Chọn công ty và mục 10-K, hoặc để Tất cả để khám phá và so sánh." : "Select a company and 10-K section, or leave both on All for discovery and comparisons."}
           </p>
           <p>
-            <strong className="block text-slate-800 dark:text-slate-100">
+            <strong className="block text-[var(--text-primary)]">
               {vi ? "2. Hỏi tự nhiên" : "2. Ask naturally"}
             </strong>
             {vi ? "Câu hỏi so sánh có thể được tách thành các truy vấn tập trung trước khi tạo tóm tắt có căn cứ." : "Comparisons can be decomposed into focused sub-queries before a grounded summary is produced."}
           </p>
           <p>
-            <strong className="block text-slate-800 dark:text-slate-100">
+            <strong className="block text-[var(--text-primary)]">
               {vi ? "3. Kiểm chứng bằng chứng" : "3. Verify evidence"}
             </strong>
             {vi ? "Mở bảng bằng chứng để đọc đoạn nguồn. Điểm rank chỉ sắp xếp kết quả, không phải phần trăm tin cậy." : "Open the evidence panel to read source excerpts. Rank scores order results; they are not confidence percentages."}
           </p>
         </div>
-        <p className="md:col-span-3 text-xs text-slate-500 dark:text-slate-400 border-t border-brand-indigo/10 pt-3">
+        <p className="border-t border-[var(--border-subtle)] pt-3 text-xs text-[var(--text-muted)] md:col-span-3">
           {vi ? "Chỉ dành cho demo nghiên cứu · Câu trả lời có thể chưa đầy đủ và không phải tư vấn tài chính." : "Research demo only · Answers may be incomplete and are not financial advice."}
         </p>
       </details>

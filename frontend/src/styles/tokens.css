@@ -77,6 +77,7 @@
   --text-primary: #172033;
   --text-muted: #526174;
   --text-subtle: #64748B;
+  --text-secondary: #526174;
   --border-subtle: #E8EDF3;
   --border-default: #DCE4EE;
   --border-strong: #C6D2E1;
@@ -94,6 +95,34 @@
   --focus-ring: #2563EB;
   --shadow-sm: 0 2px 8px rgb(23 32 51 / 0.06);
   --shadow-md: 0 12px 30px rgb(23 32 51 / 0.1);
+  --shadow-lg: 0 18px 42px rgb(23 32 51 / 0.16);
+
+  /* Semantic roles used by shared controls. Keep these separate from the
+     compatibility palette above so a text role can never resolve to a border
+     or surface role. */
+  --surface-app: var(--canvas);
+  --surface-sidebar: var(--surface);
+  --surface-panel: var(--surface);
+  --surface-input: var(--surface-raised);
+  --surface-overlay: var(--surface-raised);
+  --surface-hover: #E8EEF6;
+  --surface-pressed: #DCE8F8;
+  --surface-disabled: var(--surface-muted);
+  --text-inverse: #FFFFFF;
+  --text-link: var(--accent-text);
+  --text-disabled: #94A3B8;
+  --border-focus: var(--focus-ring);
+  --state-info-surface: var(--surface-muted);
+  --state-info-border: var(--border-default);
+  --state-info-text: var(--text-muted);
+  --state-neutral-surface: var(--surface-muted);
+  --state-neutral-border: var(--border-default);
+  --state-neutral-text: var(--text-muted);
+  --tooltip-surface: #172033;
+  --tooltip-foreground: #FFFFFF;
+  --tooltip-border: #2F435B;
+  --scrollbar-thumb: rgb(38 50 74 / 0.16);
+  --scrollbar-thumb-hover: rgb(79 70 229 / 0.4);
 }
 
 :root.dark {
@@ -108,6 +137,7 @@
   --text-primary: #EDF3FB;
   --text-muted: #A8B6C9;
   --text-subtle: #8FA2BA;
+  --text-secondary: #A8B6C9;
   --border-subtle: #1B2B3F;
   --border-default: #24364D;
   --border-strong: #34506D;
@@ -125,6 +155,31 @@
   --focus-ring: #60A5FA;
   --shadow-sm: 0 2px 10px rgb(0 0 0 / 0.18);
   --shadow-md: 0 14px 34px rgb(0 0 0 / 0.28);
+  --shadow-lg: 0 22px 48px rgb(0 0 0 / 0.42);
+
+  --surface-app: var(--canvas);
+  --surface-sidebar: var(--surface);
+  --surface-panel: var(--surface);
+  --surface-input: var(--surface-raised);
+  --surface-overlay: var(--surface-raised);
+  --surface-hover: #1B3048;
+  --surface-pressed: #203D5E;
+  --surface-disabled: var(--surface-muted);
+  --text-inverse: #08111E;
+  --text-link: var(--accent-text);
+  --text-disabled: #71839B;
+  --border-focus: var(--focus-ring);
+  --state-info-surface: var(--surface-muted);
+  --state-info-border: var(--border-default);
+  --state-info-text: var(--text-muted);
+  --state-neutral-surface: var(--surface-muted);
+  --state-neutral-border: var(--border-default);
+  --state-neutral-text: var(--text-muted);
+  --tooltip-surface: #162840;
+  --tooltip-foreground: #EDF3FB;
+  --tooltip-border: #34506D;
+  --scrollbar-thumb: rgb(129 140 248 / 0.22);
+  --scrollbar-thumb-hover: rgb(129 140 248 / 0.55);
 }
 
 @keyframes ui-fade-in {

@@ -4,16 +4,15 @@
  */
 
 import React from "react";
-import { TrendingUp } from "lucide-react";
 
 interface BrandMarkProps {
-  size?: "sm" | "md";
+  size?: "xs" | "sm" | "md";
   className?: string;
 }
 
 /**
- * A compact, high-contrast brand mark that remains legible in both themes.
- * The glow is CSS-only so it does not add an image request or another asset.
+ * Two offset filing pages joined by an evidence mark: compact enough for the
+ * sidebar, but specific to document retrieval rather than generic AI.
  */
 export const BrandMark = React.memo<BrandMarkProps>(
   ({ size = "md", className = "" }) => (
@@ -23,7 +22,11 @@ export const BrandMark = React.memo<BrandMarkProps>(
     >
       <span className="brand-mark__glow" />
       <span className="brand-mark__surface">
-        <TrendingUp className="brand-mark__icon" strokeWidth={2.4} />
+        <svg viewBox="0 0 24 24" className="brand-mark__icon" fill="none" aria-hidden="true">
+          <path d="M7.5 4.5h7l3 3v10a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+          <path d="M14.5 4.5v3h3M8.5 12h6M8.5 15h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          <path d="m15.5 15.5 1.25 1.25 2.75-3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </span>
     </span>
   ),

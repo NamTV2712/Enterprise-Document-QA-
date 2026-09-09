@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useRef } from "react";
+import React, { useRef } from "react";
 import { X } from "lucide-react";
 import { useLocale } from "../lib/i18n";
+import { ModalDialog } from "./ui/ModalDialog";
 
 interface HelpDialogProps {
   open: boolean;
@@ -119,61 +120,17 @@ const GLOSSARY_VI = [
 export const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
   const { locale, t } = useLocale();
   const sections = locale === "vi" ? SECTIONS_VI : SECTIONS;
-  const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-    closeRef.current?.focus();
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.stopPropagation();
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const focusable = Array.from(
-        dialogRef.current?.querySelectorAll<HTMLElement>(
-          'button:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
-        ) || [],
-      );
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown, true);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown, true);
-      previouslyFocused?.focus();
-    };
-  }, [open, onClose]);
-
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center overlay-backdrop p-4"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+    <ModalDialog
+      open={open}
+      onClose={onClose}
+      labelledBy="help-dialog-title"
+      describedBy="help-dialog-description"
+      initialFocusRef={closeRef}
+      className="help-dialog-panel flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border-[var(--border-subtle)] surface-raised"
     >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="help-dialog-title"
-        className="w-full max-w-lg rounded-2xl surface-raised border-[var(--border-subtle)] p-5 shadow-2xl max-h-[85dvh] overflow-y-auto"
-      >
-        <div className="flex items-start justify-between gap-3">
+        <div className="help-dialog-panel__header flex shrink-0 items-start justify-between gap-3">
           <h2 id="help-dialog-title" className="text-base font-semibold text-[var(--text-primary)]">
             {t("help.title")}
           </h2>
@@ -187,7 +144,7 @@ export const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="mt-3 space-y-4">
+        <div id="help-dialog-description" className="help-dialog-panel__body mt-3 space-y-4">
           {sections.map((section) => (
             <section key={section.title}>
               <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
@@ -219,7 +176,6 @@ export const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
             </dl>
           </section>
         </div>
-      </div>
-    </div>
+    </ModalDialog>
   );
 };

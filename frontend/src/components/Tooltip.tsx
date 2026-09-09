@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect, useId } from "react";
 import { createPortal } from "react-dom";
 
 interface TooltipProps {
@@ -28,11 +28,15 @@ export const Tooltip: React.FC<TooltipProps> = ({
     arrowLeft: 0,
     placement,
   });
+  const [isFocused, setIsFocused] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hoveringRef = useRef(false);
   const triggerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const tooltipId = useId();
 
   const handleMouseEnter = () => {
+    hoveringRef.current = true;
     // Clear any existing timeout
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -44,11 +48,23 @@ export const Tooltip: React.FC<TooltipProps> = ({
   };
 
   const handleMouseLeave = () => {
+    hoveringRef.current = false;
     // Clear the timeout and hide immediately
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
-    setIsVisible(false);
+    if (!isFocused) setIsVisible(false);
+  };
+
+  const handleFocus = () => {
+    setIsFocused(true);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setIsVisible(true);
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    if (!hoveringRef.current) setIsVisible(false);
   };
 
   useEffect(() => {
@@ -111,6 +127,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
   const tooltip = isVisible ? (
         <div
           ref={tooltipRef}
+          id={tooltipId}
           role="tooltip"
           className="ui-popover-enter fixed z-[9999] pointer-events-none"
           style={{
@@ -120,16 +137,19 @@ export const Tooltip: React.FC<TooltipProps> = ({
             maxWidth: `min(${maxWidth}, calc(100vw - 16px))`,
           }}
         >
-          <div className="bg-[#26324A] dark:bg-slate-900 border border-slate-700/55 text-[#FCFBF8] text-[10px] md:text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-xl leading-normal break-words font-sans text-center">
+          <div className="bg-[var(--tooltip-surface)] border border-[var(--tooltip-border)] text-[var(--tooltip-foreground)] text-[10px] md:text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-xl leading-normal break-words font-sans text-center">
             {content}
           </div>
           <div
             className={`absolute -translate-x-1/2 border-4 border-transparent ${
-              position.placement === "top"
-                ? "top-full border-t-[#26324A] dark:border-t-slate-900"
-                : "bottom-full border-b-[#26324A] dark:border-b-slate-900"
+              position.placement === "top" ? "top-full" : "bottom-full"
             }`}
-            style={{ left: position.arrowLeft }}
+            style={{
+              left: position.arrowLeft,
+              ...(position.placement === "top"
+                ? { borderTopColor: "var(--tooltip-surface)" }
+                : { borderBottomColor: "var(--tooltip-surface)" }),
+            }}
           />
         </div>
       ) : null;
@@ -140,10 +160,25 @@ export const Tooltip: React.FC<TooltipProps> = ({
       className="relative inline-block"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      onFocusCapture={() => setIsVisible(true)}
-      onBlurCapture={() => setIsVisible(false)}
+      onFocusCapture={handleFocus}
+      onBlurCapture={handleBlur}
+      onKeyDownCapture={(event) => {
+        if (event.key === "Escape") setIsVisible(false);
+      }}
     >
-      {children}
+      {React.isValidElement(children)
+        ? React.cloneElement(
+            children as React.ReactElement<{ "aria-describedby"?: string }>,
+            {
+              "aria-describedby": [
+                (children.props as { "aria-describedby"?: string })["aria-describedby"],
+                isVisible ? tooltipId : null,
+              ]
+                .filter(Boolean)
+                .join(" ") || undefined,
+            },
+          )
+        : children}
       {typeof document !== "undefined" && createPortal(tooltip, document.body)}
     </div>
   );

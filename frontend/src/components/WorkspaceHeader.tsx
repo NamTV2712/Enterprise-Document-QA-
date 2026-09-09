@@ -5,15 +5,8 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import {
-  BookOpen,
   CircleHelp,
-  FileText,
-  Server,
-  FlaskConical,
   Menu,
-  MessageSquare,
-  BarChart3,
-  Activity,
   Moon,
   Monitor,
   RefreshCw,
@@ -23,10 +16,10 @@ import {
 } from "lucide-react";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { BrandMark } from "./BrandMark";
+import { SelectField } from "./ui/SelectField";
 import { ThemePreference } from "../types";
 import { useLocale } from "../lib/i18n";
-
-export type WorkspaceView = "overview" | "conversation" | "retrieval" | "documents" | "evaluation" | "analytics" | "system";
+import { WORKSPACE_NAV_SECTIONS, type WorkspaceView } from "../lib/workspace";
 
 interface WorkspaceHeaderProps {
   isSidebarOpen: boolean;
@@ -103,7 +96,10 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
     // WAI-ARIA menu pattern: Arrow keys move, Home/End jump, Enter/Space
     // activate, Escape closes and returns focus to the trigger button.
     const handleMenuKeyDown = (event: React.KeyboardEvent) => {
-      const currentIndex = THEME_OPTIONS.indexOf(theme);
+      const items = Array.from(
+        themeMenuListRef.current?.querySelectorAll<HTMLElement>("button") ?? [],
+      );
+      const currentIndex = Math.max(0, items.indexOf(event.target as HTMLElement));
       if (event.key === "Escape") {
         event.stopPropagation();
         setIsThemeMenuOpen(false);
@@ -112,25 +108,22 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
       }
       if (event.key === "ArrowDown" || event.key === "ArrowRight") {
         event.preventDefault();
-        const next = themeMenuListRef.current?.querySelectorAll<HTMLElement>("button");
-        next?.[(currentIndex + 1) % THEME_OPTIONS.length]?.focus();
+        items[(currentIndex + 1) % items.length]?.focus();
         return;
       }
       if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
         event.preventDefault();
-        const items = themeMenuListRef.current?.querySelectorAll<HTMLElement>("button");
-        items?.[(currentIndex - 1 + THEME_OPTIONS.length) % THEME_OPTIONS.length]?.focus();
+        items[(currentIndex - 1 + items.length) % items.length]?.focus();
         return;
       }
       if (event.key === "Home") {
         event.preventDefault();
-        themeMenuListRef.current?.querySelector<HTMLElement>("button")?.focus();
+        items[0]?.focus();
         return;
       }
       if (event.key === "End") {
         event.preventDefault();
-        const items = themeMenuListRef.current?.querySelectorAll<HTMLElement>("button");
-        items?.[items.length - 1]?.focus();
+        items[items.length - 1]?.focus();
       }
     };
 
@@ -153,11 +146,14 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
         >
           <Menu className="w-5 h-5" />
         </button>
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div className="header-product-identity flex items-center gap-2.5 min-w-0">
           <BrandMark size="sm" />
           <div className="flex flex-col min-w-0">
-            <span className="font-bold text-sm md:text-base text-slate-900 dark:text-white truncate leading-tight tracking-tight">
+            <span className="header-product-title-long font-bold text-sm md:text-base text-[var(--text-primary)] truncate leading-tight tracking-tight">
               Enterprise Document QA
+            </span>
+            <span className="header-product-title-short font-bold text-sm text-[var(--text-primary)] leading-tight tracking-tight">
+              SEC Research
             </span>
             <span className="hidden sm:inline text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider font-mono">
               SEC 10-K Intelligence
@@ -171,124 +167,22 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
             aria-label={t("nav.showOverview")}
             className="lg:hidden min-h-9 inline-flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
-            <BookOpen className="w-4 h-4" />
-            <span className="hidden sm:inline">{t("nav.overview")}</span>
+            <span className="text-xs">{t("nav.overview")}</span>
           </button>
         )}
-        <label className="lg:hidden">
-          <span className="sr-only">{t("nav.workspaceViews")}</span>
-          <select
-            value={activeView}
-            onChange={(event) => onSelectView(event.target.value as WorkspaceView)}
-            aria-label={t("nav.workspaceViews")}
-            className="control-select min-h-9 py-1 text-xs"
-          >
-            <option value="overview">{t("nav.overview")}</option>
-            <option value="conversation" disabled={!hasMessages}>{t("nav.conversation")}</option>
-            <option value="retrieval">{t("nav.retrieval")}</option>
-            <option value="documents">{t("nav.documents")}</option>
-            <option value="evaluation">{t("nav.evaluation")}</option>
-            <option value="analytics">{t("nav.analytics")}</option>
-            <option value="system">{t("nav.system")}</option>
-          </select>
-        </label>
-        <nav
-          className="hidden lg:flex items-center gap-1.5 ml-2 pl-3 border-l border-slate-200 dark:border-slate-800"
-          aria-label={t("nav.overview")}
-        >
-          <button
-            type="button"
-            onClick={() => onSelectView("overview")}
-            aria-pressed={activeView === "overview"}
-            className={`workspace-nav-button ${
-              activeView === "overview"
-                ? "workspace-nav-button--active"
-                : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-            }`}
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            {t("nav.overview")}
-          </button>
-          <button
-            type="button"
-            onClick={() => onSelectView("conversation")}
-            disabled={!hasMessages}
-            aria-pressed={activeView === "conversation"}
-            className={`workspace-nav-button ${
-              activeView === "conversation"
-                ? "workspace-nav-button--active"
-                : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-            } disabled:opacity-40 disabled:cursor-not-allowed`}
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            {t("nav.conversation")}
-          </button>
-          <button
-            type="button"
-            onClick={() => onSelectView("retrieval")}
-            aria-pressed={activeView === "retrieval"}
-            className={`workspace-nav-button ${
-              activeView === "retrieval"
-                ? "workspace-nav-button--active"
-                : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-            }`}
-          >
-            <FlaskConical className="w-3.5 h-3.5" />
-            {t("nav.retrieval")}
-          </button>
-          <button
-            type="button"
-            onClick={() => onSelectView("documents")}
-            aria-pressed={activeView === "documents"}
-            className={`workspace-nav-button ${
-              activeView === "documents"
-                ? "workspace-nav-button--active"
-                : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-            }`}
-          >
-            <FileText className="w-3.5 h-3.5" />
-            {t("nav.documents")}
-          </button>
-          <button
-            type="button"
-            onClick={() => onSelectView("evaluation")}
-            aria-pressed={activeView === "evaluation"}
-            className={`workspace-nav-button ${
-              activeView === "evaluation"
-                ? "workspace-nav-button--active"
-                : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-            }`}
-          >
-            <BarChart3 className="w-3.5 h-3.5" />
-            {t("nav.evaluation")}
-          </button>
-          <button
-            type="button"
-            onClick={() => onSelectView("analytics")}
-            aria-pressed={activeView === "analytics"}
-            className={`workspace-nav-button ${
-              activeView === "analytics"
-                ? "workspace-nav-button--active"
-                : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-            }`}
-          >
-            <Activity className="w-3.5 h-3.5" />
-            {t("nav.analytics")}
-          </button>
-          <button
-            type="button"
-            onClick={() => onSelectView("system")}
-            aria-pressed={activeView === "system"}
-            className={`workspace-nav-button ${
-              activeView === "system"
-                ? "workspace-nav-button--active"
-                : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-            }`}
-          >
-            <Server className="w-3.5 h-3.5" />
-            {t("nav.system")}
-          </button>
-        </nav>
+        <SelectField
+          label={t("nav.workspaceViews")}
+          value={activeView}
+          onValueChange={(value) => onSelectView(value as WorkspaceView)}
+          className="header-view-select lg:hidden"
+          options={[
+            ...WORKSPACE_NAV_SECTIONS.flatMap((section) => section.items.map((item) => ({
+              value: item.view,
+              label: t(item.labelKey),
+              disabled: item.requiresMessages && !hasMessages,
+            }))),
+          ]}
+        />
       </div>
 
       <div className="flex items-center gap-2 md:gap-3">

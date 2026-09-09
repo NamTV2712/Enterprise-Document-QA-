@@ -29,7 +29,9 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
       aria-live="polite"
       aria-label={`${locale === "vi" ? "Trạng thái kết nối backend" : "Backend connection status"}: ${label}`}
       title={label}
-      className="inline-flex min-h-8 items-center gap-2 rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300"
+      className={`connection-status connection-status--${
+        isChecking ? "checking" : isReady ? "ready" : !isBackendConnected ? "offline" : "loading"
+      }`}
     >
       <span
         aria-hidden="true"
@@ -43,9 +45,9 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
                 : "connection-dot--loading"
         }`}
       />
-      <span className="hidden whitespace-nowrap sm:inline">{label}</span>
+        <span className="hidden whitespace-nowrap sm:inline">{label}</span>
       {isReady && companyCount ? (
-        <span className="hidden sm:inline text-slate-400 dark:text-slate-500">
+        <span className="hidden sm:inline connection-status__meta">
           · {companyCount} {locale === "vi" ? "công ty đã lập chỉ mục" : "indexed"}
         </span>
       ) : null}

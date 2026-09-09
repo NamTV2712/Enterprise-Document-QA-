@@ -20,17 +20,23 @@ import {
   ThumbsDown,
   ThumbsUp,
   Layers2,
+  BarChart3,
 } from "lucide-react";
 import {
   AnswerVariant,
+  EvidenceSelection,
   FeedbackCategory,
   Message,
   MessageFeedback,
   RequestSnapshot,
+  StageEvent,
 } from "../types";
 import { SourcesPanel } from "./SourcesPanel";
 import { SubQueriesPanel } from "./SubQueriesPanel";
 import { useLocale } from "../lib/i18n";
+import { formatCompanyLabel, SECTION_METADATA } from "../lib/displayMetadata";
+import { getSourceKey } from "../lib/sourceIdentity";
+import { PipelineExecution } from "./PipelineExecution";
 
 interface ChatMessageProps {
   message: Message;
@@ -46,6 +52,8 @@ interface ChatMessageProps {
   onSaveVariant?: () => void;
   /** The article container is focusable so Library links can land on it. */
   tabIndex?: number;
+  onInspectSource?: (selection: Omit<EvidenceSelection, "conversationId">) => void;
+  pipelineStages?: StageEvent[];
 }
 
 // Tickers rendered with the monospace ticker chip styling
@@ -129,7 +137,7 @@ const formatMonospaceInline = (
             return (
               <span
                 key={idx}
-                className="font-mono font-bold px-1 py-0.5 bg-slate-100 dark:bg-slate-800 text-[#26324A] dark:text-[#FCFBF8] rounded text-xs select-all border border-slate-200/50 dark:border-slate-700/50"
+                className="font-mono font-bold px-1 py-0.5 bg-slate-100 dark:bg-slate-800 text-[var(--text-primary)] rounded text-xs select-all border border-slate-200/50 dark:border-slate-700/50"
               >
                 {token}
               </span>
@@ -146,7 +154,7 @@ const formatMonospaceInline = (
           return (
             <span
               key={idx}
-              className="font-mono font-semibold text-[#26324A] dark:text-[#FCFBF8] bg-[#FCFBF8] dark:bg-[#171D2B] border border-slate-200/40 dark:border-slate-800/60 px-1 py-0.5 rounded text-xs"
+              className="font-mono font-semibold text-[var(--text-primary)] bg-[var(--surface)] border border-slate-200/40 dark:border-slate-800/60 px-1 py-0.5 rounded text-xs"
             >
               {token}
             </span>
@@ -202,6 +210,8 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
   variants = [],
   onSaveVariant,
   tabIndex,
+  onInspectSource,
+  pipelineStages,
 }) => {
   const { locale, t } = useLocale();
   const isUser = message.sender === "user";
@@ -215,6 +225,33 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
   const selectedVariant = variants.find((variant) => variant.id === selectedVariantId) ?? null;
   const displayedText = selectedVariant?.text ?? message.text;
   const displayedSources = selectedVariant?.sources ?? message.sources;
+  const displayedExecution = selectedVariant?.execution ?? message.execution;
+  const displayedVisualAnswer = selectedVariant?.visualAnswer ?? message.visualAnswer;
+  const scopeSnapshot = message.requestSnapshot
+    ? [
+        message.requestSnapshot.ticker
+          ? formatCompanyLabel(message.requestSnapshot.ticker)
+          : locale === "vi" ? "Tất cả công ty" : "All companies",
+        message.requestSnapshot.section
+          ? SECTION_METADATA[message.requestSnapshot.section]?.shortLabel || message.requestSnapshot.section
+          : locale === "vi" ? "Tất cả mục" : "All sections",
+        `Top ${message.requestSnapshot.topK}`,
+        ...(message.requestSnapshot.enableComparative ? [locale === "vi" ? "So sánh" : "Comparison"] : []),
+      ].join(" · ")
+    : null;
+  const inspectCitation = (citationIndex: number, fallbackSource?: { citation: string; text_preview: string; chunk_id?: string; document_id?: string }) => {
+    const source = displayedSources?.[citationIndex] ?? fallbackSource;
+    if (!source) return;
+    setFocusSourceIndex(citationIndex);
+    onInspectSource?.({
+      messageId,
+      ...(selectedVariant?.id ? { variantId: selectedVariant.id } : {}),
+      citationIndex,
+      ...(source.chunk_id ? { chunkId: source.chunk_id } : {}),
+      ...(source.document_id ? { documentId: source.document_id } : {}),
+      sourceKey: getSourceKey(source),
+    });
+  };
 
   useEffect(() => {
     setFeedback(message.feedback?.rating ?? null);
@@ -297,7 +334,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                 {isUser ? (locale === "vi" ? "Câu hỏi của bạn" : "Your question") : locale === "vi" ? "Trợ lý nghiên cứu filing SEC" : "SEC Filing Research Assistant"}
               </span>
               {!isUser && message.model_used && (
-                <span className="text-xs font-mono font-medium bg-slate-50 dark:bg-[#171D2B] border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded shadow-4xs">
+                <span className="text-xs font-mono font-medium bg-slate-50 dark:bg-[var(--surface)] border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded shadow-4xs">
                   {message.model_used}
                 </span>
               )}
@@ -406,6 +443,13 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
             )}
           </div>
 
+          {isUser && scopeSnapshot && (
+            <div className="message-scope-snapshot" aria-label={locale === "vi" ? `Phạm vi câu hỏi: ${scopeSnapshot}` : `Question scope: ${scopeSnapshot}`}>
+              <span>{locale === "vi" ? "Phạm vi câu hỏi" : "Question scope"}</span>
+              <strong>{scopeSnapshot}</strong>
+            </div>
+          )}
+
           {!isUser && feedback === "down" && !message.isStreaming && (
             <div
               className="flex flex-wrap items-center gap-1.5 rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-xs"
@@ -490,18 +534,53 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
             </details>
           )}
 
+          {!isUser && (displayedExecution || pipelineStages?.length) && (
+            <PipelineExecution
+              events={pipelineStages}
+              trace={displayedExecution}
+              isStreaming={message.isStreaming}
+            />
+          )}
+
+          {!isUser && displayedVisualAnswer && (
+            <section className="rounded-lg border border-[var(--border-subtle)] surface-muted p-3" aria-label={locale === "vi" ? "Dữ liệu được kiểm chứng" : "Verified filing metric"}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-[var(--text-muted)]">
+                  <BarChart3 className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{displayedVisualAnswer.label}</span>
+                </div>
+                <span className="shrink-0 text-xs text-[var(--text-subtle)]">FY {displayedVisualAnswer.period}</span>
+              </div>
+              <p className="mt-2 text-xl font-semibold tabular-nums text-[var(--text-primary)]">{displayedVisualAnswer.display_value}</p>
+              <p className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">{displayedVisualAnswer.evidence_quote}</p>
+              {onInspectSource && (
+                <button
+                  type="button"
+                  className="mt-2 text-xs font-semibold text-[var(--focus-ring)] hover:underline"
+                  onClick={() => inspectCitation(displayedVisualAnswer.source_index, {
+                    citation: displayedVisualAnswer.citation,
+                    text_preview: displayedVisualAnswer.evidence_quote,
+                    chunk_id: displayedVisualAnswer.source_chunk_id,
+                  })}
+                >
+                  {locale === "vi" ? "Mở bằng chứng" : "Open evidence"}
+                </button>
+              )}
+            </section>
+          )}
+
           <div className={isUser ? "message-answer-layout" : "assistant-evidence-layout"}>
           <div className="assistant-answer-column">
           {/* Keep the answer visually primary; execution details follow it. */}
           <div
-            className={`ui-answer-enter prose prose-slate dark:prose-invert max-w-none text-[#26324A] dark:text-[#FCFBF8] text-sm md:text-base leading-relaxed font-sans ${
+            className={`ui-answer-enter prose prose-slate dark:prose-invert max-w-none text-[var(--text-primary)] text-sm md:text-base leading-relaxed font-sans ${
               isUser
                 ? "rounded-2xl rounded-tr-md border border-brand-indigo/20 bg-brand-indigo/[0.06] dark:bg-brand-indigo/[0.10] px-4 py-3 shadow-3xs"
                 : ""
             }`}
           >
                 {isUser ? (
-                  <p className="!m-0 whitespace-pre-wrap select-text font-sans text-slate-850 dark:text-slate-100">
+                  <p className="!m-0 whitespace-pre-wrap select-text font-sans text-[var(--text-primary)]">
                     {message.text}
                   </p>
                 ) : message.error ? (
@@ -544,7 +623,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                         <ReactMarkdown
                           components={{
                           table: ({ ...props }) => (
-                            <div className="overflow-x-auto my-4 border border-slate-200/90 dark:border-slate-800 rounded-xl shadow-4xs bg-white dark:bg-[#171D2B]/80">
+                            <div className="overflow-x-auto my-4 border border-slate-200/90 dark:border-slate-800 rounded-xl shadow-4xs bg-white dark:bg-[var(--surface)]/80">
                               <table
                                 className="w-full text-xs text-left border-collapse"
                                 {...props}
@@ -553,7 +632,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                           ),
                           thead: ({ ...props }) => (
                             <thead
-                              className="bg-slate-50 dark:bg-[#171D2B] text-slate-700 dark:text-slate-200 border-b border-slate-200 dark:border-slate-800"
+                              className="bg-[var(--surface-muted)] text-[var(--text-primary)] border-b border-[var(--border-subtle)]"
                               {...props}
                             />
                           ),
@@ -571,41 +650,41 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                           ),
                           td: ({ ...props }) => (
                             <td
-                              className="px-3 py-2.5 font-mono text-xs text-[#26324A] dark:text-[#FCFBF8] border-r last:border-r-0 border-slate-100 dark:border-slate-800/40"
+                              className="px-3 py-2.5 font-mono text-xs text-[var(--text-primary)] border-r last:border-r-0 border-slate-100 dark:border-slate-800/40"
                               {...props}
                             />
                           ),
                           p: ({ children }) => (
                             <p className="mb-3.5 last:mb-0 text-sm md:text-base leading-relaxed text-[var(--text-primary)]">
-                              {renderFormattedChildren(children, (index) => setFocusSourceIndex(index), displayedSources?.length || 0)}
+                              {renderFormattedChildren(children, inspectCitation, displayedSources?.length || 0)}
                             </p>
                           ),
                           ul: ({ children }) => (
-                            <ul className="list-disc pl-5 mb-3 text-sm space-y-1.5 text-slate-800 dark:text-slate-200">
-                              {renderFormattedChildren(children, (index) => setFocusSourceIndex(index), displayedSources?.length || 0)}
+                            <ul className="list-disc pl-5 mb-3 text-sm space-y-1.5 text-[var(--text-primary)]">
+                              {renderFormattedChildren(children, inspectCitation, displayedSources?.length || 0)}
                             </ul>
                           ),
                           ol: ({ children }) => (
-                            <ol className="list-decimal pl-5 mb-3 text-sm space-y-1.5 text-slate-800 dark:text-slate-200">
-                              {renderFormattedChildren(children, (index) => setFocusSourceIndex(index), displayedSources?.length || 0)}
+                            <ol className="list-decimal pl-5 mb-3 text-sm space-y-1.5 text-[var(--text-primary)]">
+                              {renderFormattedChildren(children, inspectCitation, displayedSources?.length || 0)}
                             </ol>
                           ),
                           li: ({ children }) => (
                             <li className="text-sm md:text-base leading-relaxed">
-                              {renderFormattedChildren(children, (index) => setFocusSourceIndex(index), displayedSources?.length || 0)}
+                              {renderFormattedChildren(children, inspectCitation, displayedSources?.length || 0)}
                             </li>
                           ),
                           strong: ({ children, ...props }) => (
                             <strong
-                              className="font-bold text-[#26324A] dark:text-[#FCFBF8] font-sans"
+                              className="font-bold text-[var(--text-primary)] font-sans"
                               {...props}
                             >
-                              {renderFormattedChildren(children, (index) => setFocusSourceIndex(index), displayedSources?.length || 0)}
+                              {renderFormattedChildren(children, inspectCitation, displayedSources?.length || 0)}
                             </strong>
                           ),
                           em: ({ children, ...props }) => (
                             <em className="italic" {...props}>
-                              {renderFormattedChildren(children, (index) => setFocusSourceIndex(index), displayedSources?.length || 0)}
+                              {renderFormattedChildren(children, inspectCitation, displayedSources?.length || 0)}
                             </em>
                           ),
                           }}

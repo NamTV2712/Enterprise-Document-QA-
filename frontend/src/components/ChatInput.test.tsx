@@ -57,11 +57,11 @@ describe("ChatInput", () => {
         isStreaming={false}
         isBackendConnected={true}
         isPipelineReady={true}
-        scopeLabel="Company: Apple Inc. (AAPL)"
+        scopeLabel="Apple Inc. (AAPL) · Risk Factors · Top 5"
       />,
     );
 
-    expect(screen.getByLabelText("Active search scope: Company: Apple Inc. (AAPL)"))
+    expect(screen.getByText("Scope · Apple Inc. (AAPL) · Risk Factors · Top 5"))
       .toBeInTheDocument();
     expect(screen.getByText("Query must be at least 5 characters.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Send question" })).toBeDisabled();

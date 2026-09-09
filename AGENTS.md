@@ -19,6 +19,7 @@ This file is the stable operating guide for AI coding agents working in this rep
 ## Frontend (`frontend/`)
 
 - `frontend/` is a separate Vite/React/TypeScript application generated through Google AI Studio. Treat it as a distinct Node/Bun stack; do not run Python tooling inside it.
+- Before substantive frontend/UI work, use the repo-local `.agents/skills/rag-ui-ux` skill and read `docs/frontend/DESIGN.md` plus `docs/frontend/FRONTEND_CONTRACT.md`; inspect the rendered production build before declaring visual work complete.
 - The frontend is deployed independently. The backend Docker image never bundles or serves it, and `.dockerignore` must continue to exclude `frontend/`.
 - Keep dependencies, build output, platform state, and local environment files untracked. Browser-exposed `VITE_*` variables must never contain secrets.
 - For Vercel, set the project root directory to `frontend` and configure `VITE_API_BASE_URL` with a reachable backend URL, not `localhost`.

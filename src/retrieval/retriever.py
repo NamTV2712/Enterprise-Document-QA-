@@ -27,6 +27,12 @@ class RetrievedChunk:
     score: float
     text: str
     citation: str  # Example: "AAPL 10-K (2025-10-31), Section: Risk Factors"
+    document_id: str | None = None
+    filing_type: str | None = None
+    report_date: str | None = None
+    chunk_index: int | None = None
+    source_url: str | None = None
+    score_kind: str = "retrieval"
 
     @classmethod
     def from_raw(cls, raw: dict, score: float | None = None) -> "RetrievedChunk":
@@ -36,14 +42,25 @@ class RetrievedChunk:
             f"{raw['ticker']} 10-K (filed {raw['filing_date']}), "
             f"Section: {section_label}"
         )
+        ticker = raw["ticker"]
+        accession_number = raw.get("accession_number")
+        document_id = raw.get("document_id")
+        if document_id is None and ticker and accession_number:
+            document_id = f"{ticker}:{accession_number}"
         return cls(
             chunk_id=raw["chunk_id"],
-            ticker=raw["ticker"],
+            ticker=ticker,
             section=raw["section"],
             filing_date=raw["filing_date"],
             score=float(score if score is not None else raw["score"]),
             text=raw["text"],
             citation=citation,
+            document_id=document_id,
+            filing_type=raw.get("filing_type"),
+            report_date=raw.get("report_date"),
+            chunk_index=raw.get("chunk_index"),
+            source_url=raw.get("source_url") or raw.get("filing_url"),
+            score_kind="cross_encoder" if score is not None else "retrieval",
         )
 
 

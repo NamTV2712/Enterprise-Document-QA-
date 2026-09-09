@@ -73,13 +73,13 @@ export function clearAnalytics(): void {
   }
 }
 
-export function exportAnalytics(): string {
+export function exportAnalytics(events: AnalyticsEvent[] = readAnalyticsEvents()): string {
   return JSON.stringify(
     {
       schema_version: 1,
       exported_at: new Date().toISOString(),
       note: "Local activity only; no question, answer, source text, session ID, or secret is stored.",
-      events: readAnalyticsEvents().map(({ id, ...event }) => event),
+      events: events.map(({ id, ...event }) => event),
     },
     null,
     2,

@@ -30,4 +30,14 @@ describe("analyticsStore", () => {
     expect(readAnalyticsEvents()).toEqual([]);
     expect(localStorage.getItem("sec_qa_library_v3")).toBe("kept");
   });
+
+  test("can export an explicitly scoped event list", () => {
+    const recent = { id: "recent", kind: "feedback" as const, at: Date.now(), status: "helpful" };
+    const older = { id: "older", kind: "query_error" as const, at: Date.now() - 1000, status: "error" };
+
+    const exported = JSON.parse(exportAnalytics([recent])) as { events: Array<Record<string, unknown>> };
+
+    expect(exported.events).toEqual([{ kind: "feedback", at: recent.at, status: "helpful" }]);
+    expect(exported.events).not.toContainEqual(expect.objectContaining({ kind: older.kind }));
+  });
 });

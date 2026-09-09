@@ -41,7 +41,11 @@ function writeCollections(collections: EvidenceCollection[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(collections));
     window.dispatchEvent(new Event("sec-qa-evidence-updated"));
-  } catch { /* local-only convenience must not break research */ }
+  } catch {
+    // Callers must not announce a successful save when the browser rejected
+    // the write (quota, private mode, or a disabled storage backend).
+    throw new Error("Evidence storage is unavailable. The excerpt was not saved.");
+  }
 }
 
 /** Return a validated snapshot suitable for a local backup. */
@@ -96,6 +100,8 @@ export function importEvidenceCollections(value: unknown): EvidenceCollection[] 
         (item.ticker !== undefined && typeof item.ticker !== "string") ||
         (item.section !== undefined && typeof item.section !== "string") ||
         (item.filingDate !== undefined && typeof item.filingDate !== "string") ||
+        (item.sourceConversationId !== undefined && typeof item.sourceConversationId !== "string") ||
+        (item.sourceMessageId !== undefined && typeof item.sourceMessageId !== "string") ||
         (item.savedAt !== undefined && (typeof item.savedAt !== "number" || !Number.isFinite(item.savedAt)))
       ) throw new Error("The backup contains an invalid evidence item.");
       items.push({
@@ -106,6 +112,8 @@ export function importEvidenceCollections(value: unknown): EvidenceCollection[] 
         ...(typeof item.ticker === "string" ? { ticker: item.ticker } : {}),
         ...(typeof item.section === "string" ? { section: item.section } : {}),
         ...(typeof item.filingDate === "string" ? { filingDate: item.filingDate } : {}),
+        ...(typeof item.sourceConversationId === "string" ? { sourceConversationId: item.sourceConversationId } : {}),
+        ...(typeof item.sourceMessageId === "string" ? { sourceMessageId: item.sourceMessageId } : {}),
         savedAt: typeof item.savedAt === "number" && Number.isFinite(item.savedAt) ? item.savedAt : now,
       });
     }
@@ -147,7 +155,18 @@ export function saveEvidence(source: Source, options: { collectionId?: string; c
   if (!collection) collection = createEvidenceCollection("Research evidence");
   const items = collection.items.filter((item) => item.chunkId !== source.chunk_id || item.citation !== source.citation);
   if (items.length >= MAX_ITEMS_PER_COLLECTION) throw new Error("Collection item limit reached");
-  const item: EvidenceItem = { id: `evidence-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, citation: source.citation, excerpt: source.text || source.text_preview, chunkId: source.chunk_id, ticker: source.ticker, section: source.section, filingDate: source.filing_date, sourceConversationId: options.conversationId, sourceMessageId: options.messageId, savedAt: Date.now() };
+  const item: EvidenceItem = {
+    id: `evidence-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    citation: source.citation,
+    excerpt: source.text || source.text_preview,
+    ...(source.chunk_id ? { chunkId: source.chunk_id } : {}),
+    ...(source.ticker ? { ticker: source.ticker } : {}),
+    ...(source.section ? { section: source.section } : {}),
+    ...(source.filing_date ? { filingDate: source.filing_date } : {}),
+    sourceConversationId: options.conversationId,
+    sourceMessageId: options.messageId,
+    savedAt: Date.now(),
+  };
   const next = { ...collection, items: [...items, item], updatedAt: Date.now() };
   writeCollections(collections.some((item) => item.id === collection?.id) ? collections.map((item) => item.id === next.id ? next : item) : [...collections, next]);
   return next;

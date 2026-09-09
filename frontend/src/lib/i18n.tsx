@@ -3,23 +3,39 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from "
 export type Locale = "en" | "vi";
 export type LocalePreference = Locale | "system";
 
-type MessageKey = keyof typeof MESSAGES.en;
+export type MessageKey = keyof typeof MESSAGES.en;
 
 const MESSAGES = {
   en: {
     "nav.overview": "Overview",
+    "nav.research": "Research",
     "nav.showOverview": "Show overview",
     "nav.conversation": "Conversation",
+    "nav.currentConversation": "Current conversation",
+    "nav.search": "Search",
     "nav.retrieval": "Retrieval Lab",
     "nav.documents": "Documents",
+    "nav.library": "Library",
+    "nav.architecture": "Architecture",
     "nav.evaluation": "Evaluation",
     "nav.analytics": "Analytics",
     "nav.system": "System",
+    "nav.groupWorkspace": "Workspace",
+    "nav.groupRetrieval": "Retrieval",
+    "nav.groupEvaluate": "Evaluate",
+    "nav.groupSystem": "System",
     "nav.workspaceViews": "Workspace view",
     "nav.closeSearch": "Close search controls",
     "nav.openSearch": "Open search controls",
     "nav.help": "Open help",
     "nav.newConversation": "New conversation",
+    "palette.title": "Command palette",
+    "palette.search": "Search actions or templates...",
+    "palette.searchAria": "Search command palette",
+    "palette.navigate": "Navigate",
+    "palette.utilities": "Utilities",
+    "palette.templates": "Research templates (never auto-send)",
+    "palette.noMatch": "No actions or templates match.",
     "nav.resetting": "Resetting...",
     "theme.system": "System",
     "theme.light": "Light",
@@ -80,18 +96,34 @@ const MESSAGES = {
   },
   vi: {
     "nav.overview": "Tổng quan",
+    "nav.research": "Nghiên cứu",
     "nav.showOverview": "Hiện tổng quan",
     "nav.conversation": "Cuộc trò chuyện",
+    "nav.currentConversation": "Cuộc trò chuyện hiện tại",
+    "nav.search": "Tìm kiếm",
     "nav.retrieval": "Phòng Retrieval",
     "nav.documents": "Tài liệu",
+    "nav.library": "Thư viện",
+    "nav.architecture": "Kiến trúc",
     "nav.evaluation": "Đánh giá",
     "nav.analytics": "Analytics",
     "nav.system": "Hệ thống",
+    "nav.groupWorkspace": "Workspace",
+    "nav.groupRetrieval": "Retrieval",
+    "nav.groupEvaluate": "Đánh giá",
+    "nav.groupSystem": "Hệ thống",
     "nav.workspaceViews": "Chế độ workspace",
     "nav.closeSearch": "Đóng bộ lọc tìm kiếm",
     "nav.openSearch": "Mở bộ lọc tìm kiếm",
     "nav.help": "Mở hướng dẫn",
     "nav.newConversation": "Cuộc trò chuyện mới",
+    "palette.title": "Bảng lệnh",
+    "palette.search": "Tìm tính năng hoặc template...",
+    "palette.searchAria": "Tìm trong bảng lệnh",
+    "palette.navigate": "Điều hướng",
+    "palette.utilities": "Tiện ích",
+    "palette.templates": "Mẫu câu hỏi (không tự gửi)",
+    "palette.noMatch": "Không có hành động hoặc template phù hợp.",
     "nav.resetting": "Đang đặt lại...",
     "theme.system": "Theo hệ thống",
     "theme.light": "Sáng",
@@ -173,6 +205,14 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
     try {
       const saved = localStorage.getItem("sec_qa_locale");
       if (saved === "en" || saved === "vi" || saved === "system") return saved;
+
+      // Migration: earlier versions stored the answer language separately from
+      // the interface locale. Adopt that value only when no locale preference
+      // exists, then keep one preference for both the UI and new requests.
+      const legacyAnswerLanguage = localStorage.getItem("sec_qa_answer_language");
+      if (legacyAnswerLanguage === "en" || legacyAnswerLanguage === "vi") {
+        return legacyAnswerLanguage;
+      }
     } catch {
       // The UI remains usable when browser storage is unavailable.
     }
@@ -184,6 +224,9 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
     setPreferenceState(next);
     try {
       localStorage.setItem("sec_qa_locale", next);
+      // Do not keep writing the legacy key. Removing it prevents an old stale
+      // answer-only preference from reintroducing language desynchronization.
+      localStorage.removeItem("sec_qa_answer_language");
     } catch {
       // Keep the preference for the current tab.
     }
@@ -192,6 +235,17 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);
+
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== "sec_qa_locale") return;
+      if (event.newValue === "en" || event.newValue === "vi" || event.newValue === "system") {
+        setPreferenceState(event.newValue);
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   const value = useMemo<LocaleContextValue>(
     () => ({

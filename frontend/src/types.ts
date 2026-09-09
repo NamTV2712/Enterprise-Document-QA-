@@ -32,13 +32,33 @@ export interface QueryRequest {
 
 export interface Source {
   citation: string;
-  score: number;
+  score?: number | null;
   text_preview: string;
   text?: string;
-  chunk_id?: string;
-  ticker?: string;
-  section?: string;
-  filing_date?: string;
+  chunk_id?: string | null;
+  document_id?: string | null;
+  ticker?: string | null;
+  filing_type?: string | null;
+  section?: string | null;
+  filing_date?: string | null;
+  report_date?: string | null;
+  chunk_index?: number | null;
+  source_url?: string | null;
+  rank?: number | null;
+  score_kind?: "retrieval" | "cross_encoder" | "rrf" | "unknown" | null;
+  reranker_score?: number | null;
+}
+
+/** Exact source-selection identity used by citation jumps and the evidence rail. */
+export interface EvidenceSelection {
+  conversationId: string;
+  messageId: string;
+  variantId?: string;
+  citationIndex: number;
+  chunkId?: string;
+  documentId?: string;
+  /** Deterministic source identity, including an excerpt fallback when IDs are absent. */
+  sourceKey: string;
 }
 
 export type RetrievalPreset = "bm25" | "dense" | "hybrid" | "hybrid_rerank";
@@ -98,10 +118,17 @@ export interface DocumentChunk {
   ticker: string | null;
   section: string | null;
   filing_date: string | null;
+  report_date?: string | null;
   accession_number: string | null;
+  chunk_index?: number | null;
   text_preview: string;
   text_length: number;
   source_url: string | null;
+}
+
+export interface DocumentChunkDetail extends DocumentChunk {
+  document_id: string;
+  text: string;
 }
 
 export interface DocumentListResponse {
@@ -128,6 +155,11 @@ export interface SystemInfoResponse {
     default: RetrievalPreset;
   };
   build: Record<string, string>;
+  capabilities?: {
+    stage_events?: boolean;
+    comparative_stream?: boolean;
+    document_indexed_viewer?: boolean;
+  };
 }
 
 export type EvaluationRunStatus = "official" | "candidate" | "historical" | "incomplete";
@@ -212,6 +244,10 @@ export interface AnswerVariant {
   requestSnapshot?: RequestSnapshot;
   answerLanguage: AnswerLanguage;
   status: AnswerVariantStatus;
+  /** Optional backend-measured work for this answer variant. */
+  execution?: ExecutionTrace;
+  /** Optional fact that is valid only against this variant's sources. */
+  visualAnswer?: VisualAnswer;
   createdAt: number;
   updatedAt: number;
 }
@@ -234,6 +270,51 @@ export interface QueryInterpretation {
   is_comparative: boolean;
 }
 
+/** Actual request-scoped work reported by the backend; absent means unavailable. */
+export interface ExecutionTrace {
+  request_id?: string;
+  elapsed_ms: number;
+  stages: Array<{
+    name: string;
+    elapsed_ms: number;
+    status: string;
+  }>;
+}
+
+export type StageEventStatus = "pending" | "running" | "success" | "failed" | "skipped" | "cancelled";
+
+export interface StageEvent {
+  version: 1;
+  request_id: string;
+  sequence: number;
+  stage_id: string;
+  parent_stage_id?: string | null;
+  status: StageEventStatus;
+  elapsed_ms?: number;
+  counters?: {
+    candidate_count?: number;
+    source_count?: number;
+    subquery_count?: number;
+    token_count?: number;
+  };
+  metadata?: Record<string, string | number | boolean | null>;
+}
+
+/** A backend-verified fact eligible for a compact visual treatment. */
+export interface VisualAnswer {
+  kind: "metric";
+  metric: string;
+  label: string;
+  value: string;
+  display_value: string;
+  unit: string;
+  period: string;
+  source_index: number;
+  source_chunk_id: string;
+  citation: string;
+  evidence_quote: string;
+}
+
 export interface SubQuery {
   query: string;
   ticker: string | null;
@@ -250,6 +331,7 @@ export interface DecomposedResponse {
   num_total_chunks: number;
   answer_language?: AnswerLanguage;
   query_interpretation?: QueryInterpretation;
+  visual_answer?: VisualAnswer;
 }
 
 export interface SessionContextInfo {
@@ -292,6 +374,8 @@ export interface Message {
   status?: MessageStatus;
   requestSnapshot?: RequestSnapshot;
   queryInterpretation?: QueryInterpretation;
+  execution?: ExecutionTrace;
+  visualAnswer?: VisualAnswer;
   note?: string;
   feedback?: MessageFeedback;
 }

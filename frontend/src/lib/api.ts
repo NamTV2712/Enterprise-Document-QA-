@@ -15,6 +15,7 @@ import {
   RetrievalPreset,
   DocumentListResponse,
   DocumentChunkListResponse,
+  DocumentChunkDetail,
   SystemInfoResponse,
   EvaluationRun,
   EvaluationRunListResponse,
@@ -216,6 +217,20 @@ export async function getDocumentChunks(
   return response.json();
 }
 
+export async function getChunkDetail(chunkId: string, signal?: AbortSignal): Promise<DocumentChunkDetail> {
+  const baseUrl = getApiBaseUrl();
+  const response = await apiFetch(`${baseUrl}/chunks/${encodeURIComponent(chunkId)}`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok) {
+    throw new ApiError(`Failed to fetch chunk: ${response.status}`, response.status);
+  }
+  return response.json();
+}
+
 export async function getSystemInfo(signal?: AbortSignal): Promise<SystemInfoResponse> {
   const baseUrl = getApiBaseUrl();
   const response = await apiFetch(`${baseUrl}/system/info`, {
@@ -407,5 +422,53 @@ export async function streamQuery(
         ? error
         : new Error(error?.message || "Unknown streaming error occurred."),
     );
+  }
+}
+
+/** Handles the comparative SSE endpoint while keeping queryDecomposed available for legacy clients. */
+export async function streamDecomposedQuery(
+  payload: QueryRequest,
+  onEvent: (event: { type: string; data: any }) => void,
+  onError: (error: Error) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const baseUrl = getApiBaseUrl();
+  try {
+    const response = await apiFetch(`${baseUrl}/query/decomposed/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify(payload),
+      signal,
+    });
+    if (!response.ok) {
+      await throwApiError(response, `Comparative streaming query failed with status ${response.status}`);
+    }
+    if (!response.body) throw new ApiError("No readable response body available for comparative streaming.");
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+    const consume = (line: string) => {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data: ")) return;
+      try {
+        onEvent(JSON.parse(trimmed.slice(6)));
+      } catch (error) {
+        console.error("Failed to parse comparative stream event JSON:", trimmed, error);
+      }
+    };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      lines.forEach(consume);
+    }
+    if (buffer.trim()) consume(buffer);
+  } catch (error: any) {
+    if (signal?.aborted || error?.name === "AbortError") return;
+    onError(error instanceof Error ? error : new Error(error?.message || "Unknown comparative streaming error occurred."));
   }
 }

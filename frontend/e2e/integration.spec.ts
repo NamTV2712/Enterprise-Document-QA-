@@ -61,8 +61,9 @@ test.afterEach(async ({ page }) => {
 test("health readiness and ticker discovery over real HTTP", async ({ page }) => {
   await setup(page);
   await expect(page.getByText(/Pipeline: Ready/i).first()).toBeVisible();
-  await page.locator("#ticker-select-btn").click();
-  await expect(page.getByRole("button", { name: "Apple Inc. AAPL" })).toBeVisible();
+  await page.getByRole("button", { name: /Scope/i }).click();
+  await page.getByRole("button", { name: "Company" }).click();
+  await expect(page.getByRole("option", { name: /Apple Inc.*AAPL/ })).toBeVisible();
   await page.keyboard.press("Escape");
 });
 

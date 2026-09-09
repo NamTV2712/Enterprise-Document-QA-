@@ -511,7 +511,7 @@ test("unreadable library data survives load and later operations untouched", asy
   await expect(page.getByText(/could not be read/i)).toBeVisible();
 
   // Ask a question in a new conversation; the corrupt bytes must survive.
-  await page.getByRole("tab", { name: /Research/ }).click();
+  await page.getByRole("button", { name: "Research", exact: true }).click();
   await askQuestion(page, "What was Apple's total net sales in fiscal year 2025?");
   await expect(page.getByText(LONG_ANSWER.split("\n")[0]).first()).toBeVisible();
   await openLibrary(page);

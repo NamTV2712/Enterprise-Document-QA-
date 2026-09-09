@@ -41,9 +41,14 @@ export const SAMPLE_SOURCES = [
     text_preview: "The company faces competition risks in consumer markets.",
     text: "The company faces competition risks in consumer markets worldwide, including aggressive pricing pressure from competitors.",
     chunk_id: "AAPL_test_risk_factors_0",
+    document_id: "AAPL:fixture",
     ticker: "AAPL",
     section: "risk_factors",
     filing_date: "2025-10-31",
+    report_date: "2025-09-27",
+    chunk_index: 1,
+    source_url: "https://www.sec.gov/Archives/edgar/data/1/fixture.htm",
+    score_kind: "retrieval",
   },
   {
     citation: "MSFT 10-K (filed 2025-07-30), Section: MDNA",
@@ -51,9 +56,14 @@ export const SAMPLE_SOURCES = [
     text_preview: "Microsoft Cloud revenue increased 23% to $168.9 billion.",
     text: "Microsoft Cloud revenue increased 23% to $168.9 billion driven by Azure growth across all customer segments this fiscal year.",
     chunk_id: "MSFT_test_mdna_0",
+    document_id: "MSFT:fixture",
     ticker: "MSFT",
     section: "mdna",
     filing_date: "2025-07-30",
+    report_date: "2025-06-30",
+    chunk_index: 1,
+    source_url: "https://www.sec.gov/Archives/edgar/data/2/fixture.htm",
+    score_kind: "retrieval",
   },
 ];
 
@@ -208,6 +218,22 @@ export async function installApiFixtures(
       return;
     }
 
+    if (path.startsWith("/chunks/") && method === "GET") {
+      const chunkId = decodeURIComponent(path.slice("/chunks/".length));
+      const source = SAMPLE_SOURCES.find((item) => item.chunk_id === chunkId) ?? SAMPLE_SOURCES[0];
+      await route.fulfill({
+        status: 200,
+        headers: { ...CORS_HEADERS, "content-type": "application/json" },
+        body: JSON.stringify({
+          ...source,
+          document_id: source.document_id,
+          accession_number: "fixture-accession",
+          text_length: source.text.length,
+        }),
+      });
+      return;
+    }
+
     if (path.startsWith("/documents/") && path.endsWith("/chunks")) {
       await route.fulfill({
         status: 200,
@@ -270,11 +296,46 @@ export async function installApiFixtures(
 
     if (path === "/query/stream" && method === "POST") {
       const body =
+        sseEvent("stage", {
+          version: 1,
+          request_id: "fixture-request-1",
+          sequence: 1,
+          stage_id: "query_preparation",
+          status: "running",
+        }) +
+        sseEvent("stage", {
+          version: 1,
+          request_id: "fixture-request-1",
+          sequence: 2,
+          stage_id: "query_preparation",
+          status: "success",
+          elapsed_ms: 1.4,
+        }) +
+        sseEvent("stage", {
+          version: 1,
+          request_id: "fixture-request-1",
+          sequence: 3,
+          stage_id: "retrieval",
+          status: "success",
+          elapsed_ms: 8.2,
+          counters: { source_count: 2 },
+        }) +
         sseEvent("sources", SAMPLE_SOURCES) +
         sseEvent("token", "Apple's total net sales were ") +
         sseEvent("token", "$391,035 million in fiscal 2024 ") +
         sseEvent("token", "and $416,161 million in fiscal 2025 [Source 1].") +
-        sseEvent("done", null);
+        sseEvent("done", {
+          request_id: "fixture-request-1",
+          request_status: "completed",
+          execution: {
+            request_id: "fixture-request-1",
+            elapsed_ms: 24.8,
+            stages: [
+              { name: "query_preparation", elapsed_ms: 1.4, status: "completed" },
+              { name: "retrieval", elapsed_ms: 8.2, status: "completed" },
+            ],
+          },
+        });
       await route.fulfill({
         status: 200,
         headers: {
@@ -282,6 +343,54 @@ export async function installApiFixtures(
           "content-type": "text/event-stream",
           "cache-control": "no-cache",
         },
+        body,
+      });
+      return;
+    }
+
+    if (path === "/query/decomposed/stream" && method === "POST") {
+      const body =
+        sseEvent("stage", {
+          version: 1,
+          request_id: "fixture-comparison-1",
+          sequence: 1,
+          stage_id: "decomposition_plan",
+          status: "success",
+          elapsed_ms: 4.1,
+        }) +
+        sseEvent("stage", {
+          version: 1,
+          request_id: "fixture-comparison-1",
+          sequence: 2,
+          stage_id: "subquery_retrieval",
+          status: "success",
+          elapsed_ms: 11.5,
+          counters: { subquery_count: 2, source_count: 4 },
+        }) +
+        sseEvent("stage", {
+          version: 1,
+          request_id: "fixture-comparison-1",
+          sequence: 3,
+          stage_id: "synthesis",
+          status: "success",
+          elapsed_ms: 7.8,
+        }) +
+        sseEvent("sources", SAMPLE_SOURCES) +
+        sseEvent("token", "Apple services revenue grew while Microsoft Cloud revenue increased 23% to $168.9 billion [Source 1] [Source 2].") +
+        sseEvent("done", {
+          request_id: "fixture-comparison-1",
+          request_status: "completed",
+          model_used: "openai/gpt-oss-120b",
+          was_decomposed: true,
+          sub_queries: [
+            { query: "Apple services revenue", ticker: "AAPL", section: "mdna", num_chunks: 2 },
+            { query: "Microsoft Cloud revenue", ticker: "MSFT", section: "mdna", num_chunks: 2 },
+          ],
+          num_total_chunks: 4,
+        });
+      await route.fulfill({
+        status: 200,
+        headers: { ...CORS_HEADERS, "content-type": "text/event-stream", "cache-control": "no-cache" },
         body,
       });
       return;
@@ -318,5 +427,5 @@ export async function askQuestion(page: Page, question: string): Promise<void> {
 }
 
 export async function openLibrary(page: Page): Promise<void> {
-  await page.getByRole("tab", { name: /Library/ }).click();
+  await page.getByRole("button", { name: /Library/ }).click();
 }

@@ -4,6 +4,11 @@ import { installApiFixtures, askQuestion, openLibrary, LONG_ANSWER, API_ORIGIN }
 
 const LONG_ANSWER_FIRST_LINE = LONG_ANSWER.split("\n")[0];
 
+async function selectListboxOption(page: Page, label: string, option: string) {
+  await page.getByRole("button", { name: label, exact: true }).click();
+  await page.getByRole("option", { name: option, exact: true }).click();
+}
+
 /**
  * Regression coverage for the persistence and request-lifecycle fixes. All
  * backend traffic is mocked; storage is the browser's real IndexedDB and
@@ -37,6 +42,38 @@ async function expectVisiblyDisplayed(locator: import("@playwright/test").Locato
     expect(displayed).toBe(true);
   }).toPass({ timeout: 5_000 });
 }
+
+async function openTools(page: Page): Promise<void> {
+  // PLAN V2 exposes real tool destinations in canonical groups rather than
+  // hiding them behind the removed legacy Tools accordion.
+  await expect(page.getByRole("button", { name: "Retrieval Lab", exact: true })).toBeVisible();
+}
+
+test("opens the exact citation in the indexed context viewer", async ({ page }) => {
+  await setup(page);
+  await askQuestion(page, "What are Apple's main business risks?");
+
+  const contextPanel = page.locator(".context-panel");
+  await expect(contextPanel).toBeVisible();
+  await expect(contextPanel.getByText("Indexed excerpts").first()).toBeVisible();
+  await expect(contextPanel.locator(".context-viewer-text")).toContainText("competition risks");
+  await expect(contextPanel.getByRole("link", { name: "Open SEC" })).toHaveAttribute("href", /sec\.gov/);
+  await expect(contextPanel.getByText("Indexed document chunks")).toBeVisible();
+  await contextPanel.screenshot({ path: "test-results/p2-4-context-panel.png" });
+});
+
+test("projects measured pipeline stages from the response stream", async ({ page }) => {
+  await setup(page);
+  await askQuestion(page, "What are Apple's main business risks?");
+
+  const execution = page.getByText("Execution stages", { exact: true });
+  await expect(execution).toBeVisible();
+  await execution.click();
+  const executionStatus = page.getByRole("status", { name: "Execution stages" });
+  await expect(executionStatus.getByText("Query preparation", { exact: true })).toBeVisible();
+  await expect(executionStatus.getByText("Retrieval", { exact: true })).toBeVisible();
+  await expect(executionStatus.getByText("2", { exact: true })).toBeVisible();
+});
 
 test("switching conversations during a pending preflight never sends the old question", async ({
   page,
@@ -130,7 +167,7 @@ test("deleting the active conversation while a request is pending aborts and iso
   });
   // Hold the decomposed response until the deletion has won; the request
   // stays pending in the app while the user deletes the conversation.
-  await page.route(`${API_ORIGIN}/query/decomposed`, async (route) => {
+  await page.route(`${API_ORIGIN}/query/decomposed/stream`, async (route) => {
     if (route.request().method() === "OPTIONS") {
       await route.fulfill({
         status: 204,
@@ -148,15 +185,8 @@ test("deleting the active conversation while a request is pending aborts and iso
     });
     await route.fulfill({
       status: 200,
-      headers: { "access-control-allow-origin": "*", "content-type": "application/json" },
-      body: JSON.stringify({
-        answer: "Late comparative answer that must never appear.",
-        model_used: "openai/gpt-oss-120b",
-        was_decomposed: true,
-        sub_queries: [],
-        sources: [],
-        num_total_chunks: 0,
-      }),
+      headers: { "access-control-allow-origin": "*", "content-type": "text/event-stream" },
+      body: `data: ${JSON.stringify({ type: "token", data: "Late comparative answer that must never appear." })}\n\ndata: ${JSON.stringify({ type: "done", data: { request_status: "completed" } })}\n\n`,
     });
   });
   await page.goto("/");
@@ -175,6 +205,7 @@ test("deleting the active conversation while a request is pending aborts and iso
   await page.getByRole("button", { name: "Delete", exact: true }).click();
 
   // A fresh conversation replaced the deleted one.
+  await page.getByRole("button", { name: "Research", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Research question" })).toBeEnabled();
 
   // The late response must not leak into the new conversation.
@@ -219,6 +250,7 @@ test("reload after a fallback failure keeps saved data and warnings", async ({ p
 
   // A reload runs the same protection path again.
   await page.reload();
+  await page.getByRole("button", { name: "Research", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Research question" })).toBeEnabled();
   await openLibrary(page);
   await expect(page.getByText("Legacy copy")).toBeVisible();
@@ -301,18 +333,92 @@ test("guided portfolio route reaches research, retrieval, evaluation, and archit
   await expect(page.getByText(LONG_ANSWER.split("\n")[0]).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Open source 1" }).first()).toBeVisible();
 
+  await openTools(page);
   await page.getByRole("button", { name: "Retrieval Lab", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Retrieval Lab" })).toBeVisible();
   await expect(page.getByText("Provider-free")).toBeVisible();
 
   await page.getByRole("button", { name: "Evaluation", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Evaluation & experiments" })).toBeVisible();
-  await page.getByRole("combobox", { name: "Evaluation mode" }).selectOption("recorded");
+  await selectListboxOption(page, "Mode", "Recorded demo");
   await expect(page.getByRole("heading", { name: "Recorded evaluation contract" })).toBeVisible();
 
   await page.getByRole("button", { name: "System", exact: true }).click();
   await expect(page.getByRole("heading", { name: "System & provenance" })).toBeVisible();
   await expect(page.getByText("Provider-free tools")).toBeVisible();
+});
+
+test("wide tool views retain a usable canvas without evidence-rail geometry", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await setup(page);
+  await openTools(page);
+
+  for (const step of [
+    { button: "Retrieval Lab", heading: "Retrieval Lab" },
+    { button: "Evaluation", heading: "Evaluation & experiments" },
+    { button: "Architecture", heading: "Architecture" },
+  ]) {
+    await page.getByRole("button", { name: step.button, exact: true }).click();
+    await expect(page.getByRole("heading", { name: step.heading, exact: true })).toBeVisible();
+    const geometry = await page.evaluate(() => {
+      const primary = document.querySelector<HTMLElement>(".workspace-primary-column");
+      return {
+        primaryWidth: primary?.getBoundingClientRect().width ?? 0,
+        scrollWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth,
+      };
+    });
+    expect(geometry.primaryWidth).toBeGreaterThan(1_000);
+    expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.viewportWidth);
+  }
+
+  await page.getByRole("button", { name: "Evaluation", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Evaluation & experiments", exact: true })).toBeVisible();
+  await selectListboxOption(page, "Mode", "Recorded demo");
+  const detailWidth = await page.getByRole("heading", { name: "Recorded evaluation contract demo (provider-free)" }).evaluate(
+    (heading) => heading.closest("article")?.getBoundingClientRect().width ?? 0,
+  );
+  expect(detailWidth).toBeGreaterThan(650);
+});
+
+test("research shell stays inside the viewport from desktop to narrow phone widths", async ({ page }) => {
+  await installApiFixtures(page);
+
+  for (const width of [1920, 1440, 1280, 1024, 768, 390, 320]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto("/");
+    const input = page.getByRole("textbox", { name: "Research question" });
+    await expect(input).toBeVisible();
+    await expect(input).toBeEnabled();
+
+    const geometry = await page.evaluate(() => {
+      const composer = document.querySelector<HTMLElement>(".composer-shell");
+      const inputElement = document.getElementById("chat-textarea");
+      const composerBox = composer?.getBoundingClientRect();
+      const inputBox = inputElement?.getBoundingClientRect();
+      return {
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        documentWidth: document.documentElement.scrollWidth,
+        bodyWidth: document.body.scrollWidth,
+        composer: composerBox
+          ? { left: composerBox.left, right: composerBox.right, bottom: composerBox.bottom }
+          : null,
+        input: inputBox
+          ? { left: inputBox.left, right: inputBox.right, bottom: inputBox.bottom }
+          : null,
+      };
+    });
+
+    expect(geometry.documentWidth).toBeLessThanOrEqual(geometry.viewportWidth);
+    expect(geometry.bodyWidth).toBeLessThanOrEqual(geometry.viewportWidth);
+    expect(geometry.composer?.left ?? -1).toBeGreaterThanOrEqual(0);
+    expect(geometry.composer?.right ?? Number.MAX_SAFE_INTEGER).toBeLessThanOrEqual(geometry.viewportWidth);
+    expect(geometry.composer?.bottom ?? 0).toBeLessThanOrEqual(geometry.viewportHeight + 1);
+    expect(geometry.input?.left ?? -1).toBeGreaterThanOrEqual(0);
+    expect(geometry.input?.right ?? Number.MAX_SAFE_INTEGER).toBeLessThanOrEqual(geometry.viewportWidth);
+    expect(geometry.input?.bottom ?? 0).toBeLessThanOrEqual(geometry.viewportHeight + 1);
+  }
 });
 
 test("closing the help dialog returns focus to its opener", async ({ page }) => {
@@ -488,7 +594,7 @@ test("malformed tombstones are preserved and reported across reloads", async ({ 
   await expect(page.getByText(/deletion state/i)).toBeVisible();
 
   // The malformed bytes survive ask/save/reload untouched.
-  await page.getByRole("tab", { name: /Research/ }).click();
+  await page.getByRole("button", { name: "Research", exact: true }).click();
   await askQuestion(page, "What was Apple's total net sales in fiscal year 2025?");
   await expect(page.getByText(LONG_ANSWER_FIRST_LINE).first()).toBeVisible();
   await page.reload();
@@ -519,7 +625,10 @@ test("a durable tombstone shows deletion-pending with retry and locks editing", 
   await expect(page.getByRole("button", { name: "Retry deletion" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Rename conversation" })).not.toBeVisible();
   // The active pending conversation locks follow-up sending.
+  await page.getByRole("button", { name: "Research", exact: true }).click();
   await expect(page.getByRole("button", { name: "Send question" })).toBeDisabled();
+
+  await openLibrary(page);
 
   // Retry completes the deletion on healthy backends.
   await page.getByRole("button", { name: "Retry deletion" }).click();
@@ -648,4 +757,60 @@ test("production Library search stays below the 200ms p95 budget", async ({ page
   const p95 = samples[Math.ceil(samples.length * 0.95) - 1];
   console.log(`[performance] Library search p95=${p95.toFixed(2)}ms (${samples.length} samples)`);
   expect(p95).toBeLessThan(200);
+});
+
+test("production composer input stays below the 100ms p95 budget with 200 messages", async ({ page }) => {
+  const messages = Array.from({ length: 200 }, (_, index) => ({
+    id: `message-render-performance-${index}`,
+    sender: index % 2 === 0 ? "user" : "assistant",
+    text: index % 2 === 0
+      ? `Question ${index} about annual filing evidence`
+      : `Grounded answer ${index} with indexed filing evidence.`,
+    status: "completed",
+  }));
+  const record = {
+    schemaVersion: 4,
+    id: "conversation-render-performance",
+    sessionId: "session-render-performance",
+    title: "200-message rendering benchmark",
+    titleMode: "auto",
+    revision: 1,
+    createdAt: 1,
+    updatedAt: 2,
+    draft: "",
+    tags: ["performance"],
+    notes: [],
+    variants: [],
+    bookmarkedMessageIds: [],
+    messages,
+  };
+  await installApiFixtures(page);
+  await page.addInitScript((raw) => {
+    localStorage.setItem("sec_qa_library_v3", raw);
+    localStorage.setItem("sec_qa_session_id", "session-render-performance");
+    localStorage.setItem("sec_qa_active_conversation_id", "conversation-render-performance");
+  }, JSON.stringify({ envelopeVersion: 4, records: [record], tombstones: [] }));
+  await page.goto("/?view=conversation");
+  await expect(page.getByRole("textbox", { name: "Research question" })).toBeEnabled();
+  await expect(page.getByRole("article")).toHaveCount(200);
+
+  const samples = await page.evaluate(async () => {
+    const input = document.querySelector<HTMLTextAreaElement>("#chat-textarea");
+    if (!input) throw new Error("Research composer was not mounted");
+    const valueSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+    if (!valueSetter) throw new Error("Textarea value setter was not found");
+    const durations: number[] = [];
+    for (let index = 0; index < 100; index += 1) {
+      const start = performance.now();
+      valueSetter.call(input, `Performance sample ${index}`);
+      input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      durations.push(performance.now() - start);
+    }
+    return durations;
+  });
+  samples.sort((left, right) => left - right);
+  const p95 = samples[Math.ceil(samples.length * 0.95) - 1];
+  console.log(`[performance] 200-message composer input p95=${p95.toFixed(2)}ms (${samples.length} samples)`);
+  expect(p95).toBeLessThan(100);
 });

@@ -27,9 +27,18 @@ export default defineConfig({
     { name: "firefox", use: { ...devices["Desktop Firefox"] } },
   ],
   webServer: {
-    command: "bunx vite preview --port 4173 --strictPort",
+    // Browser specs use the hermetic API fixture origin. Rebuild here so a
+    // developer's local .env.local (often an ngrok or deployed backend) is
+    // never baked into the production bundle under test.
+    command: "bun run build && bunx vite preview --port 4173 --strictPort",
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
+    // Never reuse a preview that might have been built with a developer's
+    // real backend URL; the fixture contract depends on the build above.
+    reuseExistingServer: false,
     timeout: 30_000,
+    env: {
+      ...process.env,
+      VITE_API_BASE_URL: "http://127.0.0.1:8000",
+    },
   },
 });

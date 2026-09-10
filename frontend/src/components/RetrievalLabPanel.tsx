@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, ArrowRight, Download, FlaskConical, GitCompare, Search, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Activity, ArrowRight, Download, GitCompare, Search, ShieldAlert, ShieldCheck } from "lucide-react";
 import { inspectRetrieval } from "../lib/api";
 import { RetrievalPreset, RetrievalTrace } from "../types";
 import { useLocale } from "../lib/i18n";
 import { describeRequestError } from "../lib/requestError";
 import { NumberRangeField } from "./NumberRangeField";
 import { SelectField } from "./ui/SelectField";
+import { getWorkspaceNavItem } from "../lib/workspace";
+import { getSemanticIcon } from "../lib/semanticIcons";
 
 interface RetrievalLabPanelProps {
   tickers: string[];
@@ -15,6 +17,18 @@ interface RetrievalLabPanelProps {
   isBackendConnected: boolean | null;
   onUseQuestion: (question: string, scope?: { ticker: string | null; section: string | null }) => void;
 }
+
+interface InspectionSnapshot {
+  question: string;
+  ticker: string | null;
+  section: string | null;
+  topK: number;
+  candidatePool: number;
+  preset: RetrievalPreset;
+  comparePreset: RetrievalPreset | null;
+}
+
+const WORKSPACE_META = getWorkspaceNavItem("retrieval");
 
 const PRESETS: Array<{ value: RetrievalPreset; label: string; vi: string }> = [
   { value: "bm25", label: "BM25", vi: "BM25" },
@@ -37,8 +51,9 @@ export function RetrievalLabPanel({
   isBackendConnected,
   onUseQuestion,
 }: RetrievalLabPanelProps) {
-  const { locale } = useLocale();
+  const { locale, t } = useLocale();
   const vi = locale === "vi";
+  const ToolIcon = getSemanticIcon(WORKSPACE_META.icon);
   const [question, setQuestion] = useState(DEFAULT_QUESTION);
   const [ticker, setTicker] = useState(selectedTicker ?? "");
   const [section, setSection] = useState(selectedSection ?? "");
@@ -52,8 +67,23 @@ export function RetrievalLabPanel({
   const [interpretation, setInterpretation] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [submittedSnapshot, setSubmittedSnapshot] = useState<InspectionSnapshot | null>(null);
+  const [isInvalidated, setIsInvalidated] = useState(false);
   const inspectionAbortRef = useRef<AbortController | null>(null);
   const inspectionRequestId = useRef(0);
+  const currentConfigurationKeyRef = useRef("");
+
+  const configurationKey = JSON.stringify({
+    question: question.trim(),
+    ticker,
+    section,
+    topK,
+    candidatePool,
+    preset,
+    compareEnabled,
+    comparePreset,
+  });
+  currentConfigurationKeyRef.current = configurationKey;
 
   useEffect(() => {
     setTicker(selectedTicker ?? "");
@@ -63,7 +93,25 @@ export function RetrievalLabPanel({
     setSection(selectedSection ?? "");
   }, [selectedSection]);
 
-  useEffect(() => () => inspectionAbortRef.current?.abort(), []);
+  useEffect(() => {
+    const hadSubmittedState = Boolean(trace || comparisonTrace || interpretation || submittedSnapshot || isLoading);
+    inspectionRequestId.current += 1;
+    inspectionAbortRef.current?.abort();
+    inspectionAbortRef.current = null;
+    setTrace(null);
+    setComparisonTrace(null);
+    setInterpretation(null);
+    setSubmittedSnapshot(null);
+    setError(null);
+    setIsLoading(false);
+    if (hadSubmittedState) setIsInvalidated(true);
+  }, [configurationKey]);
+
+  useEffect(() => () => {
+    inspectionRequestId.current += 1;
+    inspectionAbortRef.current?.abort();
+    inspectionAbortRef.current = null;
+  }, []);
 
   const presetLabel = useMemo(
     () => PRESETS.find((item) => item.value === preset)?.[vi ? "vi" : "label"] ?? preset,
@@ -88,44 +136,83 @@ export function RetrievalLabPanel({
     const controller = new AbortController();
     inspectionAbortRef.current = controller;
     const requestId = ++inspectionRequestId.current;
+    const requestSnapshot: InspectionSnapshot = {
+      question: question.trim(),
+      ticker: ticker || null,
+      section: section || null,
+      topK,
+      candidatePool: Math.max(candidatePool, topK),
+      preset,
+      comparePreset: compareEnabled && comparePreset !== preset ? comparePreset : null,
+    };
+    const requestConfigurationKey = configurationKey;
     setIsLoading(true);
     setError(null);
+    setIsInvalidated(false);
+    setSubmittedSnapshot(requestSnapshot);
+    setTrace(null);
+    setComparisonTrace(null);
+    setInterpretation(null);
     try {
       const response = await inspectRetrieval({
-        question: question.trim(),
-        ticker: ticker || null,
-        section: section || null,
-        top_k: topK,
-        candidate_pool: Math.max(candidatePool, topK),
-        preset,
+        question: requestSnapshot.question,
+        ticker: requestSnapshot.ticker,
+        section: requestSnapshot.section,
+        top_k: requestSnapshot.topK,
+        candidate_pool: requestSnapshot.candidatePool,
+        preset: requestSnapshot.preset,
       }, controller.signal);
-      if (requestId !== inspectionRequestId.current) return;
+      if (requestId !== inspectionRequestId.current || currentConfigurationKeyRef.current !== requestConfigurationKey) return;
       setTrace(response.trace);
       setComparisonTrace(null);
       setInterpretation(response.query_interpretation.retrieval_question);
-      if (compareEnabled && comparePreset !== preset) {
+      if (requestSnapshot.comparePreset) {
         const comparison = await inspectRetrieval({
-          question: question.trim(), ticker: ticker || null, section: section || null,
-          top_k: topK, candidate_pool: Math.max(candidatePool, topK), preset: comparePreset,
+          question: requestSnapshot.question,
+          ticker: requestSnapshot.ticker,
+          section: requestSnapshot.section,
+          top_k: requestSnapshot.topK,
+          candidate_pool: requestSnapshot.candidatePool,
+          preset: requestSnapshot.comparePreset,
         }, controller.signal);
-        if (requestId !== inspectionRequestId.current) return;
+        if (requestId !== inspectionRequestId.current || currentConfigurationKeyRef.current !== requestConfigurationKey) return;
         setComparisonTrace(comparison.trace);
       }
     } catch (inspectionError) {
-      if (requestId !== inspectionRequestId.current || (inspectionError instanceof DOMException && inspectionError.name === "AbortError")) return;
+      if (requestId !== inspectionRequestId.current || currentConfigurationKeyRef.current !== requestConfigurationKey || (inspectionError instanceof DOMException && inspectionError.name === "AbortError")) return;
       setError(describeRequestError(inspectionError, vi ? "Không thể kiểm tra retrieval." : "Retrieval inspection failed.", vi ? "vi" : "en").message);
       setTrace(null);
+      setComparisonTrace(null);
+      setInterpretation(null);
     } finally {
-      if (requestId === inspectionRequestId.current) setIsLoading(false);
+      if (requestId === inspectionRequestId.current && currentConfigurationKeyRef.current === requestConfigurationKey) {
+        setIsLoading(false);
+        if (inspectionAbortRef.current === controller) inspectionAbortRef.current = null;
+      }
     }
   };
 
   const downloadTrace = (format: "json" | "csv") => {
     if (!trace) return;
     const traces = comparisonTrace ? [trace, comparisonTrace] : [trace];
+    const escapeCsv = (value: string | number | boolean | null | undefined) => {
+      const text = value === null || value === undefined ? "" : String(value);
+      return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+    };
     const content = format === "json"
-      ? JSON.stringify({ query: question, traces }, null, 2)
-      : ["preset,chunk_id,final_rank,selected,bm25_score,dense_score,rrf_score,cross_encoder_score", ...traces.flatMap((item) => item.candidates.map((candidate) => [item.preset, candidate.chunk_id, candidate.final_rank ?? "", candidate.selected, candidate.bm25_score ?? "", candidate.dense_score ?? "", candidate.rrf_score ?? "", candidate.cross_encoder_score ?? ""].join(",")))].join("\n");
+      ? JSON.stringify({
+        query: trace.query,
+        configuration: {
+          ticker: trace.filters.ticker,
+          section: trace.filters.section,
+          top_k: trace.top_k,
+          candidate_pool: trace.candidate_pool,
+          preset: trace.preset,
+          comparison_preset: comparisonTrace?.preset ?? null,
+        },
+        traces,
+      }, null, 2)
+      : ["query,ticker,section,top_k,candidate_pool,preset,chunk_id,final_rank,selected,bm25_score,dense_score,rrf_score,cross_encoder_score", ...traces.flatMap((item) => item.candidates.map((candidate) => [item.query, item.filters.ticker, item.filters.section, item.top_k, item.candidate_pool, item.preset, candidate.chunk_id, candidate.final_rank ?? "", candidate.selected, candidate.bm25_score ?? "", candidate.dense_score ?? "", candidate.rrf_score ?? "", candidate.cross_encoder_score ?? ""].map(escapeCsv).join(",")))].join("\n");
     const url = URL.createObjectURL(new Blob([content], { type: format === "json" ? "application/json" : "text/csv" }));
     const anchor = document.createElement("a"); anchor.href = url; anchor.download = `retrieval-trace.${format}`; anchor.click(); URL.revokeObjectURL(url);
   };
@@ -135,16 +222,14 @@ export function RetrievalLabPanel({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-700 dark:text-cyan-300">
-            <FlaskConical className="h-3.5 w-3.5" aria-hidden="true" />
-            {vi ? "Chế độ nghiên cứu retrieval" : "Retrieval research mode"}
+            <ToolIcon className="h-3.5 w-3.5" aria-hidden="true" />
+            {t(WORKSPACE_META.labelKey)}
           </div>
           <h1 id="retrieval-lab-title" className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">
             {vi ? "Retrieval Lab" : "Retrieval Lab"}
           </h1>
           <p className="mt-1 max-w-2xl text-sm leading-relaxed text-[var(--text-muted)]">
-            {vi
-              ? "Chạy tìm kiếm cục bộ và xem BM25, dense, RRF cùng reranker. Trang này không gọi LLM."
-              : "Run local retrieval and inspect BM25, dense search, RRF, and reranking. This page does not call an LLM."}
+            {t(WORKSPACE_META.descriptionKey)} {vi ? "Không gọi LLM." : "This page does not call an LLM."}
           </p>
         </div>
         <div className="inline-flex items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-raised)] px-3 py-2 text-xs text-[var(--text-muted)]">
@@ -222,6 +307,8 @@ export function RetrievalLabPanel({
       </div>
 
       {error && <div className="rounded-xl border border-rose-300/60 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300" role="alert">{error}</div>}
+      {isInvalidated && <div className="rounded-xl border border-amber-300/60 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200" role="status" aria-live="polite">{vi ? "Cấu hình đã thay đổi; hãy chạy lại retrieval để cập nhật trace và export." : "The configuration changed. Run retrieval again to refresh the trace and exports."}</div>}
+      {isLoading && <div className="rounded-xl border border-cyan-300/60 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-800 dark:text-cyan-200" role="status" aria-live="polite">{vi ? "Đang chạy retrieval cho cấu hình đã gửi." : "Running retrieval for the submitted configuration."}</div>}
       {interpretation && (
         <div className="rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm text-[var(--text-primary)]">
           <span className="font-semibold">{vi ? "Câu dùng để retrieval:" : "Retrieval query:"}</span> <code className="font-mono">{interpretation}</code>
@@ -230,6 +317,11 @@ export function RetrievalLabPanel({
 
       {trace ? (
         <>
+          <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-primary)]" data-testid="submitted-retrieval-configuration">
+            <span className="font-semibold">{vi ? "Cấu hình đã gửi:" : "Submitted configuration:"}</span>{" "}
+            <code className="font-mono">{trace.query}</code>{" · "}
+            <span>{trace.filters.ticker ?? (vi ? "Tất cả công ty" : "All companies")} · {trace.filters.section ?? (vi ? "Tất cả mục" : "All sections")} · top K {trace.top_k} · pool {trace.candidate_pool} · {trace.preset}</span>
+          </div>
           <div className="retrieval-settings-grid">
             {trace.stages.map((stage) => (
               <div key={stage.name} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-3">

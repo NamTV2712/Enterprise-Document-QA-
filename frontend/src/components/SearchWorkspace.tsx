@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, FileSearch, Search, ShieldCheck } from "lucide-react";
 import { inspectRetrieval } from "../lib/api";
 import type { RetrievalCandidate, RetrievalPreset, RetrievalTrace } from "../types";
 import { useLocale } from "../lib/i18n";
 import { describeRequestError } from "../lib/requestError";
+import { getWorkspaceNavItem } from "../lib/workspace";
+import { getSemanticIcon } from "../lib/semanticIcons";
 
 interface SearchWorkspaceProps {
   selectedTicker: string | null;
@@ -12,7 +14,13 @@ interface SearchWorkspaceProps {
   onUseQuestion: (question: string, scope?: { ticker: string | null; section: string | null }) => void;
 }
 
+interface SubmittedScope {
+  ticker: string | null;
+  section: string | null;
+}
+
 const DEFAULT_QUERY = "What are Apple's main business risks?";
+const WORKSPACE_META = getWorkspaceNavItem("search");
 
 function score(candidate: RetrievalCandidate): string {
   const value = candidate.cross_encoder_score ?? candidate.rrf_score ?? candidate.dense_score ?? candidate.bm25_score;
@@ -20,22 +28,51 @@ function score(candidate: RetrievalCandidate): string {
 }
 
 export function SearchWorkspace({ selectedTicker, selectedSection, isBackendConnected, onUseQuestion }: SearchWorkspaceProps) {
-  const { locale } = useLocale();
+  const { locale, t } = useLocale();
   const vi = locale === "vi";
+  const ToolIcon = getSemanticIcon(WORKSPACE_META.icon);
   const [query, setQuery] = useState(DEFAULT_QUERY);
   const [trace, setTrace] = useState<RetrievalTrace | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [submittedScope, setSubmittedScope] = useState<SubmittedScope | null>(null);
+  const requestSequenceRef = useRef(0);
+  const requestControllerRef = useRef<AbortController | null>(null);
+  const scopeKey = `${selectedTicker ?? ""}\u001f${selectedSection ?? ""}`;
+  const currentScopeKeyRef = useRef(scopeKey);
+  currentScopeKeyRef.current = scopeKey;
 
   useEffect(() => {
+    requestSequenceRef.current += 1;
+    requestControllerRef.current?.abort();
+    requestControllerRef.current = null;
     setTrace(null);
-  }, [selectedSection, selectedTicker]);
+    setSubmittedScope(null);
+    setError(null);
+    setIsLoading(false);
+  }, [scopeKey]);
+
+  useEffect(() => () => {
+    requestSequenceRef.current += 1;
+    requestControllerRef.current?.abort();
+    requestControllerRef.current = null;
+  }, []);
 
   const runSearch = async () => {
     const question = query.trim();
     if (question.length < 5 || isLoading || isBackendConnected === false) return;
+    const requestId = ++requestSequenceRef.current;
+    requestControllerRef.current?.abort();
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
+    const requestScope: SubmittedScope = { ticker: selectedTicker, section: selectedSection };
+    const requestScopeKey = `${requestScope.ticker ?? ""}\u001f${requestScope.section ?? ""}`;
+    const preservePreviousTrace = Boolean(trace && submittedScope &&
+      submittedScope.ticker === requestScope.ticker && submittedScope.section === requestScope.section);
     setIsLoading(true);
     setError(null);
+    setSubmittedScope(requestScope);
+    if (!preservePreviousTrace) setTrace(null);
     try {
       const response = await inspectRetrieval({
         question,
@@ -44,23 +81,32 @@ export function SearchWorkspace({ selectedTicker, selectedSection, isBackendConn
         top_k: 8,
         candidate_pool: 24,
         preset: "hybrid_rerank" as RetrievalPreset,
-      });
+      }, controller.signal);
+      if (requestId !== requestSequenceRef.current || currentScopeKeyRef.current !== requestScopeKey) return;
       setTrace(response.trace);
     } catch (reason) {
-      setTrace(null);
+      if (requestId !== requestSequenceRef.current || currentScopeKeyRef.current !== requestScopeKey) return;
+      if (!preservePreviousTrace) setTrace(null);
       setError(describeRequestError(reason, vi ? "Không thể tìm kiếm." : "Search failed.", vi ? "vi" : "en").message);
     } finally {
-      setIsLoading(false);
+      if (requestId === requestSequenceRef.current && currentScopeKeyRef.current === requestScopeKey) {
+        setIsLoading(false);
+        if (requestControllerRef.current === controller) requestControllerRef.current = null;
+      }
     }
   };
+
+  const submittedScopeLabel = submittedScope
+    ? `${submittedScope.ticker ?? (vi ? "Tất cả công ty" : "All companies")} · ${submittedScope.section ?? (vi ? "Tất cả mục" : "All sections")}`
+    : null;
 
   return (
     <section className="workspace-page" aria-labelledby="search-workspace-title">
       <div className="workspace-page__intro">
         <div>
-          <div className="workspace-eyebrow"><FileSearch className="h-3.5 w-3.5" />{vi ? "Tìm kiếm evidence" : "Evidence search"}</div>
+          <div className="workspace-eyebrow"><ToolIcon className="h-3.5 w-3.5" />{t(WORKSPACE_META.labelKey)}</div>
           <h1 id="search-workspace-title">{vi ? "Tìm kiếm trong filing" : "Search the filing corpus"}</h1>
-          <p>{vi ? "Tìm các đoạn nguồn bằng retrieval cục bộ trước khi mở một câu hỏi nghiên cứu đầy đủ." : "Find source excerpts with local retrieval before opening a full research question."}</p>
+          <p>{t(WORKSPACE_META.descriptionKey)}</p>
         </div>
         <div className="workspace-status-chip"><ShieldCheck className="h-4 w-4" />{vi ? "Không gọi LLM" : "No LLM call"}</div>
       </div>
@@ -82,9 +128,17 @@ export function SearchWorkspace({ selectedTicker, selectedSection, isBackendConn
       </div>
 
       {error && <div className="workspace-alert workspace-alert--error" role="alert">{error}</div>}
+      {trace && isLoading && (
+        <div className="workspace-alert" role="status" aria-live="polite">
+          {vi
+            ? "Đang làm mới kết quả cho cùng phạm vi. Đang hiển thị kết quả trước đó cho đến khi có phản hồi mới."
+            : "Refreshing results for the submitted scope. Showing the previous results until the new response arrives."}
+        </div>
+      )}
       {trace ? (
-        <div className="search-results-panel">
+        <div className="search-results-panel" aria-busy={isLoading}>
           <div className="search-results-panel__header"><div><span className="workspace-eyebrow">{vi ? "Kết quả" : "Results"}</span><h2>{trace.candidates.length} {vi ? "đoạn ứng viên" : "candidate excerpts"}</h2></div><span className="workspace-result-meta">{trace.preset} · {trace.elapsed_ms.toFixed(0)} ms</span></div>
+          {submittedScopeLabel && <p className="workspace-result-meta">{vi ? "Phạm vi đã gửi" : "Submitted scope"}: {submittedScopeLabel}</p>}
           <div className="search-result-list">
             {trace.candidates.map((candidate, index) => (
               <article key={candidate.chunk_id} className={`search-result ${candidate.selected ? "is-selected" : ""}`}>

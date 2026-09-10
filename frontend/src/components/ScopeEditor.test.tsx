@@ -69,4 +69,29 @@ describe("ScopeEditor", () => {
     expect(screen.getByRole("dialog", { name: "Retrieval scope" })).toBeInTheDocument();
     expect(screen.queryByRole("listbox", { name: "Company" })).not.toBeInTheDocument();
   });
+
+  test("supports a controlled open owner for contextual commands", () => {
+    const onOpenChange = vi.fn();
+    render(
+      <ScopeEditor
+        open={false}
+        onOpenChange={onOpenChange}
+        scopeLabel="All companies · All sections · Top 5"
+        tickers={[]}
+        sections={[]}
+        selectedTicker={null}
+        onSelectTicker={vi.fn()}
+        selectedSection={null}
+        onSelectSection={vi.fn()}
+        topK={5}
+        onChangeTopK={vi.fn()}
+        enableComparative={false}
+        onToggleComparative={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Scope · All companies/ }));
+    expect(onOpenChange).toHaveBeenCalledWith(true);
+    expect(screen.queryByRole("dialog", { name: "Retrieval scope" })).not.toBeInTheDocument();
+  });
 });

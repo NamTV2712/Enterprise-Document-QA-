@@ -1,12 +1,61 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { RetrievalLabPanel } from "./RetrievalLabPanel";
 import { LocaleProvider } from "../lib/i18n";
 import { inspectRetrieval } from "../lib/api";
+import type { RetrievalPreset } from "../types";
 
 vi.mock("../lib/api", () => ({ inspectRetrieval: vi.fn() }));
 
 const inspectMock = vi.mocked(inspectRetrieval);
+type InspectResponse = Awaited<ReturnType<typeof inspectRetrieval>>;
+
+function makeResponse(preset: RetrievalPreset = "hybrid_rerank", query = "Submitted retrieval query"): InspectResponse {
+  return {
+    query_interpretation: {
+      original_question: query,
+      retrieval_question: query,
+      translation_method: "identity",
+      detected_ticker: null,
+      requested_periods: [],
+      is_comparative: false,
+    },
+    trace: {
+      preset,
+      query,
+      filters: { ticker: "AAPL", section: "financial_table" },
+      top_k: 5,
+      candidate_pool: 10,
+      models: { embedding: "test-embed", reranker: "test-reranker", rrf_k: 60 },
+      stages: [{ name: "bm25", elapsed_ms: 1.2 }],
+      candidates: [{
+        chunk_id: `${preset}-chunk`,
+        citation: `${preset} citation`,
+        text_preview: `${preset} result`,
+        bm25_score: 2,
+        bm25_rank: 1,
+        dense_score: 0.9,
+        dense_rank: 1,
+        rrf_score: 0.03,
+        cross_encoder_score: 0.8,
+        final_rank: 1,
+        selected: true,
+      }],
+      selected_chunk_ids: [`${preset}-chunk`],
+      elapsed_ms: 4.1,
+    },
+  };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
 
 function renderPanel(onUseQuestion = vi.fn()) {
   return render(
@@ -122,5 +171,86 @@ describe("RetrievalLabPanel", () => {
     );
     expect(screen.getByRole("button", { name: "Company" })).toHaveTextContent("All");
     expect(screen.getByRole("button", { name: "Section" })).toHaveTextContent("All");
+  });
+
+  test("invalidates a delayed inspection when the question changes", async () => {
+    const pending = deferred<InspectResponse>();
+    inspectMock.mockReturnValueOnce(pending.promise);
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: "Run retrieval" }));
+    await waitFor(() => expect(inspectMock).toHaveBeenCalledTimes(1));
+    const signal = inspectMock.mock.calls[0]?.[1] as AbortSignal;
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Retrieval question" }), { target: { value: "A changed retrieval question" } });
+    expect(signal.aborted).toBe(true);
+    await act(async () => pending.resolve(makeResponse("hybrid_rerank", "obsolete response")));
+
+    expect(screen.queryByTestId("submitted-retrieval-configuration")).not.toBeInTheDocument();
+    expect(screen.getByText("The configuration changed. Run retrieval again to refresh the trace and exports.")).toBeInTheDocument();
+  });
+
+  test("does not let a delayed comparison response repopulate an edited configuration", async () => {
+    const primary = deferred<InspectResponse>();
+    const comparison = deferred<InspectResponse>();
+    inspectMock.mockReturnValueOnce(primary.promise).mockReturnValueOnce(comparison.promise);
+    renderPanel();
+    fireEvent.click(screen.getByRole("checkbox", { name: /Compare preset/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Run retrieval" }));
+    await waitFor(() => expect(inspectMock).toHaveBeenCalledTimes(1));
+    await act(async () => primary.resolve(makeResponse("hybrid_rerank", "primary submitted query")));
+    await waitFor(() => expect(inspectMock).toHaveBeenCalledTimes(2));
+    const signal = inspectMock.mock.calls[1]?.[1] as AbortSignal;
+
+    fireEvent.click(screen.getByRole("button", { name: "Preset" }));
+    fireEvent.click(screen.getByRole("option", { name: "BM25" }));
+    expect(signal.aborted).toBe(true);
+    await act(async () => comparison.resolve(makeResponse("bm25", "obsolete comparison query")));
+
+    expect(screen.queryByTestId("submitted-retrieval-configuration")).not.toBeInTheDocument();
+    expect(screen.getByText("The configuration changed. Run retrieval again to refresh the trace and exports.")).toBeInTheDocument();
+  });
+
+  test("aborts an active inspection when the Lab route unmounts", async () => {
+    const pending = deferred<InspectResponse>();
+    inspectMock.mockReturnValueOnce(pending.promise);
+    const view = renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: "Run retrieval" }));
+    await waitFor(() => expect(inspectMock).toHaveBeenCalledTimes(1));
+    const signal = inspectMock.mock.calls[0]?.[1] as AbortSignal;
+    view.unmount();
+    expect(signal.aborted).toBe(true);
+    await act(async () => pending.resolve(makeResponse("hybrid_rerank", "unmounted response")));
+  });
+
+  test("exports the submitted trace query and trace configuration", async () => {
+    inspectMock.mockResolvedValue(makeResponse("hybrid_rerank", "Canonical trace query"));
+    const originalCreateObjectUrl = (URL as typeof URL & { createObjectURL?: typeof URL.createObjectURL }).createObjectURL;
+    const originalRevokeObjectUrl = (URL as typeof URL & { revokeObjectURL?: typeof URL.revokeObjectURL }).revokeObjectURL;
+    const createObjectUrl = vi.fn((_: unknown) => "blob:retrieval-trace");
+    const revokeObjectUrl = vi.fn();
+    const originalBlob = globalThis.Blob;
+    class TestBlob {
+      constructor(public readonly parts: unknown[]) {}
+    }
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, writable: true, value: createObjectUrl });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, writable: true, value: revokeObjectUrl });
+    Object.defineProperty(globalThis, "Blob", { configurable: true, writable: true, value: TestBlob });
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: "Run retrieval" }));
+    await screen.findByTestId("submitted-retrieval-configuration");
+    fireEvent.click(screen.getByRole("button", { name: "JSON" }));
+
+    const blob = createObjectUrl.mock.calls[0]?.[0] as unknown as TestBlob;
+    const exported = JSON.parse(String(blob.parts[0])) as { query: string; configuration: { ticker: string; section: string; top_k: number; candidate_pool: number; preset: string } };
+    expect(exported.query).toBe("Canonical trace query");
+    expect(exported.configuration).toMatchObject({ ticker: "AAPL", section: "financial_table", top_k: 5, candidate_pool: 10, preset: "hybrid_rerank" });
+    expect(anchorClick).toHaveBeenCalled();
+
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, writable: true, value: originalCreateObjectUrl });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, writable: true, value: originalRevokeObjectUrl });
+    Object.defineProperty(globalThis, "Blob", { configurable: true, writable: true, value: originalBlob });
+    anchorClick.mockRestore();
   });
 });

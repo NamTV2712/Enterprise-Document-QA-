@@ -19,6 +19,8 @@ interface ScopeEditorProps {
   enableComparative: boolean;
   onToggleComparative: (enabled: boolean) => void;
   disabled?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 /**
@@ -39,10 +41,17 @@ export function ScopeEditor({
   enableComparative,
   onToggleComparative,
   disabled = false,
+  open: controlledOpen,
+  onOpenChange,
 }: ScopeEditorProps) {
   const { locale, t } = useLocale();
   const vi = locale === "vi";
   const [open, setOpen] = useState(false);
+  const isOpen = controlledOpen ?? open;
+  const setIsOpen = (next: boolean) => {
+    onOpenChange?.(next);
+    if (controlledOpen === undefined) setOpen(next);
+  };
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -67,7 +76,7 @@ export function ScopeEditor({
   );
 
   useEffect(() => {
-    if (!open) return;
+    if (!isOpen) return;
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Element | null;
       if (target?.closest(".select-field__menu")) return;
@@ -91,10 +100,10 @@ export function ScopeEditor({
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open]);
+  }, [isOpen]);
 
   const close = () => {
-    setOpen(false);
+    setIsOpen(false);
     triggerRef.current?.focus();
   };
 
@@ -104,14 +113,14 @@ export function ScopeEditor({
         ref={triggerRef}
         type="button"
         className="composer-settings__trigger"
-        aria-expanded={open}
-        aria-controls={open ? panelId : undefined}
-        onClick={() => setOpen((current) => !current)}
+        aria-expanded={isOpen}
+        aria-controls={isOpen ? panelId : undefined}
+        onClick={() => setIsOpen(!isOpen)}
       >
         <span>{t("input.scope")} {scopeLabel ? `· ${scopeLabel}` : ""}</span>
         <span className="composer-settings__edit">{vi ? "Chỉnh sửa" : "Edit"}</span>
       </button>
-      {open && (
+      {isOpen && (
         <section
           id={panelId}
           className="composer-settings__popover"

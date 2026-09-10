@@ -123,6 +123,18 @@
   --tooltip-border: #2F435B;
   --scrollbar-thumb: rgb(38 50 74 / 0.16);
   --scrollbar-thumb-hover: rgb(79 70 229 / 0.4);
+
+  --feature-research-fg: #1D4ED8;
+  --feature-documents-fg: #4338CA;
+  --feature-retrieval-fg: #0E7490;
+  --feature-evidence-fg: #0F766E;
+  --feature-evaluation-fg: #6D28D9;
+  --feature-analytics-fg: #9A3412;
+  --feature-system-fg: #475569;
+  --feature-tint-soft: 6%;
+  --feature-tint-hover: 9%;
+  --feature-tint-selected: 12%;
+  --feature-tint-pressed: 16%;
 }
 
 :root.dark {
@@ -180,6 +192,18 @@
   --tooltip-border: #34506D;
   --scrollbar-thumb: rgb(129 140 248 / 0.22);
   --scrollbar-thumb-hover: rgb(129 140 248 / 0.55);
+
+  --feature-research-fg: #93C5FD;
+  --feature-documents-fg: #C4B5FD;
+  --feature-retrieval-fg: #67E8F9;
+  --feature-evidence-fg: #5EEAD4;
+  --feature-evaluation-fg: #C4B5FD;
+  --feature-analytics-fg: #FDBA74;
+  --feature-system-fg: #CBD5E1;
+  --feature-tint-soft: 8%;
+  --feature-tint-hover: 12%;
+  --feature-tint-selected: 16%;
+  --feature-tint-pressed: 20%;
 }
 
 @keyframes ui-fade-in {

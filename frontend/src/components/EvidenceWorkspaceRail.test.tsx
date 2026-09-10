@@ -63,6 +63,46 @@ describe("EvidenceWorkspaceRail", () => {
     expect(screen.getByRole("status")).toHaveTextContent("selected source is unavailable");
   });
 
+  test("keeps reader state when the inspector moves from inline to drawer and exposes Close", async () => {
+    getDocumentChunksMock.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 8 });
+    const onClose = vi.fn();
+    const source = { citation: "AAPL source", document_id: "doc-1", text_preview: "Excerpt" };
+    const view = render(
+      <LocaleProvider>
+        <EvidenceWorkspaceRail
+          sources={[source]}
+          selectedIndex={0}
+          onSelectIndex={vi.fn()}
+          presentation="inline"
+          onClose={onClose}
+        />
+      </LocaleProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Increase text size" }));
+    fireEvent.change(screen.getByPlaceholderText("Search chunks…"), { target: { value: "risk" } });
+    expect(screen.getByText("110%")).toBeInTheDocument();
+
+    view.rerender(
+      <LocaleProvider>
+        <EvidenceWorkspaceRail
+          sources={[source]}
+          selectedIndex={0}
+          onSelectIndex={vi.fn()}
+          presentation="drawer"
+          onClose={onClose}
+        />
+      </LocaleProvider>,
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "Evidence inspector" });
+    expect(dialog).toBeVisible();
+    expect(screen.getByDisplayValue("risk")).toBeInTheDocument();
+    expect(screen.getByText("110%")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close evidence inspector" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   test("ignores a late reader response after the selected source changes", async () => {
     let resolveFirst: (value: { text: string }) => void = () => undefined;
     let resolveSecond: (value: { text: string }) => void = () => undefined;
@@ -84,6 +124,34 @@ describe("EvidenceWorkspaceRail", () => {
     expect(screen.queryByText("Stale full source")).not.toBeInTheDocument();
     await act(async () => { resolveSecond({ text: "Current full source" }); });
     expect(await screen.findByText("Current full source")).toBeInTheDocument();
+  });
+
+  test("ignores a late neighbor response after the reader unmounts", async () => {
+    let resolveNeighbor: (value: { text: string }) => void = () => undefined;
+    const neighbor = new Promise<{ text: string }>((resolve) => { resolveNeighbor = resolve; });
+    getChunkDetailMock
+      .mockResolvedValueOnce({ text: "Current full source" } as never)
+      .mockReturnValueOnce(neighbor as ReturnType<typeof getChunkDetail>);
+    getDocumentChunksMock.mockResolvedValue({
+      items: [{ chunk_id: "chunk-2", ticker: "AAPL", section: "risk_factors", filing_date: null, accession_number: null, chunk_index: 2, text_preview: "Neighbor excerpt", text_length: 15, source_url: null }],
+      total: 1,
+      page: 1,
+      page_size: 8,
+    });
+    const view = render(
+      <LocaleProvider>
+        <EvidenceWorkspaceRail
+          sources={[{ citation: "AAPL source", chunk_id: "chunk-1", document_id: "doc-1", text_preview: "Current excerpt" }]}
+          selectedIndex={0}
+          onSelectIndex={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Neighbor excerpt/i }));
+    view.unmount();
+    await act(async () => { resolveNeighbor({ text: "Stale neighbor content" }); });
+    expect(screen.queryByText("Stale neighbor content")).not.toBeInTheDocument();
   });
 
   test("renders indexed metadata, highlights the exact excerpt, and paginates document chunks", async () => {

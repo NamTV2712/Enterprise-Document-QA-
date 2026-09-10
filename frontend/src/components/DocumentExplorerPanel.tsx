@@ -5,6 +5,8 @@ import { DocumentChunk, DocumentRow } from "../types";
 import { useLocale } from "../lib/i18n";
 import { describeRequestError } from "../lib/requestError";
 import { SelectField } from "./ui/SelectField";
+import { getWorkspaceNavItem } from "../lib/workspace";
+import { getSemanticIcon } from "../lib/semanticIcons";
 
 interface DocumentExplorerPanelProps {
   tickers: string[];
@@ -13,6 +15,7 @@ interface DocumentExplorerPanelProps {
 
 const PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 250;
+const WORKSPACE_META = getWorkspaceNavItem("documents");
 
 function useDebouncedValue(value: string): string {
   const [debounced, setDebounced] = useState(value);
@@ -24,8 +27,9 @@ function useDebouncedValue(value: string): string {
 }
 
 export function DocumentExplorerPanel({ tickers, sections }: DocumentExplorerPanelProps) {
-  const { locale } = useLocale();
+  const { locale, t } = useLocale();
   const vi = locale === "vi";
+  const ToolIcon = getSemanticIcon(WORKSPACE_META.icon);
   const [search, setSearch] = useState("");
   const [ticker, setTicker] = useState("");
   const [section, setSection] = useState("");
@@ -149,14 +153,14 @@ export function DocumentExplorerPanel({ tickers, sections }: DocumentExplorerPan
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-700 dark:text-violet-300">
-            <FileText className="h-3.5 w-3.5" aria-hidden="true" />
-            {vi ? "Kho tài liệu" : "Document catalog"}
+            <ToolIcon className="h-3.5 w-3.5" aria-hidden="true" />
+            {t(WORKSPACE_META.labelKey)}
           </div>
           <h1 id="document-explorer-title" className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">
             {vi ? "Document Explorer" : "Document Explorer"}
           </h1>
           <p className="mt-1 max-w-2xl text-sm leading-relaxed text-[var(--text-muted)]">
-            {vi ? "Duyệt filing và đoạn nguồn đang được nạp vào retrieval. Không truy cập đường dẫn filesystem." : "Browse filings and source excerpts loaded by retrieval. Filesystem paths are never exposed."}
+            {t(WORKSPACE_META.descriptionKey)} {vi ? "Không truy cập đường dẫn filesystem." : "Filesystem paths are never exposed."}
           </p>
         </div>
       </div>

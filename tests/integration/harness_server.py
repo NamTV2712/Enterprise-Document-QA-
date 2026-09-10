@@ -33,7 +33,9 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import socket
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
@@ -42,15 +44,28 @@ from typing import Any, Callable
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
+# Every harness owns an isolated temporary directory.  If a caller does not
+# provide one, create it outside the repository so diagnostics can never
+# overwrite a developer's working-tree artifact.
+_HARNESS_TEMP_DIR = Path(
+    os.environ.get("HARNESS_TEMP_DIR")
+    or tempfile.mkdtemp(prefix="enterprise-document-qa-harness-")
+).resolve()
+_HARNESS_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+os.environ["HARNESS_TEMP_DIR"] = str(_HARNESS_TEMP_DIR)
+
 # Harness settings must exist before configs.settings is imported.
 os.environ.setdefault("GROQ_API_KEY", "harness-fake-key")
 os.environ.setdefault("GROQ_API_KEY2", "harness-fake-key-2")
 os.environ.setdefault("QDRANT_MODE", "local")
-os.environ.setdefault("QDRANT_LOCAL_PATH", str(Path(os.environ.get("HARNESS_TEMP_DIR", REPO_ROOT / "data" / "harness-tmp")) / "qdrant"))
-os.environ.setdefault("QDRANT_INDEX_MANIFEST_PATH", str(Path(os.environ.get("HARNESS_TEMP_DIR", REPO_ROOT / "data" / "harness-tmp")) / "index_manifest.json"))
+os.environ.setdefault("QDRANT_LOCAL_PATH", str(_HARNESS_TEMP_DIR / "qdrant"))
+os.environ.setdefault("QDRANT_INDEX_MANIFEST_PATH", str(_HARNESS_TEMP_DIR / "index_manifest.json"))
 os.environ.setdefault("EMBEDDING_MODEL_ID", "nomic-ai/nomic-embed-text-v1.5")
 os.environ.setdefault("EMBEDDING_MODEL_REVISION", "harness-revision")
-os.environ.setdefault("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:4173,http://127.0.0.1:4173")
+os.environ.setdefault(
+    "ALLOWED_ORIGINS",
+    "http://localhost:3000,http://localhost:4173,http://127.0.0.1:4173,http://localhost:4175",
+)
 os.environ.setdefault("LLM_RATE_LIMIT_BURST", os.environ.get("HARNESS_RATE_BURST", "1000/minute"))
 os.environ.setdefault("LLM_RATE_LIMIT_DAILY", "1000/day")
 os.environ.setdefault("DECOMPOSED_RATE_LIMIT", "100/minute")
@@ -73,20 +88,71 @@ from src.retrieval.semantic_cache import SemanticCache  # noqa: E402
 
 SSE_TOKENS = ["Harness ", "answer with ", "évidence ", "for: "]  # é is multi-byte
 
+HARNESS_DOCUMENT_CHUNKS = [
+    {
+        "chunk_id": "AAPL_harness_0000",
+        "ticker": "AAPL",
+        "section": "mdna",
+        "filing_date": "2025-10-31",
+        "report_date": "2025-09-27",
+        "accession_number": "HARNESS",
+        "chunk_index": 0,
+        "score": 0.9,
+        "text": "Harness indexed excerpt for AAPL.",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/harness/aapl.htm",
+    },
+    {
+        "chunk_id": "AAPL_harness_0001",
+        "ticker": "AAPL",
+        "section": "mdna",
+        "filing_date": "2025-10-31",
+        "report_date": "2025-09-27",
+        "accession_number": "HARNESS",
+        "chunk_index": 1,
+        "score": 0.7,
+        "text": "Harness neighboring indexed excerpt for AAPL.",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/harness/aapl.htm",
+    },
+    {
+        "chunk_id": "MSFT_harness_0000",
+        "ticker": "MSFT",
+        "section": "mdna",
+        "filing_date": "2025-07-30",
+        "report_date": "2025-06-30",
+        "accession_number": "HARNESS",
+        "chunk_index": 0,
+        "score": 0.9,
+        "text": "Harness indexed excerpt for MSFT.",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/harness/msft.htm",
+    },
+    {
+        "chunk_id": "MSFT_harness_0001",
+        "ticker": "MSFT",
+        "section": "mdna",
+        "filing_date": "2025-07-30",
+        "report_date": "2025-06-30",
+        "accession_number": "HARNESS",
+        "chunk_index": 1,
+        "score": 0.7,
+        "text": "Harness neighboring indexed excerpt for MSFT.",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/harness/msft.htm",
+    },
+]
 
-def _chunk(text: str, ticker: str | None) -> RetrievedChunk:
-    return RetrievedChunk(
-        chunk_id=f"{ticker or 'ALL'}_harness_0000",
-        ticker=ticker or "AAPL",
-        section="mdna",
-        filing_date="2025-10-31",
-        score=0.9,
-        text=text,
-        citation=f"{ticker or 'AAPL'} 10-K (filed 2025-10-31), Section: Mdna",
+
+def _chunk(ticker: str | None) -> RetrievedChunk:
+    selected_ticker = ticker or "AAPL"
+    raw = next(
+        (chunk for chunk in HARNESS_DOCUMENT_CHUNKS if chunk["ticker"] == selected_ticker and chunk["chunk_index"] == 0),
+        HARNESS_DOCUMENT_CHUNKS[0],
     )
+    return RetrievedChunk.from_raw(raw, score=0.9)
 
 
 class FakeRetriever:
+    def __init__(self) -> None:
+        self._all_chunks = list(HARNESS_DOCUMENT_CHUNKS)
+
     def embed_query(self, query: str) -> list[float]:
         return [0.1] * 8
 
@@ -95,14 +161,14 @@ class FakeRetriever:
             import time
 
             time.sleep(1.2)
-        return [_chunk(f"Harness evidence for: {query}", ticker)]
+        return [_chunk(ticker)]
 
     def retrieve_with_embedding(self, query: str, query_embedding, top_k: int = 5, ticker=None, section=None):
         if failure_mode["mode"] == "decomposed_slow":
             import time
 
             time.sleep(1.2)
-        return [_chunk(f"Harness evidence for: {query}", ticker)]
+        return [_chunk(ticker)]
 
 
 class FakeGenerator:
@@ -175,10 +241,32 @@ class FakePipeline:
 
     def query_stream(self, question: str, top_k: int = 5, ticker=None, section=None,
                      conversation_history=None, session_id=None, cancel_event=None,
-                     answer_language="en"):
+                     answer_language="en", request_id: str | None = None):
+        request_id = request_id or "harness-request"
+        sequence = 0
+
+        def stage(stage_id: str, status: str, elapsed_ms: float | None = None, counters: dict[str, int] | None = None):
+            nonlocal sequence
+            sequence += 1
+            payload: dict[str, Any] = {
+                "version": 1,
+                "request_id": request_id,
+                "sequence": sequence,
+                "stage_id": stage_id,
+                "status": status,
+            }
+            if elapsed_ms is not None:
+                payload["elapsed_ms"] = elapsed_ms
+            if counters:
+                payload["counters"] = counters
+            return ("stage", payload)
+
+        yield stage("query_preparation", "running")
+        yield stage("query_preparation", "success", 1.1)
         chunks = self.retriever.retrieve_with_embedding(
             query=question, query_embedding=[0.1] * 8, top_k=top_k, ticker=ticker, section=section
         )
+        yield stage("retrieval", "success", 8.4, {"source_count": len(chunks)})
         yield ("sources", self._sources(chunks))
         full = ""
         for token in self.generator.generate_stream(question, chunks, cancel_event=cancel_event):
@@ -193,7 +281,21 @@ class FakePipeline:
 
             self.memory.add_turn(session_id, Turn(user_message=question, assistant_message=full))
         if failure_mode["mode"] != "omit_done":
-            yield ("done", None)
+            yield (
+                "done",
+                {
+                    "request_id": request_id,
+                    "request_status": "completed",
+                    "execution": {
+                        "request_id": request_id,
+                        "elapsed_ms": 24.0,
+                        "stages": [
+                            {"name": "query_preparation", "elapsed_ms": 1.1, "status": "completed"},
+                            {"name": "retrieval", "elapsed_ms": 8.4, "status": "completed"},
+                        ],
+                    },
+                },
+            )
         # "omit_done" ends the stream without a done event on purpose.
 
     @staticmethod
@@ -204,12 +306,19 @@ class FakePipeline:
                 "score": round(c.score, 4),
                 "text_preview": c.text[:200],
                 "chunk_id": c.chunk_id,
+                "document_id": c.document_id,
                 "ticker": c.ticker,
+                "filing_type": c.filing_type,
                 "section": c.section,
                 "filing_date": c.filing_date,
+                "report_date": c.report_date,
+                "chunk_index": c.chunk_index,
+                "source_url": c.source_url,
+                "rank": index + 1,
+                "score_kind": c.score_kind,
                 "text": c.text,
             }
-            for c in chunks
+            for index, c in enumerate(chunks)
         ]
 
 
@@ -288,9 +397,14 @@ def run_app() -> None:
 
     # Debug aid: periodically dump all thread stacks so a hang can be
     # attributed to the exact awaiting frame.
-    stack_dump = Path(os.environ.get("HARNESS_TEMP_DIR", ".")) / "harness_stacks.txt"
-    stack_dump.parent.mkdir(parents=True, exist_ok=True)
-    stack_file = stack_dump.open("w", encoding="utf-8")
+    stack_file = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        prefix=f"harness_stacks-{APP_PORT}-",
+        suffix=".txt",
+        dir=_HARNESS_TEMP_DIR,
+        delete=False,
+    )
     faulthandler.dump_traceback_later(15, repeat=True, file=stack_file)
 
     import uvicorn
@@ -352,6 +466,13 @@ async def run_proxy() -> None:
 
 def main() -> int:
     import threading
+
+    for port in (APP_PORT, PROXY_PORT):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            try:
+                probe.bind(("127.0.0.1", port))
+            except OSError as exc:
+                raise RuntimeError(f"harness port {port} is already occupied; refusing to reuse it") from exc
 
     proxy_thread = threading.Thread(target=lambda: asyncio.run(run_proxy()), daemon=True)
     proxy_thread.start()

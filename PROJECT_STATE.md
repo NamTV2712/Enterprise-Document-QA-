@@ -3405,3 +3405,189 @@ cases passing on isolated reruns. Performance p95 was `51.67 ms` for 100-item
 Library search and `43.30 ms` for 200-message composer input in Chromium; the
 Firefox measurements were `79.08 ms` and `30.00 ms`. No provider, corpus,
 embedding, index, deployment, or secret state was changed.
+
+### Plan V2 execution checkpoint — displayed answer identity (2026-09-10)
+
+V2-B03.4 is complete. Command-palette Copy, Inspect Sources, and Save Source
+now resolve an ID-only transient `{conversationId, messageId, variantId}`
+against current records at invocation time, so an older answer or selected
+saved variant cannot silently fall through to the newest answer. Missing or
+changed variants and conversation switches fail closed with a contextual
+notice. ChatMessage publishes context on answer focus, answer/action pointer
+interaction, and variant selection without publishing per-token stream
+updates; nested citation clicks retain their deep-link behavior.
+
+The final provider-free frontend gates passed: Vitest `198/198`, full
+Chromium/Firefox app coverage `76/76`, regression `60/60`, HTTP/SSE
+integration `14/14`, local-provider `4/4`, typecheck, production build, and
+`git diff --check`. Regression p95 remained within budget for Library search
+(`38.15 ms` Chromium, `109.61 ms` Firefox; budget `<200 ms`) and 200-message
+composer input (`30.20 ms`, `48.00 ms`; budget `<100 ms`). The real local
+FastAPI readiness gate remains unavailable at `127.0.0.1:8000/health/live`,
+as recorded earlier; no provider, corpus, index, deployment, or secret state
+was changed.
+
+### Plan V2 execution checkpoint — honest execution presentation (2026-09-10)
+
+V2-B04.1 is complete. PipelineExecution now presents only reported stage
+events and timing: counters are labelled, server elapsed/final durations are
+explicitly separated from the local 250 ms running-view timer, valid
+same-request parent stages receive bounded indentation, and unknown stages use
+a neutral label/icon. Cache, skipped, cancelled, out-of-order, and trace-only
+states remain visible without fabricated progress. Stage changes use a
+dedicated polite live region while timer ticks remain out of the announcement
+stream.
+
+Provider-free frontend verification passed: Vitest `202/202`, typecheck/lint,
+production build, full Chromium/Firefox app coverage `76/76`, regression
+coverage `60/60`, HTTP/SSE integration `14/14`, local harness `4/4`, and
+`git diff --check`. Regression p95 remained within budget for Library search
+(`42.59 ms` Chromium, `76.22 ms` Firefox; budget `<200 ms`) and 200-message
+composer input (`35.20 ms`, `36.00 ms`; budget `<100 ms`). The production
+preview was visually inspected at the offline overview with no visible
+clipping. The real local FastAPI readiness gate remains unavailable at
+`127.0.0.1:8000/health/live`; no provider, corpus, index, deployment, or
+secret state was changed.
+
+### Plan V2 execution checkpoint — discoverability and metadata parity (2026-09-10)
+
+V2-B04.2 is complete. Overview and tool introductions now use truthful
+service-reported metadata: configured ticker lists are not presented as
+searchable corpus counts, readiness copy does not imply a wait estimate, and
+offline/index-not-ready states remain explicit. Source-panel copy clarifies
+that counts are local retrieved sources and ranking scores are ordering
+signals, not confidence. Search, Documents, Retrieval Lab, Architecture,
+Evaluation, Analytics, System, and Library introductions consume the existing
+workspace registry and semantic icon mapping for their tool identity.
+
+Provider-free frontend verification passed: Vitest `203/203`, typecheck/lint,
+production build, full Chromium/Firefox app coverage `76/76`, HTTP/SSE
+integration `14/14`, local harness `4/4`, and `git diff --check`. Regression
+performance remained within budget for Library search (`49.81 ms` Chromium,
+`90.87 ms` Firefox; budget `<200 ms`) and 200-message composer input
+(`28.50 ms`, `35.00 ms`; budget `<100 ms`). The full regression runner had one
+runner-only Chromium evidence-drawer timing failure (`59/60` in each final
+attempt); the exact scenario passed in a focused Chromium/Firefox rerun before
+the reverted wait experiment. The final production preview showed explicit
+offline readiness copy and no visible narrow-layout clipping. The real local
+FastAPI readiness gate remains unavailable at `127.0.0.1:8000/health/live`;
+no provider, corpus, index, deployment, or secret state was changed.
+
+### Plan V2 execution checkpoint — compact brand refinement (2026-09-10)
+
+V2-B05.1 is complete. The compact mark now uses an original folded filing
+page with one search/evidence connection rather than a filing checkmark. The
+inert glow node is gone; SVG strokes remain `currentColor`; the decorative
+mark stays hidden from assistive technology beside the unchanged product
+lockup; and explicit 16/24/32/48px semantic sizes plus a forced-colors
+monochrome path are covered.
+
+Provider-free frontend verification passed: BrandMark tests `2/2`, typecheck,
+production build, full Vitest with `--retry=2` (`204/204`), and
+`git diff --check`. The retry-free full Vitest run had one timing-sensitive
+failure in the unrelated App session-history test (`203/204`); the isolated
+test passed. Light/dark production-preview screenshots at 1440×900 showed
+legible header/sidebar marks, unchanged lockup text, and no visible clipping.
+No backend, provider, corpus, index, deployment, or secret state changed.
+
+### Plan V2 execution checkpoint — measured optimization decision (2026-09-10)
+
+V2-B02.3 is complete as `NO CODE CHANGE REQUIRED`. Three identical
+provider-free `workspace-performance.spec.ts` runs, each with one worker and
+zero retries, kept warm composer input p95 within `15.00/13.70/15.90 ms`
+(Chromium) and `25.00/39.00/46.00 ms` (Firefox) against the `100 ms` budget.
+Warm view-switch p95 stayed within `139.40/117.40/130.20 ms` and
+`154.00/139.00/153.00 ms` against the `200 ms` budget. No measured hotspot
+justified changing message-row ownership, resize/motion handling, batching,
+or architecture, so the existing implementation remains the evidence-backed
+choice.
+
+Each run passed `4` tests and skipped only the two real-backend cases because
+the local API is unavailable. No source, data, provider, corpus, index,
+deployment, or secret state changed; `git diff --check` passed.
+
+### Plan V2 execution checkpoint — integrated product gates (2026-09-10)
+
+V2-B06.1 reached the final gate with all implementation and available
+provider-free validation green. Closing the evidence inspector now clears its
+URL anchor, so responsive drawer-to-inline transitions cannot reopen a modal
+that the user closed. The regular Playwright config now keeps dedicated
+local-backend specs out of the hermetic browser gate, and the A–G layout test
+waits for transition hit-testing to settle without weakening geometry or focus
+assertions.
+
+Static/unit/build verification passed: typecheck/lint, one-worker Vitest
+`204/204`, and production build. Regular Chromium passed `71` tests with one
+intentional real-backend skip on both required runs; Firefox passed `71` with
+the same skip. Provider-free HTTP/SSE integration passed `14/14`, the local
+harness passed `4/4`, backend pytest passed `738` with `121` existing warnings,
+and `git diff --check` passed. Final browser performance probes remained below
+budget: Library search p95 `42.43 ms` Chromium / `89.88 ms` Firefox and
+200-message composer input p95 `30.10 ms` / `34.00 ms` against `<200 ms` and
+`<100 ms` budgets respectively.
+
+The production preview was inspected at the offline overview with no visible
+clipping across the available browser surface. Native browser zoom at 100%,
+125%, 150%, and 200% could not be driven or observed through the connected
+browser surface, so that mandatory product checkpoint remains `[!]`. The
+real local FastAPI gate also remains `[!]` at
+`127.0.0.1:8000/health/live`; its provider-free local harness is green. No
+provider, corpus, index, deployment, or secret state changed. Per the final
+plan, this is documented partial delivery rather than a completion claim.
+
+### Plan V2 execution checkpoint — real backend gate reopened (2026-09-10)
+
+The local FastAPI process was started from the existing local artifacts and
+models after the earlier unavailable-endpoint receipt. `/health/live`,
+`/health/ready`, and `/health` all returned `200`; readiness reported
+`pipeline_ready=true`, 50 searchable companies, and 10,053 indexed chunks.
+The provider-free real-backend performance/feasibility check passed in both
+Chromium and Firefox with `PLAYWRIGHT_REAL_BACKEND=1` (`2 passed, 4 intentional
+synthetic-test skips`), including documents, chunks, chunk detail, system
+metadata, and retrieval inspection without a generation request. Final
+retrieval-inspect timings were 244.25 ms in Chromium and 256.95 ms in Firefox.
+The API was stopped cleanly after verification.
+
+This clears the real local API blocker for B06.1. The only remaining mandatory
+verification gap is native browser-chrome zoom at 100%, 125%, 150%, and 200%,
+which the connected browser surface cannot drive or observe; CSS-viewport
+equivalents remain green. No source, corpus, index, provider, deployment, or
+secret state changed.
+
+### Plan V2 execution checkpoint — native zoom surface audit (2026-09-10)
+
+The connected-computer inventory still exposes only the Codex in-app browser;
+named Chrome and Edge surfaces are unavailable. The in-app browser can render
+the production preview but does not expose browser-chrome zoom controls or a
+native zoom value. A scoped temporary-profile headed-Chrome/CDP probe was
+attempted, but the environment policy rejected launching the native Chrome
+process; the temporary directory was removed and no user profile was touched.
+The master plan therefore remains `[!]` for native zoom at 100%, 125%, 150%,
+and 200%. CSS viewport equivalents remain verified.
+
+### Plan V2 final closure review (2026-09-10)
+
+Status is `IMPLEMENTATION COMPLETE` and `VALIDATION COMPLETE EXCEPT ONE
+EXTERNAL MANUAL-VERIFICATION GATE`. All V2-B implementation tasks are complete:
+B01.1, B02.4, B02.1, B01.2, B01.3, B01.7, B01.4, B01.5, B01.6, B02.2, B02.5,
+B03.1, B03.2, B03.3, B03.4, B04.1, B04.2, B05.1, B02.3, and the available B06.1
+closure gates. The final evidence remains green: lint, production build,
+one-worker Vitest 204/204, backend pytest 738 passed, two regular Chromium
+runs with 71 passed plus one intentional real-backend skip each, Firefox 71
+passed plus one intentional skip, HTTP/SSE integration 14/14, local harness
+4/4, and real-local backend feasibility in both engines. This evidence covers
+layout, accessibility, source identity, persistence, streaming/cancellation,
+integration, and measured performance; no implementation defect is masked by
+the zoom limitation.
+
+The sole active `[!]` is unchanged native browser zoom at 100%, 125%, 150%,
+and 200%. The in-app browser lacks browser-chrome zoom state/control, named
+Chrome/Edge surfaces are unavailable, and environment policy rejected the
+temporary headed-Chrome/CDP probe. This is an external environment/policy
+limitation, not an implementation defect. A human should build and preview the
+frontend, open it in visible Chrome or Edge, set each exact zoom through the
+browser menu, record the displayed zoom plus `window.innerWidth ×
+window.innerHeight`, capture overview and conversation/evidence screens, and
+check for overflow, overlay, clipping, focus loss, and inaccessible controls.
+No production-code workaround is warranted: CSS/browser-specific changes or a
+simulated zoom test would weaken rather than meet the original requirement.

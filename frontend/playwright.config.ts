@@ -7,8 +7,10 @@ const baseURL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
-  // Integration-over-HTTP specs run through playwright.integration.config.ts.
-  testIgnore: /integration\.spec\.ts/,
+  // Integration-over-HTTP and dedicated local-backend specs run through their
+  // own configs so the regular hermetic browser gate never depends on a
+  // task-owned harness or a real API process.
+  testIgnore: /(integration|workspace\.local)\.spec\.ts/,
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: true,

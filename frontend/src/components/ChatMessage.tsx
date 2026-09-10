@@ -14,6 +14,7 @@ import {
   ChevronDown,
   Copy,
   Check,
+  FileText,
   Bookmark,
   BookmarkCheck,
   StickyNote,
@@ -53,6 +54,8 @@ interface ChatMessageProps {
   /** The article container is focusable so Library links can land on it. */
   tabIndex?: number;
   onInspectSource?: (selection: Omit<EvidenceSelection, "conversationId">) => void;
+  /** Publishes answer identity only on focus, pointer interaction, or variant changes. */
+  onDisplayedAnswerContext?: (context: { messageId: string; variantId: string | null }) => void;
   pipelineStages?: StageEvent[];
 }
 
@@ -211,6 +214,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
   onSaveVariant,
   tabIndex,
   onInspectSource,
+  onDisplayedAnswerContext,
   pipelineStages,
 }) => {
   const { locale, t } = useLocale();
@@ -220,6 +224,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
   const [feedback, setFeedback] = useState<"up" | "down" | null>(message.feedback?.rating ?? null);
   const [feedbackCategory, setFeedbackCategory] = useState<FeedbackCategory | null>(message.feedback?.category ?? null);
   const [isNoteOpen, setIsNoteOpen] = useState(false);
+  const [isSecondaryActionsOpen, setIsSecondaryActionsOpen] = useState(false);
   const [noteDraft, setNoteDraft] = useState(message.note ?? "");
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const selectedVariant = variants.find((variant) => variant.id === selectedVariantId) ?? null;
@@ -227,6 +232,25 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
   const displayedSources = selectedVariant?.sources ?? message.sources;
   const displayedExecution = selectedVariant?.execution ?? message.execution;
   const displayedVisualAnswer = selectedVariant?.visualAnswer ?? message.visualAnswer;
+  const selectedVariantIndex = selectedVariant ? variants.findIndex((variant) => variant.id === selectedVariant.id) + 1 : 0;
+  const reportDisplayedAnswerContext = (variantId = selectedVariant?.id ?? null) => {
+    if (
+      isUser ||
+      message.isStreaming ||
+      message.error ||
+      message.status === "error" ||
+      !displayedText.trim()
+    ) {
+      return;
+    }
+    onDisplayedAnswerContext?.({ messageId, variantId });
+  };
+  const hasSecondaryActions = Boolean(
+    (onToggleBookmark && message.status !== "error") ||
+    (onFeedback && message.status !== "error") ||
+    (onSaveVariant && message.status !== "error" && !message.isStreaming && message.text) ||
+    (onSaveNote && message.status !== "error"),
+  );
   const scopeSnapshot = message.requestSnapshot
     ? [
         message.requestSnapshot.ticker
@@ -242,7 +266,6 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
   const inspectCitation = (citationIndex: number, fallbackSource?: { citation: string; text_preview: string; chunk_id?: string; document_id?: string }) => {
     const source = displayedSources?.[citationIndex] ?? fallbackSource;
     if (!source) return;
-    setFocusSourceIndex(citationIndex);
     onInspectSource?.({
       messageId,
       ...(selectedVariant?.id ? { variantId: selectedVariant.id } : {}),
@@ -251,6 +274,10 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
       ...(source.document_id ? { documentId: source.document_id } : {}),
       sourceKey: getSourceKey(source),
     });
+    // The workspace evidence inspector owns focus when it is present. Avoid
+    // scheduling a second focus target in the legacy message-level source
+    // panel, which could steal focus back after the inspector closes.
+    if (!onInspectSource) setFocusSourceIndex(citationIndex);
   };
 
   useEffect(() => {
@@ -297,6 +324,11 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
       role="article"
       aria-label={isUser ? (locale === "vi" ? "Câu hỏi của bạn" : "Your question") : locale === "vi" ? "Câu trả lời của trợ lý nghiên cứu" : "Research assistant response"}
       tabIndex={tabIndex}
+      onFocus={(event) => {
+        // Do not rerender while a nested citation/action is receiving focus;
+        // that could replace the node before its click event is dispatched.
+        if (event.target === event.currentTarget) reportDisplayedAnswerContext();
+      }}
     >
       <div
         className={`max-w-4xl mx-auto w-full flex gap-3 md:gap-4 ${
@@ -312,7 +344,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                 ? "bg-brand-indigo/10 text-brand-indigo border-brand-indigo/20"
                 : message.error
                   ? "bg-rose-100 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400 border-rose-200 dark:border-rose-900"
-                  : "bg-slate-100 text-slate-700 dark:bg-slate-850 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                  : "bg-slate-100 text-[var(--text-primary)] dark:bg-slate-850 border-slate-200 dark:border-slate-700"
             }`}
           >
             {isUser ? (
@@ -340,107 +372,6 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
               )}
             </div>
 
-            {!isUser && !message.isStreaming && displayedText && (
-              <div className="flex items-center gap-1">
-                {onToggleBookmark && message.status !== "error" && (
-                  <button
-                    type="button"
-                    onClick={onToggleBookmark}
-                    aria-label={bookmarked ? "Remove bookmark from this answer" : "Bookmark this answer"}
-                    aria-pressed={bookmarked}
-                    title={bookmarked ? "Remove bookmark" : "Bookmark answer"}
-                    className={`inline-flex items-center gap-1 text-[11px] font-semibold transition-colors py-0.5 px-2 rounded-md cursor-pointer border ${
-                      bookmarked
-                        ? "text-[var(--accent-text)] bg-brand-indigo/10 border-brand-indigo/30"
-                        : "text-[var(--text-muted)] hover:text-[var(--accent-text)] dark:text-[var(--text-muted)] dark:hover:text-indigo-300 border-transparent hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-200 dark:hover:border-slate-700"
-                    }`}
-                  >
-                    {bookmarked ? (
-                      <>
-                        <BookmarkCheck className="w-3 h-3" />
-                        <span className="font-sans">{locale === "vi" ? "Đã đánh dấu" : "Bookmarked"}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Bookmark className="w-3 h-3" />
-                        <span className="font-sans">{locale === "vi" ? "Đánh dấu" : "Bookmark"}</span>
-                      </>
-                    )}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={handleCopy}
-                  aria-label={copyState === "copied" ? (locale === "vi" ? "Đã sao chép câu trả lời" : "Copied answer") : (locale === "vi" ? "Sao chép câu trả lời" : "Copy answer")}
-                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--accent-text)] dark:text-[var(--text-muted)] dark:hover:text-indigo-300 transition-colors py-0.5 px-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
-                >
-                  {copyState === "copied" ? (
-                    <>
-                      <Check className="w-3 h-3 text-emerald-500" />
-                        <span className="text-emerald-500 font-sans">{t("common.copied")}</span>
-                    </>
-                  ) : copyState === "error" ? (
-                    <>
-                      <AlertCircle className="w-3 h-3 text-rose-500" />
-                      <span className="text-rose-500 font-sans">{locale === "vi" ? "Không thể sao chép" : "Copy unavailable"}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3 h-3" />
-                      <span className="font-sans">{t("common.copy")}</span>
-                    </>
-                  )}
-                </button>
-                {message.status !== "error" && (
-                  <div className="ml-1 inline-flex items-center gap-0.5 rounded-md border border-transparent" role="group" aria-label={locale === "vi" ? "Đánh giá câu trả lời" : "Rate this answer"}>
-                    <button
-                      type="button"
-                      onClick={() => updateFeedback("up")}
-                      aria-label={locale === "vi" ? "Câu trả lời hữu ích" : "Helpful answer"}
-                      aria-pressed={feedback === "up"}
-                      title={locale === "vi" ? "Hữu ích" : "Helpful"}
-                      className={`rounded-md p-1.5 transition-colors ${feedback === "up" ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300" : "text-slate-400 hover:bg-slate-100 hover:text-emerald-600 dark:text-slate-500 dark:hover:bg-slate-800"}`}
-                    >
-                      <ThumbsUp className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateFeedback("down")}
-                      aria-label={locale === "vi" ? "Câu trả lời chưa hữu ích" : "Unhelpful answer"}
-                      aria-pressed={feedback === "down"}
-                      title={locale === "vi" ? "Chưa hữu ích" : "Unhelpful"}
-                      className={`rounded-md p-1.5 transition-colors ${feedback === "down" ? "bg-rose-500/15 text-rose-600 dark:text-rose-300" : "text-slate-400 hover:bg-slate-100 hover:text-rose-600 dark:text-slate-500 dark:hover:bg-slate-800"}`}
-                    >
-                      <ThumbsDown className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                )}
-                {onSaveVariant && message.status !== "error" && !message.isStreaming && message.text && (
-                  <button
-                    type="button"
-                    onClick={onSaveVariant}
-                    aria-label={locale === "vi" ? "Lưu phiên bản câu trả lời" : "Save answer variant"}
-                    title={locale === "vi" ? "Lưu phiên bản" : "Save variant"}
-                    className="inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-0.5 text-[11px] font-semibold text-[var(--text-muted)] transition-colors hover:border-[var(--border-subtle)] hover:bg-[var(--surface-muted)] hover:text-[var(--accent-text)]"
-                  >
-                    <Layers2 className="h-3 w-3" />
-                    <span>{locale === "vi" ? "Lưu phiên bản" : "Save variant"}</span>
-                  </button>
-                )}
-                {onSaveNote && message.status !== "error" && (
-                  <button
-                    type="button"
-                    onClick={() => setIsNoteOpen((open) => !open)}
-                    aria-label={locale === "vi" ? "Ghi chú cho câu trả lời" : "Add note to answer"}
-                    aria-pressed={isNoteOpen || Boolean(message.note)}
-                    title={locale === "vi" ? "Ghi chú" : "Add note"}
-                    className={`rounded-md p-1.5 transition-colors ${message.note ? "bg-amber-500/15 text-amber-600 dark:text-amber-300" : "text-slate-400 hover:bg-slate-100 hover:text-amber-600 dark:text-slate-500 dark:hover:bg-slate-800"}`}
-                  >
-                    <StickyNote className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            )}
           </div>
 
           {isUser && scopeSnapshot && (
@@ -448,125 +379,6 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
               <span>{locale === "vi" ? "Phạm vi câu hỏi" : "Question scope"}</span>
               <strong>{scopeSnapshot}</strong>
             </div>
-          )}
-
-          {!isUser && feedback === "down" && !message.isStreaming && (
-            <div
-              className="flex flex-wrap items-center gap-1.5 rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-xs"
-              role="group"
-              aria-label={locale === "vi" ? "Lý do đánh giá chưa hữu ích" : "Why was this answer unhelpful?"}
-            >
-              <span className="font-semibold text-[var(--text-muted)]">
-                {locale === "vi" ? "Lý do:" : "Reason:"}
-              </span>
-              {FEEDBACK_CATEGORIES.map((category) => (
-                <button
-                  key={category.value}
-                  type="button"
-                  onClick={() => updateFeedbackCategory(category.value)}
-                  aria-pressed={feedbackCategory === category.value}
-                  className={`rounded-full border px-2 py-1 transition-colors ${
-                    feedbackCategory === category.value
-                      ? "border-rose-500/50 bg-rose-500/15 text-rose-700 dark:text-rose-300"
-                      : "border-[var(--border-subtle)] text-[var(--text-muted)] hover:bg-[var(--surface-muted)]"
-                  }`}
-                >
-                  {locale === "vi" ? category.vi : category.en}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {!isUser && isNoteOpen && onSaveNote && !message.isStreaming && (
-            <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
-              <label className="block text-xs font-semibold text-[var(--text-muted)]" htmlFor={`note-${message.id}`}>
-                {locale === "vi" ? "Ghi chú riêng trên thiết bị" : "Private device note"}
-              </label>
-              <textarea
-                id={`note-${message.id}`}
-                value={noteDraft}
-                onChange={(event) => setNoteDraft(event.target.value.slice(0, 10000))}
-                maxLength={10000}
-                rows={3}
-                placeholder={locale === "vi" ? "Lưu ý, giả định hoặc việc cần kiểm tra…" : "Save an observation, assumption, or follow-up…"}
-                className="mt-2 w-full resize-y rounded-lg border border-[var(--border-strong)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-amber-500"
-              />
-              <div className="mt-2 flex items-center justify-between gap-2">
-                <span className="text-[11px] text-[var(--text-muted)]">{noteDraft.length}/10000</span>
-                <button
-                  type="button"
-                  onClick={() => { onSaveNote(noteDraft.trim()); setIsNoteOpen(false); }}
-                  className="rounded-lg bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-500/25 dark:text-amber-300"
-                >
-                  {locale === "vi" ? "Lưu ghi chú" : "Save note"}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {!isUser && message.note && !isNoteOpen && (
-            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-[var(--text-muted)]">
-              <span className="font-semibold text-amber-700 dark:text-amber-300">{locale === "vi" ? "Ghi chú:" : "Note:"}</span> {message.note}
-            </div>
-          )}
-
-          {!isUser && variants.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5 text-xs" aria-label={locale === "vi" ? "Các phiên bản câu trả lời" : "Answer variants"}>
-              <span className="font-semibold text-[var(--text-muted)]">{locale === "vi" ? "Phiên bản:" : "Variants:"}</span>
-              <button type="button" onClick={() => setSelectedVariantId(null)} className={`rounded-full border px-2 py-1 ${!selectedVariantId ? "border-[var(--accent-text)] bg-[var(--accent-soft)] text-[var(--accent-text)]" : "border-[var(--border-subtle)] text-[var(--text-muted)]"}`}>{locale === "vi" ? "Gốc" : "Original"}</button>
-              {variants.map((variant, index) => (
-                <button key={variant.id} type="button" onClick={() => setSelectedVariantId(variant.id)} className={`rounded-full border px-2 py-1 ${selectedVariantId === variant.id ? "border-[var(--accent-text)] bg-[var(--accent-soft)] text-[var(--accent-text)]" : "border-[var(--border-subtle)] text-[var(--text-muted)]"}`}>
-                  {locale === "vi" ? `Bản ${index + 1}` : `Variant ${index + 1}`}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {!isUser && (message.queryInterpretation || message.rewritten_query) && (
-            <details className="group rounded-lg border border-brand-indigo/15 bg-brand-indigo/[0.035] text-xs">
-              <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 font-semibold text-slate-600 dark:text-slate-300 [&::-webkit-details-marker]:hidden">
-                <span>{locale === "vi" ? "Câu hỏi đã diễn giải" : "Interpreted query"}</span>
-                <ChevronDown className="h-4 w-4 text-brand-indigo transition-transform group-open:rotate-180" />
-              </summary>
-              <p className="ui-expand-enter border-t border-brand-indigo/10 px-3 py-2 font-mono text-xs italic leading-relaxed text-brand-indigo">
-                {message.queryInterpretation?.retrieval_question || message.rewritten_query}
-              </p>
-            </details>
-          )}
-
-          {!isUser && (displayedExecution || pipelineStages?.length) && (
-            <PipelineExecution
-              events={pipelineStages}
-              trace={displayedExecution}
-              isStreaming={message.isStreaming}
-            />
-          )}
-
-          {!isUser && displayedVisualAnswer && (
-            <section className="rounded-lg border border-[var(--border-subtle)] surface-muted p-3" aria-label={locale === "vi" ? "Dữ liệu được kiểm chứng" : "Verified filing metric"}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-[var(--text-muted)]">
-                  <BarChart3 className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{displayedVisualAnswer.label}</span>
-                </div>
-                <span className="shrink-0 text-xs text-[var(--text-subtle)]">FY {displayedVisualAnswer.period}</span>
-              </div>
-              <p className="mt-2 text-xl font-semibold tabular-nums text-[var(--text-primary)]">{displayedVisualAnswer.display_value}</p>
-              <p className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">{displayedVisualAnswer.evidence_quote}</p>
-              {onInspectSource && (
-                <button
-                  type="button"
-                  className="mt-2 text-xs font-semibold text-[var(--focus-ring)] hover:underline"
-                  onClick={() => inspectCitation(displayedVisualAnswer.source_index, {
-                    citation: displayedVisualAnswer.citation,
-                    text_preview: displayedVisualAnswer.evidence_quote,
-                    chunk_id: displayedVisualAnswer.source_chunk_id,
-                  })}
-                >
-                  {locale === "vi" ? "Mở bằng chứng" : "Open evidence"}
-                </button>
-              )}
-            </section>
           )}
 
           <div className={isUser ? "message-answer-layout" : "assistant-evidence-layout"}>
@@ -578,6 +390,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                 ? "rounded-2xl rounded-tr-md border border-brand-indigo/20 bg-brand-indigo/[0.06] dark:bg-brand-indigo/[0.10] px-4 py-3 shadow-3xs"
                 : ""
             }`}
+            onClick={() => reportDisplayedAnswerContext()}
           >
                 {isUser ? (
                   <p className="!m-0 whitespace-pre-wrap select-text font-sans text-[var(--text-primary)]">
@@ -704,6 +517,169 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                 )}
           </div>
 
+          {!isUser && displayedVisualAnswer && (
+            <section className="rounded-lg border border-[var(--border-subtle)] surface-muted p-3" aria-label={locale === "vi" ? "Dữ liệu được kiểm chứng" : "Verified filing metric"}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-[var(--text-muted)]">
+                  <BarChart3 className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{displayedVisualAnswer.label}</span>
+                </div>
+                <span className="shrink-0 text-xs text-[var(--text-subtle)]">FY {displayedVisualAnswer.period}</span>
+              </div>
+              <p className="mt-2 text-xl font-semibold tabular-nums text-[var(--text-primary)]">{displayedVisualAnswer.display_value}</p>
+              <p className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">{displayedVisualAnswer.evidence_quote}</p>
+              {onInspectSource && (
+                <button
+                  type="button"
+                  className="mt-2 text-xs font-semibold text-[var(--focus-ring)] hover:underline"
+                  onClick={() => inspectCitation(displayedVisualAnswer.source_index, {
+                    citation: displayedVisualAnswer.citation,
+                    text_preview: displayedVisualAnswer.evidence_quote,
+                    chunk_id: displayedVisualAnswer.source_chunk_id,
+                  })}
+                >
+                  {locale === "vi" ? "Mở bằng chứng" : "Open evidence"}
+                </button>
+              )}
+            </section>
+          )}
+
+          {!isUser && message.isStreaming && (
+            <div className="inline-flex items-center ml-1" aria-label="Answer is streaming">
+              <span className="inline-block w-2 h-4 bg-brand-indigo animate-pulse rounded-xs" />
+            </div>
+          )}
+
+          {!isUser && (displayedSources?.length || selectedVariant || displayedExecution?.elapsed_ms !== undefined) && (
+            <div className="message-answer-meta" aria-label={locale === "vi" ? "Siêu dữ liệu câu trả lời" : "Answer metadata"}>
+              {displayedSources && displayedSources.length > 0 && (
+                <span><FileText className="h-3.5 w-3.5" aria-hidden="true" />{displayedSources.length} {locale === "vi" ? "nguồn" : "sources"}</span>
+              )}
+              <span>{selectedVariant ? (locale === "vi" ? `Bản ${selectedVariantIndex}` : `Variant ${selectedVariantIndex}`) : (locale === "vi" ? "Bản gốc" : "Original answer")}</span>
+              {typeof displayedExecution?.elapsed_ms === "number" && <span>{displayedExecution.elapsed_ms.toFixed(0)} ms</span>}
+            </div>
+          )}
+
+          {!isUser && !message.isStreaming && (displayedText || displayedSources?.length) && (
+            <div className="message-action-row" aria-label={locale === "vi" ? "Hành động chính của câu trả lời" : "Primary answer actions"} onClick={() => reportDisplayedAnswerContext()}>
+              {displayedText && (
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  aria-label={copyState === "copied" ? (locale === "vi" ? "Đã sao chép câu trả lời" : "Copied answer") : (locale === "vi" ? "Sao chép câu trả lời" : "Copy answer")}
+                  className="message-primary-action"
+                >
+                  {copyState === "copied" ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : copyState === "error" ? <AlertCircle className="h-3.5 w-3.5 text-rose-500" /> : <Copy className="h-3.5 w-3.5" />}
+                  <span>{copyState === "copied" ? t("common.copied") : copyState === "error" ? (locale === "vi" ? "Không thể sao chép" : "Copy unavailable") : t("common.copy")}</span>
+                </button>
+              )}
+              {onInspectSource && displayedSources && displayedSources.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => inspectCitation(0)}
+                  aria-label={locale === "vi" ? `Mở ${displayedSources.length} nguồn` : `Open ${displayedSources.length} sources`}
+                  className="message-primary-action message-primary-action--sources"
+                >
+                  <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>{locale === "vi" ? "Nguồn" : "Sources"}</span>
+                  <span className="message-primary-action__count">{displayedSources.length}</span>
+                </button>
+              )}
+              {hasSecondaryActions && (
+                <details
+                  className="message-secondary-actions"
+                  open={isSecondaryActionsOpen || feedback === "down" || isNoteOpen}
+                  onToggle={(event) => setIsSecondaryActionsOpen(event.currentTarget.open)}
+                >
+                  <summary>
+                    <span>{locale === "vi" ? "Thao tác khác" : "More actions"}</span>
+                    <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+                  </summary>
+                  <div className="message-secondary-actions__body">
+                    {onToggleBookmark && message.status !== "error" && (
+                      <button
+                        type="button"
+                        onClick={onToggleBookmark}
+                        aria-label={bookmarked ? "Remove bookmark from this answer" : "Bookmark this answer"}
+                        aria-pressed={bookmarked}
+                        title={bookmarked ? "Remove bookmark" : "Bookmark answer"}
+                        className={`message-secondary-action ${bookmarked ? "is-active" : ""}`}
+                      >
+                        {bookmarked ? <BookmarkCheck className="h-3.5 w-3.5" /> : <Bookmark className="h-3.5 w-3.5" />}
+                        <span>{bookmarked ? (locale === "vi" ? "Đã đánh dấu" : "Bookmarked") : (locale === "vi" ? "Đánh dấu" : "Bookmark")}</span>
+                      </button>
+                    )}
+                    {onFeedback && message.status !== "error" && (
+                      <div className="message-feedback-actions" role="group" aria-label={locale === "vi" ? "Đánh giá câu trả lời" : "Rate this answer"}>
+                        <button type="button" onClick={() => updateFeedback("up")} aria-label={locale === "vi" ? "Câu trả lời hữu ích" : "Helpful answer"} aria-pressed={feedback === "up"} title={locale === "vi" ? "Hữu ích" : "Helpful"} className={`message-secondary-action ${feedback === "up" ? "is-active" : ""}`}><ThumbsUp className="h-3.5 w-3.5" /><span>{locale === "vi" ? "Hữu ích" : "Helpful"}</span></button>
+                        <button type="button" onClick={() => updateFeedback("down")} aria-label={locale === "vi" ? "Câu trả lời chưa hữu ích" : "Unhelpful answer"} aria-pressed={feedback === "down"} title={locale === "vi" ? "Chưa hữu ích" : "Unhelpful"} className={`message-secondary-action ${feedback === "down" ? "is-active is-negative" : ""}`}><ThumbsDown className="h-3.5 w-3.5" /><span>{locale === "vi" ? "Chưa hữu ích" : "Not helpful"}</span></button>
+                      </div>
+                    )}
+                    {onSaveVariant && message.status !== "error" && !message.isStreaming && message.text && (
+                      <button type="button" onClick={onSaveVariant} aria-label={locale === "vi" ? "Lưu phiên bản câu trả lời" : "Save answer variant"} title={locale === "vi" ? "Lưu phiên bản" : "Save variant"} className="message-secondary-action"><Layers2 className="h-3.5 w-3.5" /><span>{locale === "vi" ? "Lưu phiên bản" : "Save variant"}</span></button>
+                    )}
+                    {onSaveNote && message.status !== "error" && (
+                      <button type="button" onClick={() => setIsNoteOpen((open) => !open)} aria-label={locale === "vi" ? "Ghi chú cho câu trả lời" : "Add note to answer"} aria-pressed={isNoteOpen || Boolean(message.note)} title={locale === "vi" ? "Ghi chú" : "Add note"} className={`message-secondary-action ${message.note ? "is-active is-note" : ""}`}><StickyNote className="h-3.5 w-3.5" /><span>{locale === "vi" ? "Ghi chú" : "Add note"}</span></button>
+                    )}
+                  </div>
+                  {!isUser && feedback === "down" && !message.isStreaming && (
+                    <div className="message-feedback-reasons" role="group" aria-label={locale === "vi" ? "Lý do đánh giá chưa hữu ích" : "Why was this answer unhelpful?"}>
+                      <span className="font-semibold text-[var(--text-muted)]">{locale === "vi" ? "Lý do:" : "Reason:"}</span>
+                      {FEEDBACK_CATEGORIES.map((category) => (
+                        <button key={category.value} type="button" onClick={() => updateFeedbackCategory(category.value)} aria-pressed={feedbackCategory === category.value} className={`rounded-full border px-2 py-1 transition-colors ${feedbackCategory === category.value ? "border-rose-500/50 bg-rose-500/15 text-rose-700 dark:text-rose-300" : "border-[var(--border-subtle)] text-[var(--text-muted)] hover:bg-[var(--surface-muted)]"}`}>
+                          {locale === "vi" ? category.vi : category.en}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {!isUser && isNoteOpen && onSaveNote && !message.isStreaming && (
+                    <div className="message-note-editor rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
+                      <label className="block text-xs font-semibold text-[var(--text-muted)]" htmlFor={`note-${message.id}`}>{locale === "vi" ? "Ghi chú riêng trên thiết bị" : "Private device note"}</label>
+                      <textarea id={`note-${message.id}`} value={noteDraft} onChange={(event) => setNoteDraft(event.target.value.slice(0, 10000))} maxLength={10000} rows={3} placeholder={locale === "vi" ? "Lưu ý, giả định hoặc việc cần kiểm tra…" : "Save an observation, assumption, or follow-up…"} className="mt-2 w-full resize-y rounded-lg border border-[var(--border-strong)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-amber-500" />
+                      <div className="mt-2 flex items-center justify-between gap-2"><span className="text-[11px] text-[var(--text-muted)]">{noteDraft.length}/10000</span><button type="button" onClick={() => { onSaveNote(noteDraft.trim()); setIsNoteOpen(false); }} className="rounded-lg bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-500/25 dark:text-amber-300">{locale === "vi" ? "Lưu ghi chú" : "Save note"}</button></div>
+                    </div>
+                  )}
+                </details>
+              )}
+            </div>
+          )}
+
+          {!isUser && message.note && !isNoteOpen && (
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-[var(--text-muted)]">
+              <span className="font-semibold text-amber-700 dark:text-amber-300">{locale === "vi" ? "Ghi chú:" : "Note:"}</span> {message.note}
+            </div>
+          )}
+
+          {!isUser && variants.length > 0 && (
+            <div className="message-variant-switcher" aria-label={locale === "vi" ? "Các phiên bản câu trả lời" : "Answer variants"}>
+              <span className="font-semibold text-[var(--text-muted)]">{locale === "vi" ? "Phiên bản:" : "Variants:"}</span>
+              <button type="button" onClick={() => { setSelectedVariantId(null); reportDisplayedAnswerContext(null); }} className={`rounded-full border px-2 py-1 ${!selectedVariantId ? "border-[var(--accent-text)] bg-[var(--accent-soft)] text-[var(--accent-text)]" : "border-[var(--border-subtle)] text-[var(--text-muted)]"}`}>{locale === "vi" ? "Gốc" : "Original"}</button>
+              {variants.map((variant, index) => (
+                <button key={variant.id} type="button" onClick={() => { setSelectedVariantId(variant.id); reportDisplayedAnswerContext(variant.id); }} className={`rounded-full border px-2 py-1 ${selectedVariantId === variant.id ? "border-[var(--accent-text)] bg-[var(--accent-soft)] text-[var(--accent-text)]" : "border-[var(--border-subtle)] text-[var(--text-muted)]"}`}>
+                  {locale === "vi" ? `Bản ${index + 1}` : `Variant ${index + 1}`}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {!isUser && (message.queryInterpretation || message.rewritten_query) && (
+            <details className="group rounded-lg border border-brand-indigo/15 bg-brand-indigo/[0.035] text-xs">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 font-semibold text-[var(--text-muted)] [&::-webkit-details-marker]:hidden">
+                <span>{locale === "vi" ? "Câu hỏi đã diễn giải" : "Interpreted query"}</span>
+                <ChevronDown className="h-4 w-4 text-brand-indigo transition-transform group-open:rotate-180" />
+              </summary>
+              <p className="ui-expand-enter border-t border-brand-indigo/10 px-3 py-2 font-mono text-xs italic leading-relaxed text-brand-indigo">{message.queryInterpretation?.retrieval_question || message.rewritten_query}</p>
+            </details>
+          )}
+
+          {!isUser && (displayedExecution || pipelineStages?.length) && (
+            <PipelineExecution events={pipelineStages} trace={displayedExecution} isStreaming={message.isStreaming} />
+          )}
+
+          {!isUser && !onInspectSource && displayedSources && displayedSources.length > 0 && (
+            <SourcesPanel sources={displayedSources} messageId={messageId} focusSourceIndex={focusSourceIndex} onFocusHandled={() => setFocusSourceIndex(null)} />
+          )}
+
           {!isUser && (message.subQueries || message.wasDecomposed) && (
             <SubQueriesPanel
               subQueries={message.subQueries || []}
@@ -711,24 +687,6 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
             />
           )}
 
-          {/* Streaming Blink Cursor */}
-          {message.isStreaming && (
-            <div className="inline-flex items-center ml-1">
-              <span className="inline-block w-2 h-4 bg-brand-indigo animate-pulse rounded-xs" />
-            </div>
-          )}
-
-          {/* Collapsible Sources */}
-          {!isUser &&
-            displayedSources &&
-            displayedSources.length > 0 && (
-            <SourcesPanel
-              sources={displayedSources}
-              messageId={messageId}
-              focusSourceIndex={focusSourceIndex}
-              onFocusHandled={() => setFocusSourceIndex(null)}
-            />
-            )}
           </div>
           </div>
         </div>

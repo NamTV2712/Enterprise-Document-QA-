@@ -93,6 +93,30 @@ describe("ChatMessage", () => {
     }));
   });
 
+  test("uses the workspace source action without rendering a duplicate source tree", () => {
+    const onInspectSource = vi.fn();
+    render(
+      <ChatMessage
+        messageId="assistant-sources"
+        onInspectSource={onInspectSource}
+        message={{
+          id: "assistant-sources",
+          sender: "assistant",
+          text: "The answer is grounded in the filing.",
+          sources: [{ citation: "AAPL source", chunk_id: "aapl-chunk", score: 0.8, text_preview: "Excerpt" }],
+        }}
+      />,
+    );
+
+    const answer = screen.getByText("The answer is grounded in the filing.");
+    const sourceAction = screen.getByRole("button", { name: "Open 1 sources" });
+    expect(answer.compareDocumentPosition(sourceAction) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Show 1 retrieved filing evidence excerpts/i })).not.toBeInTheDocument();
+
+    fireEvent.click(sourceAction);
+    expect(onInspectSource).toHaveBeenCalledWith(expect.objectContaining({ citationIndex: 0, chunkId: "aapl-chunk" }));
+  });
+
   test("keeps variant citation identity separate from the original answer", () => {
     const onInspectSource = vi.fn();
     render(
@@ -129,6 +153,51 @@ describe("ChatMessage", () => {
     });
   });
 
+  test("publishes the focused answer and selected variant identity without token churn", () => {
+    const onDisplayedAnswerContext = vi.fn();
+    const { rerender } = render(
+      <ChatMessage
+        message={{ id: "assistant-context", sender: "assistant", text: "Original answer." }}
+        variants={[{
+          id: "variant-context",
+          originMessageId: "assistant-context",
+          text: "Variant answer.",
+          sources: [],
+          answerLanguage: "en",
+          status: "completed",
+          createdAt: 1,
+          updatedAt: 1,
+        }]}
+        onDisplayedAnswerContext={onDisplayedAnswerContext}
+      />,
+    );
+
+    fireEvent.focus(screen.getByRole("article", { name: "Research assistant response" }));
+    expect(onDisplayedAnswerContext).toHaveBeenLastCalledWith({ messageId: "assistant-context", variantId: null });
+
+    fireEvent.click(screen.getByRole("button", { name: "Variant 1" }));
+    expect(onDisplayedAnswerContext).toHaveBeenLastCalledWith({ messageId: "assistant-context", variantId: "variant-context" });
+    const publicationCount = onDisplayedAnswerContext.mock.calls.length;
+
+    rerender(
+      <ChatMessage
+        message={{ id: "assistant-context", sender: "assistant", text: "Original answer updated." }}
+        variants={[{
+          id: "variant-context",
+          originMessageId: "assistant-context",
+          text: "Variant answer.",
+          sources: [],
+          answerLanguage: "en",
+          status: "completed",
+          createdAt: 1,
+          updatedAt: 2,
+        }]}
+        onDisplayedAnswerContext={onDisplayedAnswerContext}
+      />,
+    );
+    expect(onDisplayedAnswerContext).toHaveBeenCalledTimes(publicationCount);
+  });
+
   test("shows only backend-provided execution stages", () => {
     render(
       <ChatMessage
@@ -148,9 +217,9 @@ describe("ChatMessage", () => {
     );
 
     fireEvent.click(screen.getByText("Execution stages"));
-    expect(screen.getByText("embedding")).toBeInTheDocument();
-    expect(screen.getByText("cache lookup · miss")).toBeInTheDocument();
-    expect(screen.getByText("42 ms")).toBeInTheDocument();
+    expect(screen.getByText("Embedding")).toBeInTheDocument();
+    expect(screen.getByText("Cache lookup · miss")).toBeInTheDocument();
+    expect(screen.getByText("Server · 42 ms")).toBeInTheDocument();
   });
 
   test("keeps a verified visual metric linked to its exact source", () => {
@@ -199,6 +268,7 @@ describe("ChatMessage", () => {
       />,
     );
 
+    fireEvent.click(document.querySelector(".message-secondary-actions summary")!);
     fireEvent.click(screen.getByRole("button", { name: "Add note to answer" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Private device note" }), {
       target: { value: "Verify the fiscal-year label." },
@@ -239,6 +309,7 @@ describe("ChatMessage", () => {
       />,
     );
 
+    fireEvent.click(document.querySelector(".message-secondary-actions summary")!);
     fireEvent.click(screen.getAllByRole("button", { name: "Unhelpful answer" }).at(-1)!);
     expect(screen.getByRole("group", { name: "Why was this answer unhelpful?" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Citation issue" }));

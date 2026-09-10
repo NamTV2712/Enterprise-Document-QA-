@@ -45,6 +45,34 @@ describe("ChatInput", () => {
     expect(onSendMessage).toHaveBeenCalledWith("doanh thu Apple");
   });
 
+  test("keeps the next draft editable and does not submit during a stream", () => {
+    const onSendMessage = vi.fn();
+    function StreamingHarness() {
+      const [inputText, setInputText] = useState("");
+      return (
+        <ChatInput
+          inputText={inputText}
+          setInputText={setInputText}
+          onSendMessage={onSendMessage}
+          onStopGenerating={vi.fn()}
+          isLoading={true}
+          isStreaming={true}
+          isBackendConnected={true}
+          isPipelineReady={true}
+        />
+      );
+    }
+
+    render(<StreamingHarness />);
+    const input = screen.getByRole("textbox", { name: "Research question" });
+    fireEvent.change(input, { target: { value: "A follow-up draft while streaming" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(input).toHaveValue("A follow-up draft while streaming");
+    expect(onSendMessage).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Stop generating response" })).toBeInTheDocument();
+  });
+
   test("validates trimmed content and exposes the active scope", () => {
     const onSendMessage = vi.fn();
     render(

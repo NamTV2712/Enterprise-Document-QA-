@@ -16,6 +16,7 @@ interface ChatInputProps {
   onStopGenerating: () => void;
   isLoading: boolean;
   isStreaming: boolean;
+  isPreflightRunning?: boolean;
   isBackendConnected: boolean | null;
   isPipelineReady: boolean | null;
   showBanner?: boolean;
@@ -33,6 +34,8 @@ interface ChatInputProps {
   onChangeTopK?: (topK: number) => void;
   enableComparative?: boolean;
   onToggleComparative?: (enabled: boolean) => void;
+  scopeOpen?: boolean;
+  onScopeOpenChange?: (open: boolean) => void;
 }
 
 export const ConnectionBanner = memo(
@@ -88,6 +91,7 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
   onStopGenerating,
   isLoading,
   isStreaming,
+  isPreflightRunning = false,
   isBackendConnected,
   isPipelineReady,
   showBanner = true,
@@ -104,6 +108,8 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
   onChangeTopK = () => {},
   enableComparative = false,
   onToggleComparative = () => {},
+  scopeOpen,
+  onScopeOpenChange,
 }) => {
   const { t, locale } = useLocale();
   const vi = locale === "vi";
@@ -117,16 +123,15 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
   const isValidLength = trimmedLength >= 5 && charCount <= 500;
 
   const isDisabled =
-    isLoading || !isBackendConnected || !isPipelineReady || isReadOnly;
-  // Connectivity controls whether a question can be sent, not whether a
-  // researcher may keep drafting. Drafts remain recoverable while offline.
-  const isTextareaDisabled = isLoading;
+    isLoading || isPreflightRunning || !isBackendConnected || !isPipelineReady || isReadOnly;
+  // Connectivity and request state control sending, not drafting. Keep the
+  // textarea editable so a next question can be recovered during a stream.
+  const isTextareaDisabled = false;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (isValidLength && !isDisabled) {
       onSendMessage(inputText.trim());
-      setInputText("");
     }
   };
 
@@ -143,7 +148,6 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
       e.preventDefault();
       if (isValidLength && !isDisabled) {
         onSendMessage(inputText.trim());
-        setInputText("");
       }
     }
   };
@@ -298,6 +302,8 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
           onChangeTopK={onChangeTopK}
           enableComparative={enableComparative}
           onToggleComparative={onToggleComparative}
+          open={scopeOpen}
+          onOpenChange={onScopeOpenChange}
           disabled={isLoading}
         />
 

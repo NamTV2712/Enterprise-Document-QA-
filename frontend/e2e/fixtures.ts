@@ -87,13 +87,20 @@ export const LONG_ANSWER = [
  */
 export async function installApiFixtures(
   page: Page,
-  options: { history?: HistoryFixture; health?: Record<string, unknown> } = {},
+  options: {
+    history?: HistoryFixture;
+    health?: Record<string, unknown>;
+    streamDelayMs?: number;
+    streamAnswers?: string[];
+    streamSources?: Array<typeof SAMPLE_SOURCES>;
+  } = {},
 ): Promise<void> {
   const history: HistoryFixture = options.history ?? {
     session_id: "session-test",
     turns: [],
     context: { status: "missing", retained_turns: 0, ttl_remaining_seconds: 0 },
   };
+  let streamRequestIndex = 0;
 
   // Playwright matches routes in reverse registration order, so the
   // catch-all guard must be registered FIRST and the specific API mock
@@ -295,6 +302,9 @@ export async function installApiFixtures(
     }
 
     if (path === "/query/stream" && method === "POST") {
+      const responseIndex = streamRequestIndex++;
+      const answer = options.streamAnswers?.[responseIndex] ?? LONG_ANSWER;
+      const sources = options.streamSources?.[responseIndex] ?? SAMPLE_SOURCES;
       const body =
         sseEvent("stage", {
           version: 1,
@@ -320,10 +330,8 @@ export async function installApiFixtures(
           elapsed_ms: 8.2,
           counters: { source_count: 2 },
         }) +
-        sseEvent("sources", SAMPLE_SOURCES) +
-        sseEvent("token", "Apple's total net sales were ") +
-        sseEvent("token", "$391,035 million in fiscal 2024 ") +
-        sseEvent("token", "and $416,161 million in fiscal 2025 [Source 1].") +
+        sseEvent("sources", sources) +
+        sseEvent("token", answer) +
         sseEvent("done", {
           request_id: "fixture-request-1",
           request_status: "completed",
@@ -336,6 +344,9 @@ export async function installApiFixtures(
             ],
           },
         });
+      if (options.streamDelayMs) {
+        await new Promise((resolve) => setTimeout(resolve, options.streamDelayMs));
+      }
       await route.fulfill({
         status: 200,
         headers: {

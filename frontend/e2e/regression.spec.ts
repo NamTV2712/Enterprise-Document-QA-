@@ -52,6 +52,9 @@ async function openTools(page: Page): Promise<void> {
 test("opens the exact citation in the indexed context viewer", async ({ page }) => {
   await setup(page);
   await askQuestion(page, "What are Apple's main business risks?");
+  const sourceButton = page.getByRole("button", { name: "Open source 1" }).first();
+  await expect(sourceButton).toBeVisible();
+  await sourceButton.click();
 
   const contextPanel = page.locator(".context-panel");
   await expect(contextPanel).toBeVisible();
@@ -62,6 +65,66 @@ test("opens the exact citation in the indexed context viewer", async ({ page }) 
   await contextPanel.screenshot({ path: "test-results/p2-4-context-panel.png" });
 });
 
+test("evidence inspector uses the remaining-width mode and closes without losing citation identity", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await setup(page);
+  await askQuestion(page, "What are Apple's main business risks?");
+  const sourceButton = page.getByRole("button", { name: "Open source 1" }).first();
+  await expect(sourceButton).toBeVisible();
+  await sourceButton.click();
+  await expect(page.locator(".context-panel")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Evidence inspector" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Close evidence inspector" }).click();
+  await expect(page.locator(".context-panel")).toHaveCount(0);
+
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await sourceButton.click();
+  await expect(page.getByRole("dialog", { name: "Evidence inspector" })).toBeVisible();
+  await page.getByRole("button", { name: "Close evidence inspector" }).click();
+  await expect(page.getByRole("dialog", { name: "Evidence inspector" })).toHaveCount(0);
+  await expect(sourceButton).toBeFocused();
+
+  await page.getByRole("button", { name: "Use compact navigation" }).click();
+  await sourceButton.click();
+  await expect(page.locator(".context-panel")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Evidence inspector" })).toHaveCount(0);
+});
+
+test("conversation keeps the message scroller and composer inside the primary column", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await setup(page);
+  await askQuestion(page, "What are Apple's main business risks?");
+
+  const primary = page.locator(".workspace-primary-column");
+  const messageScroller = page.locator(".conversation-message-scroll");
+  const composer = page.locator(".composer-shell");
+  const answer = page.getByText(LONG_ANSWER_FIRST_LINE).first();
+  await expect(answer).toBeVisible();
+  const geometry = await page.evaluate(() => {
+    const primaryBox = document.querySelector<HTMLElement>(".workspace-primary-column")?.getBoundingClientRect();
+    const scrollerBox = document.querySelector<HTMLElement>(".conversation-message-scroll")?.getBoundingClientRect();
+    const composerBox = document.querySelector<HTMLElement>(".composer-shell")?.getBoundingClientRect();
+    const answerBox = document.querySelector<HTMLElement>(".message-answer-layout")?.getBoundingClientRect();
+    return { primaryBox, scrollerBox, composerBox, answerBox };
+  });
+  expect(geometry.scrollerBox?.left ?? -1).toBeGreaterThanOrEqual((geometry.primaryBox?.left ?? 0) - 1);
+  expect(geometry.scrollerBox?.right ?? Number.MAX_SAFE_INTEGER).toBeLessThanOrEqual((geometry.primaryBox?.right ?? 0) + 1);
+  expect(geometry.composerBox?.top ?? -1).toBeGreaterThanOrEqual(geometry.scrollerBox?.top ?? 0);
+  expect(geometry.composerBox?.bottom ?? Number.MAX_SAFE_INTEGER).toBeLessThanOrEqual(900 + 1);
+  expect(geometry.answerBox?.bottom ?? Number.MAX_SAFE_INTEGER).toBeLessThanOrEqual((geometry.composerBox?.top ?? 0) + 1);
+
+  const input = page.getByRole("textbox", { name: "Research question" });
+  await input.fill("First line\nSecond line\nThird line");
+  await expect(input).toHaveValue("First line\nSecond line\nThird line");
+  const inputHeight = await input.evaluate((element) => element.getBoundingClientRect().height);
+  expect(inputHeight).toBeGreaterThan(40);
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await expect(input).toHaveValue("First line\nSecond line\nThird line");
+  await expect(composer).toBeVisible();
+  await expect(primary).toBeVisible();
+  await expect(messageScroller).toBeVisible();
+});
+
 test("projects measured pipeline stages from the response stream", async ({ page }) => {
   await setup(page);
   await askQuestion(page, "What are Apple's main business risks?");
@@ -69,10 +132,39 @@ test("projects measured pipeline stages from the response stream", async ({ page
   const execution = page.getByText("Execution stages", { exact: true });
   await expect(execution).toBeVisible();
   await execution.click();
-  const executionStatus = page.getByRole("status", { name: "Execution stages" });
+  const executionStatus = page.getByTestId("execution-stage-list");
   await expect(executionStatus.getByText("Query preparation", { exact: true })).toBeVisible();
   await expect(executionStatus.getByText("Retrieval", { exact: true })).toBeVisible();
-  await expect(executionStatus.getByText("2", { exact: true })).toBeVisible();
+  await expect(executionStatus.getByText("2 sources", { exact: true })).toBeVisible();
+});
+
+test("Retrieval Lab invalidates edited loading config and exports the completed trace", async ({ page }) => {
+  let releaseInspection!: () => void;
+  const inspectionHeld = new Promise<void>((resolve) => { releaseInspection = resolve; });
+  await setup(page);
+  await page.route(`${API_ORIGIN}/retrieval/inspect`, async (route) => {
+    await inspectionHeld;
+    await route.fallback();
+  });
+
+  await page.getByRole("button", { name: "Retrieval Lab", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Retrieval Lab", exact: true })).toBeVisible();
+  const runButton = page.getByRole("button", { name: "Run retrieval", exact: true });
+  await runButton.click();
+  await expect(page.getByRole("button", { name: "Running…", exact: true })).toBeDisabled();
+  await page.getByRole("textbox", { name: "Retrieval question" }).fill("A changed question must invalidate the pending trace");
+  await expect(page.getByText("The configuration changed. Run retrieval again to refresh the trace and exports.")).toBeVisible();
+  releaseInspection();
+  await page.waitForTimeout(100);
+  await expect(page.getByTestId("submitted-retrieval-configuration")).toHaveCount(0);
+  await page.unroute(`${API_ORIGIN}/retrieval/inspect`);
+
+  await runButton.click();
+  await expect(page.getByTestId("submitted-retrieval-configuration")).toBeVisible();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "JSON", exact: true }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("retrieval-trace.json");
 });
 
 test("switching conversations during a pending preflight never sends the old question", async ({
@@ -381,10 +473,106 @@ test("wide tool views retain a usable canvas without evidence-rail geometry", as
   expect(detailWidth).toBeGreaterThan(650);
 });
 
+test("navigation reflows at the 1024px desktop boundary in both themes and locales", async ({ page }) => {
+  await installApiFixtures(page);
+
+  for (const theme of ["light", "dark"] as const) {
+    for (const locale of ["en", "vi"] as const) {
+      await page.setViewportSize({ width: 1440, height: 800 });
+      await page.goto("/");
+      await page.evaluate(({ nextTheme, nextLocale }) => {
+        localStorage.setItem("theme", nextTheme);
+        localStorage.setItem("sec_qa_locale", nextLocale);
+        localStorage.setItem("sec_qa_navigation_layout_v1", "expanded");
+      }, { nextTheme: theme, nextLocale: locale });
+      await page.reload();
+      await expect(page.getByRole("textbox", { name: locale === "vi" ? "Câu hỏi nghiên cứu" : "Research question" })).toBeVisible();
+
+      for (const width of [1024, 1272, 1280, 1440]) {
+        await page.setViewportSize({ width, height: 800 });
+        await page.goto("/");
+        const nav = page.locator(".sidebar-shell");
+        const geometry = await page.evaluate(() => {
+          const sidebar = document.querySelector<HTMLElement>(".sidebar-shell");
+          const primary = document.querySelector<HTMLElement>(".workspace-primary-column");
+          const composer = document.querySelector<HTMLElement>(".composer-shell");
+          const sidebarBox = sidebar?.getBoundingClientRect();
+          const primaryBox = primary?.getBoundingClientRect();
+          const composerBox = composer?.getBoundingClientRect();
+          const layoutControl = document.querySelector<HTMLElement>(".sidebar-layout-toggle");
+          const themeControl = document.querySelector<HTMLElement>("#theme-switcher-btn");
+          return {
+            navigationMode: sidebar?.classList.contains("sidebar-shell--desktop") ? "inline" : "drawer",
+            navigationWidth: sidebarBox?.width ?? 0,
+            navigationRight: sidebarBox?.right ?? 0,
+            primaryLeft: primaryBox?.left ?? 0,
+            composerLeft: composerBox?.left ?? 0,
+            composerRight: composerBox?.right ?? 0,
+            foregroundPairs: [layoutControl, themeControl].map((element) => {
+              if (!element) return null;
+              const styles = getComputedStyle(element);
+              return {
+                height: element.getBoundingClientRect().height,
+                color: styles.color,
+                borderColor: styles.borderColor,
+              };
+            }),
+            scrollWidth: document.documentElement.scrollWidth,
+            viewportWidth: window.innerWidth,
+          };
+        });
+
+        await expect(nav).toBeVisible();
+        expect(geometry.navigationMode).toBe("inline");
+        expect(geometry.navigationWidth).toBeGreaterThanOrEqual(215);
+        expect(geometry.navigationWidth).toBeLessThanOrEqual(217);
+        expect(geometry.primaryLeft).toBeGreaterThanOrEqual(geometry.navigationRight - 1);
+        expect(geometry.composerLeft).toBeGreaterThanOrEqual(geometry.navigationRight - 1);
+        expect(geometry.composerRight).toBeLessThanOrEqual(geometry.viewportWidth);
+        for (const pair of geometry.foregroundPairs) {
+          expect(pair).not.toBeNull();
+          expect(pair?.height ?? 0).toBeGreaterThanOrEqual(44);
+          expect(pair?.color).not.toBe(pair?.borderColor);
+        }
+        expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.viewportWidth);
+      }
+
+      await page.locator(".sidebar-layout-toggle").click();
+      await expect(page.locator(".sidebar-shell--desktop")).toHaveAttribute("data-navigation-layout", "compact");
+      await page.waitForFunction(() => {
+        const sidebar = document.querySelector<HTMLElement>(".sidebar-shell--desktop");
+        return (sidebar?.getBoundingClientRect().width ?? Number.POSITIVE_INFINITY) <= 57;
+      });
+      const compactWidth = await page.locator(".sidebar-shell--desktop").evaluate((element) => element.getBoundingClientRect().width);
+      expect(compactWidth).toBeGreaterThanOrEqual(55);
+      expect(compactWidth).toBeLessThanOrEqual(57);
+
+      await page.setViewportSize({ width: 1023, height: 800 });
+      await page.goto("/");
+      await expect(page.locator("#sidebar-toggle")).toBeVisible();
+      await expect(page.locator(".sidebar-shell")).toHaveCount(0);
+      await page.locator("#sidebar-toggle").click();
+      await expect(page.locator(".sidebar-shell--drawer")).toBeVisible();
+      const menuControl = await page.locator("#sidebar-toggle").evaluate((element) => {
+        const styles = getComputedStyle(element);
+        return {
+          height: element.getBoundingClientRect().height,
+          color: styles.color,
+          borderColor: styles.borderColor,
+        };
+      });
+      expect(menuControl.height).toBeGreaterThanOrEqual(44);
+      expect(menuControl.color).not.toBe(menuControl.borderColor);
+      await page.locator(".sidebar-drawer-close").click();
+      await expect(page.locator("#sidebar-toggle")).toBeFocused();
+    }
+  }
+});
+
 test("research shell stays inside the viewport from desktop to narrow phone widths", async ({ page }) => {
   await installApiFixtures(page);
 
-  for (const width of [1920, 1440, 1280, 1024, 768, 390, 320]) {
+  for (const width of [1920, 1440, 1366, 1280, 1272, 1024, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 800 });
     await page.goto("/");
     const input = page.getByRole("textbox", { name: "Research question" });
@@ -436,6 +624,7 @@ test("opening a bookmarked answer scrolls to and focuses the message", async ({ 
   await askQuestion(page, "What was Apple's total net sales in fiscal year 2025?");
   const answerText = page.getByText(LONG_ANSWER.split("\n")[0]).first();
   await expect(answerText).toBeVisible();
+  await page.locator(".message-secondary-actions > summary").click();
   await page.getByRole("button", { name: "Bookmark this answer" }).click();
 
   await openLibrary(page);
@@ -457,7 +646,7 @@ test("conversation view passes the color-contrast scan", async ({ page }) => {
   await askQuestion(page, "What was Apple's total net sales in fiscal year 2025?");
   await expect(page.getByText(LONG_ANSWER.split("\n")[0]).first()).toBeVisible();
   await page
-    .getByRole("button", { name: /Show 2 retrieved filing evidence excerpts/i })
+    .getByRole("button", { name: "Open 2 sources", exact: true })
     .click();
   await expect(page.getByText("Microsoft Cloud revenue increased").first()).toBeVisible();
 
@@ -478,6 +667,60 @@ test("320px smoke keeps the workspace visibly usable", async ({ page }) => {
   await expectVisiblyDisplayed(page.getByRole("textbox", { name: "Research question" }));
 });
 
+test("narrow header exposes command and More controls without horizontal overflow", async ({ page }) => {
+  await installApiFixtures(page);
+  await page.setViewportSize({ width: 1440, height: 800 });
+  await page.goto("/");
+
+  for (const locale of ["en", "vi"] as const) {
+    await page.evaluate((nextLocale) => {
+      localStorage.setItem("theme", "light");
+      localStorage.setItem("sec_qa_locale", nextLocale);
+    }, locale);
+    await page.reload();
+
+    for (const width of [320, 390, 768]) {
+      await page.setViewportSize({ width, height: 700 });
+      await page.goto("/");
+      await expect(page.locator("#chat-textarea")).toBeVisible();
+
+      const geometry = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        bodyWidth: document.body.scrollWidth,
+        viewportWidth: window.innerWidth,
+      }));
+      expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.viewportWidth);
+      expect(geometry.bodyWidth).toBeLessThanOrEqual(geometry.viewportWidth);
+      await expect(page.locator("#sidebar-toggle")).toBeVisible();
+      await expect(page.locator(".header-command-button")).toBeVisible();
+
+      if (width < 768) {
+        await expect(page.locator(".header-compact-status")).toBeVisible();
+        await expect(page.locator(".header-more-trigger")).toBeVisible();
+        await expect(page.locator("#theme-switcher-btn")).toBeHidden();
+        await expect(page.locator(".locale-switcher.header-wide-control")).toBeHidden();
+
+        await page.locator(".header-more-trigger").click();
+        const moreDialog = page.locator(".header-more-dialog");
+        await expect(moreDialog).toBeVisible();
+        await expect(moreDialog.locator(".header-more-dialog__close")).toBeFocused();
+        await expect(moreDialog.locator(".header-more-control-option")).toHaveCount(3);
+
+        await moreDialog.getByRole("button", { name: /help|hướng dẫn/i }).click();
+        await expect(moreDialog).toHaveCount(0);
+        await expect(page.locator(".help-dialog-panel")).toBeVisible();
+        await page.locator(".help-dialog-panel").getByRole("button").first().click();
+        await expect(page.locator(".help-dialog-panel")).toHaveCount(0);
+        await expect(page.locator(".header-more-trigger")).toBeFocused();
+      } else {
+        await expect(page.locator(".header-more-trigger")).toBeHidden();
+        await expect(page.locator("#theme-switcher-btn")).toBeVisible();
+        await expect(page.locator(".locale-switcher.header-wide-control")).toBeVisible();
+      }
+    }
+  }
+});
+
 test("narrow-viewport reflow (640px CSS viewport, no browser zoom) keeps the workspace usable", async ({ page }) => {
   await page.setViewportSize({ width: 640, height: 450 });
   await setup(page);
@@ -494,7 +737,7 @@ test.describe("390px reduced motion", () => {
   await askQuestion(page, "What was Apple's total net sales in fiscal year 2025?");
   await expectVisiblyDisplayed(page.getByText(LONG_ANSWER.split("\n")[0]).first());
   await page
-    .getByRole("button", { name: /Show 2 retrieved filing evidence excerpts/i })
+    .getByRole("button", { name: "Open 2 sources", exact: true })
     .click();
     await expectVisiblyDisplayed(page.getByText("Microsoft Cloud revenue increased").first());
   });

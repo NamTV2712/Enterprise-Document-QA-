@@ -60,7 +60,7 @@ test.afterEach(async ({ page }) => {
 
 test("health readiness and ticker discovery over real HTTP", async ({ page }) => {
   await setup(page);
-  await expect(page.getByText(/Pipeline: Ready/i).first()).toBeVisible();
+  await expect(page.getByText(/Research ready/i).first()).toBeVisible();
   await page.getByRole("button", { name: /Scope/i }).click();
   await page.getByRole("button", { name: "Company" }).click();
   await expect(page.getByRole("option", { name: /Apple Inc.*AAPL/ })).toBeVisible();
@@ -71,14 +71,13 @@ test("asked question streams cited answer over real SSE with sources", async ({ 
   await setup(page);
   await askQuestion(page, "What was Apple total revenue?");
   await expect(page.getByText(/Harness answer with/).first()).toBeVisible();
-  await expect(page.getByText(/Retrieved filing evidence · 1 excerpts/i)).toBeVisible();
-  await page.getByRole("button", { name: /Show 1 retrieved filing evidence excerpts/i }).click();
-  await expect(
-    page.getByRole("article", { name: "Research assistant response" }).getByText(/Harness evidence for:/),
-  ).toBeVisible();
+  await expect(page.getByText("Execution stages", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Open 1 sources", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Retrieved sources", exact: true })).toBeVisible();
+  await expect(page.getByText(/Harness indexed excerpt for/).first()).toBeVisible();
   // The citation button in the answer opens the matching source excerpt.
   await page.getByRole("button", { name: "Open source 1" }).click();
-  await expect(page.getByText(/Harness evidence for:/).first()).toBeVisible();
+  await expect(page.getByText(/Harness indexed excerpt for/).first()).toBeVisible();
 });
 
 test("stream interrupted mid-answer keeps the partial answer visible", async ({ page }) => {

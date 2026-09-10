@@ -6,6 +6,7 @@ import {
   openLibrary,
   LONG_ANSWER,
   API_ORIGIN,
+  SAMPLE_SOURCES,
 } from "./fixtures";
 
 /**
@@ -23,10 +24,22 @@ async function setup(page: Page, options?: Parameters<typeof installApiFixtures>
   await installApiFixtures(page, options);
   await page.goto("/");
   // The composer becomes usable once health reports the pipeline ready;
-  // the "Pipeline: Ready" label is hidden on small viewports.
+  // the "Research ready" label is hidden on small viewports.
   const input = page.getByRole("textbox", { name: "Research question" });
   await expect(input).toBeVisible();
   await expect(input).toBeEnabled();
+}
+
+async function selectTheme(page: Page, theme: "light" | "dark", viewportWidth: number): Promise<void> {
+  if (viewportWidth < 768) {
+    await page.getByRole("button", { name: "More workspace controls" }).click();
+    const dialog = page.getByRole("dialog", { name: "Workspace controls" });
+    await dialog.getByRole("button", { name: theme === "dark" ? "Dark" : "Light", exact: true }).click();
+    await dialog.getByRole("button", { name: "Close workspace controls" }).click();
+    return;
+  }
+  await page.getByRole("button", { name: /Theme System/ }).click();
+  await page.getByRole("menuitemradio", { name: theme === "dark" ? "Dark" : "Light" }).click();
 }
 
 /**
@@ -77,9 +90,7 @@ test("asked question streams a cited answer with evidence", async ({ page }) => 
   await setup(page);
   await askQuestion(page, "What was Apple's total net sales in fiscal year 2025?");
   await expect(page.getByText(LONG_ANSWER.split("\n")[0]).first()).toBeVisible();
-  await expect(
-    page.getByText(/Retrieved filing evidence · 2 excerpts/i),
-  ).toBeVisible();
+  await expect(page.getByLabel("Answer metadata").getByText("2 sources", { exact: true })).toBeVisible();
 });
 
 test("a stream that ends without done keeps partial text as a stopped answer", async ({ page }) => {
@@ -108,7 +119,7 @@ test("a stream that ends without done keeps partial text as a stopped answer", a
     });
   });
   await page.goto("/");
-  await expect(page.getByText("Pipeline: Ready")).toBeVisible();
+  await expect(page.getByText("Research ready")).toBeVisible();
   await askQuestion(page, "What are Apple's main risk factors?");
   // The mocked stream ends without a done event; the connection closes so
   // the message normalizes to a stopped state with partial text kept.
@@ -118,11 +129,107 @@ test("a stream that ends without done keeps partial text as a stopped answer", a
   ).not.toBeVisible();
 });
 
+test("next draft stays editable during streaming and survives completion reload", async ({ page }) => {
+  await setup(page, { streamDelayMs: 1500 });
+  const input = page.getByRole("textbox", { name: "Research question" });
+  await input.fill("What are Apple's main risk factors?");
+  await input.press("Enter");
+  await expect(page.getByRole("button", { name: "Stop generating response" })).toBeVisible();
+
+  const nextDraft = "A follow-up question typed during streaming";
+  await input.fill(nextDraft);
+  await expect(input).toHaveValue(nextDraft);
+  await expect(page.getByText(LONG_ANSWER.split("\n")[0]).first()).toBeVisible();
+  await expect(input).toHaveValue(nextDraft);
+  await page.waitForFunction(
+    (expectedDraft) => window.localStorage.getItem("sec_qa_library_v3")?.includes(expectedDraft) ?? false,
+    nextDraft,
+  );
+
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Research question" })).toHaveValue(nextDraft);
+});
+
+test("template Apply is draft-only and submits the validated company scope later", async ({ page }) => {
+  await setup(page);
+  const queryRequests: Array<Record<string, unknown>> = [];
+  page.on("request", (request) => {
+    if (request.url() === `${API_ORIGIN}/query/stream` && request.method() === "POST") {
+      queryRequests.push(request.postDataJSON() as Record<string, unknown>);
+    }
+  });
+
+  await page.getByRole("button", { name: /^Revenue fact/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Revenue fact" });
+  await dialog.getByRole("button", { name: "Company" }).click();
+  await page.getByRole("option", { name: "Apple Inc. (AAPL)" }).click();
+  await dialog.getByLabel("Fiscal year").fill("2024");
+  await dialog.getByRole("button", { name: "Use in question" }).click();
+
+  const input = page.getByRole("textbox", { name: "Research question" });
+  await expect(input).toHaveValue("What total revenue did AAPL report in 2024?");
+  await expect(input).toBeFocused();
+  await expect(page.getByRole("button", { name: /Scope · Apple Inc\. \(AAPL\) · Financial Tables · Top 5/ })).toBeVisible();
+  expect(queryRequests).toHaveLength(0);
+
+  await input.press("Enter");
+  await expect(page.getByText(LONG_ANSWER.split("\n")[0]).first()).toBeVisible();
+  expect(queryRequests).toHaveLength(1);
+  expect(queryRequests[0]).toMatchObject({
+    question: "What total revenue did AAPL report in 2024?",
+    ticker: "AAPL",
+    section: "financial_table",
+    top_k: 5,
+  });
+});
+
+test("template cancel preserves the draft and Vietnamese Apply stays draft-only", async ({ page }) => {
+  await setup(page);
+  const input = page.getByRole("textbox", { name: "Research question" });
+  await input.fill("Keep this draft while browsing templates");
+  await page.getByRole("button", { name: /^Revenue fact/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Revenue fact" });
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(input).toHaveValue("Keep this draft while browsing templates");
+
+  await page.getByRole("button", { name: "VI", exact: true }).click();
+  await page.getByRole("button", { name: /^Doanh thu/ }).click();
+  const vietnameseDialog = page.getByRole("dialog", { name: "Doanh thu" });
+  await vietnameseDialog.getByRole("button", { name: "Công ty" }).click();
+  await page.getByRole("option", { name: "Apple Inc. (AAPL)" }).click();
+  await vietnameseDialog.getByLabel("Năm tài chính").fill("2024");
+  await vietnameseDialog.getByRole("button", { name: "Áp dụng vào câu hỏi" }).click();
+
+  await expect(page.locator("#chat-textarea")).toHaveValue("AAPL báo cáo tổng doanh thu bao nhiêu trong 2024?");
+  expect(page.url()).not.toContain("query");
+});
+
+test("template Apply rejects a draft changed after the dialog opened", async ({ page }) => {
+  await setup(page);
+  await page.getByRole("button", { name: /^Revenue fact/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Revenue fact" });
+  const input = page.locator("#chat-textarea");
+  await input.evaluate((element, value) => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+    setter?.call(element, value);
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  }, "Newer draft from another context");
+  await dialog.getByRole("button", { name: "Company" }).click();
+  await page.getByRole("option", { name: "Apple Inc. (AAPL)" }).click();
+  await dialog.getByLabel("Fiscal year").fill("2024");
+  await dialog.getByRole("button", { name: "Use in question" }).click();
+
+  await expect(page.getByText("Research context changed; reopen this template.")).toBeVisible();
+  await expect(input).toHaveValue("Newer draft from another context");
+  await expect(page.getByRole("button", { name: /Scope · All companies · All sections · Top 5/ })).toBeVisible();
+});
+
 test("answer can be bookmarked and found through the Library filter", async ({ page }) => {
   await setup(page);
   await askQuestion(page, "What was Apple's total net sales in fiscal year 2025?");
   await expect(page.getByText(LONG_ANSWER.split("\n")[0]).first()).toBeVisible();
 
+  await page.locator(".message-secondary-actions > summary").click();
   await page.getByRole("button", { name: "Bookmark this answer" }).click();
   await expect(page.getByRole("button", { name: "Remove bookmark from this answer" })).toBeVisible();
 
@@ -134,23 +241,19 @@ test("answer can be bookmarked and found through the Library filter", async ({ p
 test("evidence panel search filters excerpts and keeps source numbers", async ({ page }) => {
   await setup(page);
   await askQuestion(page, "What was Apple's total net sales in fiscal year 2025?");
-  await page.getByRole("button", { name: /Show 2 retrieved filing evidence excerpts/i }).click();
+  await page.getByRole("button", { name: "Open 2 sources", exact: true }).click();
 
   const search = page.getByRole("searchbox", {
-    name: "Search within these evidence excerpts",
+    name: "Search sources",
   });
   await search.fill("Microsoft Cloud");
-  await expect(page.getByText(/Showing 1 of 2 excerpts/i)).toBeVisible();
+  await expect(page.locator(".context-source-card")).toHaveCount(1);
   // The surviving excerpt keeps its original source identity and shows the
   // filing date as document metadata, not as a fiscal period.
-  await expect(
-    page.getByText(
-      /Microsoft Corporation \(MSFT\) · Filed 2025-07-30 · Management Discussion & Analysis \(MD&A\)/,
-    ),
-  ).toBeVisible();
+  await expect(page.locator(".context-source-card").first()).toContainText("Microsoft Corporation (MSFT)");
 
   await search.fill("");
-  await expect(page.getByText(/Showing 2 of 2 excerpts/i)).toBeVisible();
+  await expect(page.locator(".context-source-card")).toHaveCount(2);
 });
 
 test("evidence excerpt copy writes citation context to the clipboard", async ({
@@ -164,10 +267,10 @@ test("evidence excerpt copy writes citation context to the clipboard", async ({
   }
   await setup(page);
   await askQuestion(page, "What was Apple's total net sales in fiscal year 2025?");
-  await page.getByRole("button", { name: /Show 2 retrieved filing evidence excerpts/i }).click();
+  await page.getByRole("button", { name: "Open 2 sources", exact: true }).click();
 
-  await page.getByRole("button", { name: "Copy excerpt 1 with citation" }).click();
-  await expect(page.getByRole("button", { name: "Copied excerpt 1" })).toBeVisible();
+  await page.getByRole("button", { name: "Copy", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Copied", exact: true })).toBeVisible();
   if (!isFirefox) {
     const clipboard = await page.evaluate(() => navigator.clipboard.readText());
     expect(clipboard).toContain("[Source 1] AAPL 10-K (filed 2025-10-31)");
@@ -292,8 +395,68 @@ test("conversation survives a full page reload through IndexedDB", async ({ page
   await expect(page.getByText("Saved on this device")).toBeVisible();
 
   await page.reload();
-  await expect(page.getByText("Pipeline: Ready")).toBeVisible();
+  await expect(page.getByText("Research ready")).toBeVisible();
   await expect(page.getByText(LONG_ANSWER.split("\n")[0]).first()).toBeVisible();
+});
+
+test("command palette follows the focused older answer and selected variant", async ({ page }) => {
+  await page.addInitScript(() => {
+    let clipboardText = "";
+    Object.defineProperty(window, "__fixtureClipboard", {
+      configurable: true,
+      get: () => clipboardText,
+    });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (text: string) => { clipboardText = text; },
+        readText: async () => clipboardText,
+      },
+    });
+  });
+  const olderSources = SAMPLE_SOURCES.map((source) => ({
+    ...source,
+    citation: `Older ${source.citation}`,
+    chunk_id: `older-${source.chunk_id}`,
+  }));
+  const newerSources = SAMPLE_SOURCES.map((source) => ({
+    ...source,
+    citation: `Newer ${source.citation}`,
+    chunk_id: `newer-${source.chunk_id}`,
+  }));
+  await setup(page, {
+    history: {
+      session_id: "session-command-identity",
+      turns: [],
+      context: { status: "available", retained_turns: 0, ttl_remaining_seconds: 3600 },
+    },
+    streamAnswers: ["Older answer [Source 1].", "Newer answer [Source 1]."],
+    streamSources: [olderSources, newerSources],
+  });
+
+  await askQuestion(page, "What did the older filing answer?");
+  await expect(page.getByText("Older answer", { exact: false }).first()).toBeVisible();
+  const olderArticle = page.getByRole("article", { name: "Research assistant response" }).first();
+  await olderArticle.locator(".message-secondary-actions > summary").click();
+  await olderArticle.getByRole("button", { name: "Save answer variant" }).click();
+  await expect(olderArticle.getByRole("button", { name: "Variant 1" })).toBeVisible();
+
+  await askQuestion(page, "What did the newer filing answer?");
+  await expect(page.getByText("Newer answer", { exact: false }).first()).toBeVisible();
+  await olderArticle.getByRole("button", { name: "Variant 1" }).click();
+
+  await page.getByRole("button", { name: "Open command palette" }).click();
+  const palette = page.getByRole("dialog", { name: "Command palette" });
+  await palette.getByRole("combobox", { name: "Search command palette" }).fill("Copy current answer");
+  await palette.getByRole("option", { name: /Copy current answer/ }).click();
+  await expect.poll(() => page.evaluate(() => (window as Window & { __fixtureClipboard?: string }).__fixtureClipboard)).toBe("Older answer [Source 1].");
+
+  await page.getByRole("button", { name: "Open command palette" }).click();
+  const sourcePalette = page.getByRole("dialog", { name: "Command palette" });
+  await sourcePalette.getByRole("combobox", { name: "Search command palette" }).fill("Inspect current sources");
+  await sourcePalette.getByRole("option", { name: /Inspect current sources/ }).click();
+  await expect(page.getByText(/Older AAPL 10-K/).first()).toBeVisible();
+  await expect(page.getByText(/Newer AAPL 10-K/)).not.toBeVisible();
 });
 
 test("citation deep links survive reload and Markdown export keeps evidence anchors", async ({ page }) => {
@@ -307,9 +470,7 @@ test("citation deep links survive reload and Markdown export keeps evidence anch
 
   await page.reload();
   await expect(page).toHaveURL(deepLink);
-  await expect(
-    page.getByRole("button", { name: /Hide 2 retrieved filing evidence excerpts/i }),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Close evidence inspector" })).toBeVisible();
 
   await openLibrary(page);
   const downloadPromise = page.waitForEvent("download");
@@ -383,8 +544,7 @@ test.describe("visual matrix", () => {
         await page.setViewportSize({ width: viewport.width, height: viewport.height });
         await setup(page);
         if (theme === "dark") {
-          await page.getByRole("button", { name: /Theme System/ }).click();
-          await page.getByRole("menuitemradio", { name: "Dark" }).click();
+          await selectTheme(page, theme, viewport.width);
         }
         await expect(page.getByText("Ask questions. Verify every answer.")).toBeVisible();
         // Let entrance animations settle so screenshots show the final state.
@@ -399,12 +559,11 @@ test.describe("visual matrix", () => {
         await page.setViewportSize({ width: viewport.width, height: viewport.height });
         await setup(page);
         if (theme === "dark") {
-          await page.getByRole("button", { name: /Theme System/ }).click();
-          await page.getByRole("menuitemradio", { name: "Dark" }).click();
+          await selectTheme(page, theme, viewport.width);
         }
         await askQuestion(page, "What was Apple's total net sales in fiscal year 2025?");
         await expect(page.getByText(LONG_ANSWER.split("\n")[0]).first()).toBeVisible();
-        await page.getByRole("button", { name: /Show 2 retrieved filing evidence excerpts/i }).click();
+        await page.getByRole("button", { name: "Open 2 sources", exact: true }).click();
         await expect(page.getByText("Microsoft Cloud revenue increased").first()).toBeVisible();
         await page.waitForTimeout(700);
         await page.screenshot({
@@ -445,7 +604,7 @@ test.describe("display smokes", () => {
         const answer = page.getByText(LONG_ANSWER.split("\n")[0]).first();
         await expectVisiblyDisplayed(answer);
         await page
-          .getByRole("button", { name: /Show 2 retrieved filing evidence excerpts/i })
+          .getByRole("button", { name: "Open 2 sources", exact: true })
           .click();
         await expectVisiblyDisplayed(
           page.getByText("Microsoft Cloud revenue increased").first(),

@@ -20,7 +20,6 @@ import {
 } from "../lib/conversationStore";
 
 const DRAFT_PERSIST_DEBOUNCE_MS = 1000;
-const COMPLETION_SAVE_DELAY_MS = 150;
 
 export type SessionContextStatus =
   | "fresh"
@@ -206,7 +205,6 @@ export function useConversationLibrary(
   const activeContextCheckRef = useRef<AbortController | null>(null);
   const sendInFlightRef = useRef<SendIdentity | null>(null);
   const draftTimerRef = useRef<number | null>(null);
-  const completionTimerRef = useRef<number | null>(null);
   const lastSavedSignatureRef = useRef<string>("");
 
   const bumpEpoch = useCallback((): number => {
@@ -243,8 +241,14 @@ export function useConversationLibrary(
       // The caller captures the snapshot at schedule time so a pending save
       // can never write one conversation's content under another's id, and
       // it never reads live refs after an await.
+      // Draft saves intentionally omit the in-flight assistant message. A
+      // next question must be recoverable without turning a partial answer
+      // into durable conversation history.
+      const persistedMessages = reason === "draft"
+        ? normalizeStoredMessages(snapshot.messages.filter((message) => !message.isStreaming))
+        : snapshot.messages;
       const hasContent =
-        snapshot.messages.length > 0 || snapshot.draft.trim().length > 0;
+        persistedMessages.length > 0 || snapshot.draft.trim().length > 0;
       if (!hasContent && reason !== "switch") return;
       if (epochRef.current !== identityEpoch) return;
 
@@ -257,7 +261,7 @@ export function useConversationLibrary(
       const record = buildConversationRecord(existing ?? null, {
         id: conversationId,
         sessionId: snapshot.sessionId,
-        messages: snapshot.messages,
+        messages: persistedMessages,
         draft: snapshot.draft,
         bookmarkedMessageIds: snapshot.bookmarks,
         createdAt: snapshot.createdAt,
@@ -328,7 +332,13 @@ export function useConversationLibrary(
       // Never overwrite an in-flight send or a draft that is waiting for its
       // debounced save. The next repository sync will observe the newer
       // revision after the local operation completes.
-      if (sendInFlightRef.current || draftTimerRef.current !== null) return;
+      // A draft save may finish while the answer is still streaming. Do not
+      // reload that intermediate repository snapshot over newer local input.
+      if (
+        sendInFlightRef.current ||
+        draftTimerRef.current !== null ||
+        messagesRef.current.some((message) => message.isStreaming)
+      ) return;
       void loadConversationLibrary(sessionIdRef.current, activeIdRef.current).then((library) => {
         setConversations(library.conversations);
         setStorageMode(library.storageMode);
@@ -510,28 +520,24 @@ export function useConversationLibrary(
       createdAt: conversationCreatedAtRef.current,
     };
     const epoch = epochRef.current;
-    if (completionTimerRef.current !== null) window.clearTimeout(completionTimerRef.current);
-    completionTimerRef.current = window.setTimeout(() => {
-      completionTimerRef.current = null;
-      lastSavedSignatureRef.current = signature;
-      void persistConversation(conversationId, "exchange", snapshot, epoch);
-    }, COMPLETION_SAVE_DELAY_MS);
-    return () => {
-      if (completionTimerRef.current !== null) {
-        window.clearTimeout(completionTimerRef.current);
-        completionTimerRef.current = null;
-      }
-    };
+    lastSavedSignatureRef.current = signature;
+    // Persist completed exchanges immediately. Drafts remain debounced, but
+    // an answer must be durable before a user can reasonably reload or open
+    // the Library immediately after it appears.
+    void persistConversation(conversationId, "exchange", snapshot, epoch);
   }, [messages, isLibraryReady, persistConversation]);
 
   // Debounced draft persistence; cleared on every switch so a pending draft
-  // save can never write into a different conversation.
+  // save can never write into a different conversation. Streaming assistant
+  // messages are omitted so the draft save never becomes partial history.
   useEffect(() => {
     if (!isLibraryReady) return;
-    if (messages.some((message) => message.isStreaming)) return;
     const conversationId = activeIdRef.current;
+    const persistedMessages = normalizeStoredMessages(
+      messages.filter((message) => !message.isStreaming),
+    );
     const snapshot = {
-      messages,
+      messages: persistedMessages,
       draft: inputText,
       sessionId: sessionIdRef.current,
       bookmarks: bookmarksRef.current,
@@ -556,9 +562,10 @@ export function useConversationLibrary(
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState !== "hidden") return;
-      if (messagesRef.current.some((message) => message.isStreaming)) return;
       void persistConversation(activeIdRef.current, "draft", {
-        messages: messagesRef.current,
+        messages: normalizeStoredMessages(
+          messagesRef.current.filter((message) => !message.isStreaming),
+        ),
         draft: inputTextRef.current,
         sessionId: sessionIdRef.current,
         bookmarks: bookmarksRef.current,
@@ -606,10 +613,6 @@ export function useConversationLibrary(
     if (draftTimerRef.current !== null) {
       window.clearTimeout(draftTimerRef.current);
       draftTimerRef.current = null;
-    }
-    if (completionTimerRef.current !== null) {
-      window.clearTimeout(completionTimerRef.current);
-      completionTimerRef.current = null;
     }
     sendInFlightRef.current = null;
     setIsPreflightRunning(false);

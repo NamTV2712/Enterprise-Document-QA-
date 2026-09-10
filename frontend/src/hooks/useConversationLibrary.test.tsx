@@ -241,6 +241,41 @@ describe("useConversationLibrary request isolation", () => {
     ).toBe(false);
   });
 
+  it("persists a next draft during streaming without persisting the partial answer", async () => {
+    const { store, rendered } = await freshHook();
+    const nextDraft = "A follow-up question typed during streaming";
+
+    act(() => {
+      rendered.result.current.updateMessages((previous) => [
+        ...previous,
+        { id: "u-1", sender: "user", text: "What are the risks?" },
+        {
+          id: "a-1",
+          sender: "assistant",
+          text: "Partial answer",
+          isStreaming: true,
+          status: "streaming",
+        },
+      ]);
+      rendered.result.current.setInputText(nextDraft);
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    });
+
+    const library = await store.loadConversationLibrary(
+      rendered.result.current.sessionId,
+      rendered.result.current.activeConversationId,
+    );
+    const saved = library.conversations.find(
+      (conversation) => conversation.id === rendered.result.current.activeConversationId,
+    );
+    expect(saved?.draft).toBe(nextDraft);
+    expect(saved?.messages.some((message) => message.id === "a-1")).toBe(false);
+    expect(saved?.messages.some((message) => message.isStreaming)).toBe(false);
+  });
+
   it("saves the normalized partial answer of the old conversation when starting a new one", async () => {
     const { rendered } = await freshHook();
 

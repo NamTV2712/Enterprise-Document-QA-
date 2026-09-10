@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { COMMAND_REGISTRY } from "./commandRegistry";
-import { WORKSPACE_NAV_SECTIONS, WORKSPACE_VIEWS } from "./workspace";
+import { getWorkspaceNavItem, WORKSPACE_NAV_SECTIONS, WORKSPACE_VIEWS } from "./workspace";
 
 describe("workspace navigation registry", () => {
   test("exposes the exact four navigation groups and only real views", () => {
@@ -33,5 +33,13 @@ describe("workspace navigation registry", () => {
     expect(navigation.find((command) => command.view === "conversation")?.labelKey).toBe(
       "nav.currentConversation",
     );
+  });
+
+  test("keeps tool introductions bound to registered icon and description metadata", () => {
+    for (const view of WORKSPACE_VIEWS) {
+      const item = getWorkspaceNavItem(view);
+      expect(item.icon).toBeTruthy();
+      expect(item.descriptionKey).toMatch(/^nav\..+Description$/);
+    }
   });
 });

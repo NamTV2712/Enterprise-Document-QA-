@@ -1,16 +1,31 @@
 import type { MessageKey } from "./i18n";
-import { WORKSPACE_NAV_SECTIONS, type WorkspaceIcon, type WorkspaceView } from "./workspace";
+import { WORKSPACE_NAV_SECTIONS, type WorkspaceView } from "./workspace";
+import type { SemanticIconKey } from "./semanticIcons";
 
-export type CommandIcon = WorkspaceIcon | "help";
+export type CommandIcon = SemanticIconKey;
 
 export interface CommandDefinition {
   id: string;
   kind: "navigation" | "utility";
   labelKey: MessageKey;
+  descriptionKey?: MessageKey;
+  accentFamily?: "research" | "documents" | "retrieval" | "evidence" | "evaluation" | "analytics" | "system";
   icon: CommandIcon;
   view?: WorkspaceView;
   action: "navigate" | "help" | "new-conversation";
   keywords?: readonly string[];
+}
+
+/** Runtime-bound commands are metadata-compatible with the registry but own
+ * their callback in the feature owner. The palette never implements effects.
+ */
+export interface ContextualCommandDefinition {
+  id: string;
+  labelKey: MessageKey;
+  descriptionKey?: MessageKey;
+  accentFamily?: CommandDefinition["accentFamily"];
+  icon: CommandIcon;
+  run: () => void;
 }
 
 /**
@@ -23,6 +38,8 @@ const NAVIGATION_COMMANDS: readonly CommandDefinition[] = WORKSPACE_NAV_SECTIONS
     id: `navigate-${item.view}`,
     kind: "navigation" as const,
     labelKey: item.labelKey,
+    descriptionKey: item.descriptionKey,
+    accentFamily: item.accentFamily,
     icon: item.icon,
     view: item.view,
     action: "navigate" as const,
@@ -32,6 +49,6 @@ const NAVIGATION_COMMANDS: readonly CommandDefinition[] = WORKSPACE_NAV_SECTIONS
 
 export const COMMAND_REGISTRY: readonly CommandDefinition[] = [
   ...NAVIGATION_COMMANDS,
-  { id: "new-conversation", kind: "utility", labelKey: "nav.newConversation", icon: "sparkles", action: "new-conversation", keywords: ["reset", "clear"] },
+  { id: "new-conversation", kind: "utility", labelKey: "nav.newConversation", descriptionKey: "nav.newConversationDescription", icon: "newConversation", action: "new-conversation", keywords: ["reset", "clear"] },
   { id: "open-help", kind: "utility", labelKey: "nav.help", icon: "help", action: "help", keywords: ["guide", "instructions"] },
 ];

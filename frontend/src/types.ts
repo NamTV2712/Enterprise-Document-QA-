@@ -61,6 +61,13 @@ export interface EvidenceSelection {
   sourceKey: string;
 }
 
+/** Transient identity of the answer currently focused or displayed by the user. */
+export interface DisplayedAnswerContext {
+  conversationId: string;
+  messageId: string;
+  variantId: string | null;
+}
+
 export type RetrievalPreset = "bm25" | "dense" | "hybrid" | "hybrid_rerank";
 
 export interface RetrievalCandidate {

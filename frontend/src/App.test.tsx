@@ -1,8 +1,10 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import App from "./App";
+import App, { resolveDisplayedAnswerTarget, resolveEvidenceCommandTarget } from "./App";
 import { LocaleProvider } from "./lib/i18n";
+import type { EvidenceSelection, Message } from "./types";
+import type { ConversationRecord } from "./lib/conversationStore";
 
 const apiMocks = vi.hoisted(() => ({
   checkHealth: vi.fn(),
@@ -101,7 +103,7 @@ describe("App request cancellation", () => {
     expect(resolveSupportedTickers).toBeDefined();
 
     resolveSupportedTickers?.({ tickers: ["AAPL"], sections: ["business"] });
-    expect(await screen.findByText("Pipeline: Ready")).toBeInTheDocument();
+    expect(await screen.findByText("Research ready")).toBeInTheDocument();
   });
 
   test("session history can switch between conversation and overview", async () => {
@@ -121,6 +123,7 @@ describe("App request cancellation", () => {
 
     expect(await screen.findByText(longAnswer)).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
     fireEvent.click(screen.getByRole("button", { name: "Research" }));
     expect(
       await screen.findByText("Ask questions. Verify every answer."),
@@ -130,6 +133,7 @@ describe("App request cancellation", () => {
       screen.getByRole("button", { name: "Return to conversation" }),
     ).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
     fireEvent.click(screen.getByRole("button", { name: "Current conversation" }));
     expect(await screen.findByText(longAnswer)).toBeInTheDocument();
   });
@@ -232,7 +236,7 @@ describe("App request cancellation", () => {
 
   test("theme preference can be selected from the three-mode menu", async () => {
     render(<App />);
-    await screen.findByText("Pipeline: Ready");
+    await screen.findByText("Research ready");
 
     const themeButton = screen.getByRole("button", {
       name: "Theme System. Choose light, dark, or system theme",
@@ -255,17 +259,36 @@ describe("App request cancellation", () => {
     expect(themeButton).toHaveAccessibleName("Theme System. Choose light, dark, or system theme");
   });
 
+  test("narrow header keeps secondary controls in More and closes it before Help", async () => {
+    render(<App />);
+    await screen.findByText("Research ready");
+
+    fireEvent.click(screen.getByRole("button", { name: "More workspace controls" }));
+    const moreDialog = screen.getByRole("dialog", { name: "Workspace controls" });
+    expect(moreDialog).toBeInTheDocument();
+    expect(within(moreDialog).getByRole("button", { name: "Close workspace controls" })).toHaveFocus();
+    expect(within(moreDialog).getByRole("group", { name: "Language" })).toBeInTheDocument();
+
+    fireEvent.click(within(moreDialog).getByRole("button", { name: "Open help" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Workspace controls" })).not.toBeInTheDocument();
+      expect(screen.getByRole("dialog", { name: "How to use this research workspace" })).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "Close help" })).toHaveFocus();
+  });
+
   test("sidebar is a stable navigation surface without a resizer or duplicate Library", async () => {
     render(<App />);
-    await screen.findByText("Pipeline: Ready");
+    await screen.findByText("Research ready");
 
     expect(screen.queryByRole("separator", { name: /Resize/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
     expect(screen.getAllByRole("button", { name: /Library/i })).toHaveLength(1);
   });
 
   test("research scope is controlled next to the composer", async () => {
     render(<App />);
-    await screen.findByText("Pipeline: Ready");
+    await screen.findByText("Research ready");
 
     fireEvent.click(screen.getByRole("button", { name: /Scope · All companies/ }));
     fireEvent.click(screen.getByRole("button", { name: "Company" }));
@@ -275,7 +298,7 @@ describe("App request cancellation", () => {
 
   test("research scope keeps selected filing section visible", async () => {
     render(<App />);
-    await screen.findByText("Pipeline: Ready");
+    await screen.findByText("Research ready");
 
     fireEvent.click(screen.getByRole("button", { name: /Scope · All companies/ }));
     fireEvent.click(screen.getByRole("button", { name: "10-K section" }));
@@ -283,9 +306,44 @@ describe("App request cancellation", () => {
     expect(screen.getAllByText(/^Risk Factors$/).length).toBeGreaterThan(0);
   });
 
+  test("applies a validated template question with its selected company scope without sending", async () => {
+    render(<App />);
+    await screen.findByText("Research ready");
+
+    fireEvent.click(screen.getByRole("button", { name: /^Revenue fact/ }));
+    const dialog = screen.getByRole("dialog", { name: "Revenue fact" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Company" }));
+    fireEvent.click(screen.getByRole("option", { name: "Apple Inc. (AAPL)" }));
+    fireEvent.change(within(dialog).getByLabelText("Fiscal year"), { target: { value: "2024" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Use in question" }));
+
+    expect(apiMocks.streamQuery).not.toHaveBeenCalled();
+    expect(document.getElementById("chat-textarea")).toHaveValue("What total revenue did AAPL report in 2024?");
+    expect(screen.getByRole("button", { name: /Scope · Apple Inc\. \(AAPL\) · Financial Tables · Top 5/ })).toBeInTheDocument();
+  });
+
+  test("rejects a template apply after the current draft changes and preserves that draft", async () => {
+    render(<App />);
+    await screen.findByText("Research ready");
+
+    fireEvent.click(screen.getByRole("button", { name: /^Revenue fact/ }));
+    const dialog = screen.getByRole("dialog", { name: "Revenue fact" });
+    fireEvent.change(document.getElementById("chat-textarea")!, { target: { value: "A newer draft" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Company" }));
+    fireEvent.click(screen.getByRole("option", { name: "Apple Inc. (AAPL)" }));
+    fireEvent.change(within(dialog).getByLabelText("Fiscal year"), { target: { value: "2024" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Use in question" }));
+
+    expect(screen.getByText("Research context changed; reopen this template.")).toBeInTheDocument();
+    expect(document.getElementById("chat-textarea")).toHaveValue("A newer draft");
+    expect(screen.getByRole("button", { name: /Scope · All companies · All sections · Top 5/ })).toBeInTheDocument();
+    expect(apiMocks.streamQuery).not.toHaveBeenCalled();
+  });
+
   test("sidebar keeps retrieval and diagnostics grouped", async () => {
     render(<App />);
-    await screen.findByText("Pipeline: Ready");
+    await screen.findByText("Research ready");
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
     expect(screen.getByText("Retrieval")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retrieval Lab" })).toBeInTheDocument();
   });
@@ -297,7 +355,7 @@ describe("App request cancellation", () => {
     });
 
     render(<LocaleProvider><App /></LocaleProvider>);
-    await screen.findByText("Pipeline: Ready");
+    await screen.findByText("Research ready");
     fireEvent.click(screen.getByRole("button", { name: "VI" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "VI" })).toHaveAttribute("aria-pressed", "true"));
     fireEvent.change(document.getElementById("chat-textarea")!, {
@@ -336,7 +394,7 @@ describe("App request cancellation", () => {
     );
 
     render(<App />);
-    await screen.findByText("Pipeline: Ready");
+    await screen.findByText("Research ready");
     setItemSpy.mockClear();
 
     const input = screen.getByRole("textbox");
@@ -391,7 +449,7 @@ describe("App request cancellation", () => {
     );
 
     render(<App />);
-    await screen.findByText("Pipeline: Ready");
+    await screen.findByText("Research ready");
 
     const input = screen.getByRole("textbox");
     fireEvent.change(input, {
@@ -445,5 +503,60 @@ describe("App request cancellation", () => {
       expect(raw).toContain("Full historical answer");
     });
     expect(apiMocks.deleteSession).not.toHaveBeenCalled();
+  });
+});
+
+describe("displayed answer command identity", () => {
+  const messages: Message[] = [
+    {
+      id: "answer-older",
+      sender: "assistant",
+      text: "Older original answer.",
+      sources: [{ citation: "Older source", chunk_id: "older-chunk", text_preview: "Older excerpt" }],
+    },
+    {
+      id: "answer-newer",
+      sender: "assistant",
+      text: "Newer answer.",
+      sources: [{ citation: "Newer source", chunk_id: "newer-chunk", text_preview: "Newer excerpt" }],
+    },
+  ];
+  const record = {
+    variants: [{
+      id: "older-variant",
+      originMessageId: "answer-older",
+      text: "Older selected variant.",
+      sources: [{ citation: "Variant source", chunk_id: "variant-chunk", text_preview: "Variant excerpt" }],
+      answerLanguage: "en" as const,
+      status: "completed" as const,
+      createdAt: 1,
+      updatedAt: 1,
+  }],
+  } as unknown as ConversationRecord;
+
+  test("resolves copy and source commands to the focused older variant", () => {
+    const context = { conversationId: "conversation-1", messageId: "answer-older", variantId: "older-variant" };
+    const answer = resolveDisplayedAnswerTarget(context, messages, record, "conversation-1");
+    expect(answer?.text).toBe("Older selected variant.");
+    expect(answer?.sources[0].chunk_id).toBe("variant-chunk");
+
+    const target = resolveEvidenceCommandTarget(context, null, messages, record, "conversation-1");
+    expect(target?.source.chunk_id).toBe("variant-chunk");
+    expect(target?.selection).toEqual(expect.objectContaining({ messageId: "answer-older", variantId: "older-variant" }));
+  });
+
+  test("fails closed when a focused variant disappears instead of falling back to newest", () => {
+    const context = { conversationId: "conversation-1", messageId: "answer-older", variantId: "deleted-variant" };
+    expect(resolveDisplayedAnswerTarget(context, messages, record, "conversation-1")).toBeNull();
+    expect(resolveEvidenceCommandTarget(context, null, messages, record, "conversation-1")).toBeNull();
+
+    const staleSelection: EvidenceSelection = {
+      conversationId: "conversation-1",
+      messageId: "answer-older",
+      variantId: "deleted-variant",
+      citationIndex: 0,
+      sourceKey: "chunk:variant-chunk",
+    };
+    expect(resolveEvidenceCommandTarget(context, staleSelection, messages, record, "conversation-1")).toBeNull();
   });
 });

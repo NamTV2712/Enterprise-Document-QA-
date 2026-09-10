@@ -1,22 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  BarChart3,
-  BookOpen,
-  FileText,
-  FlaskConical,
-  HelpCircle,
-  Network,
   Search,
-  Settings2,
-  Sparkles,
-  type LucideIcon,
 } from "lucide-react";
 
-import { COMMAND_REGISTRY, type CommandIcon } from "../lib/commandRegistry";
+import { COMMAND_REGISTRY, type CommandIcon, type ContextualCommandDefinition } from "../lib/commandRegistry";
 import { getResearchTemplateCopy, RESEARCH_TEMPLATES, type ResearchTemplate } from "../lib/researchTemplates";
 import { normalizeLocaleSearch, useLocale } from "../lib/i18n";
 import type { WorkspaceView } from "../lib/workspace";
 import { ModalDialog } from "./ui/ModalDialog";
+import { getSemanticIcon } from "../lib/semanticIcons";
 
 export type PaletteView = WorkspaceView;
 
@@ -27,6 +19,7 @@ interface CommandPaletteProps {
   onTemplate: (template: ResearchTemplate) => void;
   onHelp: () => void;
   onNewConversation: () => void;
+  contextualCommands?: readonly ContextualCommandDefinition[];
 }
 
 interface PaletteItem {
@@ -34,21 +27,10 @@ interface PaletteItem {
   kind: "navigation" | "utility" | "template";
   label: string;
   description?: string;
+  accentFamily?: string;
   icon: CommandIcon;
   run: () => void;
 }
-
-const ICONS: Record<CommandIcon, LucideIcon> = {
-  analytics: BarChart3,
-  book: BookOpen,
-  file: FileText,
-  flask: FlaskConical,
-  help: HelpCircle,
-  network: Network,
-  search: Search,
-  settings: Settings2,
-  sparkles: Sparkles,
-};
 
 function optionId(id: string): string {
   return `command-palette-option-${id}`;
@@ -61,6 +43,7 @@ export function CommandPalette({
   onTemplate,
   onHelp,
   onNewConversation,
+  contextualCommands = [],
 }: CommandPaletteProps) {
   const { locale, t } = useLocale();
   const [query, setQuery] = useState("");
@@ -72,12 +55,23 @@ export function CommandPalette({
       id: command.id,
       kind: command.kind,
       label: t(command.labelKey),
+      description: command.descriptionKey ? t(command.descriptionKey) : undefined,
+      accentFamily: command.accentFamily,
       icon: command.icon,
       run: () => {
         if (command.action === "navigate" && command.view) onNavigate(command.view);
         if (command.action === "help") onHelp();
         if (command.action === "new-conversation") onNewConversation();
       },
+    }));
+    const contextualItems = contextualCommands.map((command) => ({
+      id: command.id,
+      kind: "utility" as const,
+      label: t(command.labelKey),
+      description: command.descriptionKey ? t(command.descriptionKey) : undefined,
+      accentFamily: command.accentFamily,
+      icon: command.icon,
+      run: command.run,
     }));
     const templateItems = RESEARCH_TEMPLATES.map((template) => {
       const copy = getResearchTemplateCopy(template, locale);
@@ -86,12 +80,12 @@ export function CommandPalette({
         kind: "template" as const,
         label: copy.label,
         description: copy.description,
-        icon: "sparkles" as const,
+        icon: template.iconKey,
         run: () => onTemplate(template),
       };
     });
-    return [...commandItems, ...templateItems];
-  }, [locale, onHelp, onNavigate, onNewConversation, onTemplate, t]);
+    return [...commandItems, ...contextualItems, ...templateItems];
+  }, [contextualCommands, locale, onHelp, onNavigate, onNewConversation, onTemplate, t]);
 
   const filtered = useMemo(() => {
     const folded = normalizeLocaleSearch(query.trim());
@@ -101,7 +95,8 @@ export function CommandPalette({
         ? RESEARCH_TEMPLATES.find((candidate) => `template-${candidate.id}` === item.id)
         : undefined;
       const copy = template ? getResearchTemplateCopy(template, locale) : undefined;
-      const keywords = template?.copy[locale].keywords ?? [];
+      const command = item.kind !== "template" ? COMMAND_REGISTRY.find((candidate) => candidate.id === item.id) : undefined;
+      const keywords = template?.copy[locale].keywords ?? command?.keywords ?? [];
       return normalizeLocaleSearch(
         [item.label, item.description, ...(copy ? [copy.question] : []), ...keywords]
           .filter(Boolean)
@@ -158,7 +153,7 @@ export function CommandPalette({
   };
 
   const renderItem = (item: PaletteItem, index: number) => {
-    const Icon = ICONS[item.icon];
+    const Icon = getSemanticIcon(item.icon);
     const active = index === activeIndex;
     return (
       <button
@@ -168,8 +163,10 @@ export function CommandPalette({
         role="option"
         aria-selected={active}
         className={`command-palette__option ${active ? "is-active" : ""}`}
+        data-feature={item.accentFamily}
+        onPointerDown={(event) => event.preventDefault()}
         onMouseEnter={() => setActiveIndex(index)}
-        onFocus={() => setActiveIndex(index)}
+        tabIndex={-1}
         onClick={() => {
           item.run();
           onClose();
@@ -207,6 +204,9 @@ export function CommandPalette({
           onKeyDown={onQueryKeyDown}
           placeholder={t("palette.search")}
           aria-label={t("palette.searchAria")}
+          role="combobox"
+          aria-expanded="true"
+          aria-autocomplete="list"
           aria-controls="command-palette-options"
           aria-activedescendant={activeIndex >= 0 ? optionId(filtered[activeIndex]?.id ?? "") : undefined}
           className="min-w-0 flex-1 bg-transparent text-sm text-[var(--text-primary)] outline-none"

@@ -16,6 +16,7 @@ import {
 import { AlertTriangle, BookMarked, ChevronDown, RefreshCw, X } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { ChatInput } from "./components/ChatInput";
+import { TemplateQuestionDialog } from "./components/TemplateQuestionDialog";
 import { SampleQuestion, SampleQuestionChips } from "./components/SampleQuestionChips";
 import { OverviewPanel } from "./components/OverviewPanel";
 import { WorkspaceHeader } from "./components/WorkspaceHeader";
@@ -29,6 +30,7 @@ import {
   RequestSnapshot,
   ThemePreference,
   AnswerVariant,
+  DisplayedAnswerContext,
   EvidenceSelection,
   Message,
   MessageFeedback,
@@ -53,23 +55,28 @@ import type { ConversationBackupBundle } from "./lib/conversationExport";
 import { useConversationLibrary, SessionContextStatus } from "./hooks/useConversationLibrary";
 import { useResearchDraft } from "./hooks/useResearchDraft";
 import type { ResearchScope } from "./hooks/useResearchDraft";
+import { useNavigationLayout } from "./hooks/useNavigationLayout";
 import { useEvidenceSelection } from "./hooks/useEvidenceSelection";
 import { useResearchSession } from "./hooks/useResearchSession";
-import { useLocale } from "./lib/i18n";
+import { useLocale, type Locale } from "./lib/i18n";
 import { recordAnalyticsEvent } from "./lib/analyticsStore";
-import { getResearchTemplateCopy, RESEARCH_TEMPLATES, ResearchTemplate } from "./lib/researchTemplates";
-import { mergeEvidenceCollections } from "./lib/evidenceCollections";
+import { getResearchTemplateCopy, isSendableResearchQuestion, RESEARCH_TEMPLATES, type ResearchTemplate, type ResearchTemplateApplyPayload } from "./lib/researchTemplates";
+import { mergeEvidenceCollections, saveEvidence } from "./lib/evidenceCollections";
+import type { ContextualCommandDefinition } from "./lib/commandRegistry";
 import { isWorkspaceView } from "./lib/workspace";
-import type { WorkspaceView } from "./lib/workspace";
+import { getWorkspaceNavItem, type WorkspaceView } from "./lib/workspace";
+import { getSemanticIcon } from "./lib/semanticIcons";
 import { describeRequestError } from "./lib/requestError";
-import { createEvidenceSelection, sourceMatchesSelection } from "./lib/sourceIdentity";
+import { createEvidenceSelection, getSourceKey, sourceMatchesSelection } from "./lib/sourceIdentity";
 import { appendStageEvent, isStageEvent } from "./lib/stageEvents";
 
 const STREAM_FLUSH_INTERVAL_MS = 80;
 const HEALTH_REFRESH_INTERVAL_MS = 15_000;
 const CONTEXT_RAIL_MIN_WIDTH = 360;
 const CONTEXT_RAIL_MAX_WIDTH = 560;
+const CONTEXT_INLINE_MIN_WORKSPACE_WIDTH = 888;
 const CONTEXT_RAIL_STORAGE_KEY = "sec_qa_context_rail_width_v1";
+const NAVIGATION_DESKTOP_MIN_WIDTH = 1024;
 const COMPARATIVE_KEYWORDS = [
   "compare",
   "vs",
@@ -147,6 +154,12 @@ function readContextRailWidth(): number {
   return 384;
 }
 
+function readInitialWorkspaceWidth(isDesktopNavigation: boolean, navigationLayout: string): number {
+  if (typeof window === "undefined") return 0;
+  const navigationWidth = !isDesktopNavigation ? 0 : navigationLayout === "compact" ? 56 : 216;
+  return Math.max(0, window.innerWidth - navigationWidth);
+}
+
 function scopeFromRequestSnapshot(snapshot: RequestSnapshot): ResearchScope {
   return {
     ticker: snapshot.ticker,
@@ -154,6 +167,136 @@ function scopeFromRequestSnapshot(snapshot: RequestSnapshot): ResearchScope {
     topK: snapshot.topK,
     enableComparative: snapshot.enableComparative,
   };
+}
+
+interface TemplateOpeningSnapshot {
+  conversationId: string;
+  draft: string;
+  locale: Locale;
+  scope: ResearchScope;
+  templateId: ResearchTemplate["id"];
+}
+
+function scopesMatch(left: ResearchScope, right: ResearchScope): boolean {
+  return left.ticker === right.ticker &&
+    left.section === right.section &&
+    left.topK === right.topK &&
+    left.enableComparative === right.enableComparative;
+}
+
+interface DisplayedAnswerTarget {
+  message: Message;
+  variant: AnswerVariant | null;
+  text: string;
+  sources: Source[];
+}
+
+export interface CommandEvidenceTarget {
+  selection: EvidenceSelection;
+  source: Source;
+}
+
+function isUsableGroundedAnswer(message: Message): boolean {
+  return message.sender === "assistant" &&
+    !message.isStreaming &&
+    !message.error &&
+    message.status !== "error" &&
+    Boolean(message.text.trim());
+}
+
+/** Resolve an answer by durable IDs, never by position or recency when context is present. */
+export function resolveDisplayedAnswerTarget(
+  context: DisplayedAnswerContext | null,
+  messages: Message[],
+  record: ConversationRecord | null,
+  conversationId: string,
+): DisplayedAnswerTarget | null {
+  if (context && context.conversationId !== conversationId) return null;
+  const message = context
+    ? messages.find((candidate) => candidate.id === context.messageId)
+    : [...messages].reverse().find(isUsableGroundedAnswer);
+  if (!message || !isUsableGroundedAnswer(message)) return null;
+
+  if (context?.variantId !== null && context?.variantId !== undefined) {
+    const variant = record?.variants?.find((candidate) =>
+      candidate.id === context.variantId &&
+      candidate.originMessageId === message.id &&
+      candidate.status !== "error" &&
+      Boolean(candidate.text.trim()),
+    );
+    if (!variant) return null;
+    return { message, variant, text: variant.text, sources: variant.sources };
+  }
+
+  return { message, variant: null, text: message.text, sources: message.sources ?? [] };
+}
+
+/** Resolve the source command target against current records at invocation time. */
+export function resolveEvidenceCommandTarget(
+  context: DisplayedAnswerContext | null,
+  evidenceSelection: EvidenceSelection | null,
+  messages: Message[],
+  record: ConversationRecord | null,
+  conversationId: string,
+): CommandEvidenceTarget | null {
+  const displayed = resolveDisplayedAnswerTarget(context, messages, record, conversationId);
+  const selectionMatchesDisplayed = Boolean(
+    context &&
+    evidenceSelection &&
+    evidenceSelection.conversationId === context.conversationId &&
+    evidenceSelection.messageId === context.messageId &&
+    (evidenceSelection.variantId ?? null) === context.variantId,
+  );
+
+  if (displayed && context && !selectionMatchesDisplayed) {
+    const source = displayed.sources[0];
+    return source
+      ? {
+          source,
+          selection: createEvidenceSelection(
+            conversationId,
+            displayed.message.id,
+            0,
+            source,
+            displayed.variant?.id,
+          ),
+        }
+      : null;
+  }
+
+  if (evidenceSelection) {
+    if (evidenceSelection.conversationId !== conversationId) return null;
+    const message = messages.find((candidate) => candidate.id === evidenceSelection.messageId);
+    if (!message || message.sender !== "assistant" || message.isStreaming || message.error || message.status === "error") return null;
+    const variant = evidenceSelection.variantId
+      ? record?.variants?.find((candidate) =>
+          candidate.id === evidenceSelection.variantId &&
+          candidate.originMessageId === message.id &&
+          candidate.status !== "error",
+        )
+      : null;
+    if (evidenceSelection.variantId && !variant) return null;
+    const sources = variant?.sources ?? message.sources ?? [];
+    const source = sources[evidenceSelection.citationIndex];
+    return source && sourceMatchesSelection(source, evidenceSelection, evidenceSelection.citationIndex)
+      ? { source, selection: evidenceSelection }
+      : null;
+  }
+
+  if (!displayed) return null;
+  const source = displayed.sources[0];
+  return source
+    ? {
+        source,
+        selection: createEvidenceSelection(
+          conversationId,
+          displayed.message.id,
+          0,
+          source,
+          displayed.variant?.id,
+        ),
+      }
+    : null;
 }
 
 function scopeForConversationDraft(record: ConversationRecord | null): Partial<ResearchScope> | null {
@@ -184,8 +327,26 @@ function initialWorkspaceView(): WorkspaceView {
     : "overview";
 }
 
+function evidenceAnchorMessageId(messageId: string): string {
+  return messageId.replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
+function writeEvidenceAnchor(messageId: string, citationIndex: number): void {
+  window.history.replaceState(
+    window.history.state,
+    "",
+    `${window.location.pathname}${window.location.search}#evidence=${evidenceAnchorMessageId(messageId)}-${citationIndex}`,
+  );
+}
+
+function clearEvidenceAnchor(): void {
+  window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}`);
+}
+
 export default function App() {
-  const { locale } = useLocale();
+  const { locale, t } = useLocale();
+  const libraryNavItem = getWorkspaceNavItem("library");
+  const LibraryIcon = getSemanticIcon(libraryNavItem.icon);
   const [tickers, setTickers] = useState<string[]>([]);
   const [sections, setSections] = useState<string[]>([]);
   const [isBackendConnected, setIsBackendConnected] = useState<boolean | null>(
@@ -198,12 +359,44 @@ export default function App() {
   const [showResetDialog, setShowResetDialog] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
+  const [templateToCustomize, setTemplateToCustomize] = useState<ResearchTemplate | null>(null);
+  const templateOpeningSnapshotRef = useRef<TemplateOpeningSnapshot | null>(null);
+  const [contextualCommandNotice, setContextualCommandNotice] = useState<string | null>(null);
+  const [displayedAnswerContext, setDisplayedAnswerContext] = useState<DisplayedAnswerContext | null>(null);
   const [activeView, setActiveView] = useState<WorkspaceView>(initialWorkspaceView);
   const [pendingFocusMessageId, setPendingFocusMessageId] = useState<string | null>(null);
   const [shouldFocusLibrarySearch, setShouldFocusLibrarySearch] = useState(false);
   const [activeSidebarPanel, setActiveSidebarPanel] = useState<"research" | "library">("research");
   const [stageEventsByMessage, setStageEventsByMessage] = useState<Record<string, StageEvent[]>>({});
   const [contextRailWidth, setContextRailWidth] = useState(readContextRailWidth);
+  const [workspaceWidth, setWorkspaceWidth] = useState(0);
+  const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
+  const [isScopeEditorOpen, setIsScopeEditorOpen] = useState(false);
+  const [isDesktopNavigation, setIsDesktopNavigation] = useState(() =>
+    typeof window === "undefined" || typeof window.matchMedia !== "function"
+      ? true
+      : window.matchMedia(`(min-width: ${NAVIGATION_DESKTOP_MIN_WIDTH}px)`).matches,
+  );
+  const { layout: navigationLayout, toggleLayout: toggleNavigationLayout } = useNavigationLayout();
+
+  useEffect(() => {
+    setWorkspaceWidth(readInitialWorkspaceWidth(isDesktopNavigation, navigationLayout));
+  }, [isDesktopNavigation, navigationLayout]);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const mediaQuery = window.matchMedia(`(min-width: ${NAVIGATION_DESKTOP_MIN_WIDTH}px)`);
+    const syncNavigationMode = () => setIsDesktopNavigation(mediaQuery.matches);
+    syncNavigationMode();
+    mediaQuery.addEventListener?.("change", syncNavigationMode);
+    return () => mediaQuery.removeEventListener?.("change", syncNavigationMode);
+  }, []);
+
+  useEffect(() => {
+    // A drawer opened below the breakpoint must not remain logically open when
+    // the same tab crosses into the inline desktop shell.
+    if (isDesktopNavigation && isSidebarOpen) setIsSidebarOpen(false);
+  }, [isDesktopNavigation, isSidebarOpen]);
 
   useEffect(() => {
     try {
@@ -247,11 +440,26 @@ export default function App() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const workspaceMainRef = useRef<HTMLElement>(null);
   const resetCancelRef = useRef<HTMLButtonElement>(null);
   const healthRequestRef = useRef<Promise<HealthResponse> | null>(null);
   const lastHealthRefreshRef = useRef(0);
   const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
   const isNearConversationBottomRef = useRef(true);
+
+  useEffect(() => {
+    const element = workspaceMainRef.current;
+    if (!element) return;
+    const syncWorkspaceWidth = () => setWorkspaceWidth(element.clientWidth);
+    syncWorkspaceWidth();
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(syncWorkspaceWidth);
+      observer.observe(element);
+      return () => observer.disconnect();
+    }
+    window.addEventListener("resize", syncWorkspaceWidth);
+    return () => window.removeEventListener("resize", syncWorkspaceWidth);
+  }, [isDesktopNavigation, navigationLayout]);
 
   // Indirection so the library hook can trigger the cancel path (which
   // needs updateMessages) before that function is declared below.
@@ -272,6 +480,7 @@ export default function App() {
     saveIndicator,
     sessionContext,
     isReadOnly,
+    isPreflightRunning,
     setInputText,
     updateMessages,
     beginSend,
@@ -291,6 +500,23 @@ export default function App() {
     updateConversationMetadata,
   } = library;
   const activeConversationId = library.activeConversationId;
+  const inputTextRef = useRef(inputText);
+  inputTextRef.current = inputText;
+  const displayedAnswerContextRef = useRef<DisplayedAnswerContext | null>(null);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const activeRecordRef = useRef(activeRecord);
+  activeRecordRef.current = activeRecord;
+  const activeConversationIdRef = useRef(activeConversationId);
+  activeConversationIdRef.current = activeConversationId;
+  const handleDisplayedAnswerContext = useCallback(
+    ({ messageId, variantId }: { messageId: string; variantId: string | null }) => {
+      const nextContext = { conversationId: activeConversationId, messageId, variantId };
+      displayedAnswerContextRef.current = nextContext;
+      setDisplayedAnswerContext(nextContext);
+    },
+    [activeConversationId],
+  );
   const previousScopeRef = useRef<ResearchScope | null>(null);
   const draftScopeFallback = useMemo(
     () => scopeForConversationDraft(activeRecord) ?? previousScopeRef.current ?? {},
@@ -313,12 +539,100 @@ export default function App() {
     [conversations],
   );
   const [evidenceSelection, setEvidenceSelection] = useEvidenceSelection(activeConversationId);
+  const evidenceSelectionRef = useRef<EvidenceSelection | null>(evidenceSelection);
+  evidenceSelectionRef.current = evidenceSelection;
+  const evidenceReturnFocusRef = useRef<{ messageId: string; citationIndex: number } | null>(null);
+  const evidenceFocusRestorePendingRef = useRef(false);
+  const evidenceFocusRestoreTimeoutRef = useRef<number | null>(null);
+  const clearEvidenceFocusRestoreTimer = useCallback(() => {
+    if (evidenceFocusRestoreTimeoutRef.current !== null) {
+      window.clearTimeout(evidenceFocusRestoreTimeoutRef.current);
+      evidenceFocusRestoreTimeoutRef.current = null;
+    }
+  }, []);
+  const cancelEvidenceFocusRestore = useCallback(() => {
+    clearEvidenceFocusRestoreTimer();
+    evidenceFocusRestorePendingRef.current = false;
+  }, [clearEvidenceFocusRestoreTimer]);
+  useEffect(() => {
+    setIsEvidenceOpen(false);
+  }, [activeConversationId]);
+  useEffect(() => {
+    displayedAnswerContextRef.current = null;
+    setDisplayedAnswerContext(null);
+  }, [activeConversationId]);
+  useEffect(() => {
+    if (!isLibraryReady || !window.location.hash) return;
+    const match = window.location.hash.match(/^#evidence=([a-zA-Z0-9_-]+)-(\d+)$/);
+    if (!match) return;
+    const message = messages.find(
+      (candidate) => evidenceAnchorMessageId(candidate.id) === match[1],
+    );
+    const citationIndex = Number(match[2]);
+    const source = message?.sources?.[citationIndex];
+    if (!message || !source || !Number.isInteger(citationIndex)) return;
+    if (
+      evidenceSelection?.messageId === message.id &&
+      evidenceSelection.citationIndex === citationIndex &&
+      evidenceSelection.sourceKey === getSourceKey(source)
+    ) {
+      setIsEvidenceOpen(true);
+      return;
+    }
+    setActiveView("conversation");
+    setEvidenceSelection(
+      createEvidenceSelection(activeConversationId, message.id, citationIndex, source),
+    );
+    setIsEvidenceOpen(true);
+  }, [activeConversationId, evidenceSelection, isLibraryReady, messages, setEvidenceSelection]);
   const handleInspectSource = useCallback(
     (selection: Omit<EvidenceSelection, "conversationId">) => {
+      cancelEvidenceFocusRestore();
+      evidenceReturnFocusRef.current = {
+        messageId: selection.messageId,
+        citationIndex: selection.citationIndex,
+      };
+      writeEvidenceAnchor(selection.messageId, selection.citationIndex);
       setEvidenceSelection({ conversationId: activeConversationId, ...selection });
+      setIsEvidenceOpen(true);
     },
-    [activeConversationId, setEvidenceSelection],
+    [activeConversationId, cancelEvidenceFocusRestore, setEvidenceSelection],
   );
+  const handleCloseEvidence = useCallback(() => {
+    cancelEvidenceFocusRestore();
+    evidenceFocusRestorePendingRef.current = true;
+    clearEvidenceAnchor();
+    setIsEvidenceOpen(false);
+  }, [cancelEvidenceFocusRestore]);
+  useEffect(() => {
+    if (isEvidenceOpen || !evidenceFocusRestorePendingRef.current) return;
+    evidenceFocusRestorePendingRef.current = false;
+    const target = evidenceReturnFocusRef.current;
+    let attempts = 0;
+    let timeout: number | null = null;
+    const restoreFocus = () => {
+      const opener = target
+        ? document.getElementById(`message-${target.messageId}`)
+          ?.querySelector<HTMLButtonElement>(`button[aria-label="Open source ${target.citationIndex + 1}"]`)
+        : null;
+      if (opener && !opener.hasAttribute("disabled")) {
+        opener.focus({ preventScroll: true });
+      }
+      if (attempts < 12) {
+        attempts += 1;
+        timeout = window.setTimeout(() => {
+          evidenceFocusRestoreTimeoutRef.current = null;
+          restoreFocus();
+        }, 16);
+        evidenceFocusRestoreTimeoutRef.current = timeout;
+      }
+    };
+    const frame = window.requestAnimationFrame(restoreFocus);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      clearEvidenceFocusRestoreTimer();
+    };
+  }, [clearEvidenceFocusRestoreTimer, isEvidenceOpen]);
   const researchSession = useResearchSession({ updateMessages });
   const {
     isLoading,
@@ -456,7 +770,7 @@ export default function App() {
 
   useEffect(() => {
     if (activeView === "conversation") return;
-    const container = scrollContainerRef.current;
+    const container = workspaceMainRef.current;
     if (!container) return;
     if (typeof container.scrollTo === "function") {
       container.scrollTo({ top: 0, behavior: "auto" });
@@ -510,6 +824,7 @@ export default function App() {
   const handleSendMessage = useCallback(async (text: string, snapshot?: RequestSnapshot) => {
     if (!isBackendConnected || !isPipelineReady) return;
     if (isReadOnly) return;
+    if (!isSendableResearchQuestion(text)) return;
 
     const requestSnapshot: RequestSnapshot = snapshot
       ? { ...snapshot, answerLanguage: snapshot.answerLanguage ?? locale }
@@ -548,6 +863,11 @@ export default function App() {
       finishSend(identity);
       return;
     }
+
+    // Clear only the draft that was actually accepted. If the user edited a
+    // next question while session preflight was pending, leave that newer
+    // draft untouched; a failed preflight never erases input.
+    if (inputTextRef.current.trim() === text) setInputText("");
 
     setActiveView("conversation");
     const controller = beginRequest();
@@ -954,6 +1274,7 @@ export default function App() {
     isCurrentResearchRequest,
     isPipelineReady,
     isReadOnly,
+    setInputText,
     locale,
     markRequestIdle,
     registerBackendExchange,
@@ -1142,10 +1463,60 @@ export default function App() {
 
   const handleStopGenerating = stopGenerating;
 
+  const closeTemplateQuestion = useCallback(() => {
+    templateOpeningSnapshotRef.current = null;
+    setTemplateToCustomize(null);
+  }, []);
+
+  const openTemplateQuestion = useCallback((template: ResearchTemplate) => {
+    templateOpeningSnapshotRef.current = {
+      conversationId: activeConversationId,
+      draft: inputTextRef.current,
+      locale,
+      scope: { ticker: selectedTicker, section: selectedSection, topK, enableComparative },
+      templateId: template.id,
+    };
+    setTemplateToCustomize(template);
+  }, [activeConversationId, enableComparative, locale, selectedSection, selectedTicker, topK]);
+
+  const handleApplyTemplate = useCallback((payload: ResearchTemplateApplyPayload) => {
+    const opening = templateOpeningSnapshotRef.current;
+    const currentScope = { ticker: selectedTicker, section: selectedSection, topK, enableComparative };
+    const contextChanged = !opening ||
+      opening.templateId !== payload.templateId ||
+      opening.conversationId !== activeConversationId ||
+      opening.draft !== inputTextRef.current ||
+      opening.locale !== locale ||
+      !scopesMatch(opening.scope, currentScope);
+
+    if (contextChanged) {
+      setContextualCommandNotice(locale === "vi"
+        ? "Ngữ cảnh nghiên cứu đã thay đổi; hãy mở lại mẫu này."
+        : "Research context changed; reopen this template.");
+      closeTemplateQuestion();
+      return;
+    }
+    if (!isSendableResearchQuestion(payload.question)) {
+      setContextualCommandNotice(locale === "vi"
+        ? "Câu hỏi mẫu không hợp lệ; các thay đổi hiện tại vẫn được giữ nguyên."
+        : "This template question is invalid; your current draft and scope were preserved.");
+      return;
+    }
+
+    // The dialog has already validated and normalized the payload. Apply the
+    // question and its derived scope in the same event, without sending it.
+    setInputText(payload.question);
+    patchScope(payload.scope);
+    closeTemplateQuestion();
+    setActiveView("conversation");
+    window.requestAnimationFrame(() => {
+      document.getElementById("chat-textarea")?.focus();
+    });
+  }, [activeConversationId, closeTemplateQuestion, enableComparative, locale, patchScope, selectedSection, selectedTicker, setInputText, topK]);
+
   const handleSelectSample = useCallback((sample: ResearchTemplate | SampleQuestion) => {
     if ("id" in sample) {
-      patchScope(sample.scope);
-      setInputText(getResearchTemplateCopy(sample, locale).question);
+      openTemplateQuestion(sample);
     } else {
       patchScope({
         ...(sample.ticker !== undefined ? { ticker: sample.ticker || null } : {}),
@@ -1157,19 +1528,22 @@ export default function App() {
     window.requestAnimationFrame(() => {
       document.getElementById("chat-textarea")?.focus();
     });
-  }, [locale, patchScope, setInputText]);
+  }, [locale, openTemplateQuestion, patchScope, setInputText]);
 
   const handleCloseSidebar = useCallback(() => {
+    cancelEvidenceFocusRestore();
     setIsSidebarOpen(false);
-  }, []);
+  }, [cancelEvidenceFocusRestore]);
 
   const handleToggleSidebar = useCallback(() => {
+    cancelEvidenceFocusRestore();
     setIsSidebarOpen((open) => !open);
-  }, []);
+  }, [cancelEvidenceFocusRestore]);
 
   const handleSelectWorkspaceView = useCallback((view: WorkspaceView) => {
     setActiveView(view);
     setIsSidebarOpen(false);
+    if (view !== "conversation") setIsEvidenceOpen(false);
     if (view === "library") setActiveSidebarPanel("library");
     if (view === "overview" || view === "conversation" || view === "search" || view === "documents" || view === "retrieval" || view === "architecture") {
       setActiveSidebarPanel("research");
@@ -1202,13 +1576,7 @@ export default function App() {
     }
   }, [handleSelectWorkspaceView]);
 
-  const handlePaletteTemplate = useCallback((template: ResearchTemplate) => {
-    const copy = getResearchTemplateCopy(template, locale);
-    setInputText(copy.question);
-    patchScope(template.scope);
-    setActiveView("conversation");
-    window.requestAnimationFrame(() => document.getElementById("chat-textarea")?.focus());
-  }, [locale, patchScope, setInputText]);
+  const handlePaletteTemplate = openTemplateQuestion;
 
   const handleRetryConnection = useCallback(async () => {
     try {
@@ -1262,9 +1630,169 @@ export default function App() {
         }
       : null;
   }, [activeConversationId, activeRecord?.variants, evidenceSelection, messages]);
+  const hasGroundedAnswer = useMemo(
+    () => Boolean(resolveDisplayedAnswerTarget(null, messages, activeRecord, activeConversationId)),
+    [activeConversationId, activeRecord, messages],
+  );
+  const commandEvidenceTarget = useMemo(
+    () => resolveEvidenceCommandTarget(
+      displayedAnswerContext,
+      evidenceSelection,
+      messages,
+      activeRecord,
+      activeConversationId,
+    ),
+    [activeConversationId, activeRecord, displayedAnswerContext, evidenceSelection, messages],
+  );
+  const contextualCommands = useMemo<ContextualCommandDefinition[]>(() => {
+    const commands: ContextualCommandDefinition[] = [];
+    const unavailableAnswerNotice = locale === "vi"
+      ? "Câu trả lời đang chọn không còn khả dụng."
+      : "The selected answer is no longer available.";
+    const unavailableSourceNotice = locale === "vi"
+      ? "Source đang chọn không còn khả dụng."
+      : "The selected source is no longer available.";
+    if (hasGroundedAnswer) {
+      commands.push({
+        id: "copy-current-answer",
+        labelKey: "palette.copyAnswer",
+        descriptionKey: "palette.copyAnswerDescription",
+        icon: "copy",
+        accentFamily: "evidence",
+        run: () => {
+          const target = resolveDisplayedAnswerTarget(
+            displayedAnswerContextRef.current,
+            messagesRef.current,
+            activeRecordRef.current,
+            activeConversationIdRef.current,
+          );
+          if (!target) {
+            setContextualCommandNotice(unavailableAnswerNotice);
+            return;
+          }
+          if (!navigator.clipboard) {
+            setContextualCommandNotice(locale === "vi" ? "Không thể sao chép câu trả lời." : "Could not copy the current answer.");
+            return;
+          }
+          void navigator.clipboard.writeText(target.text).then(
+            () => setContextualCommandNotice(locale === "vi" ? "Đã sao chép câu trả lời hiện tại." : "Current answer copied."),
+            () => setContextualCommandNotice(locale === "vi" ? "Không thể sao chép câu trả lời." : "Could not copy the current answer."),
+          );
+        },
+      });
+    }
+    if (commandEvidenceTarget) {
+      commands.push({
+        id: "inspect-current-sources",
+        labelKey: "palette.inspectSources",
+        descriptionKey: "palette.inspectSourcesDescription",
+        icon: "sources",
+        accentFamily: "evidence",
+        run: () => {
+          const target = resolveEvidenceCommandTarget(
+            displayedAnswerContextRef.current,
+            evidenceSelectionRef.current,
+            messagesRef.current,
+            activeRecordRef.current,
+            activeConversationIdRef.current,
+          );
+          if (!target) {
+            setContextualCommandNotice(unavailableSourceNotice);
+            return;
+          }
+          setActiveView("conversation");
+          setEvidenceSelection(target.selection);
+          setIsEvidenceOpen(true);
+        },
+      });
+      commands.push({
+        id: "save-selected-source",
+        labelKey: "palette.saveSource",
+        descriptionKey: "palette.saveSourceDescription",
+        icon: "saveSource",
+        accentFamily: "evidence",
+        run: () => {
+          const target = resolveEvidenceCommandTarget(
+            displayedAnswerContextRef.current,
+            evidenceSelectionRef.current,
+            messagesRef.current,
+            activeRecordRef.current,
+            activeConversationIdRef.current,
+          );
+          if (!target) {
+            setContextualCommandNotice(unavailableSourceNotice);
+            return;
+          }
+          try {
+            saveEvidence(target.source, {
+              conversationId: target.selection.conversationId,
+              messageId: target.selection.messageId,
+            });
+            setContextualCommandNotice(locale === "vi" ? "Đã lưu source đang chọn." : "Selected source saved.");
+          } catch (error) {
+            setContextualCommandNotice(error instanceof Error ? error.message : (locale === "vi" ? "Không thể lưu source." : "Could not save the selected source."));
+          }
+        },
+      });
+    }
+    commands.push({
+      id: "open-scope-editor",
+      labelKey: "palette.openScope",
+      descriptionKey: "palette.openScopeDescription",
+      icon: "metadata",
+      accentFamily: "research",
+      run: () => {
+        setActiveView("conversation");
+        setIsScopeEditorOpen(true);
+      },
+    });
+    return commands;
+  }, [commandEvidenceTarget, hasGroundedAnswer, locale, setEvidenceSelection]);
   const showContextBanner =
     activeView === "conversation" && hasExchanges &&
     (sessionContext === "checking" || isReadOnly);
+  const evidenceInline = workspaceWidth >= CONTEXT_INLINE_MIN_WORKSPACE_WIDTH;
+  const effectiveContextRailWidth = Math.min(
+    CONTEXT_RAIL_MAX_WIDTH,
+    Math.max(CONTEXT_RAIL_MIN_WIDTH, workspaceWidth > 0 ? workspaceWidth - 496 : contextRailWidth),
+    contextRailWidth,
+  );
+  const showComposer = !["retrieval", "documents", "library", "search", "architecture", "evaluation", "analytics", "system"].includes(activeView);
+  const composer = showComposer ? (
+    <div className="composer-shell flex-shrink-0 z-10">
+      <ChatInput
+        inputText={inputText}
+        setInputText={setInputText}
+        onSendMessage={handleSendMessage}
+        onStopGenerating={handleStopGenerating}
+        isLoading={isLoading}
+        isStreaming={isStreaming}
+        isPreflightRunning={isPreflightRunning}
+        isBackendConnected={isBackendConnected}
+        isPipelineReady={isPipelineReady}
+        isReadOnly={isReadOnly && hasExchanges}
+        readOnlyMessage={
+          sessionContext === "missing"
+            ? "The backend session for this saved conversation has expired. Start a new conversation to ask follow-up questions."
+            : "The backend could not be reached. Check the connection again before asking follow-up questions."
+        }
+        showBanner={activeView === "conversation" && hasExchanges}
+        scopeLabel={scopeLabel || undefined}
+        tickers={tickers}
+        sections={sections}
+        selectedTicker={selectedTicker}
+        onSelectTicker={setSelectedTicker}
+        selectedSection={selectedSection}
+        onSelectSection={setSelectedSection}
+        topK={topK}
+        onChangeTopK={setTopK}
+        enableComparative={enableComparative}
+        onToggleComparative={setEnableComparative}
+        scopeOpen={isScopeEditorOpen}
+        onScopeOpenChange={setIsScopeEditorOpen}
+      />
+    </div>
+  ) : null;
 
   return (
     <div className="app-shell flex w-screen max-w-full h-dvh font-sans text-[var(--text-primary)] overflow-hidden bg-grid-pattern">
@@ -1285,6 +1813,8 @@ export default function App() {
         healthData={healthData}
         isOpen={isSidebarOpen}
         onClose={handleCloseSidebar}
+        isDesktopNavigation={isDesktopNavigation}
+        navigationLayout={navigationLayout}
         isClearingSession={isClearingSession}
         activePanel={activeSidebarPanel}
         onChangePanel={setActiveSidebarPanel}
@@ -1317,12 +1847,14 @@ export default function App() {
         <WorkspaceHeader
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={handleToggleSidebar}
+          navigationLayout={navigationLayout}
+          onToggleNavigationLayout={toggleNavigationLayout}
           activeView={activeView}
           onSelectView={handleSelectWorkspaceView}
           hasMessages={hasExchanges}
           isBackendConnected={isBackendConnected}
           isPipelineReady={isPipelineReady}
-          companyCount={healthData?.corpus?.searchable_company_count ?? (tickers.length || undefined)}
+          companyCount={healthData?.corpus?.searchable_company_count}
           theme={themePreference}
           resolvedTheme={resolvedTheme}
           onSelectTheme={handleSelectTheme}
@@ -1334,8 +1866,8 @@ export default function App() {
         {/* Content stream area */}
         <main
           aria-label="Research workspace"
-          ref={scrollContainerRef}
-          className="workspace-scroll flex-1 overflow-y-auto overflow-x-hidden min-h-0 relative z-10"
+          ref={workspaceMainRef}
+          className={`workspace-scroll flex-1 overflow-y-auto overflow-x-hidden min-h-0 relative z-10 ${activeView === "conversation" ? "workspace-scroll--conversation" : ""}`}
         >
           {showContextBanner && (
             <SessionContextBanner
@@ -1344,9 +1876,17 @@ export default function App() {
               onNewConversation={requestNewConversation}
             />
           )}
+          {contextualCommandNotice && (
+            <div className="mx-auto mt-3 flex max-w-6xl items-center justify-between gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3 py-2 text-sm text-[var(--text-muted)]" role="status">
+              <span>{contextualCommandNotice}</span>
+              <button type="button" className="text-xs font-semibold text-[var(--accent-text)]" onClick={() => setContextualCommandNotice(null)}>
+                {locale === "vi" ? "Đóng" : "Dismiss"}
+              </button>
+            </div>
+          )}
           <div
-            className={`workspace-main-grid ${activeView === "conversation" && evidenceTarget ? "workspace-main-grid--with-evidence" : ""}`}
-            style={{ "--context-rail-width": `${contextRailWidth}px` } as CSSProperties}
+            className={`workspace-main-grid ${activeView === "conversation" ? "workspace-main-grid--conversation" : ""} ${activeView === "conversation" && evidenceTarget && isEvidenceOpen && evidenceInline ? "workspace-main-grid--with-evidence" : ""}`}
+            style={{ "--context-rail-width": `${effectiveContextRailWidth}px` } as CSSProperties}
           >
             <div className="workspace-primary-column">
               <Suspense fallback={<WorkspacePanelFallback />}>
@@ -1374,9 +1914,9 @@ export default function App() {
               <section className="workspace-page" aria-labelledby="library-workspace-title">
                 <div className="workspace-page__intro">
                   <div>
-                    <div className="workspace-eyebrow"><BookMarked className="h-3.5 w-3.5" />{locale === "vi" ? "Kho nghiên cứu" : "Research library"}</div>
+                    <div className="workspace-eyebrow"><LibraryIcon className="h-3.5 w-3.5" />{locale === "vi" ? "Kho nghiên cứu" : "Research library"}</div>
                     <h1 id="library-workspace-title">{locale === "vi" ? "Thư viện cuộc trò chuyện" : "Conversation library"}</h1>
-                    <p>{locale === "vi" ? "Lưu, tìm và mở lại các câu hỏi cùng câu trả lời đã được kiểm chứng." : "Save, search, and reopen questions with their grounded answers."}</p>
+                    <p>{t(libraryNavItem.descriptionKey)}</p>
                   </div>
                 </div>
                 <div className="library-workspace-surface">
@@ -1410,7 +1950,7 @@ export default function App() {
                 ) : activeView === "overview" ? (
               <OverviewPanel
                 hasMessages={hasExchanges}
-                companyCount={healthData?.corpus?.searchable_company_count ?? (tickers.length || null)}
+                companyCount={healthData?.corpus?.searchable_company_count ?? null}
                 indexedChunkCount={healthData?.corpus?.indexed_chunk_count ?? null}
                 onReturnToConversation={handleReturnToConversation}
                 isBackendConnected={isBackendConnected}
@@ -1423,7 +1963,9 @@ export default function App() {
               />
                 ) : (
             /* Active Chat Stream */
-            <div className="flex flex-col w-full min-h-full py-4 md:py-5 pb-6 relative">
+            <div className="conversation-primary-shell">
+              <div ref={scrollContainerRef} className="conversation-message-scroll">
+                <div className="flex flex-col w-full min-h-full py-4 md:py-5 pb-6 relative">
               <Suspense
                 fallback={
                   <div className="flex items-center gap-2 max-w-4xl mx-auto w-full px-3 py-4 text-sm text-slate-500 dark:text-slate-400" role="status">
@@ -1471,6 +2013,7 @@ export default function App() {
                         : undefined
                     }
                     onInspectSource={handleInspectSource}
+                    onDisplayedAnswerContext={handleDisplayedAnswerContext}
                     pipelineStages={stageEventsByMessage[msg.id]}
                     tabIndex={0}
                   />
@@ -1489,6 +2032,9 @@ export default function App() {
                   <ChevronDown className="w-5 h-5" />
                 </button>
               )}
+                </div>
+              </div>
+              {composer}
             </div>
                 )}
               </Suspense>
@@ -1500,19 +2046,25 @@ export default function App() {
                 unavailable={evidenceTarget.unavailable}
                 messageId={evidenceTarget.selection.messageId}
                 conversationId={evidenceTarget.selection.conversationId}
-                railWidth={contextRailWidth}
+                railWidth={effectiveContextRailWidth}
                 onRailWidthChange={setContextRailWidth}
+                isOpen={isEvidenceOpen}
+                presentation={evidenceInline ? "inline" : "drawer"}
+                onClose={handleCloseEvidence}
                 onSelectIndex={(citationIndex) => {
                   const source = evidenceTarget.sources[citationIndex];
                   if (!source) return;
-                  setEvidenceSelection(
-                    createEvidenceSelection(
-                      activeConversationId,
-                      evidenceTarget.selection.messageId,
-                      citationIndex,
-                      source,
-                      evidenceTarget.selection.variantId,
-                    ),
+                  handleInspectSource(
+                    (() => {
+                      const { conversationId: _conversationId, ...selection } = createEvidenceSelection(
+                        activeConversationId,
+                        evidenceTarget.selection.messageId,
+                        citationIndex,
+                        source,
+                        evidenceTarget.selection.variantId,
+                      );
+                      return selection;
+                    })(),
                   );
                 }}
               />
@@ -1520,40 +2072,17 @@ export default function App() {
           </div>
         </main>
 
-        {/* The composer is a flex sibling, so it never overlays response evidence. */}
-        {activeView !== "retrieval" && activeView !== "documents" && activeView !== "library" && activeView !== "search" && activeView !== "architecture" && activeView !== "evaluation" && activeView !== "analytics" && activeView !== "system" && <div className="composer-shell flex-shrink-0 z-10">
-          <ChatInput
-            inputText={inputText}
-            setInputText={setInputText}
-            onSendMessage={handleSendMessage}
-            onStopGenerating={handleStopGenerating}
-            isLoading={isLoading}
-            isStreaming={isStreaming}
-            isBackendConnected={isBackendConnected}
-            isPipelineReady={isPipelineReady}
-            isReadOnly={isReadOnly && hasExchanges}
-            readOnlyMessage={
-              sessionContext === "missing"
-                ? "The backend session for this saved conversation has expired. Start a new conversation to ask follow-up questions."
-                : "The backend could not be reached. Check the connection again before asking follow-up questions."
-            }
-            showBanner={activeView === "conversation" && hasExchanges}
-            scopeLabel={scopeLabel || undefined}
-            tickers={tickers}
-            sections={sections}
-            selectedTicker={selectedTicker}
-            onSelectTicker={setSelectedTicker}
-            selectedSection={selectedSection}
-            onSelectSection={setSelectedSection}
-            topK={topK}
-            onChangeTopK={setTopK}
-            enableComparative={enableComparative}
-            onToggleComparative={setEnableComparative}
-          />
-        </div>}
+        {activeView !== "conversation" && composer}
       </div>
 
       <HelpDialog open={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+      <TemplateQuestionDialog
+        open={templateToCustomize !== null}
+        template={templateToCustomize}
+        tickers={tickers}
+        onClose={closeTemplateQuestion}
+        onApply={handleApplyTemplate}
+      />
       <CommandPalette
         open={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
@@ -1561,6 +2090,7 @@ export default function App() {
         onTemplate={handlePaletteTemplate}
         onHelp={() => setIsHelpOpen(true)}
         onNewConversation={requestNewConversation}
+        contextualCommands={contextualCommands}
       />
 
       <ModalDialog

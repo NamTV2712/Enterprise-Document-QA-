@@ -121,21 +121,25 @@ describe("App request cancellation", () => {
 
     render(<App />);
 
-    expect(await screen.findByText(longAnswer)).toBeInTheDocument();
+    expect(
+      await screen.findByRole("article", { name: "Research assistant response" }),
+    ).toHaveTextContent(longAnswer);
 
     fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
     fireEvent.click(screen.getByRole("button", { name: "Research" }));
     expect(
       await screen.findByText("Ask questions. Verify every answer."),
     ).toBeInTheDocument();
-    expect(screen.queryByText(longAnswer)).not.toBeInTheDocument();
+    expect(screen.queryByRole("article", { name: "Research assistant response" })).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Return to conversation" }),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
     fireEvent.click(screen.getByRole("button", { name: "Current conversation" }));
-    expect(await screen.findByText(longAnswer)).toBeInTheDocument();
+    expect(
+      await screen.findByRole("article", { name: "Research assistant response" }),
+    ).toHaveTextContent(longAnswer);
   });
 
   test("explains when a locally saved conversation has expired backend context", async () => {

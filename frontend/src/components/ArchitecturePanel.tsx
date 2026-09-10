@@ -1,5 +1,9 @@
 import { ExternalLink, FileCode2, Network, Route, Workflow } from "lucide-react";
 import { useLocale } from "../lib/i18n";
+import { getWorkspaceNavItem } from "../lib/workspace";
+import { getSemanticIcon } from "../lib/semanticIcons";
+
+const WORKSPACE_META = getWorkspaceNavItem("architecture");
 
 const DIAGRAMS = [
   {
@@ -32,16 +36,17 @@ const DIAGRAMS = [
 ] as const;
 
 export function ArchitecturePanel() {
-  const { locale } = useLocale();
+  const { locale, t } = useLocale();
   const vi = locale === "vi";
+  const ToolIcon = getSemanticIcon(WORKSPACE_META.icon);
 
   return (
     <section className="workspace-page workspace-page--wide architecture-page" aria-labelledby="architecture-title">
       <div className="workspace-page__intro">
         <div>
-          <div className="workspace-eyebrow"><Network className="h-3.5 w-3.5" />{vi ? "Bản đồ hệ thống" : "System map"}</div>
+          <div className="workspace-eyebrow"><ToolIcon className="h-3.5 w-3.5" />{vi ? "Bản đồ hệ thống" : "System map"}</div>
           <h1 id="architecture-title">Architecture</h1>
-          <p>{vi ? "Mở sơ đồ độc lập để tìm, phóng to và xuất bản đồ hệ thống mà không tạo thêm một vùng cuộn bên trong workspace." : "Open a standalone diagram to search, zoom, and export the system map without creating a second scroll region in the workspace."}</p>
+          <p>{vi ? `${t(WORKSPACE_META.descriptionKey)} Mở sơ đồ độc lập để tìm, phóng to và xuất bản đồ mà không tạo thêm vùng cuộn.` : `${t(WORKSPACE_META.descriptionKey)} Open a standalone diagram to search, zoom, and export the map without creating a second scroll region in the workspace.`}</p>
         </div>
       </div>
       <div className="architecture-launch-grid">

@@ -7,8 +7,11 @@ import { useLocale } from "../lib/i18n";
 import { compareEvaluationRuns, EvaluationComparison } from "../lib/evaluationComparison";
 import { describeRequestError } from "../lib/requestError";
 import { SelectField } from "./ui/SelectField";
+import { getWorkspaceNavItem } from "../lib/workspace";
+import { getSemanticIcon } from "../lib/semanticIcons";
 
 type EvaluationMode = "live" | "recorded";
+const WORKSPACE_META = getWorkspaceNavItem("evaluation");
 
 function score(value: number | undefined): string {
   return value === undefined ? "—" : value.toFixed(3);
@@ -20,8 +23,9 @@ function csvCell(value: unknown): string {
 }
 
 export function EvaluationPanel() {
-  const { locale } = useLocale();
+  const { locale, t } = useLocale();
   const vi = locale === "vi";
+  const ToolIcon = getSemanticIcon(WORKSPACE_META.icon);
   const [mode, setMode] = useState<EvaluationMode>("live");
   const [status, setStatus] = useState<EvaluationRunStatus | "">("");
   const [runs, setRuns] = useState<Array<{ run_id: string; title: string; status: EvaluationRunStatus; created_at: string; aggregate: Record<string, number>; case_count: number }>>([]);
@@ -162,9 +166,9 @@ export function EvaluationPanel() {
     <section className="workspace-page workspace-page--wide evaluation-panel" aria-labelledby="evaluation-title">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">{vi ? "Đánh giá có kiểm chứng" : "Verifiable evaluation"}</p>
+          <p className="workspace-eyebrow text-violet-600 dark:text-violet-300"><ToolIcon className="h-3.5 w-3.5" aria-hidden="true" />{t(WORKSPACE_META.labelKey)}</p>
           <h1 id="evaluation-title" className="mt-1 text-2xl font-bold text-[var(--text-primary)]">{vi ? "Evaluation & experiments" : "Evaluation & experiments"}</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--text-muted)]">{vi ? "Chỉ report đã publish và có provenance mới được hiển thị. Recorded mode không gọi provider." : "Only published reports with provenance are shown. Recorded mode never calls a provider."}</p>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--text-muted)]">{t(WORKSPACE_META.descriptionKey)} {vi ? "Recorded mode không gọi provider." : "Recorded mode never calls a provider."}</p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
           <SelectField className="min-w-36" label={vi ? "Nguồn" : "Mode"} value={mode} onValueChange={(value) => setMode(value as EvaluationMode)} options={[{ value: "live", label: vi ? "Live published" : "Live published" }, { value: "recorded", label: vi ? "Recorded demo" : "Recorded demo" }]} />

@@ -4,12 +4,16 @@ import { clearAnalytics, exportAnalytics, readAnalyticsEvents } from "../lib/ana
 import { useLocale } from "../lib/i18n";
 import { AnalyticsRange, getAnalyticsCutoff } from "../lib/analyticsRange";
 import { SegmentedControl } from "./ui/SegmentedControl";
+import { getWorkspaceNavItem } from "../lib/workspace";
+import { getSemanticIcon } from "../lib/semanticIcons";
 
 const EVENT_KINDS = ["query_completed", "query_error", "feedback"];
+const WORKSPACE_META = getWorkspaceNavItem("analytics");
 
 export function AnalyticsPanel() {
-  const { locale } = useLocale();
+  const { locale, t } = useLocale();
   const vi = locale === "vi";
+  const ToolIcon = getSemanticIcon(WORKSPACE_META.icon);
   const [events, setEvents] = useState(readAnalyticsEvents);
   const [range, setRange] = useState<AnalyticsRange>("7");
   const cutoff = getAnalyticsCutoff(range);
@@ -42,14 +46,14 @@ export function AnalyticsPanel() {
     <section className="workspace-page workspace-page--wide" aria-labelledby="analytics-title">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-300">
-            {vi ? "Dữ liệu trên thiết bị" : "On-device telemetry"}
+          <p className="workspace-eyebrow text-emerald-600 dark:text-emerald-300">
+            <ToolIcon className="h-3.5 w-3.5" aria-hidden="true" />{t(WORKSPACE_META.labelKey)}
           </p>
           <h1 id="analytics-title" className="mt-1 text-2xl font-bold text-[var(--text-primary)]">
             {vi ? "Analytics & diagnostics" : "Analytics & diagnostics"}
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--text-muted)]">
-            {vi ? "Đây chỉ là hoạt động local đã làm mờ nội dung. Không phải tổng usage backend/provider." : "This is local activity with content removed. It is not total backend/provider usage."}
+            {t(WORKSPACE_META.descriptionKey)} {vi ? "Nội dung đã được loại bỏ; đây không phải tổng usage backend/provider." : "Content is removed; this is not total backend/provider usage."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

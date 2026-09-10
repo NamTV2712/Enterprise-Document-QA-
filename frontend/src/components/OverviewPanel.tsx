@@ -5,10 +5,8 @@
 
 import React from "react";
 import {
-  CheckCircle2,
   ChevronDown,
   Database,
-  GitFork,
   HelpCircle,
   AlertTriangle,
   Loader2,
@@ -21,6 +19,8 @@ import { Tooltip } from "./Tooltip";
 import { useLocale } from "../lib/i18n";
 import { RESEARCH_TEMPLATES, getResearchTemplateCopy, type ResearchTemplate } from "../lib/researchTemplates";
 import type { ConversationRecord } from "../lib/conversationStore";
+import { getSemanticIcon } from "../lib/semanticIcons";
+import type { SemanticIconKey } from "../lib/semanticIcons";
 
 interface OverviewPanelProps {
   hasMessages: boolean;
@@ -36,16 +36,23 @@ interface OverviewPanelProps {
   onSelectConversation?: (conversation: ConversationRecord) => void;
 }
 
-const features = [
+const features: Array<{
+  title: string;
+  description: string;
+  tooltip: string;
+  iconKey: SemanticIconKey;
+  accentFamily: "documents" | "retrieval" | "evidence";
+  badge: string;
+}> = [
   {
     title: "Granular Chunk Scan",
     description:
       "Scans individual 10-K blocks in business descriptions, risk matrices, and financial statements.",
     tooltip:
       "Scans individual 10-K blocks in business descriptions, risk matrices, and financial statements.",
-    Icon: Database,
+    iconKey: "reader",
+    accentFamily: "documents",
     badge: "500-900 Tokens",
-    colorClass: "bg-indigo-500/10 text-brand-indigo dark:bg-indigo-400/15 dark:text-indigo-300",
   },
   {
     title: "Multi-Hop Querying",
@@ -53,9 +60,9 @@ const features = [
       "Decomposes comparative requests into focused retrievals and presents a grounded execution summary.",
     tooltip:
       "Decomposes comparative requests into focused retrievals and presents the completed execution summary.",
-    Icon: GitFork,
+    iconKey: "execution",
+    accentFamily: "retrieval",
     badge: "Sub-Query Planner",
-    colorClass: "bg-teal-500/10 text-teal-700 dark:bg-teal-400/15 dark:text-teal-300",
   },
   {
     title: "Verifiable Sources",
@@ -63,9 +70,9 @@ const features = [
       "Every answer keeps the retrieved filing excerpts visible so you can inspect the source text behind each claim.",
     tooltip:
       "Retrieved excerpts remain visible with filing, section, and ranking metadata so you can inspect the evidence behind an answer.",
-    Icon: CheckCircle2,
+    iconKey: "sources",
+    accentFamily: "evidence",
     badge: "Canonical Citations",
-    colorClass: "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300",
   },
 ] as const;
 
@@ -103,10 +110,7 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-brand-indigo/30 bg-brand-indigo/5 dark:bg-brand-indigo/10 text-brand-indigo text-xs font-semibold shadow-4xs">
               <Sparkles className="w-3.5 h-3.5 animate-pulse" />
               <span>
-                {vi ? "Trí tuệ SEC EDGAR" : "SEC EDGAR Intelligence"}
-                {companyCount !== null
-                  ? vi ? ` · ${companyCount} công ty có thể tìm kiếm` : ` · ${companyCount} searchable companies`
-                  : vi ? " · nghiên cứu filing" : " · filing research"}
+                {vi ? "SEC EDGAR Intelligence · nghiên cứu filing" : "SEC EDGAR Intelligence · filing research"}
               </span>
             </div>
           )}
@@ -116,18 +120,41 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
           {vi ? "Đặt câu hỏi. Kiểm chứng mọi câu trả lời." : "Ask questions. Verify every answer."}
         </h2>
         <p className="mx-auto max-w-xl text-sm leading-relaxed text-[var(--text-muted)] font-sans md:text-base">
-          {vi ? "Nghiên cứu filing SEC 10-K" : "Research SEC 10-K filings"}
-          {companyCount !== null
-            ? vi ? ` trên ${companyCount} công ty có thể tìm kiếm` : ` across ${companyCount} searchable companies`
-            : vi ? " trong kho dữ liệu hiện có" : " across the available corpus"}
           {vi
-            ? " với bằng chứng có trích dẫn, số liệu được giữ nguyên và dấu vết truy xuất rõ ràng."
-            : " with cited evidence, deterministic number preservation, and a clear retrieval trail."}
+            ? "Nghiên cứu filing SEC 10-K với bằng chứng có trích dẫn và dấu vết truy xuất rõ ràng."
+            : "Research SEC 10-K filings with cited evidence and a clear retrieval trail."}
         </p>
-        <div className="overview-scope" aria-label={vi ? `Phạm vi hiện tại: ${scopeLabel}` : `Current scope: ${scopeLabel}`}>
-          <span>{vi ? "Phạm vi hiện tại" : "Current scope"}</span>
-          <strong>{scopeLabel}</strong>
+      </div>
+
+      <section className="overview-corpus-summary" aria-label={vi ? "Thông tin kho dữ liệu" : "Corpus summary"}>
+        <div className="overview-corpus-summary__heading">
+          <span className="overview-corpus-summary__title">
+            <Database className="h-4 w-4" aria-hidden="true" />
+            {vi ? "Kho dữ liệu hiện có" : "Available corpus"}
+          </span>
+          <span>{vi ? "Chỉ hiển thị metadata do dịch vụ báo cáo" : "Only service-reported metadata is shown"}</span>
         </div>
+        {companyCount !== null || indexedChunkCount != null ? (
+          <div className="overview-corpus-summary__facts">
+            {companyCount !== null && (
+              <span><strong>{companyCount}</strong> {vi ? "công ty có thể tìm kiếm" : "searchable companies"}</span>
+            )}
+            {indexedChunkCount != null && (
+              <span><strong>{indexedChunkCount}</strong> {vi ? "đoạn đã lập chỉ mục" : "indexed chunks"}</span>
+            )}
+          </div>
+        ) : (
+          <p className="overview-corpus-summary__empty">
+            {isBackendConnected === false
+              ? vi ? "Metadata kho dữ liệu không khả dụng khi dịch vụ offline." : "Corpus metadata is unavailable while the service is offline."
+              : vi ? "Chưa có metadata kho dữ liệu từ dịch vụ nghiên cứu." : "No corpus metadata has been reported by the research service yet."}
+          </p>
+        )}
+      </section>
+
+      <div className="overview-scope" aria-label={vi ? `Phạm vi hiện tại: ${scopeLabel}` : `Current scope: ${scopeLabel}`}>
+        <span>{vi ? "Phạm vi hiện tại" : "Current scope"}</span>
+        <strong>{scopeLabel}</strong>
       </div>
 
       {/* Backend Connection Status Notice if offline/checking */}
@@ -153,7 +180,7 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
               ? vi ? "Đang kết nối tới dịch vụ nghiên cứu…" : "Connecting to the research service…"
               : isBackendConnected === false
                 ? vi ? "Dịch vụ nghiên cứu đang offline. Hãy kết nối backend FastAPI để bắt đầu hỏi." : "The research service is offline. Connect the FastAPI backend to start asking questions."
-                : vi ? "Chỉ mục tài liệu vẫn đang tải. Bạn sẽ có thể hỏi sau ít phút." : "The document index is still loading. Questions will be available shortly."}
+                : vi ? "Dịch vụ nghiên cứu đã kết nối nhưng chỉ mục tài liệu chưa sẵn sàng." : "The research service is connected, but the document index is not ready yet."}
           </span>
           {isBackendConnected === false && (
             <button
@@ -167,24 +194,6 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
           )}
         </div>
       ) : null}
-
-      {/* Only backend-reported corpus facts belong in the start state. */}
-      {(companyCount !== null || indexedChunkCount != null) && (
-        <div className="overview-facts" aria-label={vi ? "Thông tin kho dữ liệu" : "Corpus facts"}>
-          {companyCount !== null && (
-            <div className="stat-card">
-              <div className="stat-card__value">{companyCount}</div>
-              <div className="stat-card__label">{vi ? "Công ty có thể tìm kiếm" : "Searchable Companies"}</div>
-            </div>
-          )}
-          {indexedChunkCount != null && (
-            <div className="stat-card">
-              <div className="stat-card__value">{indexedChunkCount}</div>
-              <div className="stat-card__label">{vi ? "Đoạn đã lập chỉ mục" : "Indexed Chunks"}</div>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Interactive Quick-Start Prompts */}
       <div className="space-y-2.5">
@@ -211,7 +220,7 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <div className="prompt-card__icon">
-                    <Sparkles className="w-3.5 h-3.5" />
+                    {React.createElement(getSemanticIcon(template.iconKey), { className: "w-3.5 h-3.5", "aria-hidden": true })}
                   </div>
                   <span className="text-xs font-bold text-[var(--text-primary)] truncate group-hover:text-[var(--accent-text)] transition-colors">
                     {copy.label}
@@ -259,12 +268,12 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
       <details className="overview-capabilities">
         <summary>{vi ? "Cách hệ thống truy xuất bằng chứng" : "How the evidence workflow works"}</summary>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5" id="features-cards">
-          {features.map(({ title, description, tooltip, Icon, badge, colorClass }) => (
+          {features.map(({ title, description, tooltip, iconKey, accentFamily, badge }) => (
             <article className="feature-card" key={title}>
               <div className="flex items-center justify-between mb-2">
                 <Tooltip content={tooltip}>
-                  <div className={`feature-card__icon ${colorClass}`}>
-                    <Icon className="w-4 h-4" />
+                  <div className="feature-card__icon" data-feature={accentFamily}>
+                    {React.createElement(getSemanticIcon(iconKey), { className: "w-4 h-4", "aria-hidden": true })}
                   </div>
                 </Tooltip>
                 <span className="rounded border border-[var(--border-subtle)] px-2 py-0.5 font-mono text-[10px] font-semibold uppercase text-[var(--text-muted)]">

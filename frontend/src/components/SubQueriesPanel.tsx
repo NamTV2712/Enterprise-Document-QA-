@@ -110,7 +110,7 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
         aria-expanded={isOpen}
         aria-controls={panelId}
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full min-h-11 flex items-center justify-between gap-3 p-3.5 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100/50 dark:hover:bg-slate-850/50 transition-colors cursor-pointer"
+        className="subqueries-toggle w-full min-h-11 flex items-center justify-between gap-3 p-3.5 text-sm font-semibold text-[var(--text-primary)] transition-colors cursor-pointer"
       >
         <div className="flex items-center gap-2">
           <GitFork className="w-4 h-4 text-brand-indigo rotate-180" />
@@ -172,7 +172,7 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
                         className={`ui-stagger-enter p-3 rounded-lg border transition-all ${
                           isLastRow && !isFullyDone
                             ? "border-brand-indigo/40 bg-brand-indigo/5 text-[var(--text-primary)] shadow-3xs"
-                            : "border-slate-200 dark:border-slate-800 bg-white dark:bg-[var(--surface)]/60 text-slate-700 dark:text-slate-300"
+                            : "border-slate-200 dark:border-slate-800 bg-white dark:bg-[var(--surface)]/60 text-[var(--text-primary)]"
                         }`}
                         id={`subquery-item-${index}`}
                       >
@@ -189,7 +189,7 @@ export const SubQueriesPanel: React.FC<SubQueriesPanelProps> = ({
                             </span>
 
                             {sub.ticker && (
-                              <span className="font-mono text-[10px] font-bold bg-slate-200/50 dark:bg-slate-800/80 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300">
+                              <span className="font-mono text-[10px] font-bold bg-slate-200/50 dark:bg-slate-800/80 px-1.5 py-0.5 rounded text-[var(--text-primary)]">
                                 {formatCompanyLabel(sub.ticker)}
                               </span>
                             )}

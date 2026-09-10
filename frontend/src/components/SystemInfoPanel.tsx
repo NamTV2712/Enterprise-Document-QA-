@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, Cpu, Database, Info, Server } from "lucide-react";
+import { CheckCircle2, Cpu, Database, Info } from "lucide-react";
 import { getSystemInfo } from "../lib/api";
 import { SystemInfoResponse } from "../types";
 import { useLocale } from "../lib/i18n";
+import { getWorkspaceNavItem } from "../lib/workspace";
+import { getSemanticIcon } from "../lib/semanticIcons";
+
+const WORKSPACE_META = getWorkspaceNavItem("system");
 
 export function SystemInfoPanel() {
-  const { locale } = useLocale();
+  const { locale, t } = useLocale();
   const vi = locale === "vi";
+  const ToolIcon = getSemanticIcon(WORKSPACE_META.icon);
   const [info, setInfo] = useState<SystemInfoResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,8 +29,8 @@ export function SystemInfoPanel() {
   return (
     <section className="mx-auto w-full max-w-6xl space-y-5 px-3 py-5 md:px-6" aria-labelledby="system-info-title">
       <div className="flex items-start gap-3">
-        <div className="rounded-xl bg-emerald-500/10 p-3 text-emerald-600 dark:text-emerald-300"><Server className="h-5 w-5" aria-hidden="true" /></div>
-        <div><h1 id="system-info-title" className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">{vi ? "System & provenance" : "System & provenance"}</h1><p className="mt-1 max-w-2xl text-sm leading-relaxed text-[var(--text-muted)]">{vi ? "Thông tin allowlisted để hiểu corpus, model và build hiện tại mà không lộ secret hay filesystem path." : "Allowlisted metadata for the current corpus, models, and build without exposing secrets or filesystem paths."}</p></div>
+        <div className="rounded-xl bg-emerald-500/10 p-3 text-emerald-600 dark:text-emerald-300"><ToolIcon className="h-5 w-5" aria-hidden="true" /></div>
+        <div><h1 id="system-info-title" className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">{vi ? "System & provenance" : "System & provenance"}</h1><p className="mt-1 max-w-2xl text-sm leading-relaxed text-[var(--text-muted)]">{t(WORKSPACE_META.descriptionKey)} {vi ? "Metadata allowlisted không lộ secret hay filesystem path." : "Allowlisted metadata does not expose secrets or filesystem paths."}</p></div>
       </div>
       {error && <div role="alert" className="rounded-xl border border-rose-300/60 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">{error}</div>}
       {!info && !error && <div role="status" className="rounded-2xl border border-dashed border-[var(--border-strong)] px-5 py-12 text-center text-sm text-[var(--text-muted)]">{vi ? "Đang tải metadata…" : "Loading metadata…"}</div>}

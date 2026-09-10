@@ -6,6 +6,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   CircleHelp,
+  MoreHorizontal,
   Menu,
   Moon,
   Monitor,
@@ -13,6 +14,7 @@ import {
   Sun,
   Check,
   Search,
+  X,
 } from "lucide-react";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { BrandMark } from "./BrandMark";
@@ -20,10 +22,15 @@ import { SelectField } from "./ui/SelectField";
 import { ThemePreference } from "../types";
 import { useLocale } from "../lib/i18n";
 import { WORKSPACE_NAV_SECTIONS, type WorkspaceView } from "../lib/workspace";
+import { getSemanticIcon } from "../lib/semanticIcons";
+import type { NavigationLayout } from "../hooks/useNavigationLayout";
+import { ModalDialog } from "./ui/ModalDialog";
 
 interface WorkspaceHeaderProps {
   isSidebarOpen: boolean;
   onToggleSidebar: () => void;
+  navigationLayout: NavigationLayout;
+  onToggleNavigationLayout: () => void;
   activeView: WorkspaceView;
   onSelectView: (view: WorkspaceView) => void;
   hasMessages: boolean;
@@ -51,6 +58,8 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
   ({
     isSidebarOpen,
     onToggleSidebar,
+    navigationLayout,
+    onToggleNavigationLayout,
     activeView,
     onSelectView,
     hasMessages,
@@ -66,9 +75,12 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
   }) => {
     const { locale, setLocale, t } = useLocale();
     const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
+    const [isMoreOpen, setIsMoreOpen] = useState(false);
     const themeMenuRef = useRef<HTMLDivElement>(null);
     const themeTriggerRef = useRef<HTMLButtonElement>(null);
     const themeMenuListRef = useRef<HTMLDivElement>(null);
+    const moreDialogCloseRef = useRef<HTMLButtonElement>(null);
+    const NavigationLayoutIcon = getSemanticIcon(navigationLayout === "expanded" ? "sidebarClose" : "sidebarOpen");
 
     useEffect(() => {
       if (!isThemeMenuOpen) return;
@@ -129,9 +141,17 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
 
     const themeLabel =
       theme === "system" ? t("theme.system") : theme === "light" ? t("theme.light") : t("theme.dark");
+    const moreControlsLabel = locale === "vi" ? "Mở điều khiển workspace" : "More workspace controls";
+    const workspaceControlsLabel = locale === "vi" ? "Điều khiển workspace" : "Workspace controls";
+    const closeWorkspaceControlsLabel = locale === "vi" ? "Đóng điều khiển workspace" : "Close workspace controls";
+    const openHelpFromMore = () => {
+      setIsMoreOpen(false);
+      window.requestAnimationFrame(() => onOpenHelp?.());
+    };
 
     return (
-    <header className="workspace-header">
+    <>
+      <header className="workspace-header">
       <div className="flex items-center gap-3 min-w-0">
         <button
           type="button"
@@ -140,11 +160,21 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
           aria-controls="control-sidebar"
           aria-expanded={isSidebarOpen}
           aria-label={
-            isSidebarOpen ? t("nav.closeSearch") : t("nav.openSearch")
+            isSidebarOpen ? t("nav.closeNavigation") : t("nav.openNavigation")
           }
-          className="min-h-9 min-w-9 p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden text-slate-600 dark:text-slate-300 transition-colors"
+          className="sidebar-menu-trigger"
         >
-          <Menu className="w-5 h-5" />
+          <Menu className="h-5 w-5" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={onToggleNavigationLayout}
+          className="sidebar-layout-toggle"
+          aria-label={navigationLayout === "expanded" ? t("nav.compactNavigation") : t("nav.expandNavigation")}
+          title={navigationLayout === "expanded" ? t("nav.compactNavigation") : t("nav.expandNavigation")}
+          aria-pressed={navigationLayout === "compact"}
+        >
+          <NavigationLayoutIcon className="h-4 w-4" aria-hidden="true" />
         </button>
         <div className="header-product-identity flex items-center gap-2.5 min-w-0">
           <BrandMark size="sm" />
@@ -155,7 +185,7 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
             <span className="header-product-title-short font-bold text-sm text-[var(--text-primary)] leading-tight tracking-tight">
               SEC Research
             </span>
-            <span className="hidden sm:inline text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider font-mono">
+            <span className="header-product-subtitle hidden sm:inline">
               SEC 10-K Intelligence
             </span>
           </div>
@@ -165,7 +195,7 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
             type="button"
             onClick={() => onSelectView("overview")}
             aria-label={t("nav.showOverview")}
-            className="lg:hidden min-h-9 inline-flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            className="header-overview-button lg:hidden"
           >
             <span className="text-xs">{t("nav.overview")}</span>
           </button>
@@ -191,8 +221,8 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
           isPipelineReady={isPipelineReady}
           companyCount={companyCount}
         />
-        {onOpenCommandPalette && <button type="button" onClick={onOpenCommandPalette} className="hidden min-h-9 items-center gap-2 rounded-lg border border-[var(--border-subtle)] px-2.5 text-xs font-semibold text-[var(--text-muted)] hover:surface-muted-hover md:inline-flex" aria-label="Open command palette" title="Open command palette (Ctrl+Shift+P)"><Search className="h-3.5 w-3.5" /><span className="hidden xl:inline">{locale === "vi" ? "Lệnh" : "Command"}</span><kbd className="hidden rounded border border-[var(--border-subtle)] px-1 py-0.5 text-[10px] xl:inline">Ctrl+Shift+P</kbd></button>}
-        <div className="theme-menu" ref={themeMenuRef}>
+        {onOpenCommandPalette && <button type="button" onClick={onOpenCommandPalette} className="header-command-button" aria-label="Open command palette" title="Open command palette (Ctrl+Shift+P)"><Search className="h-3.5 w-3.5" aria-hidden="true" /><span className="header-command-button__label">{locale === "vi" ? "Lệnh" : "Command"}</span><kbd className="header-command-button__shortcut">Ctrl+Shift+P</kbd></button>}
+        <div className="theme-menu header-wide-control" ref={themeMenuRef}>
           <button
             type="button"
             id="theme-switcher-btn"
@@ -247,7 +277,7 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
             </div>
           )}
         </div>
-        <div className="locale-switcher" role="group" aria-label={t("language.label")}>
+        <div className="locale-switcher header-wide-control" role="group" aria-label={t("language.label")}>
           <button
             type="button"
             className={`locale-switcher__button ${locale === "en" ? "is-active" : ""}`}
@@ -272,7 +302,7 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
             aria-haspopup="dialog"
             aria-label={t("nav.help")}
             title={t("nav.help")}
-            className="theme-toggle"
+            className="theme-toggle header-wide-control"
           >
             <CircleHelp className="w-4 h-4" aria-hidden="true" />
           </button>
@@ -283,7 +313,7 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
           disabled={isClearingSession || !hasMessages}
           aria-busy={isClearingSession}
           onClick={onReset}
-          className="quick-reset-button"
+          className="quick-reset-button header-wide-control"
           title="Start a new conversation"
           aria-label="Start a new conversation"
         >
@@ -291,8 +321,98 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
             className={`w-4 h-4 ${isClearingSession ? "animate-spin" : ""}`}
           />
         </button>
+        <button
+          type="button"
+          className="header-more-trigger"
+          aria-haspopup="dialog"
+          aria-expanded={isMoreOpen}
+          aria-label={moreControlsLabel}
+          title={moreControlsLabel}
+          onClick={() => setIsMoreOpen(true)}
+        >
+          <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+        </button>
       </div>
-    </header>
+      </header>
+
+      <ModalDialog
+        open={isMoreOpen}
+        onClose={() => setIsMoreOpen(false)}
+        ariaLabel={workspaceControlsLabel}
+        initialFocusRef={moreDialogCloseRef}
+        className="header-more-dialog"
+      >
+        <div className="header-more-dialog__header">
+          <div>
+            <p className="header-more-dialog__eyebrow">{locale === "vi" ? "Workspace" : "Workspace"}</p>
+            <h2>{workspaceControlsLabel}</h2>
+          </div>
+          <button
+            ref={moreDialogCloseRef}
+            type="button"
+            className="header-more-dialog__close"
+            aria-label={closeWorkspaceControlsLabel}
+            onClick={() => setIsMoreOpen(false)}
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="header-more-dialog__body">
+          <fieldset className="header-more-dialog__group">
+            <legend>{t("theme.preference")}</legend>
+            <div className="header-more-dialog__theme-options">
+              {THEME_OPTIONS.map((option) => {
+                const isSelected = theme === option;
+                const optionLabel = option === "system" ? t("theme.system") : option === "light" ? t("theme.light") : t("theme.dark");
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    className={`header-more-control-option ${isSelected ? "is-selected" : ""}`}
+                    aria-pressed={isSelected}
+                    onClick={() => onSelectTheme(option)}
+                  >
+                    <ThemeOptionIcon option={option} className="h-4 w-4" />
+                    <span>{optionLabel}</span>
+                    {isSelected && <Check className="ml-auto h-4 w-4" aria-hidden="true" />}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+
+          <div className="header-more-dialog__group" role="group" aria-label={t("language.label")}>
+            <span className="header-more-dialog__label">{t("language.label")}</span>
+            <div className="locale-switcher header-more-dialog__locale-switcher">
+              <button type="button" className={`locale-switcher__button ${locale === "en" ? "is-active" : ""}`} aria-pressed={locale === "en"} onClick={() => setLocale("en")}>EN</button>
+              <button type="button" className={`locale-switcher__button ${locale === "vi" ? "is-active" : ""}`} aria-pressed={locale === "vi"} onClick={() => setLocale("vi")}>VI</button>
+            </div>
+          </div>
+
+          {onOpenHelp && (
+            <button type="button" className="header-more-action" onClick={openHelpFromMore}>
+              <CircleHelp className="h-4 w-4" aria-hidden="true" />
+              <span>{t("nav.help")}</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            className="header-more-action"
+            disabled={isClearingSession || !hasMessages}
+            aria-busy={isClearingSession}
+            onClick={() => {
+              setIsMoreOpen(false);
+              onReset();
+            }}
+          >
+            <RefreshCw className={`h-4 w-4 ${isClearingSession ? "animate-spin" : ""}`} aria-hidden="true" />
+            <span>{isClearingSession ? t("nav.resetting") : t("nav.newConversation")}</span>
+          </button>
+        </div>
+      </ModalDialog>
+    </>
     );
   },
 );

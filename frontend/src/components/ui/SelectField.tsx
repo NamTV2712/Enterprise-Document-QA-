@@ -14,6 +14,8 @@ interface SelectFieldProps {
   onValueChange: (value: string) => void;
   disabled?: boolean;
   className?: string;
+  ariaInvalid?: boolean;
+  ariaDescribedBy?: string;
 }
 
 /**
@@ -27,6 +29,8 @@ export function SelectField({
   onValueChange,
   disabled = false,
   className = "",
+  ariaInvalid = false,
+  ariaDescribedBy,
 }: SelectFieldProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -130,6 +134,8 @@ export function SelectField({
         type="button"
         className="select-field__trigger"
         aria-label={label}
+        aria-invalid={ariaInvalid || undefined}
+        aria-describedby={ariaDescribedBy}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}

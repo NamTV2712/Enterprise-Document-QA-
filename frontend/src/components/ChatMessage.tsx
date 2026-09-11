@@ -5,6 +5,7 @@
 
 import React, { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   User,
   Cpu,
@@ -29,6 +30,7 @@ import {
   FeedbackCategory,
   Message,
   MessageFeedback,
+  SaveAnswerVersionStatus,
   RequestSnapshot,
   StageEvent,
 } from "../types";
@@ -38,6 +40,8 @@ import { useLocale } from "../lib/i18n";
 import { formatCompanyLabel, SECTION_METADATA } from "../lib/displayMetadata";
 import { getSourceKey } from "../lib/sourceIdentity";
 import { PipelineExecution } from "./PipelineExecution";
+import { RelatedResearchPanel } from "./RelatedResearchPanel";
+import { buildRelatedResearchSuggestions } from "../lib/relatedResearch";
 
 interface ChatMessageProps {
   message: Message;
@@ -50,13 +54,18 @@ interface ChatMessageProps {
   onSaveNote?: (note: string) => void;
   onFeedback?: (feedback: MessageFeedback | undefined) => void;
   variants?: AnswerVariant[];
-  onSaveVariant?: () => void;
+  onSaveVariant?: (context: { messageId: string; variantId: string | null }) => void;
+  saveVariantStatus?: SaveAnswerVersionStatus;
+  onRetrySaveVariant?: (context: { messageId: string; variantId: string | null }) => void;
+  onViewSavedVersion?: () => void;
   /** The article container is focusable so Library links can land on it. */
   tabIndex?: number;
   onInspectSource?: (selection: Omit<EvidenceSelection, "conversationId">) => void;
   /** Publishes answer identity only on focus, pointer interaction, or variant changes. */
   onDisplayedAnswerContext?: (context: { messageId: string; variantId: string | null }) => void;
   pipelineStages?: StageEvent[];
+  availableSections?: readonly string[];
+  onUseRelatedResearch?: (question: string, scope: { ticker: string | null; section: string | null }) => void;
 }
 
 // Tickers rendered with the monospace ticker chip styling
@@ -212,10 +221,15 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
   onFeedback,
   variants = [],
   onSaveVariant,
+  saveVariantStatus = "idle",
+  onRetrySaveVariant,
+  onViewSavedVersion,
   tabIndex,
   onInspectSource,
   onDisplayedAnswerContext,
   pipelineStages,
+  availableSections = [],
+  onUseRelatedResearch,
 }) => {
   const { locale, t } = useLocale();
   const isUser = message.sender === "user";
@@ -233,6 +247,9 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
   const displayedExecution = selectedVariant?.execution ?? message.execution;
   const displayedVisualAnswer = selectedVariant?.visualAnswer ?? message.visualAnswer;
   const selectedVariantIndex = selectedVariant ? variants.findIndex((variant) => variant.id === selectedVariant.id) + 1 : 0;
+  const relatedSuggestions = onUseRelatedResearch && !isUser
+    ? buildRelatedResearchSuggestions(message, availableSections)
+    : [];
   const reportDisplayedAnswerContext = (variantId = selectedVariant?.id ?? null) => {
     if (
       isUser ||
@@ -434,6 +451,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                         </p>
                       ) : (
                         <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
                           components={{
                           table: ({ ...props }) => (
                             <div className="overflow-x-auto my-4 border border-slate-200/90 dark:border-slate-800 rounded-xl shadow-4xs bg-white dark:bg-[var(--surface)]/80">
@@ -616,12 +634,43 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                       </div>
                     )}
                     {onSaveVariant && message.status !== "error" && !message.isStreaming && message.text && (
-                      <button type="button" onClick={onSaveVariant} aria-label={locale === "vi" ? "Lưu phiên bản câu trả lời" : "Save answer variant"} title={locale === "vi" ? "Lưu phiên bản" : "Save variant"} className="message-secondary-action"><Layers2 className="h-3.5 w-3.5" /><span>{locale === "vi" ? "Lưu phiên bản" : "Save variant"}</span></button>
+                      <button
+                        type="button"
+                        onClick={() => onSaveVariant({ messageId, variantId: selectedVariant?.id ?? null })}
+                        disabled={saveVariantStatus === "saving"}
+                        aria-label={locale === "vi" ? "Lưu phiên bản câu trả lời" : "Save answer version"}
+                        title={locale === "vi" ? "Lưu phiên bản" : "Save answer version"}
+                        className="message-secondary-action"
+                      >
+                        {saveVariantStatus === "saving" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Layers2 className="h-3.5 w-3.5" />}
+                        <span>{locale === "vi" ? "Lưu phiên bản" : "Save answer version"}</span>
+                      </button>
                     )}
                     {onSaveNote && message.status !== "error" && (
                       <button type="button" onClick={() => setIsNoteOpen((open) => !open)} aria-label={locale === "vi" ? "Ghi chú cho câu trả lời" : "Add note to answer"} aria-pressed={isNoteOpen || Boolean(message.note)} title={locale === "vi" ? "Ghi chú" : "Add note"} className={`message-secondary-action ${message.note ? "is-active is-note" : ""}`}><StickyNote className="h-3.5 w-3.5" /><span>{locale === "vi" ? "Ghi chú" : "Add note"}</span></button>
                     )}
                   </div>
+                  {saveVariantStatus !== "idle" && (
+                    <div className="message-action-status" role="status" aria-live="polite">
+                      <span>
+                        {saveVariantStatus === "saving" && (locale === "vi" ? "Đang lưu phiên bản câu trả lời…" : "Saving answer version…")}
+                        {saveVariantStatus === "saved" && (locale === "vi" ? "Đã lưu phiên bản vào Thư viện." : "Answer version saved to Library.")}
+                        {saveVariantStatus === "already_saved" && (locale === "vi" ? "Phiên bản này đã được lưu." : "Already saved.")}
+                        {saveVariantStatus === "volatile" && (locale === "vi" ? "Chỉ giữ trong tab này; hãy thử lại hoặc xuất Thư viện." : "Only in this tab; retry or export the Library.")}
+                        {saveVariantStatus === "failed" && (locale === "vi" ? "Không thể lưu phiên bản; hãy thử lại." : "Could not save this version; retry.")}
+                      </span>
+                      {(saveVariantStatus === "saved" || saveVariantStatus === "already_saved") && onViewSavedVersion && (
+                        <button type="button" onClick={onViewSavedVersion} className="message-action-status__link">
+                          {locale === "vi" ? "Mở Thư viện" : "View in Library"}
+                        </button>
+                      )}
+                      {(saveVariantStatus === "failed" || saveVariantStatus === "volatile") && onRetrySaveVariant && (
+                        <button type="button" onClick={() => onRetrySaveVariant({ messageId, variantId: selectedVariant?.id ?? null })} className="message-action-status__link">
+                          {locale === "vi" ? "Thử lại" : "Retry"}
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {!isUser && feedback === "down" && !message.isStreaming && (
                     <div className="message-feedback-reasons" role="group" aria-label={locale === "vi" ? "Lý do đánh giá chưa hữu ích" : "Why was this answer unhelpful?"}>
                       <span className="font-semibold text-[var(--text-muted)]">{locale === "vi" ? "Lý do:" : "Reason:"}</span>
@@ -684,6 +733,13 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
             <SubQueriesPanel
               subQueries={message.subQueries || []}
               isLatest={isLatest}
+            />
+          )}
+
+          {!isUser && onUseRelatedResearch && (
+            <RelatedResearchPanel
+              suggestions={relatedSuggestions}
+              onSelect={(suggestion) => onUseRelatedResearch(suggestion.question[locale], suggestion.scope)}
             />
           )}
 

@@ -222,6 +222,26 @@ describe("ChatMessage", () => {
     expect(screen.getByText("Server · 42 ms")).toBeInTheDocument();
   });
 
+  test("offers truthful related research without auto-submitting", () => {
+    const onUseRelatedResearch = vi.fn();
+    render(
+      <ChatMessage
+        message={{
+          id: "assistant-related",
+          sender: "assistant",
+          text: "Revenue was reported in the filing.",
+          requestSnapshot: { ticker: "AAPL", section: "financial_table", topK: 5, enableComparative: false, answerLanguage: "en" },
+          sources: [{ citation: "AAPL filing", ticker: "AAPL", section: "financial_table", text_preview: "Revenue" }],
+        }}
+        availableSections={["financial_table", "risk_factors"]}
+        onUseRelatedResearch={onUseRelatedResearch}
+      />,
+    );
+    expect(screen.getByRole("heading", { name: "Related research" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Review disclosed risks/i }));
+    expect(onUseRelatedResearch).toHaveBeenCalledWith(expect.stringContaining("AAPL"), { ticker: "AAPL", section: "risk_factors" });
+  });
+
   test("keeps a verified visual metric linked to its exact source", () => {
     const onInspectSource = vi.fn();
     render(

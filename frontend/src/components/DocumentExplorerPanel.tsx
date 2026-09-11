@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, ExternalLink, FileText, Search, X } from "lucide-react";
 import { getDocumentChunks, getDocuments } from "../lib/api";
-import { DocumentChunk, DocumentRow } from "../types";
+import { DocumentChunk, DocumentRow, Source } from "../types";
 import { useLocale } from "../lib/i18n";
 import { describeRequestError } from "../lib/requestError";
 import { SelectField } from "./ui/SelectField";
@@ -11,11 +11,25 @@ import { getSemanticIcon } from "../lib/semanticIcons";
 interface DocumentExplorerPanelProps {
   tickers: string[];
   sections: string[];
+  onOpenSource?: (source: Source) => void;
 }
 
 const PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 250;
+const MAX_SHARED_DOCUMENT_CACHE_ENTRIES = 32;
 const WORKSPACE_META = getWorkspaceNavItem("documents");
+
+type DocumentCacheEntry = { items: DocumentRow[]; total: number };
+
+function rememberDocumentCache(cache: Map<string, DocumentCacheEntry>, key: string, entry: DocumentCacheEntry): void {
+  cache.delete(key);
+  cache.set(key, entry);
+  while (cache.size > MAX_SHARED_DOCUMENT_CACHE_ENTRIES) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
+}
 
 function useDebouncedValue(value: string): string {
   const [debounced, setDebounced] = useState(value);
@@ -26,7 +40,7 @@ function useDebouncedValue(value: string): string {
   return debounced;
 }
 
-export function DocumentExplorerPanel({ tickers, sections }: DocumentExplorerPanelProps) {
+export const DocumentExplorerPanel = memo(function DocumentExplorerPanel({ tickers, sections, onOpenSource }: DocumentExplorerPanelProps) {
   const { locale, t } = useLocale();
   const vi = locale === "vi";
   const ToolIcon = getSemanticIcon(WORKSPACE_META.icon);
@@ -48,7 +62,10 @@ export function DocumentExplorerPanel({ tickers, sections }: DocumentExplorerPan
   const [chunkRequestNonce, setChunkRequestNonce] = useState(0);
   const debouncedSearch = useDebouncedValue(search);
   const debouncedChunkSearch = useDebouncedValue(chunkSearch);
-  const documentCache = useRef(new Map<string, { items: DocumentRow[]; total: number }>());
+  // The panel is route-lazy and unmounts when the user returns to Research.
+  // Keep the bounded catalog cache at module scope so a warm route switch does
+  // not repeat the same metadata request after that intentional unmount.
+  const documentCache = useRef(new Map<string, DocumentCacheEntry>());
   const chunkCache = useRef(new Map<string, DocumentChunk[]>());
   const documentRequestId = useRef(0);
   const chunkRequestId = useRef(0);
@@ -70,7 +87,7 @@ export function DocumentExplorerPanel({ tickers, sections }: DocumentExplorerPan
     void getDocuments({ ticker: ticker || null, section: section || null, search: debouncedSearch, page, page_size: PAGE_SIZE }, controller.signal)
       .then((response) => {
         if (requestId !== documentRequestId.current) return;
-        documentCache.current.set(cacheKey, { items: response.items, total: response.total });
+        rememberDocumentCache(documentCache.current, cacheKey, { items: response.items, total: response.total });
         setDocuments(response.items);
         setTotal(response.total);
       })
@@ -166,10 +183,10 @@ export function DocumentExplorerPanel({ tickers, sections }: DocumentExplorerPan
       </div>
 
       <div className="documents-filter-grid rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-4">
-        <label className="select-field relative block">
+        <label className="select-field relative block" data-composite-field>
           <span className="select-field__label">{vi ? "Tìm tài liệu" : "Search documents"}</span>
           <Search className="documents-filter-search-icon pointer-events-none absolute left-3 h-4 w-4 text-[var(--text-muted)]" aria-hidden="true" />
-          <input
+          <input data-composite-input
             aria-label={vi ? "Tìm tài liệu" : "Search documents"}
             value={search}
             onChange={(event) => { setSearch(event.target.value); setPage(1); }}
@@ -208,15 +225,18 @@ export function DocumentExplorerPanel({ tickers, sections }: DocumentExplorerPan
         <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-raised)]">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--border-subtle)] px-4 py-4">
             <div><div className="text-sm font-bold text-[var(--text-primary)]">{selected.ticker} · {selected.filing_date}</div><div className="mt-1 text-xs text-[var(--text-muted)]">{selected.document_id} · {selected.chunk_count} chunks</div></div>
-            <button type="button" onClick={() => setSelected(null)} aria-label={vi ? "Đóng chi tiết" : "Close document details"} className="rounded-lg p-2 text-[var(--text-muted)] hover:bg-[var(--surface-muted)]"><X className="h-4 w-4" /></button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {onOpenSource && <button type="button" onClick={() => onOpenSource({ citation: `${selected.ticker ?? "SEC"} filing · ${selected.filing_date ?? "date unavailable"}`, text_preview: "", document_id: selected.document_id, ticker: selected.ticker, filing_date: selected.filing_date, report_date: selected.report_date, source_url: selected.source_url })} className="rounded-lg border border-[var(--primary)] px-3 py-1.5 text-xs font-semibold text-[var(--primary)]">{vi ? "Mở không gian tài liệu" : "Open document workspace"}</button>}
+              <button type="button" onClick={() => setSelected(null)} aria-label={vi ? "Đóng chi tiết" : "Close document details"} className="rounded-lg p-2 text-[var(--text-muted)] hover:bg-[var(--surface-muted)]"><X className="h-4 w-4" /></button>
+            </div>
           </div>
-          <div className="grid gap-3 border-b border-[var(--border-subtle)] p-4 md:grid-cols-[minmax(0,1fr)_160px]">
-            <input value={chunkSearch} onChange={(event) => { setChunkSearch(event.target.value); setChunkPage(1); }} placeholder={vi ? "Tìm trong đoạn nguồn…" : "Search excerpts…"} aria-label={vi ? "Tìm trong đoạn nguồn" : "Search excerpts"} className="min-h-10 rounded-xl border border-[var(--border-strong)] bg-[var(--surface)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--primary)]" />
+          <div className="grid gap-3 border-b border-[var(--border-subtle)] p-4 md:grid-cols-[minmax(0,1fr)_160px]" data-composite-field>
+            <input data-composite-input value={chunkSearch} onChange={(event) => { setChunkSearch(event.target.value); setChunkPage(1); }} placeholder={vi ? "Tìm trong đoạn nguồn…" : "Search excerpts…"} aria-label={vi ? "Tìm trong đoạn nguồn" : "Search excerpts"} className="min-h-10 rounded-xl border border-[var(--border-strong)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--primary)]" />
             <div className="flex items-center justify-end text-xs text-[var(--text-muted)]">{isLoadingChunks ? (vi ? "Đang tải…" : "Loading…") : `${chunks.length} ${vi ? "đoạn" : "excerpts"}`}</div>
           </div>
           <div className="space-y-3 p-4">
             {chunkError && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg state-warning-surface p-3 text-xs" role="alert"><span>{chunkError}</span><button type="button" onClick={() => setChunkRequestNonce((value) => value + 1)} className="rounded border border-current px-2 py-1 font-semibold">{vi ? "Thử lại" : "Retry"}</button></div>}
-            {chunks.map((chunk) => <article key={chunk.chunk_id} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] p-3"><div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-muted)]"><span className="font-semibold text-[var(--text-primary)]">{chunk.section ?? "Unknown section"}</span><span>{chunk.chunk_id} · {chunk.text_length} chars</span></div><p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--text-primary)]">{chunk.text_preview}</p>{chunk.source_url && <a href={chunk.source_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[var(--primary)] hover:underline">{vi ? "Mở nguồn SEC" : "Open SEC source"}<ExternalLink className="h-3 w-3" /></a>}</article>)}
+            {chunks.map((chunk) => <article key={chunk.chunk_id} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] p-3"><div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-muted)]"><span className="font-semibold text-[var(--text-primary)]">{chunk.section ?? "Unknown section"}</span><span>{chunk.chunk_id} · {chunk.text_length} chars</span></div><p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--text-primary)]">{chunk.text_preview}</p><div className="mt-2 flex flex-wrap items-center gap-3">{onOpenSource && <button type="button" className="text-xs font-semibold text-[var(--primary)] hover:underline" onClick={() => onOpenSource({ citation: `${chunk.ticker ?? "SEC"} indexed excerpt · ${chunk.section ?? "Unknown section"}`, text_preview: chunk.text_preview, chunk_id: chunk.chunk_id, document_id: selected.document_id, ticker: chunk.ticker, section: chunk.section, filing_date: chunk.filing_date, report_date: chunk.report_date, source_url: chunk.source_url })}>{vi ? "Mở đoạn indexed" : "Open indexed excerpt"}</button>}{chunk.source_url && <a href={chunk.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--primary)] hover:underline">{vi ? "Mở nguồn SEC" : "Open SEC source"}<ExternalLink className="h-3 w-3" /></a>}</div></article>)}
             {!isLoadingChunks && !chunkError && chunks.length === 0 && <p className="py-5 text-center text-sm text-[var(--text-muted)]">{vi ? "Không có đoạn phù hợp." : "No matching excerpts."}</p>}
           </div>
           <div className="flex items-center justify-between border-t border-[var(--border-subtle)] px-4 py-3"><button type="button" disabled={chunkPage <= 1 || isLoadingChunks} onClick={() => setChunkPage((value) => value - 1)} className="rounded-lg border border-[var(--border-strong)] px-3 py-1.5 text-xs font-semibold disabled:opacity-40">{vi ? "Trước" : "Previous"}</button><span className="text-xs text-[var(--text-muted)]">Page {chunkPage}</span><button type="button" disabled={chunks.length < 8 || isLoadingChunks} onClick={() => setChunkPage((value) => value + 1)} className="rounded-lg border border-[var(--border-strong)] px-3 py-1.5 text-xs font-semibold disabled:opacity-40">{vi ? "Sau" : "Next"}</button></div>
@@ -224,4 +244,4 @@ export function DocumentExplorerPanel({ tickers, sections }: DocumentExplorerPan
       )}
     </section>
   );
-}
+});

@@ -33,6 +33,32 @@ describe("EvidenceWorkspaceRail", () => {
     await waitFor(() => expect(screen.getByText("Full source text")).toBeInTheDocument());
   });
 
+  test("shows a saved snapshot first and requires an explicit current-index access", () => {
+    const onOpenCurrentSource = vi.fn();
+    render(
+      <LocaleProvider>
+        <EvidenceWorkspaceRail
+          sources={[{
+            citation: "AAPL saved evidence",
+            chunk_id: "chunk-1",
+            text_preview: "Saved snapshot",
+            text: "Saved snapshot captured earlier",
+            stored_snapshot: { chunk_id: "chunk-1" },
+          }]}
+          selectedIndex={0}
+          onSelectIndex={vi.fn()}
+          onOpenCurrentSource={onOpenCurrentSource}
+        />
+      </LocaleProvider>,
+    );
+
+    expect(screen.getByText("Saved snapshot captured earlier")).toBeInTheDocument();
+    expect(screen.getByText(/not replaced automatically/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Inspect current indexed excerpt" }));
+    expect(onOpenCurrentSource).toHaveBeenCalledWith(expect.objectContaining({ chunk_id: "chunk-1", stored_snapshot: undefined }));
+    expect(getChunkDetailMock).not.toHaveBeenCalled();
+  });
+
   test("reports the original source index to the controlled evidence selection", () => {
     const onSelectIndex = vi.fn();
     render(

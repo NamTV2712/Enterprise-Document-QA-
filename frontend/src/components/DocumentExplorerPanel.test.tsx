@@ -55,6 +55,18 @@ describe("DocumentExplorerPanel", () => {
     expect(await screen.findByText("Revenue was $100B.")).toBeInTheDocument();
   });
 
+  test("opens the selected filing in the document workspace with stable identity", async () => {
+    const onOpenSource = vi.fn();
+    render(<LocaleProvider><DocumentExplorerPanel tickers={["AAPL"]} sections={["financial_table"]} onOpenSource={onOpenSource} /></LocaleProvider>);
+    fireEvent.click(await screen.findByRole("button", { name: /AAPL · 2024-11-01/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open document workspace" }));
+    expect(onOpenSource).toHaveBeenCalledWith(expect.objectContaining({
+      document_id: "AAPL:0001",
+      ticker: "AAPL",
+      filing_date: "2024-11-01",
+    }));
+  });
+
   test("separates an empty search result from an empty catalog", async () => {
     getDocumentsMock.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 12 });
     render(<LocaleProvider><DocumentExplorerPanel tickers={["AAPL"]} sections={["financial_table"]} /></LocaleProvider>);

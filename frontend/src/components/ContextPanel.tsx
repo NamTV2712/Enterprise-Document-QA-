@@ -21,6 +21,9 @@ import { getSourceKey } from "../lib/sourceIdentity";
 import { getSectionDisplay } from "./SourcesPanel";
 import { getSemanticIcon } from "../lib/semanticIcons";
 import { ModalDialog } from "./ui/ModalDialog";
+import { renderStructuredTableNode } from "./StructuredTable";
+import { DocumentWorkspace } from "./DocumentWorkspace";
+import type { ReaderSessionController } from "../hooks/useReaderSession";
 
 export interface ContextPanelProps {
   sources: Source[];
@@ -34,6 +37,8 @@ export interface ContextPanelProps {
   isOpen?: boolean;
   presentation?: "inline" | "drawer";
   onClose?: () => void;
+  onOpenCurrentSource?: (source: Source) => void;
+  readerSession?: ReaderSessionController;
 }
 
 const CHUNK_PAGE_SIZE = 8;
@@ -61,7 +66,12 @@ function excerptText(source: Source): string {
 }
 
 function copyText(source: Source, index: number): string {
-  const lines = [`[Source ${index + 1}] ${source.citation}`];
+  const heading = source.stored_snapshot
+    ? `[Saved evidence snapshot] ${source.citation}`
+    : index >= 0
+      ? `[Source ${index + 1}] ${source.citation}`
+      : `[Indexed excerpt] ${source.citation}`;
+  const lines = [heading];
   if (source.ticker) lines.push(`Company: ${formatCompanyLabel(source.ticker)}`);
   if (source.section) lines.push(`Section: ${SECTION_METADATA[source.section]?.label ?? source.section}`);
   if (source.filing_date) lines.push(`Filed: ${source.filing_date}`);
@@ -170,10 +180,10 @@ export function RetrievedSources({
         </div>
         <span className="evidence-rail-count" aria-label={`${sources.length} ${vi ? "nguồn được truy xuất" : "retrieved sources"}`}>{sources.length}</span>
       </div>
-      <label className="context-indexed-search">
+      <label className="context-indexed-search" data-composite-field>
         <Search className="h-4 w-4" aria-hidden="true" />
         <span className="sr-only">{vi ? "Tìm trong nguồn" : "Search sources"}</span>
-        <input
+        <input data-composite-input
           type="search"
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
@@ -230,6 +240,8 @@ interface DocumentViewerProps {
   onNearbyPageChange?: (value: number | ((page: number) => number)) => void;
   textScale?: number;
   onTextScaleChange?: (value: number | ((scale: number) => number)) => void;
+  onOpenCurrentSource?: (source: Source) => void;
+  readerSession?: ReaderSessionController;
 }
 
 export function DocumentViewer({
@@ -243,6 +255,8 @@ export function DocumentViewer({
   onNearbyPageChange,
   textScale: controlledTextScale,
   onTextScaleChange,
+  onOpenCurrentSource,
+  readerSession,
 }: DocumentViewerProps) {
   const { locale } = useLocale();
   const vi = locale === "vi";
@@ -260,12 +274,14 @@ export function DocumentViewer({
   const [detailRetryNonce, setDetailRetryNonce] = useState(0);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showOriginal, setShowOriginal] = useState(false);
   const [internalTextScale, setInternalTextScale] = useState(100);
   const detailRequestId = useRef(0);
   const nearbyRequestId = useRef(0);
   const neighborDetailRequestId = useRef(0);
   const neighborDetailControllerRef = useRef<AbortController | null>(null);
   const latestSourceKey = useRef("");
+  const previousSourceKey = useRef<string | null>(null);
   const nearbySearch = controlledNearbySearch ?? internalNearbySearch;
   const nearbyPage = controlledNearbyPage ?? internalNearbyPage;
   const textScale = controlledTextScale ?? internalTextScale;
@@ -273,13 +289,39 @@ export function DocumentViewer({
   const setNearbyPage = onNearbyPageChange ?? setInternalNearbyPage;
   const setTextScale = onTextScaleChange ?? setInternalTextScale;
   const debouncedNearbySearch = useDebouncedValue(nearbySearch);
-  const selectedSection = source ? getSectionDisplay(source.citation, source.section).section : "";
   const selectedSourceKey = source ? getSourceKey(source) : "";
   latestSourceKey.current = selectedSourceKey;
+  const isStoredSnapshot = Boolean(source?.stored_snapshot);
   const indexedText = contextDetail?.text || detail?.text || source?.text || source?.text_preview || "";
   const activeExcerpt = contextDetail ? "" : source ? excerptText(source) : "";
   const pageCount = Math.max(1, Math.ceil(nearbyTotal / CHUNK_PAGE_SIZE));
   const hasStoredExcerpt = Boolean(source && (source.text || source.text_preview));
+  const readerGenerationRef = useRef<number | null>(null);
+
+  const isCurrentReaderSession = useCallback(() => {
+    const generation = readerGenerationRef.current;
+    return !readerSession || (generation !== null && readerSession.isCurrent(generation));
+  }, [readerSession]);
+
+  useEffect(() => {
+    if (!readerSession) {
+      readerGenerationRef.current = null;
+      return;
+    }
+    if (showOriginal) return;
+    readerGenerationRef.current = readerSession.select(source ? {
+      documentId: source.document_id,
+      sourceKey: selectedSourceKey,
+      representation: "indexed",
+    } : null);
+  }, [readerSession, selectedSourceKey, showOriginal, source?.document_id]);
+
+  useEffect(() => {
+    if (previousSourceKey.current !== null && previousSourceKey.current !== selectedSourceKey) {
+      setShowOriginal(false);
+    }
+    previousSourceKey.current = selectedSourceKey;
+  }, [selectedSourceKey]);
 
   useEffect(() => {
     const requestId = ++detailRequestId.current;
@@ -295,7 +337,7 @@ export function DocumentViewer({
       setLoading(false);
       return;
     }
-    if (!source.chunk_id) {
+    if (!source.chunk_id || isStoredSnapshot) {
       setLoading(false);
       return;
     }
@@ -303,14 +345,14 @@ export function DocumentViewer({
     setLoading(true);
     void getCachedChunkDetail(source.chunk_id, controller.signal)
       .then((response) => {
-        if (requestId === detailRequestId.current && latestSourceKey.current === requestSourceKey) setDetail(response);
+        if (requestId === detailRequestId.current && latestSourceKey.current === requestSourceKey && isCurrentReaderSession()) setDetail(response);
       })
       .catch((reason) => {
-        if (requestId !== detailRequestId.current || isAbortError(reason)) return;
+        if (requestId !== detailRequestId.current || !isCurrentReaderSession() || isAbortError(reason)) return;
         setError(describeRequestError(reason, vi ? "Không thể tải đoạn nguồn được lập chỉ mục." : "Could not load the indexed excerpt.", vi ? "vi" : "en").message);
       })
       .finally(() => {
-        if (requestId === detailRequestId.current) setLoading(false);
+        if (requestId === detailRequestId.current && isCurrentReaderSession()) setLoading(false);
       });
     return () => {
       controller.abort();
@@ -319,7 +361,7 @@ export function DocumentViewer({
       neighborDetailControllerRef.current = null;
       neighborDetailRequestId.current += 1;
     };
-  }, [source, vi, detailRetryNonce]);
+  }, [detailRetryNonce, isCurrentReaderSession, isStoredSnapshot, source, vi]);
 
   useEffect(() => {
     const requestId = ++nearbyRequestId.current;
@@ -338,22 +380,22 @@ export function DocumentViewer({
       page_size: CHUNK_PAGE_SIZE,
     }, controller.signal)
       .then((response) => {
-        if (requestId !== nearbyRequestId.current) return;
+        if (requestId !== nearbyRequestId.current || !isCurrentReaderSession()) return;
         setNearby(response.items);
         setNearbyTotal(response.total);
       })
       .catch((reason) => {
-        if (requestId !== nearbyRequestId.current || isAbortError(reason)) return;
+        if (requestId !== nearbyRequestId.current || !isCurrentReaderSession() || isAbortError(reason)) return;
         setNearbyError(describeRequestError(reason, vi ? "Không thể tải các đoạn liên quan." : "Could not load nearby indexed excerpts.", vi ? "vi" : "en").message);
       })
       .finally(() => {
-        if (requestId === nearbyRequestId.current) setNearbyLoading(false);
+        if (requestId === nearbyRequestId.current && isCurrentReaderSession()) setNearbyLoading(false);
       });
     return () => {
       controller.abort();
       nearbyRequestId.current += 1;
     };
-  }, [debouncedNearbySearch, nearbyPage, source?.document_id, vi]);
+  }, [debouncedNearbySearch, isCurrentReaderSession, nearbyPage, source?.document_id, vi]);
 
   useEffect(() => () => {
     detailRequestId.current += 1;
@@ -367,19 +409,53 @@ export function DocumentViewer({
     return <section className="context-viewer context-viewer--empty" aria-label={vi ? "Trình đọc bằng chứng" : "Evidence reader"}>{vi ? "Chọn một nguồn để xem đoạn trích." : "Select a source to inspect its excerpt."}</section>;
   }
 
+  // `source` remains the immutable answer origin. A nearby read is a new
+  // cursor, and all visible metadata/actions must move with that cursor.
+  const currentSource: Source = contextDetail
+    ? { ...source, ...contextDetail }
+    : detail
+      ? { ...source, ...detail }
+      : source;
+
+  if (showOriginal && currentSource.document_id) {
+    const workspaceText = currentSource.text || currentSource.text_preview || "";
+    const workspaceMetadata = [
+      currentSource.document_id ? [vi ? "Document ID" : "Document ID", currentSource.document_id] : null,
+      currentSource.chunk_id ? ["Chunk", currentSource.chunk_id] : null,
+      currentSource.ticker ? [vi ? "Công ty" : "Company", formatCompanyLabel(currentSource.ticker)] : null,
+      currentSource.section ? [vi ? "Mục" : "Section", currentSource.section] : null,
+      currentSource.filing_date ? [vi ? "Ngày nộp" : "Filed", currentSource.filing_date] : null,
+      currentSource.report_date ? [vi ? "Ngày báo cáo" : "Report date", currentSource.report_date] : null,
+    ].filter(Boolean) as string[][];
+    return <DocumentWorkspace
+      documentId={currentSource.document_id}
+      indexedSource={currentSource}
+      indexedExcerpt={<div className="document-workspace__excerpt-content"><p className="context-viewer-citation">{currentSource.citation}</p><p>{<HighlightedText text={workspaceText} excerpt={currentSource.text_preview || ""} />}</p></div>}
+      metadata={<dl>{workspaceMetadata.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>}
+      onBack={() => setShowOriginal(false)}
+      readerSession={readerSession}
+    />;
+  }
+  const currentSourceIndex = contextDetail ? -1 : sourceIndex;
+  const selectedSection = getSectionDisplay(currentSource.citation, currentSource.section).section;
   const displayText = loading ? (vi ? "Đang tải đoạn nguồn được lập chỉ mục…" : "Loading indexed excerpt…") : indexedText;
-  const openSec = isValidSecUrl(source.source_url) ? source.source_url : null;
+  const currentDetail = contextDetail ?? detail;
+  const openSec = isValidSecUrl(currentSource.sec_index_url)
+    ? currentSource.sec_index_url
+    : isValidSecUrl(currentSource.source_url)
+      ? currentSource.source_url
+      : null;
   const metadata = [
-    source.ticker ? `${vi ? "Công ty" : "Company"}: ${formatCompanyLabel(source.ticker)}` : null,
-    source.filing_type ? `${vi ? "Loại hồ sơ" : "Filing type"}: ${source.filing_type}` : null,
-    source.filing_date ? `${vi ? "Ngày nộp" : "Filed"}: ${source.filing_date}` : null,
-    source.report_date ? `${vi ? "Ngày báo cáo" : "Report date"}: ${source.report_date}` : null,
-    source.chunk_id ? `${vi ? "Chunk" : "Chunk"}: ${source.chunk_id}` : null,
+    currentSource.ticker ? `${vi ? "Công ty" : "Company"}: ${formatCompanyLabel(currentSource.ticker)}` : null,
+    currentSource.filing_type ? `${vi ? "Loại hồ sơ" : "Filing type"}: ${currentSource.filing_type}` : null,
+    currentSource.filing_date ? `${vi ? "Ngày nộp" : "Filed"}: ${currentSource.filing_date}` : null,
+    currentSource.report_date ? `${vi ? "Ngày báo cáo" : "Report date"}: ${currentSource.report_date}` : null,
+    currentSource.chunk_id ? `${vi ? "Chunk" : "Chunk"}: ${currentSource.chunk_id}` : null,
   ].filter(Boolean) as string[];
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(copyText(source, sourceIndex));
+      await navigator.clipboard.writeText(copyText(currentSource, currentSourceIndex));
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
@@ -389,7 +465,7 @@ export function DocumentViewer({
 
   const handleSave = () => {
     try {
-      saveEvidence(source, { conversationId, messageId });
+      saveEvidence(currentSource, { conversationId, messageId });
       setSaved(true);
       setActionError(null);
       window.setTimeout(() => setSaved(false), 1800);
@@ -408,13 +484,13 @@ export function DocumentViewer({
     setError(null);
     try {
       const response = await getCachedChunkDetail(chunk.chunk_id, controller.signal);
-      if (requestId === neighborDetailRequestId.current && latestSourceKey.current === selectedSourceKey) setContextDetail(response);
+      if (requestId === neighborDetailRequestId.current && latestSourceKey.current === selectedSourceKey && isCurrentReaderSession()) setContextDetail(response);
     } catch (reason) {
-      if (requestId === neighborDetailRequestId.current && !isAbortError(reason)) {
+      if (requestId === neighborDetailRequestId.current && isCurrentReaderSession() && !isAbortError(reason)) {
         setError(describeRequestError(reason, vi ? "Không thể mở đoạn lân cận." : "Could not open the nearby excerpt.", vi ? "vi" : "en").message);
       }
     } finally {
-      if (requestId === neighborDetailRequestId.current) {
+      if (requestId === neighborDetailRequestId.current && isCurrentReaderSession()) {
         setLoading(false);
         neighborDetailControllerRef.current = null;
       }
@@ -425,15 +501,18 @@ export function DocumentViewer({
     <section className="context-viewer" aria-labelledby="context-viewer-title">
       <div className="context-viewer-header">
         <div className="min-w-0">
-          <p className="evidence-rail-eyebrow">{vi ? "Indexed excerpts" : "Indexed excerpts"}</p>
+          <p className="evidence-rail-eyebrow">{isStoredSnapshot ? (vi ? "Đã lưu" : "Saved evidence") : "Indexed excerpts"}</p>
           <h2 id="context-viewer-title">{selectedSection}</h2>
-          <p className="context-viewer-citation">[Source {sourceIndex + 1}] {source.citation}</p>
+          <p className="context-viewer-citation">{isStoredSnapshot ? "[Saved evidence snapshot] " : currentSourceIndex >= 0 ? `[Source ${currentSourceIndex + 1}] ` : "[Nearby indexed excerpt] "}{currentSource.citation}</p>
         </div>
-        <span className="context-indexed-badge">{React.createElement(getSemanticIcon("reader"), { className: "h-3.5 w-3.5", "aria-hidden": true })}{vi ? "Đoạn đã lập chỉ mục" : "Indexed excerpt"}</span>
+        <span className="context-indexed-badge">{React.createElement(getSemanticIcon("reader"), { className: "h-3.5 w-3.5", "aria-hidden": true })}{isStoredSnapshot ? (vi ? "Bản chụp đã lưu" : "Stored snapshot") : (vi ? "Đoạn đã lập chỉ mục" : "Indexed excerpt")}</span>
       </div>
       <div className="context-viewer-actions" aria-label={vi ? "Thao tác evidence" : "Evidence actions"}>
-        <button type="button" onClick={handleCopy}><Clipboard className="h-3.5 w-3.5" aria-hidden="true" />{copied ? (vi ? "Đã sao chép" : "Copied") : (vi ? "Sao chép" : "Copy")}</button>
-        <button type="button" onClick={handleSave}><Save className="h-3.5 w-3.5" aria-hidden="true" />{saved ? (vi ? "Đã lưu" : "Saved") : (vi ? "Lưu" : "Save")}</button>
+        {contextDetail && <button type="button" onClick={() => setContextDetail(null)} disabled={loading}>{vi ? "Về đoạn đã trích" : "Return to cited excerpt"}</button>}
+        {isStoredSnapshot && onOpenCurrentSource && currentSource.chunk_id && <button type="button" onClick={() => onOpenCurrentSource({ ...currentSource, stored_snapshot: undefined })} disabled={loading}>{vi ? "Mở bản lập chỉ mục hiện tại" : "Inspect current indexed excerpt"}</button>}
+        {currentSource.document_id && <button type="button" onClick={() => setShowOriginal(true)} disabled={loading}>{vi ? "Mở bản gốc chuẩn hóa" : "Open normalized original"}</button>}
+        <button type="button" onClick={handleCopy} disabled={loading}><Clipboard className="h-3.5 w-3.5" aria-hidden="true" />{copied ? (vi ? "Đã sao chép" : "Copied") : (vi ? "Sao chép" : "Copy")}</button>
+        <button type="button" onClick={handleSave} disabled={loading}><Save className="h-3.5 w-3.5" aria-hidden="true" />{saved ? (vi ? "Đã lưu" : "Saved") : (vi ? "Lưu" : "Save")}</button>
         {openSec && <a href={openSec} target="_blank" rel="noreferrer" className="context-viewer-link"><ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />{vi ? "Mở SEC" : "Open SEC"}</a>}
       </div>
       <details className="context-viewer-disclosure">
@@ -445,31 +524,31 @@ export function DocumentViewer({
       {error && <div className="context-action-error" role="alert"><AlertCircle className="h-4 w-4" aria-hidden="true" /><span>{error} {vi ? "Excerpt đã lưu vẫn còn khả dụng." : "The saved excerpt remains available."}</span><button type="button" onClick={() => setDetailRetryNonce((value) => value + 1)}>{vi ? "Thử lại" : "Retry"}</button></div>}
       <div className="context-viewer-text" style={{ fontSize: `${textScale / 100}em` }}>
         {loading && <Loader2 className="mr-2 inline-block h-4 w-4 animate-spin" aria-label={vi ? "Đang tải" : "Loading"} />}
-        {contextDetail ? displayText : <HighlightedText text={displayText} excerpt={activeExcerpt} />}
+        {renderStructuredTableNode(currentDetail ?? {}) ?? <HighlightedText text={displayText} excerpt={contextDetail ? "" : activeExcerpt} />}
       </div>
-      {!detail && hasStoredExcerpt && !loading && <p className="context-offline-note">{vi ? "Đang hiển thị excerpt đã lưu; dữ liệu chỉ mục hiện không khả dụng." : "Showing the stored excerpt; indexed data is currently unavailable."}</p>}
+      {!detail && hasStoredExcerpt && !loading && <p className="context-offline-note">{isStoredSnapshot ? (vi ? "Đang hiển thị bản chụp tại thời điểm lưu; dữ liệu này không tự động bị thay thế." : "Showing the saved snapshot from the time it was captured; it is not replaced automatically.") : (vi ? "Đang hiển thị excerpt đã lưu; dữ liệu chỉ mục hiện không khả dụng." : "Showing the stored excerpt; indexed data is currently unavailable.")}</p>}
       <div className="context-viewer-footer">
         <span>{vi ? "Kích thước chữ" : "Text size"}</span>
         <button type="button" onClick={() => setTextScale((value) => Math.max(90, value - 10))} disabled={textScale <= 90} aria-label={vi ? "Giảm kích thước chữ" : "Decrease text size"}>−</button>
         <span>{textScale}%</span>
         <button type="button" onClick={() => setTextScale((value) => Math.min(150, value + 10))} disabled={textScale >= 150} aria-label={vi ? "Tăng kích thước chữ" : "Increase text size"}>+</button>
       </div>
-      {source.document_id && (
+      {currentSource.document_id && (
         <section className="context-nearby" aria-labelledby="context-nearby-title">
           <div className="context-nearby-header">
             <h3 id="context-nearby-title">{vi ? "Các đoạn trong document" : "Indexed document chunks"}</h3>
             <span>{nearbyTotal}</span>
           </div>
-          <label className="context-indexed-search context-indexed-search--small">
+          <label className="context-indexed-search context-indexed-search--small" data-composite-field>
             <Search className="h-3.5 w-3.5" aria-hidden="true" />
             <span className="sr-only">{vi ? "Tìm trong document" : "Search indexed document"}</span>
-            <input type="search" value={nearbySearch} onChange={(event) => { setNearbySearch(event.target.value); setNearbyPage(1); }} placeholder={vi ? "Tìm trong đoạn…" : "Search chunks…"} />
+            <input data-composite-input type="search" value={nearbySearch} onChange={(event) => { setNearbySearch(event.target.value); setNearbyPage(1); }} placeholder={vi ? "Tìm trong đoạn…" : "Search chunks…"} />
           </label>
           {nearbyError && <p className="context-indexed-error" role="alert">{nearbyError}</p>}
           <div className="context-nearby-list">
             {nearbyLoading && <p className="evidence-rail-empty">{vi ? "Đang tải…" : "Loading…"}</p>}
             {!nearbyLoading && nearby.map((chunk) => (
-              <button type="button" key={`${chunk.chunk_id ?? "missing"}-${chunk.chunk_index ?? ""}`} className={`context-neighbor-row ${chunk.chunk_id === source.chunk_id && !contextDetail ? "is-current" : ""}`} onClick={() => void openNearby(chunk)}>
+              <button type="button" key={`${chunk.chunk_id ?? "missing"}-${chunk.chunk_index ?? ""}`} className={`context-neighbor-row ${chunk.chunk_id === currentSource.chunk_id ? "is-current" : ""}`} onClick={() => void openNearby(chunk)}>
                 <span>{chunk.chunk_index ?? "—"}</span>
                 <span>{chunk.text_preview}</span>
               </button>
@@ -502,8 +581,12 @@ export function ContextPanel({
   isOpen = true,
   presentation = "inline",
   onClose,
+  onOpenCurrentSource,
+  readerSession,
 }: ContextPanelProps) {
-  const selected = sources[selectedIndex] ?? sources[0];
+  const selected = Number.isInteger(selectedIndex) && selectedIndex >= 0 && selectedIndex < sources.length
+    ? sources[selectedIndex]
+    : undefined;
   const { locale } = useLocale();
   const [nearbySearch, setNearbySearch] = useState("");
   const [nearbyPage, setNearbyPage] = useState(1);
@@ -589,6 +672,8 @@ export function ContextPanel({
         onNearbyPageChange={setNearbyPage}
         textScale={textScale}
         onTextScaleChange={setTextScale}
+        onOpenCurrentSource={onOpenCurrentSource}
+        readerSession={readerSession}
       />
     </aside>
   );

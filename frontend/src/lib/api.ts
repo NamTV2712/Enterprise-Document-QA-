@@ -16,6 +16,16 @@ import {
   DocumentListResponse,
   DocumentChunkListResponse,
   DocumentChunkDetail,
+  OriginalContent,
+  OriginalManifest,
+  ReaderManifest,
+  ReaderResolveResponse,
+  EvidenceLocation,
+  StructuredOutlineResponse,
+  StructuredContentResponse,
+  StructuredSearchResponse,
+  OriginalSearchResponse,
+  OriginalLocation,
   SystemInfoResponse,
   EvaluationRun,
   EvaluationRunListResponse,
@@ -228,6 +238,148 @@ export async function getChunkDetail(chunkId: string, signal?: AbortSignal): Pro
   if (!response.ok) {
     throw new ApiError(`Failed to fetch chunk: ${response.status}`, response.status);
   }
+  return response.json();
+}
+
+export async function getOriginalManifest(documentId: string, signal?: AbortSignal): Promise<OriginalManifest> {
+  const baseUrl = getApiBaseUrl();
+  const response = await apiFetch(`${baseUrl}/documents/${encodeURIComponent(documentId)}/original`, {
+    method: "GET", headers: { Accept: "application/json" }, cache: "no-store", signal,
+  });
+  if (!response.ok) await throwApiError(response, `Failed to fetch original manifest: ${response.status}`);
+  return response.json();
+}
+
+export async function getReaderManifest(documentId: string, signal?: AbortSignal): Promise<ReaderManifest> {
+  const baseUrl = getApiBaseUrl();
+  const response = await apiFetch(`${baseUrl}/documents/${encodeURIComponent(documentId)}/reader`, {
+    method: "GET", headers: { Accept: "application/json" }, cache: "no-store", signal,
+  });
+  if (!response.ok) await throwApiError(response, `Failed to fetch reader manifest: ${response.status}`);
+  return response.json();
+}
+
+export async function resolveReaderDocument(
+  documentId: string,
+  refresh = false,
+  signal?: AbortSignal,
+): Promise<ReaderResolveResponse> {
+  const baseUrl = getApiBaseUrl();
+  const response = await apiFetch(`${baseUrl}/documents/${encodeURIComponent(documentId)}/reader/resolve`, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh }),
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok) await throwApiError(response, `Failed to resolve reader source: ${response.status}`);
+  return response.json();
+}
+
+function readerQuery(params: { source_document_id: string; source_set_revision: string; document_revision: string; cursor?: number; limit?: number; q?: string }): string {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
+  });
+  return query.toString();
+}
+
+export async function getReaderOutline(documentId: string, params: { source_document_id: string; source_set_revision: string; document_revision: string; cursor?: number; limit?: number }, signal?: AbortSignal): Promise<StructuredOutlineResponse> {
+  const response = await apiFetch(`${getApiBaseUrl()}/documents/${encodeURIComponent(documentId)}/reader/outline?${readerQuery(params)}`, { method: "GET", headers: { Accept: "application/json" }, cache: "no-store", signal });
+  if (!response.ok) await throwApiError(response, `Failed to fetch reader outline: ${response.status}`);
+  return response.json();
+}
+
+export async function getReaderContent(documentId: string, params: { source_document_id: string; source_set_revision: string; document_revision: string; cursor?: number; limit?: number }, signal?: AbortSignal): Promise<StructuredContentResponse> {
+  const response = await apiFetch(`${getApiBaseUrl()}/documents/${encodeURIComponent(documentId)}/reader/content?${readerQuery(params)}`, { method: "GET", headers: { Accept: "application/json" }, cache: "no-store", signal });
+  if (!response.ok) await throwApiError(response, `Failed to fetch reader content: ${response.status}`);
+  return response.json();
+}
+
+export async function searchReader(documentId: string, params: { source_document_id: string; source_set_revision: string; document_revision: string; q: string; cursor?: number; limit?: number }, signal?: AbortSignal): Promise<StructuredSearchResponse> {
+  const response = await apiFetch(`${getApiBaseUrl()}/documents/${encodeURIComponent(documentId)}/reader/search?${readerQuery(params)}`, { method: "GET", headers: { Accept: "application/json" }, cache: "no-store", signal });
+  if (!response.ok) await throwApiError(response, `Failed to search structured reader: ${response.status}`);
+  return response.json();
+}
+
+export function getReaderSectionExportUrl(documentId: string, params: { source_document_id: string; source_set_revision: string; document_revision: string; format?: "html" | "markdown" }): string {
+  return `${getApiBaseUrl()}/documents/${encodeURIComponent(documentId)}/reader/section-export?${readerQuery(params)}`;
+}
+
+export async function getReaderLocation(
+  chunkId: string,
+  params: { chunk_text_hash: string; source_set_revision: string },
+  signal?: AbortSignal,
+): Promise<EvidenceLocation> {
+  const query = new URLSearchParams(params);
+  const response = await apiFetch(`${getApiBaseUrl()}/chunks/${encodeURIComponent(chunkId)}/reader-location?${query.toString()}`, {
+    method: "GET", headers: { Accept: "application/json" }, cache: "no-store", signal,
+  });
+  if (!response.ok) await throwApiError(response, `Failed to locate structured evidence: ${response.status}`);
+  return response.json();
+}
+
+export async function getOriginalContent(
+  documentId: string,
+  params: {
+    source_document_id: string;
+    source_set_revision: string;
+    document_revision: string;
+    start?: number;
+    limit?: number;
+    chunk_id?: string | null;
+    chunk_text_hash?: string | null;
+    find?: string | null;
+  },
+  signal?: AbortSignal,
+): Promise<OriginalContent> {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
+  });
+  const baseUrl = getApiBaseUrl();
+  const response = await apiFetch(`${baseUrl}/documents/${encodeURIComponent(documentId)}/original/content?${query.toString()}`, {
+    method: "GET", headers: { Accept: "application/json" }, cache: "no-store", signal,
+  });
+  if (!response.ok) await throwApiError(response, `Failed to fetch original content: ${response.status}`);
+  return response.json();
+}
+
+export async function searchOriginal(
+  documentId: string,
+  params: {
+    source_document_id: string;
+    source_set_revision: string;
+    document_revision: string;
+    q: string;
+    cursor?: number;
+    limit?: number;
+  },
+  signal?: AbortSignal,
+): Promise<OriginalSearchResponse> {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
+  });
+  const baseUrl = getApiBaseUrl();
+  const response = await apiFetch(`${baseUrl}/documents/${encodeURIComponent(documentId)}/original/search?${query.toString()}`, {
+    method: "GET", headers: { Accept: "application/json" }, cache: "no-store", signal,
+  });
+  if (!response.ok) await throwApiError(response, `Failed to search original: ${response.status}`);
+  return response.json();
+}
+
+export async function getOriginalLocation(
+  chunkId: string,
+  params: { chunk_text_hash: string; source_set_revision: string },
+  signal?: AbortSignal,
+): Promise<OriginalLocation> {
+  const query = new URLSearchParams(params);
+  const baseUrl = getApiBaseUrl();
+  const response = await apiFetch(`${baseUrl}/chunks/${encodeURIComponent(chunkId)}/original-location?${query.toString()}`, {
+    method: "GET", headers: { Accept: "application/json" }, cache: "no-store", signal,
+  });
+  if (!response.ok) await throwApiError(response, `Failed to locate indexed evidence: ${response.status}`);
   return response.json();
 }
 

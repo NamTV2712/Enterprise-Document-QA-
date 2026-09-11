@@ -44,9 +44,15 @@ export interface Source {
   report_date?: string | null;
   chunk_index?: number | null;
   source_url?: string | null;
+  sec_index_url?: string | null;
+  chunk_text_hash?: string;
   rank?: number | null;
   score_kind?: "retrieval" | "cross_encoder" | "rrf" | "unknown" | null;
   reranker_score?: number | null;
+  /** Transient UI marker; never persisted in evidence collection storage. */
+  stored_snapshot?: {
+    chunk_id?: string | null;
+  };
 }
 
 /** Exact source-selection identity used by citation jumps and the evidence rail. */
@@ -68,6 +74,15 @@ export interface DisplayedAnswerContext {
   variantId: string | null;
 }
 
+/** User-visible state for saving the answer that is currently displayed. */
+export type SaveAnswerVersionStatus =
+  | "idle"
+  | "saving"
+  | "saved"
+  | "already_saved"
+  | "failed"
+  | "volatile";
+
 export type RetrievalPreset = "bm25" | "dense" | "hybrid" | "hybrid_rerank";
 
 export interface RetrievalCandidate {
@@ -84,7 +99,9 @@ export interface RetrievalCandidate {
   lexical_rank?: number | null;
   rrf_score?: number | null;
   cross_encoder_score?: number | null;
+  fusion_rank?: number | null;
   final_rank?: number | null;
+  document_id?: string | null;
   selected: boolean;
 }
 
@@ -102,6 +119,8 @@ export interface RetrievalTrace {
   stages: Array<{ name: string; elapsed_ms: number; skipped?: boolean }>;
   candidates: RetrievalCandidate[];
   selected_chunk_ids: string[];
+  candidate_count?: number;
+  selected_count?: number;
   elapsed_ms: number;
 }
 
@@ -114,6 +133,7 @@ export interface DocumentRow {
   document_id: string;
   ticker: string | null;
   filing_date: string | null;
+  report_date?: string | null;
   accession_number: string | null;
   sections: string[];
   chunk_count: number;
@@ -136,6 +156,11 @@ export interface DocumentChunk {
 export interface DocumentChunkDetail extends DocumentChunk {
   document_id: string;
   text: string;
+  chunk_text_hash?: string;
+  sec_index_url?: string | null;
+  presentation?:
+    | { kind: "plain_text"; reason: string | null }
+    | { kind: "markdown_table"; caption: string | null; units: string | null; columns: string[]; rows: string[][] };
 }
 
 export interface DocumentListResponse {
@@ -166,7 +191,254 @@ export interface SystemInfoResponse {
     stage_events?: boolean;
     comparative_stream?: boolean;
     document_indexed_viewer?: boolean;
+    original_document_viewer?: {
+      enabled: boolean;
+      representation: "normalized_text";
+      normalizer_version: string;
+    };
   };
+}
+
+export interface OriginalManifestSource {
+  source_document_id: string;
+  role: "primary_filing" | "annual_report_companion";
+  label: string;
+  status: "available" | "unavailable";
+  reason: string | null;
+  document_revision: string | null;
+  text_length: number | null;
+}
+
+export interface OriginalManifest {
+  document_id: string;
+  status: "available" | "partial" | "unavailable";
+  reason: string | null;
+  normalizer_version: string;
+  source_set_revision: string;
+  sources: OriginalManifestSource[];
+}
+
+export interface ReaderFilingIdentity {
+  ticker: string | null;
+  cik: number | null;
+  accession_number: string | null;
+  filing_date: string | null;
+  report_date: string | null;
+  status: "verified" | "unverified";
+  reason_code: "verified" | "identity_unverified";
+}
+
+export interface ReaderAvailability {
+  kind: "normalized_text" | "structured" | "pdf";
+  status: "available" | "partial" | "unavailable";
+  reason_code:
+    | "available"
+    | "identity_unverified"
+    | "source_unavailable"
+    | "structured_representation_unavailable"
+    | "pdf_representation_unavailable";
+  reason: string | null;
+}
+
+export interface CanonicalSource {
+  source_document_id: string;
+  role: "primary_filing" | "annual_report_companion";
+  label: string;
+  status: "available" | "unavailable";
+  reason_code: "available" | "identity_unverified" | "source_unavailable";
+  reason: string | null;
+  canonical_url: string | null;
+  media_type: "text/html";
+  document_revision: string | null;
+  text_length: number | null;
+}
+
+export interface ReaderManifest {
+  schema_version: "sec-reader-v4";
+  document_id: string;
+  status: "available" | "partial" | "unavailable";
+  reason_code: "available" | "identity_unverified" | "source_unavailable";
+  reason: string | null;
+  identity: ReaderFilingIdentity;
+  source_set_revision: string;
+  sources: CanonicalSource[];
+  representations: ReaderAvailability[];
+}
+
+export interface ReaderAcquisition {
+  status: "not_needed" | "acquired" | "unavailable";
+  code: string;
+  message: string;
+  canonical_url: string | null;
+  raw_sha256: string | null;
+  bytes_received: number | null;
+  request_count: number;
+}
+
+export interface ReaderResolveResponse {
+  manifest: ReaderManifest;
+  acquisition: ReaderAcquisition;
+}
+
+export interface StructuredRun {
+  text: string;
+  emphasis: boolean;
+  strong: boolean;
+  superscript: boolean;
+  subscript: boolean;
+}
+
+export interface StructuredCell {
+  text: string;
+  rowspan: number;
+  colspan: number;
+  header: boolean;
+}
+
+export interface StructuredBlock {
+  block_id: string;
+  kind: "heading" | "paragraph" | "list" | "table" | "separator" | "unsupported";
+  text: string;
+  runs: StructuredRun[];
+  level: number | null;
+  anchor: string | null;
+  items: string[];
+  caption: string | null;
+  units?: string | null;
+  columns: string[];
+  rows: StructuredCell[][];
+  continuation_index?: number | null;
+  continuation_count?: number | null;
+  source_text?: string;
+}
+
+export interface StructuredOutlineItem {
+  block_id: string;
+  label: string;
+  level: number;
+  anchor: string;
+}
+
+export interface StructuredOutlineResponse {
+  document_id: string;
+  source_document_id: string;
+  source_set_revision: string;
+  document_revision: string;
+  items: StructuredOutlineItem[];
+  next_cursor: number | null;
+  complete: boolean;
+  limitations: string[];
+}
+
+export interface StructuredContentResponse {
+  document_id: string;
+  source_document_id: string;
+  source_set_revision: string;
+  document_revision: string;
+  blocks: StructuredBlock[];
+  previous_cursor: number | null;
+  next_cursor: number | null;
+  complete: boolean;
+  limitations: string[];
+}
+
+export interface StructuredSearchMatch {
+  block_id: string;
+  block_index: number;
+  start: number;
+  end: number;
+  quote: string;
+}
+
+export interface StructuredSearchResponse {
+  document_id: string;
+  source_document_id: string;
+  source_set_revision: string;
+  document_revision: string;
+  query: string;
+  matches: StructuredSearchMatch[];
+  total: number;
+  next_cursor: number | null;
+  complete: boolean;
+}
+
+export interface EvidenceRange {
+  block_id: string;
+  block_index: number;
+  kind: StructuredBlock["kind"];
+  start: number;
+  end: number;
+  method: "text_whitespace" | "table_semantic";
+}
+
+export interface EvidenceLocation {
+  chunk_id: string;
+  chunk_text_hash: string;
+  document_id: string;
+  source_set_revision: string;
+  status: "exact" | "ambiguous" | "not_found" | "unavailable" | "stale";
+  reason_code: "exact" | "ambiguous" | "not_found" | "unavailable" | "stale";
+  reason: string | null;
+  source_document_id: string | null;
+  document_revision: string | null;
+  representation_revision: string | null;
+  ranges: EvidenceRange[];
+  match_count: number;
+  match_count_capped: boolean;
+}
+
+export interface OriginalContentSegment {
+  text: string;
+  evidence: boolean;
+  search: boolean;
+}
+
+export interface OriginalContent {
+  document_id: string;
+  source_document_id: string;
+  source_set_revision: string;
+  document_revision: string;
+  start: number;
+  end: number;
+  total_length: number;
+  previous_start: number | null;
+  next_start: number | null;
+  segments: OriginalContentSegment[];
+}
+
+export interface OriginalSearchMatch {
+  start: number;
+  end: number;
+  preview: string;
+}
+
+export interface OriginalSearchResponse {
+  document_id: string;
+  source_document_id: string;
+  source_set_revision: string;
+  document_revision: string;
+  query: string;
+  matches: OriginalSearchMatch[];
+  next_cursor: number | null;
+}
+
+export interface OriginalLocation {
+  chunk_id: string;
+  chunk_text_hash: string;
+  document_id: string;
+  source_set_revision: string;
+  matcher_version: string;
+  status: "exact" | "not_found" | "ambiguous" | "unavailable";
+  reason: string | null;
+  match_count: 0 | 1 | 2;
+  match_count_capped: boolean;
+  location: {
+    source_document_id: string;
+    document_revision: string;
+    method: "full_text_whitespace" | "table_serialization";
+    start: number;
+    end: number;
+  } | null;
 }
 
 export type EvaluationRunStatus = "official" | "candidate" | "historical" | "incomplete";

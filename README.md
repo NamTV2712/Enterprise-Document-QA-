@@ -36,6 +36,7 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 | [`docs/ARCHITECTURE_API_GUIDE.md`](docs/ARCHITECTURE_API_GUIDE.md) | Retrieval flow, read-only API surfaces, and frontend state boundaries |
 | [`docs/IMPROVEMENT_ROUND_REPORT.md`](docs/IMPROVEMENT_ROUND_REPORT.md) | M0-M11 improvement receipt, provider accounting, and final verification gates |
 | [`docs/UX_IMPROVEMENT_ROUND_REPORT.md`](docs/UX_IMPROVEMENT_ROUND_REPORT.md) | P0-P14 SEC Research Workspace UX, performance, Archify, and KEY5 receipt |
+| [`docs/EVALUATION_REVIEW_GUIDE.md`](docs/EVALUATION_REVIEW_GUIDE.md) | Evaluation and experiments workflow for live, recorded, and missing reports |
 
 ## Key Features
 
@@ -1150,6 +1151,8 @@ EMBEDDING_MODEL_REVISION=<exact-hugging-face-commit>
 EMBEDDING_GENERATIONS_DIR=data/embedding_generations
 EMBEDDING_GENERATION_PATH=data/embedding_generations/<generation-id>
 ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+# Required only for optional on-demand SEC reader acquisition; use a real contact address.
+SEC_READER_USER_AGENT=Researcher Name researcher@example.com
 LLM_RATE_LIMIT_BURST=10/minute
 LLM_RATE_LIMIT_DAILY=100/day
 DECOMPOSED_RATE_LIMIT=5/minute

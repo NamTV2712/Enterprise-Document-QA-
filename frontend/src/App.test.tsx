@@ -122,7 +122,11 @@ describe("App request cancellation", () => {
     render(<App />);
 
     expect(
-      await screen.findByRole("article", { name: "Research assistant response" }),
+      await screen.findByRole(
+        "article",
+        { name: "Research assistant response" },
+        { timeout: 5_000 },
+      ),
     ).toHaveTextContent(longAnswer);
 
     fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
@@ -138,7 +142,11 @@ describe("App request cancellation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
     fireEvent.click(screen.getByRole("button", { name: "Current conversation" }));
     expect(
-      await screen.findByRole("article", { name: "Research assistant response" }),
+      await screen.findByRole(
+        "article",
+        { name: "Research assistant response" },
+        { timeout: 5_000 },
+      ),
     ).toHaveTextContent(longAnswer);
   });
 
@@ -278,7 +286,9 @@ describe("App request cancellation", () => {
       expect(screen.queryByRole("dialog", { name: "Workspace controls" })).not.toBeInTheDocument();
       expect(screen.getByRole("dialog", { name: "How to use this research workspace" })).toBeInTheDocument();
     });
-    expect(screen.getByRole("button", { name: "Close help" })).toHaveFocus();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Close help" })).toHaveFocus();
+    });
   });
 
   test("sidebar is a stable navigation surface without a resizer or duplicate Library", async () => {

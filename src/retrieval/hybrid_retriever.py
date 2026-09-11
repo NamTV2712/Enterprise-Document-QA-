@@ -281,7 +281,8 @@ class HybridRetriever:
         for ids in (bm25_ids, dense_ids, lexical_ids):
             for rank, chunk_id in enumerate(ids):
                 rrf_scores[chunk_id] = rrf_scores.get(chunk_id, 0.0) + 1 / (RRF_K + rank + 1)
-        hybrid_ids = sorted(rrf_scores, key=rrf_scores.get, reverse=True)[:candidate_pool]
+        fusion_order = sorted(rrf_scores, key=rrf_scores.get, reverse=True)
+        hybrid_ids = fusion_order[:candidate_pool]
         hybrid_chunks = [self._chunks_by_id[chunk_id] for chunk_id in hybrid_ids]
 
         cross_encoder_scores: dict[str, float] = {}
@@ -316,9 +317,10 @@ class HybridRetriever:
         all_ids = list(dict.fromkeys((*bm25_ids, *dense_ids, *lexical_ids, *hybrid_ids)))
         bm25_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(bm25_ids)}
         dense_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(dense_ids)}
+        fusion_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(fusion_order)}
         final_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(final_ids)}
         candidates = []
-        for chunk_id in all_ids[:candidate_pool]:
+        for chunk_id in all_ids:
             chunk = self._chunks_by_id[chunk_id]
             candidates.append(
                 {
@@ -335,6 +337,7 @@ class HybridRetriever:
                     if chunk_id in dense_scores else None,
                     "dense_rank": dense_rank.get(chunk_id),
                     "lexical_rank": lexical_rank.get(chunk_id),
+                    "fusion_rank": fusion_rank.get(chunk_id),
                     "rrf_score": round(rrf_scores[chunk_id], 8) if chunk_id in rrf_scores else None,
                     "cross_encoder_score": round(cross_encoder_scores[chunk_id], 6)
                     if chunk_id in cross_encoder_scores else None,
@@ -363,6 +366,8 @@ class HybridRetriever:
             ],
             "candidates": candidates,
             "selected_chunk_ids": final_ids,
+            "candidate_count": len(candidates),
+            "selected_count": len(final_ids),
             "elapsed_ms": round((time.perf_counter() - trace_started) * 1000, 3),
         }
 

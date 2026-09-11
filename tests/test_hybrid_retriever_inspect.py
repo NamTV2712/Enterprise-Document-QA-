@@ -75,3 +75,40 @@ def test_inspect_non_reranked_preset_does_not_call_cross_encoder(monkeypatch) ->
 
     assert trace["selected_chunk_ids"] == ["c1", "c2"]
     assert trace["stages"][-1]["skipped"] is True
+
+
+def test_inspect_serializes_selected_candidate_outside_first_producer_pool(monkeypatch) -> None:
+    monkeypatch.setattr(hybrid_module, "lexical_ladder_candidates", lambda *_args, **_kwargs: [])
+    retriever = _retriever()
+    chunks = [
+        {
+            "chunk_id": f"c{index}",
+            "ticker": "AAPL",
+            "section": "financial_table",
+            "filing_date": "2025-10-31",
+            "text": f"Revenue evidence {index}.",
+        }
+        for index in range(12)
+    ]
+    retriever._all_chunks = chunks
+    retriever._chunks_by_id = {chunk["chunk_id"]: chunk for chunk in chunks}
+    retriever._chunk_index_map = {chunk["chunk_id"]: index for index, chunk in enumerate(chunks)}
+    retriever._chunks_by_ticker = {"AAPL": chunks}
+    retriever._chunks_by_section = {"financial_table": chunks}
+    retriever._chunks_by_ticker_section = {("AAPL", "financial_table"): chunks}
+    retriever.bm25 = SimpleNamespace(get_scores=lambda _tokens: list(range(12, 0, -1)))
+    retriever.store = SimpleNamespace(search=lambda **_kwargs: [{"chunk_id": "c11", "score": 0.99}])
+
+    trace = retriever.inspect(
+        "What was the revenue?",
+        top_k=1,
+        candidate_pool=10,
+        preset="dense",
+    )
+
+    assert trace["selected_chunk_ids"] == ["c11"]
+    assert trace["candidate_count"] == len(trace["candidates"]) == 11
+    selected = next(candidate for candidate in trace["candidates"] if candidate["chunk_id"] == "c11")
+    assert selected["selected"] is True
+    assert selected["final_rank"] == 1
+    assert selected["fusion_rank"] == 2

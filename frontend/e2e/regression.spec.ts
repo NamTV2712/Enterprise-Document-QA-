@@ -440,6 +440,23 @@ test("guided portfolio route reaches research, retrieval, evaluation, and archit
   await expect(page.getByText("Provider-free tools")).toBeVisible();
 });
 
+test("Documents and Search open the exact chunk in the shared indexed reader", async ({ page }) => {
+  await setup(page);
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Search the filing corpus" })).toBeVisible();
+  await page.getByRole("textbox", { name: "Search question" }).fill("What was Apple's total revenue in 2024?");
+  await page.getByRole("button", { name: "Run search" }).click();
+  await page.getByRole("button", { name: "Open indexed excerpt" }).click();
+  await expect(page.locator(".context-viewer-text")).toContainText("Total revenue was reported in fiscal 2024.");
+  await page.getByRole("button", { name: "Close evidence inspector" }).click();
+
+  await page.getByRole("button", { name: "Documents", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Document Explorer" })).toBeVisible();
+  await page.getByRole("button", { name: /AAPL · 2025-10-31/ }).click();
+  await page.getByRole("button", { name: "Open indexed excerpt" }).click();
+  await expect(page.locator(".context-viewer-text")).toContainText("Total revenue was reported in fiscal 2024.");
+});
+
 test("wide tool views retain a usable canvas without evidence-rail geometry", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await setup(page);

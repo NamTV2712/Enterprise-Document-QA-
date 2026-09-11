@@ -47,6 +47,11 @@ test("renders real stage events and exact indexed reader identity", async ({ pag
   await expect(page.locator(".context-metadata")).toContainText("Chunk: AAPL_harness_0000");
   await expect(page.getByText("Indexed document chunks", { exact: true })).toBeVisible();
   await expect(page.getByText("Harness neighboring indexed excerpt for AAPL.")).toBeVisible();
+  await page.locator(".context-neighbor-row").filter({ hasText: "Harness neighboring indexed excerpt for AAPL." }).click();
+  await expect(page.locator(".context-metadata")).toContainText("Chunk: AAPL_harness_0001");
+  await expect(page.getByRole("button", { name: "Return to cited excerpt" })).toBeVisible();
+  await page.getByRole("button", { name: "Return to cited excerpt" }).click();
+  await expect(page.locator(".context-metadata")).toContainText("Chunk: AAPL_harness_0000");
 });
 
 test("keeps the harness readiness contract observable over HTTP", async ({ page }) => {
@@ -71,4 +76,10 @@ test("keeps the harness readiness contract observable over HTTP", async ({ page 
     });
   }, CONTROL_ORIGIN);
   await expect(page.getByText(/Research ready/i).first()).toBeVisible();
+});
+
+test("does not substitute another source for an unknown chunk identity", async ({ page }) => {
+  await setup(page);
+  const response = await page.request.get(`${API_ORIGIN}/chunks/unknown-fixture-chunk`);
+  expect(response.status()).toBe(404);
 });

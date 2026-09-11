@@ -200,6 +200,13 @@ async function loadAnswer(page: Page, theme: "light" | "dark", locale: "en" | "v
     localStorage.setItem("sec_qa_navigation_layout_v1", "expanded");
   }, { nextTheme: theme, nextLocale: locale });
   await page.reload();
+  // A reload can restore the previous local conversation after its mocked
+  // backend session has expired. Start a fresh conversation before exercising
+  // the next theme/locale matrix cell so the fixture remains writable.
+  const startNewConversation = page.getByRole("button", { name: "Start new conversation", exact: true });
+  if (await startNewConversation.isVisible()) {
+    await startNewConversation.click();
+  }
   const input = page.locator("#chat-textarea");
   await expect(input).toBeVisible();
   await input.fill("What are Apple's main business risks?");

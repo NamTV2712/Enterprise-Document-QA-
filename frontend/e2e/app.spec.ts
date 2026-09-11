@@ -438,7 +438,7 @@ test("command palette follows the focused older answer and selected variant", as
   await expect(page.getByText("Older answer", { exact: false }).first()).toBeVisible();
   const olderArticle = page.getByRole("article", { name: "Research assistant response" }).first();
   await olderArticle.locator(".message-secondary-actions > summary").click();
-  await olderArticle.getByRole("button", { name: "Save answer variant" }).click();
+  await olderArticle.getByRole("button", { name: "Save answer version" }).click();
   await expect(olderArticle.getByRole("button", { name: "Variant 1" })).toBeVisible();
 
   await askQuestion(page, "What did the newer filing answer?");

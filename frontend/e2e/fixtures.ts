@@ -47,6 +47,7 @@ export const SAMPLE_SOURCES = [
     filing_date: "2025-10-31",
     report_date: "2025-09-27",
     chunk_index: 1,
+    chunk_text_hash: "1111111111111111111111111111111111111111111111111111111111111111",
     source_url: "https://www.sec.gov/Archives/edgar/data/1/fixture.htm",
     score_kind: "retrieval",
   },
@@ -165,6 +166,109 @@ export async function installApiFixtures(
       return;
     }
 
+    const decodedPath = decodeURIComponent(path);
+    if (decodedPath === "/documents/AAPL:fixture/reader") {
+      await route.fulfill({
+        status: 200,
+        headers: { ...CORS_HEADERS, "content-type": "application/json" },
+        body: JSON.stringify({
+          schema_version: "sec-reader-v4",
+          document_id: "AAPL:fixture",
+          status: "available",
+          reason_code: "available",
+          reason: null,
+          identity: {
+            ticker: "AAPL",
+            cik: 320193,
+            accession_number: "0000320193-25-000079",
+            filing_date: "2025-10-31",
+            report_date: "2025-09-27",
+            status: "verified",
+            reason_code: "verified",
+          },
+          source_set_revision: "fixture-source-set-revision",
+          sources: [{
+            source_document_id: "fixture-source",
+            role: "primary_filing",
+            label: "Primary filing",
+            status: "available",
+            reason_code: "available",
+            reason: null,
+            canonical_url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.html",
+            media_type: "text/html",
+            document_revision: "fixture-document-revision",
+            text_length: 256,
+          }],
+          representations: [
+            { kind: "normalized_text", status: "available", reason_code: "available", reason: null },
+            { kind: "structured", status: "available", reason_code: "available", reason: null },
+            { kind: "pdf", status: "unavailable", reason_code: "pdf_representation_unavailable", reason: "PDF is not available in the current corpus." },
+          ],
+        }),
+      });
+      return;
+    }
+
+    if (decodedPath === "/documents/AAPL:fixture/reader/outline") {
+      await route.fulfill({
+        status: 200,
+        headers: { ...CORS_HEADERS, "content-type": "application/json" },
+        body: JSON.stringify({
+          document_id: "AAPL:fixture",
+          source_document_id: "fixture-source",
+          source_set_revision: "fixture-source-set-revision",
+          document_revision: "fixture-document-revision",
+          items: [{ block_id: "fixture-heading", label: "Risk factors", level: 1, anchor: "risk-factors" }],
+          next_cursor: null,
+          complete: true,
+          limitations: [],
+        }),
+      });
+      return;
+    }
+
+    if (decodedPath === "/documents/AAPL:fixture/reader/content") {
+      await route.fulfill({
+        status: 200,
+        headers: { ...CORS_HEADERS, "content-type": "application/json" },
+        body: JSON.stringify({
+          document_id: "AAPL:fixture",
+          source_document_id: "fixture-source",
+          source_set_revision: "fixture-source-set-revision",
+          document_revision: "fixture-document-revision",
+          blocks: [
+            { block_id: "fixture-heading", kind: "heading", text: "Risk factors", runs: [], level: 1, anchor: "risk-factors", items: [], caption: null, columns: [], rows: [], source_text: "Risk factors" },
+            { block_id: "fixture-paragraph", kind: "paragraph", text: "The company faces competition risks in consumer markets worldwide.", runs: [{ text: "The company faces competition risks in consumer markets worldwide.", emphasis: false, strong: false, superscript: false, subscript: false }], level: null, anchor: null, items: [], caption: null, columns: [], rows: [], source_text: "The company faces competition risks in consumer markets worldwide." },
+            { block_id: "fixture-table", kind: "table", text: "", runs: [], level: null, anchor: null, items: [], caption: "Revenue", columns: ["Metric", "FY2025"], rows: [[{ text: "Total sales", rowspan: 1, colspan: 1, header: false }, { text: "416,161", rowspan: 1, colspan: 1, header: false }]], source_text: "Total sales 416,161" },
+          ],
+          previous_cursor: null,
+          next_cursor: null,
+          complete: true,
+          limitations: [],
+        }),
+      });
+      return;
+    }
+
+    if (decodedPath === "/documents/AAPL:fixture/reader/search") {
+      await route.fulfill({
+        status: 200,
+        headers: { ...CORS_HEADERS, "content-type": "application/json" },
+        body: JSON.stringify({
+          document_id: "AAPL:fixture",
+          source_document_id: "fixture-source",
+          source_set_revision: "fixture-source-set-revision",
+          document_revision: "fixture-document-revision",
+          query: url.searchParams.get("q") ?? "competition",
+          matches: [{ block_id: "fixture-paragraph", block_index: 1, start: 29, end: 40, quote: "competition risks in consumer markets" }],
+          total: 1,
+          next_cursor: null,
+          complete: true,
+        }),
+      });
+      return;
+    }
+
     if (path === "/retrieval/inspect" && method === "POST") {
       await route.fulfill({
         status: 200,
@@ -225,9 +329,49 @@ export async function installApiFixtures(
       return;
     }
 
-    if (path.startsWith("/chunks/") && method === "GET") {
+    if (decodedPath.startsWith("/chunks/") && decodedPath.endsWith("/reader-location") && method === "GET") {
+      await route.fulfill({
+        status: 200,
+        headers: { ...CORS_HEADERS, "content-type": "application/json" },
+        body: JSON.stringify({
+          chunk_id: "AAPL_test_risk_factors_0",
+          chunk_text_hash: "1111111111111111111111111111111111111111111111111111111111111111",
+          document_id: "AAPL:fixture",
+          source_set_revision: "fixture-source-set-revision",
+          status: "exact",
+          reason_code: "exact",
+          reason: null,
+          source_document_id: "fixture-source",
+          document_revision: "fixture-document-revision",
+          representation_revision: "fixture-structured-revision",
+          ranges: [{ block_id: "fixture-paragraph", block_index: 1, kind: "paragraph", start: 0, end: 65, method: "text_whitespace" }],
+          match_count: 1,
+          match_count_capped: false,
+        }),
+      });
+      return;
+    }
+
+    if (decodedPath.startsWith("/chunks/") && method === "GET") {
       const chunkId = decodeURIComponent(path.slice("/chunks/".length));
-      const source = SAMPLE_SOURCES.find((item) => item.chunk_id === chunkId) ?? SAMPLE_SOURCES[0];
+      const source = SAMPLE_SOURCES.find((item) => item.chunk_id === chunkId) ?? (chunkId === "AAPL_fixture_revenue_0"
+        ? {
+            ...SAMPLE_SOURCES[0],
+            chunk_id: chunkId,
+            citation: "AAPL 10-K, Financial Statements",
+            text_preview: "Total revenue was reported in fiscal 2024.",
+            text: "Total revenue was reported in fiscal 2024.",
+            section: "financial_statements",
+          }
+        : undefined);
+      if (!source) {
+        await route.fulfill({
+          status: 404,
+          headers: { ...CORS_HEADERS, "content-type": "application/json" },
+          body: JSON.stringify({ detail: "Chunk not found" }),
+        });
+        return;
+      }
       await route.fulfill({
         status: 200,
         headers: { ...CORS_HEADERS, "content-type": "application/json" },

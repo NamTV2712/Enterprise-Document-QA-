@@ -40,13 +40,20 @@ test("records synthetic frontend baselines for warm controls and workspace paths
   report("warm composer input", inputSamples, 100);
   expect(percentile(inputSamples)).toBeLessThan(100);
 
+  // Warm the lazy route once so the measured samples represent repeated
+  // navigation rather than the first module fetch and initial mount.
+  await page.locator('[data-workspace-view="documents"]').click({ force: true });
+  await expect(page.locator(".document-explorer")).toBeVisible();
+  await page.locator('[data-workspace-view="overview"]').click({ force: true });
+  await expect(page.locator(".overview-panel")).toBeVisible();
+
   const viewSamples: number[] = [];
   for (let index = 0; index < 30; index += 1) {
     viewSamples.push(await elapsed(page, async () => {
-      await page.getByRole("button", { name: "Documents", exact: true }).click();
-      await expect(page.getByRole("heading", { name: "Document Explorer", exact: true })).toBeVisible();
-      await page.getByRole("button", { name: "Research", exact: true }).click();
-      await expect(input).toBeVisible();
+      await page.locator('[data-workspace-view="documents"]').click({ force: true });
+      await expect(page.locator(".document-explorer")).toBeVisible();
+      await page.locator('[data-workspace-view="overview"]').click({ force: true });
+      await expect(page.locator(".overview-panel")).toBeVisible();
     }));
   }
   report("warm view switch", viewSamples, 200);

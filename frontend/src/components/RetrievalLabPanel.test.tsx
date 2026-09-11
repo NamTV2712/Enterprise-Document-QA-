@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { RetrievalLabPanel } from "./RetrievalLabPanel";
 import { LocaleProvider } from "../lib/i18n";
 import { inspectRetrieval } from "../lib/api";
-import type { RetrievalPreset } from "../types";
+import type { RetrievalPreset, Source } from "../types";
 
 vi.mock("../lib/api", () => ({ inspectRetrieval: vi.fn() }));
 
@@ -30,6 +30,7 @@ function makeResponse(preset: RetrievalPreset = "hybrid_rerank", query = "Submit
       stages: [{ name: "bm25", elapsed_ms: 1.2 }],
       candidates: [{
         chunk_id: `${preset}-chunk`,
+        document_id: "AAPL:0001",
         citation: `${preset} citation`,
         text_preview: `${preset} result`,
         bm25_score: 2,
@@ -57,7 +58,7 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-function renderPanel(onUseQuestion = vi.fn()) {
+function renderPanel(onUseQuestion = vi.fn(), onOpenSource?: (source: Source) => void, onSaveEvidence?: (source: Source) => void) {
   return render(
     <LocaleProvider>
       <RetrievalLabPanel
@@ -67,6 +68,8 @@ function renderPanel(onUseQuestion = vi.fn()) {
         selectedSection={null}
         isBackendConnected={true}
         onUseQuestion={onUseQuestion}
+        onOpenSource={onOpenSource}
+        onSaveEvidence={onSaveEvidence}
       />
     </LocaleProvider>,
   );
@@ -123,6 +126,7 @@ describe("RetrievalLabPanel", () => {
       expect.any(AbortSignal),
     ));
     expect(await screen.findByText("AAPL 10-K p. 1")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Advanced mode" }));
     expect(screen.getByText("bm25")).toBeInTheDocument();
   });
 
@@ -131,6 +135,27 @@ describe("RetrievalLabPanel", () => {
     renderPanel(onUseQuestion);
     fireEvent.click(screen.getByRole("button", { name: "Use in Research" }));
     expect(onUseQuestion).toHaveBeenCalledWith("What was Apple's total revenue in 2024?", { ticker: null, section: null });
+  });
+
+  test("keeps analyst results focused and exposes evidence actions", async () => {
+    inspectMock.mockResolvedValue(makeResponse());
+    const onOpenSource = vi.fn();
+    const onSaveEvidence = vi.fn();
+    renderPanel(vi.fn(), onOpenSource, onSaveEvidence);
+    fireEvent.click(screen.getByRole("button", { name: "Run retrieval" }));
+    expect(await screen.findByTestId("retrieval-analyst-summary")).toBeInTheDocument();
+    expect(screen.getByText("Recommended strategy:")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open document" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save evidence" }));
+    expect(onOpenSource).toHaveBeenCalledWith(expect.objectContaining({ document_id: "AAPL:0001" }));
+    expect(onSaveEvidence).toHaveBeenCalledWith(expect.objectContaining({ chunk_id: "hybrid_rerank-chunk" }));
+  });
+
+  test("reveals stage diagnostics and bounded pool controls only in advanced mode", () => {
+    renderPanel();
+    expect(screen.queryByRole("slider", { name: "Candidate pool" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Advanced mode" }));
+    expect(screen.getByRole("slider", { name: "Candidate pool" })).toBeInTheDocument();
   });
 
   test("uses the shared listbox control for retrieval presets", () => {

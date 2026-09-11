@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, CheckCircle2, Download, FileJson, RefreshCw, ShieldAlert } from "lucide-react";
+import { AlertCircle, ArrowRight, BarChart3, CheckCircle2, CircleSlash2, Download, FileJson, RefreshCw, ShieldAlert } from "lucide-react";
 import { getEvaluationRun, getEvaluationRuns } from "../lib/api";
 import { RECORDED_EVALUATION_RUN } from "../lib/recordedEvaluation";
 import { EvaluationRun, EvaluationRunStatus } from "../types";
@@ -20,6 +20,12 @@ function score(value: number | undefined): string {
 function csvCell(value: unknown): string {
   const text = typeof value === "string" ? value : JSON.stringify(value ?? "");
   return `"${text.replaceAll('"', '""')}"`;
+}
+
+function CaseStatusIcon({ status }: { status: EvaluationRun["cases"][number]["status"] }) {
+  if (status === "OK") return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-300" aria-hidden="true" />;
+  if (status === "ERROR") return <AlertCircle className="h-3.5 w-3.5 text-rose-600 dark:text-rose-300" aria-hidden="true" />;
+  return <CircleSlash2 className="h-3.5 w-3.5 text-amber-600 dark:text-amber-300" aria-hidden="true" />;
 }
 
 export function EvaluationPanel() {
@@ -177,9 +183,21 @@ export function EvaluationPanel() {
         </div>
       </div>
 
+      <section className="evaluation-workflow-guide" aria-labelledby="evaluation-workflow-title">
+        <div>
+          <h2 id="evaluation-workflow-title">{vi ? "Cách đọc evaluation" : "How evaluation works"}</h2>
+          <p>{vi ? "Evaluation là báo cáo chỉ đọc về chất lượng và các gate đã ghi nhận; trang này không tự chạy provider." : "Evaluation is a read-only report of recorded quality scores and gates; this page never starts provider execution."}</p>
+        </div>
+        <ol>
+          <li>{vi ? "Chọn report publish hoặc Recorded demo." : "Choose a published report or a recorded demo."}</li>
+          <li>{vi ? "Mở case để xem answer, evidence và trạng thái." : "Open a case to inspect its answer, evidence, and status."}</li>
+          <li>{vi ? "Chỉ so sánh các run có binding tương thích." : "Compare only runs with compatible evaluation bindings."}</li>
+        </ol>
+      </section>
+
       {error && <div role="alert" className="mt-5 flex items-center gap-2 rounded-xl state-warning-surface p-3 text-sm"><ShieldAlert className="h-4 w-4 shrink-0" />{error}</div>}
       {loading && <div className="mt-5 flex items-center gap-2 text-sm text-[var(--text-muted)]" role="status"><RefreshCw className="h-4 w-4 animate-spin" />{vi ? "Đang tải report..." : "Loading reports..."}</div>}
-      {!loading && !error && runs.length === 0 && mode === "live" && <div className="mt-5 rounded-2xl border border-dashed border-[var(--border-strong)] p-8 text-center"><FileJson className="mx-auto h-8 w-8 text-[var(--text-subtle)]" /><p className="mt-3 text-sm font-semibold text-[var(--text-primary)]">{vi ? "Chưa có report publish" : "No published reports yet"}</p><p className="mt-1 text-xs text-[var(--text-muted)]">{vi ? "Chuyển sang Recorded demo để xem luồng dashboard mà không gọi provider." : "Switch to Recorded demo to preview the dashboard without provider calls."}</p></div>}
+      {!loading && !error && runs.length === 0 && mode === "live" && <div className="mt-5 rounded-2xl border border-dashed border-[var(--border-strong)] p-8 text-center"><FileJson className="mx-auto h-8 w-8 text-[var(--text-subtle)]" /><p className="mt-3 text-sm font-semibold text-[var(--text-primary)]">{vi ? "Chưa có report publish" : "No published reports yet"}</p><p className="mt-1 text-xs text-[var(--text-muted)]">{vi ? "Không có report live để mở. Bạn có thể xem một ví dụ đã ghi mà không gọi provider." : "There is no live report to open. You can view a recorded example without calling a provider."}</p><button type="button" className="workspace-link-button mt-4" onClick={() => setMode("recorded")}>{vi ? "Xem ví dụ đã ghi" : "View recorded example"}<ArrowRight className="h-3.5 w-3.5" aria-hidden="true" /></button></div>}
 
       {!loading && runs.length > 0 && <div className="evaluation-run-grid mt-5">
         <div className="space-y-2" aria-label={vi ? "Danh sách evaluation run" : "Evaluation run list"}>
@@ -187,7 +205,7 @@ export function EvaluationPanel() {
         </div>
         {selected ? <article className="min-w-0 rounded-2xl border border-[var(--border-subtle)] surface-raised p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div className="min-w-0 break-words text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]"><BarChart3 className="mr-2 inline-block h-4 w-4 text-violet-600 dark:text-violet-300" />{selected.status} · {selected.run_id}</div><div className="flex shrink-0 items-center gap-1"><button type="button" onClick={() => downloadSelected("json")} className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-[var(--border-subtle)] px-2 text-[10px] font-semibold text-[var(--text-primary)] hover:surface-muted-hover" aria-label={vi ? "Xuất evaluation JSON" : "Export evaluation JSON"}><Download className="h-3 w-3" />JSON</button><button type="button" onClick={() => downloadSelected("csv")} className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-[var(--border-subtle)] px-2 text-[10px] font-semibold text-[var(--text-primary)] hover:surface-muted-hover" aria-label={vi ? "Xuất evaluation CSV" : "Export evaluation CSV"}><Download className="h-3 w-3" />CSV</button></div></div><h2 className="mt-2 break-words text-lg font-bold text-[var(--text-primary)]">{selected.title}</h2><div className="evaluation-metrics-grid mt-4">{Object.entries(selected.aggregate).map(([key, value]) => <div key={key} className="min-w-0 rounded-xl bg-[var(--surface-muted)] p-3"><div className="break-words text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{key.replaceAll("_", " ")}</div><div className="mt-1 text-lg font-bold text-[var(--text-primary)]">{key === "sample_count" ? value : score(value)}</div></div>)}</div>
           {mode === "live" && runs.length > 1 && <div className="mt-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3"><div className="flex flex-wrap items-end gap-2"><SelectField className="min-w-52" label={vi ? "So sánh paired experiment" : "Paired experiment comparison"} value={comparisonId} onValueChange={setComparisonId} options={[{ value: "", label: vi ? "Chọn run..." : "Choose run..." }, ...runs.filter((run) => run.run_id !== selected.run_id).map((run) => ({ value: run.run_id, label: run.title }))]} /></div>{comparisonResult && (comparisonResult.compatible ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{comparisonResult.metrics.map((metric) => <div key={metric.metric} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] p-2 text-xs"><div className="font-semibold text-[var(--text-primary)]">{metric.metric} Δ {metric.delta.toFixed(3)}</div><div className="mt-1 text-[var(--text-muted)]">95% CI [{metric.lower95.toFixed(3)}, {metric.upper95.toFixed(3)}] · n={metric.sampleCount} · {metric.resamples} resamples (seed {metric.seed})</div></div>)}</div> : <p className="mt-2 text-xs text-[var(--state-warning-text)]">{comparisonResult.reason}</p>)}</div>}
-          <div className="mt-5 space-y-2">{selectedCases.map((item) => <details key={item.case_id} className="rounded-xl border border-[var(--border-subtle)] p-3"><summary className="evaluation-case-summary cursor-pointer text-sm font-semibold text-[var(--text-primary)]"><span className="text-[10px] uppercase text-[var(--text-muted)]">{item.language}</span><span className="min-w-0 break-words">{item.question}</span><span className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" />{item.status}</span></summary><p className="mt-3 text-sm leading-relaxed text-[var(--text-muted)]">{item.answer ?? (vi ? "Không có câu trả lời." : "No answer recorded.")}</p>{item.evidence.map((evidence) => <div key={evidence.citation} className="mt-2 rounded-lg bg-[var(--surface-muted)] p-2 text-xs text-[var(--text-muted)]"><strong className="text-[var(--text-primary)]">{evidence.citation}</strong><div className="mt-1">{evidence.excerpt}</div></div>)}</details>)}</div><p className="mt-4 text-xs text-[var(--text-muted)]">{selected.notes.join(" ")}</p></article> : <div className="rounded-2xl border border-dashed border-[var(--border-strong)] p-8 text-center text-sm text-[var(--text-muted)]">{vi ? "Chọn một run để xem case, scores và evidence." : "Select a run to inspect cases, scores, and evidence."}</div>}
+          <div className="mt-5 space-y-2">{selectedCases.map((item) => <details key={item.case_id} className="rounded-xl border border-[var(--border-subtle)] p-3"><summary className="evaluation-case-summary cursor-pointer text-sm font-semibold text-[var(--text-primary)]"><span className="text-[10px] uppercase text-[var(--text-muted)]">{item.language}</span><span className="min-w-0 break-words">{item.question}</span><span className={`inline-flex items-center gap-1 text-xs ${item.status === "OK" ? "text-emerald-600 dark:text-emerald-300" : item.status === "ERROR" ? "text-rose-600 dark:text-rose-300" : "text-amber-600 dark:text-amber-300"}`}><CaseStatusIcon status={item.status} />{item.status}</span></summary><p className="mt-3 text-sm leading-relaxed text-[var(--text-muted)]">{item.answer ?? (vi ? "Không có câu trả lời." : "No answer recorded.")}</p>{item.evidence.map((evidence) => <div key={evidence.citation} className="mt-2 rounded-lg bg-[var(--surface-muted)] p-2 text-xs text-[var(--text-muted)]"><strong className="text-[var(--text-primary)]">{evidence.citation}</strong><div className="mt-1">{evidence.excerpt}</div></div>)}</details>)}</div><p className="mt-4 text-xs text-[var(--text-muted)]">{selected.notes.join(" ")}</p></article> : <div className="rounded-2xl border border-dashed border-[var(--border-strong)] p-8 text-center text-sm text-[var(--text-muted)]">{vi ? "Chọn một run để xem case, scores và evidence." : "Select a run to inspect cases, scores, and evidence."}</div>}
       </div>}
     </section>
   );

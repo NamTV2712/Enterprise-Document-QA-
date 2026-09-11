@@ -138,6 +138,7 @@ export function Sidebar({
                         data-feature={item.accentFamily}
                         disabled={isDisabled}
                         aria-current={activeView === item.view ? "page" : undefined}
+                        data-workspace-view={item.view}
                         aria-label={navigationLayout === "compact" ? t(item.labelKey) : undefined}
                         title={navigationLayout === "compact" ? t(item.labelKey) : undefined}
                         onClick={() => selectView(item.view)}
@@ -158,10 +159,22 @@ export function Sidebar({
   );
 
   if (!isDrawer) return sidebar;
+  const closeDrawer = () => {
+    onClose();
+    // Firefox can leave focus on body when the portaled dialog is removed in
+    // the same task as Escape. Restore the stable header trigger after the
+    // modal cleanup has removed inert from the application root.
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        if (document.querySelector(".sidebar-drawer-dialog") || document.getElementById("root")?.hasAttribute("inert")) return;
+        document.getElementById("sidebar-toggle")?.focus({ preventScroll: true });
+      });
+    });
+  };
   return (
     <ModalDialog
       open={isOpen}
-      onClose={onClose}
+      onClose={closeDrawer}
       ariaLabel={t("nav.openNavigation")}
       overlayClassName="sidebar-drawer-overlay"
       className="sidebar-drawer-dialog"

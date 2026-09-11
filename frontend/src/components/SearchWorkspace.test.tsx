@@ -27,7 +27,7 @@ function makeResponse(chunkId: string, preview: string, citation = `AAPL filing 
       candidate_pool: 24,
       models: {},
       stages: [{ name: "retrieve", elapsed_ms: 4.5 }],
-      candidates: [{ chunk_id: chunkId, citation, text_preview: preview, final_rank: 1, cross_encoder_score: 0.89, selected: true }],
+      candidates: [{ chunk_id: chunkId, citation, text_preview: preview, document_id: "AAPL:0001", ticker: "AAPL", section: "risk_factors", filing_date: "2024-11-01", final_rank: 1, cross_encoder_score: 0.89, selected: true }],
       selected_chunk_ids: [chunkId],
       elapsed_ms: 5.2,
     },
@@ -57,6 +57,16 @@ describe("SearchWorkspace", () => {
     await waitFor(() => expect(inspectMock).toHaveBeenCalledWith(expect.objectContaining({ ticker: "AAPL", preset: "hybrid_rerank" }), expect.any(AbortSignal)));
     expect(await screen.findByText("AAPL 10-K p. 12")).toBeInTheDocument();
     expect(screen.getByText("Macroeconomic risks.")).toBeInTheDocument();
+  });
+
+  test("opens a candidate's document workspace without changing the submitted query", async () => {
+    const onOpenSource = vi.fn();
+    inspectMock.mockResolvedValue(makeResponse("risk-1", "Macroeconomic risks.", "AAPL 10-K p. 12"));
+    render(<LocaleProvider><SearchWorkspace selectedTicker="AAPL" selectedSection={null} isBackendConnected={true} onUseQuestion={vi.fn()} onOpenSource={onOpenSource} /></LocaleProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Run search" }));
+    await screen.findByText("AAPL 10-K p. 12");
+    fireEvent.click(screen.getByRole("button", { name: "Open document workspace" }));
+    expect(onOpenSource).toHaveBeenCalledWith(expect.objectContaining({ document_id: "AAPL:0001", ticker: "AAPL" }));
   });
 
   test("does not let a late success mutate results after the submitted scope changes", async () => {

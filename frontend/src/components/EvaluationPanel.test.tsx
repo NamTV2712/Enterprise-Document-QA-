@@ -12,9 +12,13 @@ vi.mock("../lib/api", () => ({
 const getEvaluationRunsMock = vi.mocked(getEvaluationRuns);
 
 describe("EvaluationPanel", () => {
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
 
   beforeEach(() => {
+    getEvaluationRunsMock.mockReset();
     getEvaluationRunsMock.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 });
   });
 

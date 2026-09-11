@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, ArrowRight, Download, GitCompare, Search, ShieldAlert, ShieldCheck } from "lucide-react";
 import { inspectRetrieval } from "../lib/api";
-import { RetrievalPreset, RetrievalTrace } from "../types";
+import { RetrievalPreset, RetrievalTrace, Source } from "../types";
 import { useLocale } from "../lib/i18n";
 import { describeRequestError } from "../lib/requestError";
 import { NumberRangeField } from "./NumberRangeField";
@@ -16,6 +16,8 @@ interface RetrievalLabPanelProps {
   selectedSection: string | null;
   isBackendConnected: boolean | null;
   onUseQuestion: (question: string, scope?: { ticker: string | null; section: string | null }) => void;
+  onOpenSource?: (source: Source) => void;
+  onSaveEvidence?: (source: Source) => void;
 }
 
 interface InspectionSnapshot {
@@ -50,6 +52,8 @@ export function RetrievalLabPanel({
   selectedSection,
   isBackendConnected,
   onUseQuestion,
+  onOpenSource,
+  onSaveEvidence,
 }: RetrievalLabPanelProps) {
   const { locale, t } = useLocale();
   const vi = locale === "vi";
@@ -69,6 +73,7 @@ export function RetrievalLabPanel({
   const [isLoading, setIsLoading] = useState(false);
   const [submittedSnapshot, setSubmittedSnapshot] = useState<InspectionSnapshot | null>(null);
   const [isInvalidated, setIsInvalidated] = useState(false);
+  const [labMode, setLabMode] = useState<"analyst" | "advanced">("analyst");
   const inspectionAbortRef = useRef<AbortController | null>(null);
   const inspectionRequestId = useRef(0);
   const currentConfigurationKeyRef = useRef("");
@@ -129,6 +134,28 @@ export function RetrievalLabPanel({
     () => [{ value: "", label: vi ? "Tất cả" : "All" }, ...sections.map((item) => ({ value: item, label: item }))],
     [sections, vi],
   );
+  const displayCandidates = useMemo(() => trace ? [...trace.candidates].sort((left, right) => {
+    if (left.selected !== right.selected) return left.selected ? -1 : 1;
+    return (left.final_rank ?? Number.MAX_SAFE_INTEGER) - (right.final_rank ?? Number.MAX_SAFE_INTEGER) ||
+      (left.fusion_rank ?? Number.MAX_SAFE_INTEGER) - (right.fusion_rank ?? Number.MAX_SAFE_INTEGER);
+  }) : [], [trace]);
+  const comparisonSummary = useMemo(() => {
+    if (!trace || !comparisonTrace) return null;
+    const selected = new Set(trace.selected_chunk_ids);
+    const compared = new Set(comparisonTrace.selected_chunk_ids);
+    const overlap = [...selected].filter((chunkId) => compared.has(chunkId));
+    const primaryRanks = new Map(trace.candidates.map((candidate) => [candidate.chunk_id, candidate.final_rank]));
+    const comparedRanks = new Map(comparisonTrace.candidates.map((candidate) => [candidate.chunk_id, candidate.final_rank]));
+    const rankMovements = overlap
+      .map((chunkId) => ({ chunkId, movement: (comparedRanks.get(chunkId) ?? 0) - (primaryRanks.get(chunkId) ?? 0) }))
+      .filter((item) => item.movement !== 0);
+    return {
+      overlap: overlap.length,
+      primaryOnly: [...selected].filter((chunkId) => !compared.has(chunkId)).length,
+      comparisonOnly: [...compared].filter((chunkId) => !selected.has(chunkId)).length,
+      rankMovements,
+    };
+  }, [comparisonTrace, trace]);
 
   const runInspection = async () => {
     if (question.trim().length < 5 || isLoading) return;
@@ -212,7 +239,7 @@ export function RetrievalLabPanel({
         },
         traces,
       }, null, 2)
-      : ["query,ticker,section,top_k,candidate_pool,preset,chunk_id,final_rank,selected,bm25_score,dense_score,rrf_score,cross_encoder_score", ...traces.flatMap((item) => item.candidates.map((candidate) => [item.query, item.filters.ticker, item.filters.section, item.top_k, item.candidate_pool, item.preset, candidate.chunk_id, candidate.final_rank ?? "", candidate.selected, candidate.bm25_score ?? "", candidate.dense_score ?? "", candidate.rrf_score ?? "", candidate.cross_encoder_score ?? ""].map(escapeCsv).join(",")))].join("\n");
+      : ["query,ticker,section,top_k,candidate_pool,preset,chunk_id,final_rank,fusion_rank,selected,bm25_score,dense_score,rrf_score,cross_encoder_score", ...traces.flatMap((item) => item.candidates.map((candidate) => [item.query, item.filters.ticker, item.filters.section, item.top_k, item.candidate_pool, item.preset, candidate.chunk_id, candidate.final_rank ?? "", candidate.fusion_rank ?? "", candidate.selected, candidate.bm25_score ?? "", candidate.dense_score ?? "", candidate.rrf_score ?? "", candidate.cross_encoder_score ?? ""].map(escapeCsv).join(",")))].join("\n");
     const url = URL.createObjectURL(new Blob([content], { type: format === "json" ? "application/json" : "text/csv" }));
     const anchor = document.createElement("a"); anchor.href = url; anchor.download = `retrieval-trace.${format}`; anchor.click(); URL.revokeObjectURL(url);
   };
@@ -240,6 +267,14 @@ export function RetrievalLabPanel({
             ? vi ? "Backend offline" : "Backend offline"
             : vi ? "Provider-free" : "Provider-free"}
         </div>
+      </div>
+
+      <div className="retrieval-mode-switcher" role="tablist" aria-label={vi ? "Chế độ Retrieval Lab" : "Retrieval Lab mode"}>
+        <button type="button" role="tab" aria-selected={labMode === "analyst"} onClick={() => setLabMode("analyst")} className={labMode === "analyst" ? "is-active" : ""}>{vi ? "Analyst" : "Analyst mode"}</button>
+        <button type="button" role="tab" aria-selected={labMode === "advanced"} onClick={() => setLabMode("advanced")} className={labMode === "advanced" ? "is-active" : ""}>{vi ? "Nâng cao" : "Advanced mode"}</button>
+        <p>{labMode === "analyst"
+          ? (vi ? "Luồng gọn: chạy, đọc nguồn đã chọn hoặc đưa câu hỏi sang Research." : "Focused flow: run, inspect selected evidence, or take the question to Research.")
+          : (vi ? "Hiển thị toàn bộ preset, điểm stage, thứ hạng và export của trace đã gửi." : "Shows all presets, stage scores, ranks, and exports for the submitted trace.")}</p>
       </div>
 
       <div className="grid gap-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_220px]">
@@ -277,7 +312,10 @@ export function RetrievalLabPanel({
       </div>
 
       <div className="retrieval-settings-grid rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-4">
-        <SelectField label="Preset" value={preset} options={presetOptions} onValueChange={(value) => setPreset(value as RetrievalPreset)} />
+        <div className="retrieval-strategy-field">
+          <SelectField label={vi ? "Preset · chiến lược đề xuất" : "Preset"} value={preset} options={presetOptions} onValueChange={(value) => setPreset(value as RetrievalPreset)} />
+          <p><strong>{vi ? "Chiến lược đề xuất:" : "Recommended strategy:"}</strong> {vi ? "Hybrid + reranker kết hợp BM25, semantic và reranking theo logic hiện có." : "Hybrid + reranker combines BM25, semantic retrieval, and the existing reranking logic."}</p>
+        </div>
         <SelectField label={vi ? "Công ty" : "Company"} value={ticker} options={tickerOptions} onValueChange={setTicker} />
         <SelectField label={vi ? "Mục" : "Section"} value={section} options={sectionOptions} onValueChange={setSection} />
         <NumberRangeField
@@ -289,7 +327,7 @@ export function RetrievalLabPanel({
           onChange={setTopK}
           hint={vi ? "Kết quả cuối cùng" : "Final results"}
         />
-        <NumberRangeField
+        {labMode === "advanced" && <NumberRangeField
           id="retrieval-candidate-pool"
           label={vi ? "Candidate pool" : "Candidate pool"}
           value={candidatePool}
@@ -298,7 +336,7 @@ export function RetrievalLabPanel({
           step={5}
           onChange={setCandidatePool}
           hint={vi ? "Ứng viên trước khi xếp hạng cuối" : "Candidates before final ranking"}
-        />
+        />}
         <label className="flex min-h-10 items-center gap-2 text-xs font-semibold text-[var(--text-muted)]">
           <input type="checkbox" checked={compareEnabled} onChange={(event) => setCompareEnabled(event.target.checked)} />
           <span>{vi ? "So sánh preset" : "Compare preset"}</span>
@@ -322,33 +360,38 @@ export function RetrievalLabPanel({
             <code className="font-mono">{trace.query}</code>{" · "}
             <span>{trace.filters.ticker ?? (vi ? "Tất cả công ty" : "All companies")} · {trace.filters.section ?? (vi ? "Tất cả mục" : "All sections")} · top K {trace.top_k} · pool {trace.candidate_pool} · {trace.preset}</span>
           </div>
-          <div className="retrieval-settings-grid">
+          {labMode === "analyst" && <div className="retrieval-analyst-summary" data-testid="retrieval-analyst-summary">
+            <div><span>{vi ? "Kết quả đã chọn" : "Selected results"}</span><strong>{trace.selected_count ?? trace.selected_chunk_ids.length}</strong></div>
+            <div><span>{vi ? "Ứng viên đã kiểm tra" : "Candidates inspected"}</span><strong>{trace.candidate_count ?? trace.candidates.length}</strong></div>
+            <div><span>{vi ? "Thời lượng server" : "Server duration"}</span><strong>{trace.elapsed_ms.toFixed(1)} ms</strong></div>
+          </div>}
+          {labMode === "advanced" && <div className="retrieval-settings-grid">
             {trace.stages.map((stage) => (
               <div key={stage.name} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-3">
                 <div className="text-xs font-semibold text-[var(--text-muted)]">{stage.name}</div>
                 <div className="mt-1 text-lg font-bold text-[var(--text-primary)]">{stage.skipped ? "—" : `${stage.elapsed_ms.toFixed(1)} ms`}</div>
               </div>
             ))}
-          </div>
+          </div>}
           <div className="overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-raised)]">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border-subtle)] px-4 py-3">
               <div className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]"><Activity className="h-4 w-4 text-cyan-600 dark:text-cyan-300" />{presetLabel}</div>
-              <div className="flex flex-wrap items-center gap-2"><span className="text-xs text-[var(--text-muted)]">{trace.candidates.length} candidates · {trace.elapsed_ms.toFixed(1)} ms</span><button type="button" onClick={() => downloadTrace("json")} className="inline-flex items-center gap-1 rounded border border-[var(--border-subtle)] px-2 py-1 text-[10px] font-semibold text-[var(--text-primary)]"><Download className="h-3 w-3" />JSON</button><button type="button" onClick={() => downloadTrace("csv")} className="inline-flex items-center gap-1 rounded border border-[var(--border-subtle)] px-2 py-1 text-[10px] font-semibold text-[var(--text-primary)]"><Download className="h-3 w-3" />CSV</button></div>
+              <div className="flex flex-wrap items-center gap-2"><span className="text-xs text-[var(--text-muted)]">{trace.candidate_count ?? trace.candidates.length} candidates · {trace.selected_count ?? trace.selected_chunk_ids.length} selected · {trace.elapsed_ms.toFixed(1)} ms</span><button type="button" onClick={() => downloadTrace("json")} className="inline-flex items-center gap-1 rounded border border-[var(--border-subtle)] px-2 py-1 text-[10px] font-semibold text-[var(--text-primary)]"><Download className="h-3 w-3" />JSON</button><button type="button" onClick={() => downloadTrace("csv")} className="inline-flex items-center gap-1 rounded border border-[var(--border-subtle)] px-2 py-1 text-[10px] font-semibold text-[var(--text-primary)]"><Download className="h-3 w-3" />CSV</button></div>
             </div>
             <div className="overflow-x-auto">
-              <table className="min-w-[900px] w-full text-left text-xs">
+              <table className={`${labMode === "advanced" ? "min-w-[900px]" : "min-w-[620px]"} w-full text-left text-xs`}>
                 <thead className="bg-[var(--surface-muted)] text-[var(--text-muted)]">
-                  <tr>{["Final", "Source", "BM25", "Dense", "RRF", "Reranker", "Preview"].map((heading) => <th key={heading} className="px-3 py-2 font-semibold">{heading}</th>)}</tr>
+                  <tr>{(labMode === "advanced" ? ["Final", "Source", "BM25", "Dense", "RRF", "Reranker", "Preview"] : ["Final", "Source", "Preview"]).map((heading) => <th key={heading} className="px-3 py-2 font-semibold">{heading}</th>)}</tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-subtle)]">
-                  {trace.candidates.map((candidate) => (
+                  {displayCandidates.map((candidate) => (
                     <tr key={candidate.chunk_id} className={candidate.selected ? "bg-cyan-500/10" : ""}>
                       <td className="px-3 py-3 font-bold text-[var(--text-primary)]">{candidate.final_rank ?? "—"}</td>
-                      <td className="px-3 py-3"><div className="font-semibold text-[var(--text-primary)]">{candidate.chunk_id}</div><div className="text-[var(--text-muted)]">{candidate.citation}</div></td>
-                      <td className="px-3 py-3 font-mono">{score(candidate.bm25_score)} <span className="text-[var(--text-muted)]">#{candidate.bm25_rank ?? "—"}</span></td>
+                      <td className="px-3 py-3"><div className="font-semibold text-[var(--text-primary)]">{candidate.chunk_id}</div><div className="text-[var(--text-muted)]">{candidate.citation}</div><div className="mt-1 flex flex-wrap gap-2">{onOpenSource && <button type="button" className="text-left text-[11px] font-semibold text-cyan-700 underline dark:text-cyan-300" onClick={() => onOpenSource({ citation: candidate.citation, text_preview: candidate.text_preview, chunk_id: candidate.chunk_id, document_id: candidate.document_id, ticker: candidate.ticker, section: candidate.section, filing_date: candidate.filing_date })}>{vi ? "Mở indexed" : "Open indexed"}</button>}{onOpenSource && candidate.document_id && <button type="button" className="text-left text-[11px] font-semibold text-cyan-700 underline dark:text-cyan-300" onClick={() => onOpenSource({ citation: candidate.citation, text_preview: "", document_id: candidate.document_id, ticker: candidate.ticker, section: candidate.section, filing_date: candidate.filing_date })}>{vi ? "Mở workspace" : "Open document"}</button>}{onSaveEvidence && <button type="button" className="text-left text-[11px] font-semibold text-cyan-700 underline dark:text-cyan-300" onClick={() => onSaveEvidence({ citation: candidate.citation, text_preview: candidate.text_preview, chunk_id: candidate.chunk_id, document_id: candidate.document_id, ticker: candidate.ticker, section: candidate.section, filing_date: candidate.filing_date })}>{vi ? "Lưu evidence" : "Save evidence"}</button>}</div></td>
+                      {labMode === "advanced" && <><td className="px-3 py-3 font-mono">{score(candidate.bm25_score)} <span className="text-[var(--text-muted)]">#{candidate.bm25_rank ?? "—"}</span></td>
                       <td className="px-3 py-3 font-mono">{score(candidate.dense_score)} <span className="text-[var(--text-muted)]">#{candidate.dense_rank ?? "—"}</span></td>
                       <td className="px-3 py-3 font-mono">{score(candidate.rrf_score)}</td>
-                      <td className="px-3 py-3 font-mono">{score(candidate.cross_encoder_score)}</td>
+                      <td className="px-3 py-3 font-mono">{score(candidate.cross_encoder_score)}</td></>}
                       <td className="max-w-sm px-3 py-3 text-[var(--text-muted)]">{candidate.text_preview}</td>
                     </tr>
                   ))}
@@ -356,7 +399,7 @@ export function RetrievalLabPanel({
               </table>
             </div>
           </div>
-          {comparisonTrace && <div className="mt-3 rounded-2xl border border-violet-400/30 bg-violet-500/10 p-4"><div className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]"><GitCompare className="h-4 w-4 text-violet-600 dark:text-violet-300" />{vi ? `So sánh với ${comparisonTrace.preset}` : `Compared with ${comparisonTrace.preset}`}</div><div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{comparisonTrace.stages.map((stage) => <div key={stage.name} className="rounded-lg bg-[var(--surface-raised)] p-2 text-xs"><div className="text-[var(--text-muted)]">{stage.name}</div><div className="mt-1 font-semibold text-[var(--text-primary)]">{stage.skipped ? "—" : `${stage.elapsed_ms.toFixed(1)} ms`}</div></div>)}</div><p className="mt-3 text-xs text-[var(--text-muted)]">{vi ? "Các trace dùng cùng câu hỏi và filter; score của các stage khác thang đo nên không được so sánh trực tiếp." : "Both traces use the same question and filters; stage scores have different scales and are not directly comparable."}</p></div>}
+          {comparisonTrace && <div className="mt-3 rounded-2xl border border-violet-400/30 bg-violet-500/10 p-4"><div className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]"><GitCompare className="h-4 w-4 text-violet-600 dark:text-violet-300" />{vi ? `So sánh với ${comparisonTrace.preset}` : `Compared with ${comparisonTrace.preset}`}</div>{comparisonSummary && <div className="mt-3 grid gap-2 sm:grid-cols-3"><div className="rounded-lg bg-[var(--surface-raised)] p-2 text-xs"><div className="text-[var(--text-muted)]">{vi ? "Nguồn trùng" : "Selected overlap"}</div><div className="mt-1 font-semibold text-[var(--text-primary)]">{comparisonSummary.overlap}</div></div><div className="rounded-lg bg-[var(--surface-raised)] p-2 text-xs"><div className="text-[var(--text-muted)]">{vi ? "Chỉ trace chính" : "Only in primary"}</div><div className="mt-1 font-semibold text-[var(--text-primary)]">{comparisonSummary.primaryOnly}</div></div><div className="rounded-lg bg-[var(--surface-raised)] p-2 text-xs"><div className="text-[var(--text-muted)]">{vi ? "Chỉ trace đối chiếu" : "Only in comparison"}</div><div className="mt-1 font-semibold text-[var(--text-primary)]">{comparisonSummary.comparisonOnly}</div></div></div>}<div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{comparisonTrace.stages.map((stage) => <div key={stage.name} className="rounded-lg bg-[var(--surface-raised)] p-2 text-xs"><div className="text-[var(--text-muted)]">{stage.name}</div><div className="mt-1 font-semibold text-[var(--text-primary)]">{stage.skipped ? "—" : `${stage.elapsed_ms.toFixed(1)} ms`}</div></div>)}</div><p className="mt-3 text-xs text-[var(--text-muted)]">{vi ? "Các trace dùng cùng câu hỏi và filter; score của các stage khác thang đo nên không được so sánh trực tiếp. Thời lượng là diagnostic duration, không phải benchmark production." : "Both traces use the same question and filters; stage scores have different scales. Durations are diagnostic measurements, not production latency benchmarks."}</p></div>}
         </>
       ) : (
         <div className="rounded-2xl border border-dashed border-[var(--border-strong)] px-5 py-12 text-center text-sm text-[var(--text-muted)]">

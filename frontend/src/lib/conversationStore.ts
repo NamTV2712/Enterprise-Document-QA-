@@ -1469,11 +1469,10 @@ function rearmTransientLocks(): void {
   }
 }
 
-export async function saveConversationRecord(
+async function saveConversationRecordLocked(
   record: ConversationRecord,
 ): Promise<ConversationWriteResult> {
-  return enqueue(() => withWriterLock(async () => {
-    rearmTransientLocks();
+  rearmTransientLocks();
     if (!snapshotLoaded) {
       await loadConversationLibrary(record.sessionId, record.id).catch(() => undefined);
     }
@@ -1588,6 +1587,41 @@ export async function saveConversationRecord(
       "Conversations could not be saved to browser storage right now; they are only kept in this tab.";
     libraryWarning = combineWarning(transientWarning);
     return { status: "volatile", storageMode: activeStorageMode, warning: libraryWarning };
+}
+
+export async function saveConversationRecord(
+  record: ConversationRecord,
+): Promise<ConversationWriteResult> {
+  return enqueue(() => withWriterLock(() => saveConversationRecordLocked(record)));
+}
+
+/**
+ * Apply a field-scoped mutation to the latest repository record inside the
+ * serialized write queue. Callers must not enqueue a stale whole-record
+ * replacement when another autosave or metadata mutation may be in flight.
+ */
+export async function mutateConversationRecord(
+  id: string,
+  mutate: (latest: ConversationRecord) => ConversationRecord | null,
+): Promise<ConversationWriteResult> {
+  return enqueue(() => withWriterLock(async () => {
+    if (!snapshotLoaded) {
+      await loadConversationLibrary().catch(() => undefined);
+    }
+    const latest = listConversations().find((record) => record.id === id);
+    if (!latest) {
+      return {
+        status: "failed",
+        storageMode: activeStorageMode,
+        warning: "Conversation not found.",
+      };
+    }
+    if (latest.deletionPending) return saveConversationRecordLocked(latest);
+    const next = mutate({ ...latest });
+    if (next === null) {
+      return { status: "persisted", storageMode: activeStorageMode, warning: libraryWarning };
+    }
+    return saveConversationRecordLocked(next);
   }));
 }
 

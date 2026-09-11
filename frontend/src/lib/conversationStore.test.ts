@@ -118,6 +118,33 @@ describe("conversation store repository", () => {
 
   // --- Title and metadata preservation -----------------------------------
 
+  it("serializes field-scoped mutations against the latest record", async () => {
+    const store = await freshStore();
+    await store.loadConversationLibrary("session-live", "conversation-live");
+    const created = store.createConversationRecord("conversation-live", "session-live", [
+      userMessage("u1", "Apple total revenue"),
+      assistantMessage("a1", "Apple reported total revenue.", { status: "completed" }),
+    ]);
+    await store.saveConversationRecord(created);
+
+    const [tagResult, noteResult] = await Promise.all([
+      store.mutateConversationRecord(created.id, (latest) => ({
+        ...latest,
+        tags: ["revenue"],
+      })),
+      store.mutateConversationRecord(created.id, (latest) => ({
+        ...latest,
+        notes: [{ id: "note-1", text: "Verify against the filing table.", createdAt: 1, updatedAt: 1 }],
+      })),
+    ]);
+
+    expect(tagResult.status).toBe("persisted");
+    expect(noteResult.status).toBe("persisted");
+    const saved = store.listConversations().find((record) => record.id === created.id);
+    expect(saved?.tags).toEqual(["revenue"]);
+    expect(saved?.notes?.[0]?.text).toBe("Verify against the filing table.");
+  });
+
   it("keeps a custom title when autosave rebuilds the record from messages", async () => {
     const store = await freshStore();
     await store.loadConversationLibrary("session-live", "conversation-live");

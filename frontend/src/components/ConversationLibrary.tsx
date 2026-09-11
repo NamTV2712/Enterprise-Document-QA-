@@ -8,7 +8,6 @@ import {
   Search,
   Trash2,
   X,
-  Plus,
 } from "lucide-react";
 import {
   ConversationRecord,
@@ -17,7 +16,8 @@ import {
 } from "../lib/conversationStore";
 import { ConversationImportResult, SaveIndicator } from "../hooks/useConversationLibrary";
 import { Locale, normalizeLocaleSearch, useLocale } from "../lib/i18n";
-import { createEvidenceCollection, listEvidenceCollections, EvidenceCollection } from "../lib/evidenceCollections";
+import type { EvidenceItem } from "../lib/evidenceCollections";
+import { EvidenceCollectionsPanel } from "./EvidenceCollectionsPanel";
 import { searchConversationRecords } from "../lib/conversationSearch";
 import {
   ConversationBackupBundle,
@@ -43,6 +43,8 @@ interface ConversationLibraryProps {
   onRequestWriter?: () => Promise<WriterStatus>;
   /** Open a conversation and focus one bookmarked answer. */
   onOpenMessage?: (conversationId: string, messageId: string) => void;
+  /** Open a saved evidence snapshot without replacing it with live indexed text. */
+  onOpenEvidence?: (item: EvidenceItem) => void;
   onClose: () => void;
 }
 
@@ -112,6 +114,7 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
   writerStatus,
   onRequestWriter,
   onOpenMessage,
+  onOpenEvidence,
   onClose,
 }) => {
   const { locale, t } = useLocale();
@@ -126,29 +129,10 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
     fileName: string;
     byteLength: number;
   } | null>(null);
-  const [collections, setCollections] = useState<EvidenceCollection[]>(listEvidenceCollections);
-  const [collectionName, setCollectionName] = useState("");
   const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({});
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const importInputRef = useRef<HTMLInputElement>(null);
   const normalizedSearch = normalizeLocaleSearch(search.trim());
-
-  useEffect(() => {
-    const refresh = () => setCollections(listEvidenceCollections());
-    window.addEventListener("sec-qa-evidence-updated", refresh);
-    return () => window.removeEventListener("sec-qa-evidence-updated", refresh);
-  }, []);
-
-  const handleCreateCollection = () => {
-    if (!collectionName.trim()) return;
-    try {
-      createEvidenceCollection(collectionName);
-      setCollectionName("");
-      setCollections(listEvidenceCollections());
-    } catch (error) {
-      setBackupStatus(error instanceof Error ? error.message : "Could not create collection.");
-    }
-  };
 
   const handlePreviewBackup = async (file: File | undefined) => {
     if (!file) return;
@@ -169,10 +153,17 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
     setBackupStatus(null);
     try {
       const result = await onImportBackup(pendingBackup.bundle);
+      const evidenceSummary = result.evidenceFailed
+        ? locale === "vi"
+          ? ` Bộ sưu tập evidence lỗi ${result.evidenceFailed}; cuộc trò chuyện vẫn đã được nhập. ${result.evidenceWarning ?? ""}`
+          : ` ${result.evidenceFailed} evidence collections failed; conversations were imported. ${result.evidenceWarning ?? ""}`
+        : result.evidencePersisted
+          ? locale === "vi" ? `, evidence ${result.evidencePersisted} bộ sưu tập` : `, ${result.evidencePersisted} evidence collections`
+          : "";
       setBackupStatus(
         locale === "vi"
-          ? `Đã nhập ${result.imported}: lưu bền vững ${result.persisted}, chỉ trong tab ${result.volatile}, lỗi ${result.failed}.`
-          : `Imported ${result.imported}: ${result.persisted} persisted, ${result.volatile} tab-only, ${result.failed} failed.`,
+          ? `Đã nhập ${result.imported}: lưu bền vững ${result.persisted}, chỉ trong tab ${result.volatile}, lỗi ${result.failed}.${evidenceSummary}`
+          : `Imported ${result.imported}: ${result.persisted} persisted, ${result.volatile} tab-only, ${result.failed} failed.${evidenceSummary}`,
       );
       setPendingBackup(null);
     } catch (error) {
@@ -258,10 +249,10 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
         </div>
       )}
 
-      <label className="library-search">
+      <label className="library-search" data-composite-field>
         <Search className="h-4 w-4" aria-hidden="true" />
         <span className="sr-only">{t("library.search")}</span>
-        <input
+        <input data-composite-input
           id="library-search-input"
           type="search"
           value={search}
@@ -346,17 +337,7 @@ export const ConversationLibrary: React.FC<ConversationLibraryProps> = ({
       )}
       {backupStatus && <p className="library-backup-status" role="status">{backupStatus}</p>}
 
-      <div className="library-collections" aria-label={locale === "vi" ? "Bộ sưu tập evidence" : "Evidence collections"}>
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">{locale === "vi" ? "Bộ sưu tập evidence" : "Evidence collections"}</span>
-          <span className="text-[10px] text-[var(--text-subtle)]">{collections.reduce((total, collection) => total + collection.items.length, 0)} {locale === "vi" ? "mục" : "items"}</span>
-        </div>
-        <div className="mt-2 flex gap-2">
-          <input value={collectionName} onChange={(event) => setCollectionName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") handleCreateCollection(); }} placeholder={locale === "vi" ? "Tên bộ sưu tập mới" : "New collection name"} aria-label={locale === "vi" ? "Tên bộ sưu tập mới" : "New collection name"} className="min-w-0 flex-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] px-2 py-1.5 text-xs text-[var(--text-primary)]" />
-          <button type="button" onClick={handleCreateCollection} aria-label={locale === "vi" ? "Tạo bộ sưu tập" : "Create collection"} className="icon-button"><Plus className="h-4 w-4" /></button>
-        </div>
-        {collections.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{collections.map((collection) => <span key={collection.id} className="rounded-full border border-[var(--border-subtle)] px-2 py-1 text-[10px] text-[var(--text-muted)]">{collection.name} · {collection.items.length}</span>)}</div>}
-      </div>
+      <EvidenceCollectionsPanel onOpenEvidence={onOpenEvidence} />
 
       <div className="library-list" aria-live="polite">
         {bookmarkedOnly ? (

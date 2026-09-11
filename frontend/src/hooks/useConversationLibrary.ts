@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AnswerVariant, ConversationNote, Message, RequestSnapshot, SessionHistoryResponse } from "../types";
+import { AnswerVariant, ConversationNote, DisplayedAnswerContext, Message, RequestSnapshot, SaveAnswerVersionStatus, SessionHistoryResponse } from "../types";
 import { getSessionHistory } from "../lib/api";
 import {
   buildConversationRecord,
@@ -10,6 +10,7 @@ import {
   listConversations,
   loadConversationLibrary,
   normalizeStoredMessages,
+  mutateConversationRecord,
   saveConversationRecord,
   ConversationWriteResult,
   subscribeConversationLibrary,
@@ -30,11 +31,21 @@ export type SessionContextStatus =
   | "cancelled";
 export type SaveIndicator = "idle" | "saved" | "volatile";
 
+export interface SaveAnswerVersionResult {
+  status: Exclude<SaveAnswerVersionStatus, "idle" | "saving">;
+  variantId?: string;
+  storageMode: ConversationStorageMode;
+  warning: string | null;
+}
+
 export interface ConversationImportResult {
   imported: number;
   persisted: number;
   volatile: number;
   failed: number;
+  evidencePersisted?: number;
+  evidenceFailed?: number;
+  evidenceWarning?: string | null;
 }
 
 /**
@@ -92,6 +103,41 @@ function applyWriteResult(
   setters.setStorageWarning(result.warning);
 }
 
+function stableIdentityValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableIdentityValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value as Record<string, unknown>)
+        .sort()
+        .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
+        .map((key) => [key, stableIdentityValue((value as Record<string, unknown>)[key])]),
+    );
+  }
+  return value;
+}
+
+function answerVersionFingerprint(variant: Pick<AnswerVariant, "originMessageId" | "text" | "sources" | "requestSnapshot" | "answerLanguage" | "status">): string {
+  // The storage normalizer intentionally drops transient source fields such
+  // as chunk_text_hash and stored_snapshot. Fingerprinting the durable shape
+  // keeps repeat saves idempotent across a browser-storage round trip.
+  const durableSources = variant.sources.map(({ chunk_text_hash: _chunkTextHash, stored_snapshot: _storedSnapshot, ...source }) => source);
+  return JSON.stringify({
+    originMessageId: variant.originMessageId,
+    text: variant.text,
+    sources: durableSources,
+    requestSnapshot: variant.requestSnapshot,
+    answerLanguage: variant.answerLanguage,
+    status: variant.status,
+  }, (_key, value) => stableIdentityValue(value));
+}
+
+function createAnswerVariantId(): string {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return `variant-${globalThis.crypto.randomUUID()}`;
+  }
+  return `variant-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export interface ConversationLibraryController {
   sessionId: string;
   activeConversationId: string;
@@ -137,12 +183,15 @@ export interface ConversationLibraryController {
   startNewConversation: () => Promise<void>;
   renameConversation: (conversationId: string, title: string) => void;
   toggleAnswerBookmark: (messageId: string) => void;
+  toggleConversationBookmark: (conversationId: string, messageId: string) => void;
   deleteConversation: (conversationId: string) => Promise<void>;
   /** Import already validated records without overwriting existing IDs. */
   importConversationRecords: (records: ConversationRecord[]) => Promise<ConversationImportResult>;
   writerStatus: WriterStatus;
   requestLibraryWriter: () => Promise<WriterStatus>;
   updateConversationMetadata: (conversationId: string, patch: { tags?: string[]; notes?: ConversationNote[]; variants?: AnswerVariant[] }) => Promise<ConversationWriteResult>;
+  saveMessageNote: (messageId: string, note: string) => Promise<ConversationWriteResult>;
+  saveAnswerVersion: (target: DisplayedAnswerContext) => Promise<SaveAnswerVersionResult>;
 }
 
 interface UseConversationLibraryOptions {
@@ -206,6 +255,7 @@ export function useConversationLibrary(
   const sendInFlightRef = useRef<SendIdentity | null>(null);
   const draftTimerRef = useRef<number | null>(null);
   const lastSavedSignatureRef = useRef<string>("");
+  const skipNextDraftPersistRef = useRef(false);
 
   const bumpEpoch = useCallback((): number => {
     epochRef.current += 1;
@@ -266,7 +316,17 @@ export function useConversationLibrary(
         bookmarkedMessageIds: snapshot.bookmarks,
         createdAt: snapshot.createdAt,
       });
-      const result = await saveConversationRecord(record);
+      const hasRepositoryRecord = listConversations().some((item) => item.id === conversationId);
+      const result = hasRepositoryRecord
+        ? await mutateConversationRecord(conversationId, (latest) => buildConversationRecord(latest, {
+            id: conversationId,
+            sessionId: snapshot.sessionId,
+            messages: persistedMessages,
+            draft: snapshot.draft,
+            bookmarkedMessageIds: snapshot.bookmarks,
+            createdAt: snapshot.createdAt,
+          }))
+        : await saveConversationRecord(record);
       if (epochRef.current !== identityEpoch) return;
       applyWriteResult(result, { setStorageMode, setStorageWarning });
       // A rejected save (for example a pending-deletion record) is not a
@@ -276,6 +336,111 @@ export function useConversationLibrary(
         setSaveIndicator(result.status === "persisted" ? "saved" : "volatile");
       }
       syncConversationsFromRepository();
+    },
+    [syncConversationsFromRepository],
+  );
+
+  const saveAnswerVersion = useCallback(
+    async (target: DisplayedAnswerContext): Promise<SaveAnswerVersionResult> => {
+      const failed = (warning: string): SaveAnswerVersionResult => ({
+        status: "failed",
+        storageMode,
+        warning,
+      });
+      if (target.conversationId !== activeIdRef.current) {
+        return failed("The displayed answer belongs to a different conversation.");
+      }
+
+      const message = messagesRef.current.find((candidate) => candidate.id === target.messageId);
+      if (!message || message.sender !== "assistant" || message.isStreaming || message.error || message.status === "error" || !message.text.trim()) {
+        return failed("The displayed answer is no longer available to save.");
+      }
+
+      const latest = listConversations().find((conversation) => conversation.id === target.conversationId) ??
+        conversationsRef.current.find((conversation) => conversation.id === target.conversationId);
+      if (!latest) return failed("Conversation not found.");
+
+      if (target.variantId) {
+        const selected = latest.variants?.find((variant) =>
+          variant.id === target.variantId && variant.originMessageId === target.messageId,
+        );
+        if (!selected) return failed("The selected answer version is no longer available.");
+        return {
+          status: "already_saved",
+          variantId: selected.id,
+          storageMode,
+          warning: null,
+        };
+      }
+
+      const now = Date.now();
+      const candidate: AnswerVariant = {
+        id: createAnswerVariantId(),
+        originMessageId: message.id,
+        text: message.text,
+        sources: (message.sources ?? []).map((source) => ({ ...source })),
+        requestSnapshot: message.requestSnapshot ? { ...message.requestSnapshot } : undefined,
+        answerLanguage: message.requestSnapshot?.answerLanguage ?? "en",
+        status: message.status === "stopped" ? "stopped" : "completed",
+        execution: message.execution,
+        visualAnswer: message.visualAnswer,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const fingerprint = answerVersionFingerprint(candidate);
+      let duplicateId: string | undefined;
+      const writeResult = await mutateConversationRecord(target.conversationId, (current) => {
+        const duplicate = (current.variants ?? []).find((variant) =>
+          answerVersionFingerprint(variant) === fingerprint,
+        );
+        if (duplicate) {
+          duplicateId = duplicate.id;
+          return null;
+        }
+        return { ...current, variants: [...(current.variants ?? []), candidate] };
+      });
+      applyWriteResult(writeResult, { setStorageMode, setStorageWarning });
+      if (writeResult.status !== "failed") {
+        setSaveIndicator(writeResult.status === "persisted" ? "saved" : "volatile");
+      }
+      syncConversationsFromRepository();
+      if (duplicateId) {
+        return {
+          status: "already_saved",
+          variantId: duplicateId,
+          storageMode: writeResult.storageMode,
+          warning: writeResult.warning,
+        };
+      }
+      return {
+        status: writeResult.status === "persisted" ? "saved" : writeResult.status === "volatile" ? "volatile" : "failed",
+        variantId: writeResult.status === "persisted" || writeResult.status === "volatile" ? candidate.id : undefined,
+        storageMode: writeResult.storageMode,
+        warning: writeResult.warning,
+      };
+    },
+    [storageMode, syncConversationsFromRepository],
+  );
+
+  const saveMessageNote = useCallback(
+    async (messageId: string, note: string): Promise<ConversationWriteResult> => {
+      skipNextDraftPersistRef.current = true;
+      setMessages((previous) => previous.map((message) =>
+        message.id === messageId ? { ...message, note: note || undefined } : message,
+      ));
+      const result = await mutateConversationRecord(activeIdRef.current, (latest) => {
+        if (!latest.messages.some((message) => message.id === messageId)) return null;
+        return {
+          ...latest,
+          messages: latest.messages.map((message) =>
+            message.id === messageId ? { ...message, note: note || undefined } : message,
+          ),
+          updatedAt: Date.now(),
+        };
+      });
+      applyWriteResult(result, { setStorageMode, setStorageWarning });
+      syncConversationsFromRepository();
+      return result;
     },
     [syncConversationsFromRepository],
   );
@@ -532,6 +697,10 @@ export function useConversationLibrary(
   // messages are omitted so the draft save never becomes partial history.
   useEffect(() => {
     if (!isLibraryReady) return;
+    if (skipNextDraftPersistRef.current) {
+      skipNextDraftPersistRef.current = false;
+      return;
+    }
     const conversationId = activeIdRef.current;
     const persistedMessages = normalizeStoredMessages(
       messages.filter((message) => !message.isStreaming),
@@ -703,17 +872,12 @@ export function useConversationLibrary(
 
   const renameConversation = useCallback(
     (conversationId: string, title: string) => {
-      const conversation = conversationsRef.current.find((item) => item.id === conversationId);
-      if (!conversation || conversation.deletionPending) return;
       const trimmed = title.trim().replace(/\s+/g, " ").slice(0, 80);
       if (!trimmed) return;
-      const updated: ConversationRecord = {
-        ...conversation,
-        title: trimmed,
-        titleMode: "custom",
-        updatedAt: Date.now(),
-      };
-      void saveConversationRecord(updated).then((result) => {
+      void mutateConversationRecord(conversationId, (latest) => {
+        if (latest.deletionPending) return null;
+        return { ...latest, title: trimmed, titleMode: "custom", updatedAt: Date.now() };
+      }).then((result) => {
         applyWriteResult(result, { setStorageMode, setStorageWarning });
         syncConversationsFromRepository();
       });
@@ -721,21 +885,19 @@ export function useConversationLibrary(
     [syncConversationsFromRepository],
   );
 
-  const toggleAnswerBookmark = useCallback(
-    (messageId: string) => {
-      const conversationId = activeIdRef.current;
+  const toggleConversationBookmark = useCallback(
+    (conversationId: string, messageId: string) => {
       const conversation = conversationsRef.current.find((item) => item.id === conversationId);
       if (!conversation || conversation.deletionPending) return;
-      const bookmarked = bookmarksRef.current.includes(messageId);
+      const currentBookmarks = conversationId === activeIdRef.current
+        ? bookmarksRef.current
+        : conversation.bookmarkedMessageIds;
+      const bookmarked = currentBookmarks.includes(messageId);
       const next = bookmarked
-        ? bookmarksRef.current.filter((id) => id !== messageId)
-        : [...bookmarksRef.current, messageId];
-      setBookmarkedMessageIds(next);
-      const updated: ConversationRecord = {
-        ...conversation,
-        bookmarkedMessageIds: next,
-        updatedAt: Date.now(),
-      };
+        ? currentBookmarks.filter((id) => id !== messageId)
+        : [...currentBookmarks, messageId];
+      if (conversationId === activeIdRef.current) setBookmarkedMessageIds(next);
+      const updated: ConversationRecord = { ...conversation, bookmarkedMessageIds: next, updatedAt: Date.now() };
       // Keep Library filters responsive while the durable write completes.
       // The repository sync below remains authoritative and rolls the
       // optimistic record back if persistence fails.
@@ -744,7 +906,14 @@ export function useConversationLibrary(
       );
       conversationsRef.current = optimisticConversations;
       setConversations(optimisticConversations);
-      void saveConversationRecord(updated).then((result) => {
+      void mutateConversationRecord(conversationId, (latest) => {
+        if (latest.deletionPending) return null;
+        const isBookmarked = latest.bookmarkedMessageIds.includes(messageId);
+        const nextBookmarks = isBookmarked
+          ? latest.bookmarkedMessageIds.filter((id) => id !== messageId)
+          : [...latest.bookmarkedMessageIds, messageId];
+        return { ...latest, bookmarkedMessageIds: nextBookmarks, updatedAt: Date.now() };
+      }).then((result) => {
         applyWriteResult(result, { setStorageMode, setStorageWarning });
         syncConversationsFromRepository();
       });
@@ -817,16 +986,23 @@ export function useConversationLibrary(
     [syncConversationsFromRepository],
   );
 
+  const toggleAnswerBookmark = useCallback(
+    (messageId: string) => toggleConversationBookmark(activeIdRef.current, messageId),
+    [toggleConversationBookmark],
+  );
+
   const updateConversationMetadata = useCallback(
     async (
       conversationId: string,
       patch: { tags?: string[]; notes?: ConversationNote[]; variants?: AnswerVariant[] },
     ): Promise<ConversationWriteResult> => {
-      const conversation = conversationsRef.current.find((item) => item.id === conversationId);
-      if (!conversation) {
-        return { status: "failed", storageMode, warning: "Conversation not found." };
-      }
-      const result = await saveConversationRecord({ ...conversation, ...patch, updatedAt: Date.now() });
+      const result = await mutateConversationRecord(conversationId, (latest) => ({
+        ...latest,
+        ...(patch.tags !== undefined ? { tags: patch.tags } : {}),
+        ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
+        ...(patch.variants !== undefined ? { variants: patch.variants } : {}),
+        updatedAt: Date.now(),
+      }));
       applyWriteResult(result, { setStorageMode, setStorageWarning });
       syncConversationsFromRepository();
       return result;
@@ -912,10 +1088,13 @@ export function useConversationLibrary(
     startNewConversation,
     renameConversation,
     toggleAnswerBookmark,
+    toggleConversationBookmark,
     deleteConversation,
     importConversationRecords,
     writerStatus,
     requestLibraryWriter,
     updateConversationMetadata,
+    saveMessageNote,
+    saveAnswerVersion,
   };
 }

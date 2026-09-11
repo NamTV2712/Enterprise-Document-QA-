@@ -1,9 +1,10 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps } from "react";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { ConversationLibrary } from "./ConversationLibrary";
 import { ConversationRecord } from "../lib/conversationStore";
 import { conversationsToJson } from "../lib/conversationExport";
+import { saveEvidence } from "../lib/evidenceCollections";
 
 const record: ConversationRecord = {
   schemaVersion: 2,
@@ -41,6 +42,7 @@ function renderLibrary(overrides: Partial<ComponentProps<typeof ConversationLibr
 }
 
 describe("ConversationLibrary", () => {
+  beforeEach(() => localStorage.clear());
   afterEach(() => cleanup());
 
   test("filters saved conversations and exposes bookmark/export controls", () => {
@@ -95,5 +97,27 @@ describe("ConversationLibrary", () => {
     await screen.findByText(/Imported 1/);
     expect(onImportBackup).toHaveBeenCalledTimes(1);
     expect(onImportBackup.mock.calls[0][0].conversations).toHaveLength(1);
+  });
+
+  test("browses a saved evidence snapshot and opens it through the reader", () => {
+    const onOpenEvidence = vi.fn();
+    saveEvidence({
+      citation: "AAPL 10-K · Financial Table",
+      text_preview: "Revenue snapshot",
+      text: "Revenue snapshot captured at save time",
+      chunk_id: "chunk-1",
+      ticker: "AAPL",
+      section: "financial_table",
+    });
+    renderLibrary({ onOpenEvidence });
+
+    fireEvent.click(screen.getByRole("button", { name: /Research evidence · 1/ }));
+    fireEvent.click(screen.getByRole("button", { name: /AAPL 10-K · Financial Table/ }));
+
+    expect(onOpenEvidence).toHaveBeenCalledWith(expect.objectContaining({
+      citation: "AAPL 10-K · Financial Table",
+      excerpt: "Revenue snapshot captured at save time",
+      chunkId: "chunk-1",
+    }));
   });
 });

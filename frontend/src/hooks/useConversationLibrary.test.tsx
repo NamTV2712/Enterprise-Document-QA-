@@ -241,6 +241,40 @@ describe("useConversationLibrary request isolation", () => {
     ).toBe(false);
   });
 
+  it("saves the displayed original answer once and deduplicates a repeat", async () => {
+    const record = makeRecord("conversation-version", "session-version", [
+      { id: "u-1", sender: "user", text: "What was revenue?" },
+      { id: "a-1", sender: "assistant", text: "Revenue was $100B.", status: "completed" },
+    ]);
+    localStorage.setItem(V3_KEY, JSON.stringify({ envelopeVersion: 3, records: [{ ...record, variants: [] }], tombstones: [] }));
+    localStorage.setItem("sec_qa_session_id", "session-version");
+    localStorage.setItem("sec_qa_active_conversation_id", "conversation-version");
+
+    const { rendered } = await freshHook();
+    await waitFor(() => expect(rendered.result.current.activeConversationId).toBe("conversation-version"));
+
+    let first!: Awaited<ReturnType<typeof rendered.result.current.saveAnswerVersion>>;
+    await act(async () => {
+      first = await rendered.result.current.saveAnswerVersion({
+        conversationId: "conversation-version",
+        messageId: "a-1",
+        variantId: null,
+      });
+    });
+    expect(first.status).toBe("saved");
+
+    let second!: Awaited<ReturnType<typeof rendered.result.current.saveAnswerVersion>>;
+    await act(async () => {
+      second = await rendered.result.current.saveAnswerVersion({
+        conversationId: "conversation-version",
+        messageId: "a-1",
+        variantId: null,
+      });
+    });
+    expect(second.status).toBe("already_saved");
+    expect(rendered.result.current.conversations.find((item) => item.id === "conversation-version")?.variants).toHaveLength(1);
+  });
+
   it("persists a next draft during streaming without persisting the partial answer", async () => {
     const { store, rendered } = await freshHook();
     const nextDraft = "A follow-up question typed during streaming";

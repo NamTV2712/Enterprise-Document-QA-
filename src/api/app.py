@@ -6,6 +6,7 @@ at startup via the lifespan context manager.
 """
 
 import logging
+import hashlib
 import os
 import re
 import time
@@ -39,10 +40,24 @@ from src.retrieval.query_normalizer import normalize_retrieval_question
 from src.retrieval.vector_store import VectorStore
 from src.api.telemetry import RequestTelemetry
 from src.api.proxy import get_rate_limit_key
+from src.api.content_presentation import build_chunk_presentation
+from src.api.original_normalizer import NORMALIZER_VERSION
+from src.api.original_location import locate_chunk
+from src.api.original_viewer import OriginalViewerError, original_viewer, sec_index_url_for_document
+from src.api.document_reader_models import EvidenceLocation, ReaderAcquisition, ReaderManifest, ReaderResolveRequest, ReaderResolveResponse
+from src.api.document_sources import build_reader_manifest
+from src.api.structured_document import (
+    StructuredContentResponse,
+    StructuredDocumentService,
+    StructuredOutlineResponse,
+    StructuredSearchResponse,
+)
+from src.api.structured_location import StructuredLocationService
+from src.api.sec_reader_client import SecReaderClient, SecReaderError
 from src.evaluation.public_report import get_public_report, list_public_reports
 
 import json as json_lib
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 # Setup structured logging (use json_mode=True in production)
 setup_logging(level="INFO", json_mode=False)
@@ -70,6 +85,8 @@ STREAM_QUEUE_POLL_SECONDS = 0.25
 T = TypeVar("T")
 limiter = Limiter(key_func=get_rate_limit_key)
 telemetry = RequestTelemetry()
+structured_reader = StructuredDocumentService(original_viewer)
+structured_locations = StructuredLocationService(original_viewer, structured_reader)
 
 
 def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
@@ -154,6 +171,7 @@ def _document_rows(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "document_id": document_id,
                 "ticker": chunk.get("ticker"),
                 "filing_date": chunk.get("filing_date"),
+                "report_date": chunk.get("report_date"),
                 "accession_number": chunk.get("accession_number"),
                 "sections": set(),
                 "chunk_count": 0,
@@ -162,6 +180,8 @@ def _document_rows(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
         )
         if chunk.get("section"):
             row["sections"].add(chunk["section"])
+        if row["report_date"] != chunk.get("report_date"):
+            row["report_date"] = None
         row["chunk_count"] += 1
     return [
         {**row, "sections": sorted(row["sections"])}
@@ -227,6 +247,14 @@ def _document_catalog() -> list[dict[str, Any]]:
     rows = _document_rows(_loaded_retrieval_chunks())
     _state["document_rows"] = rows
     return rows
+
+
+def _find_document_row(document_id: str) -> dict[str, Any] | None:
+    return next((item for item in _document_catalog() if item["document_id"] == document_id), None)
+
+
+def _raise_original_viewer_error(error: OriginalViewerError) -> None:
+    raise HTTPException(status_code=error.status_code, detail={"code": error.code, "message": error.message}) from error
 
 
 def _document_chunks_index() -> dict[str, list[dict[str, Any]]]:
@@ -993,6 +1021,7 @@ async def chunk_detail(chunk_id: str) -> dict:
         raise HTTPException(status_code=409, detail="Chunk ID is ambiguous")
     document_id, chunk = records[0]
     text = str(chunk.get("text") or "")
+    document_row = _find_document_row(document_id)
     return {
         "chunk_id": chunk.get("chunk_id"),
         "document_id": document_id,
@@ -1003,10 +1032,336 @@ async def chunk_detail(chunk_id: str) -> dict:
         "accession_number": chunk.get("accession_number"),
         "chunk_index": chunk.get("chunk_index"),
         "text": text,
+        "chunk_text_hash": hashlib.sha256(text.encode("utf-8")).hexdigest(),
         "text_preview": text[:500],
         "text_length": len(text),
         "source_url": chunk.get("source_url") or chunk.get("filing_url"),
+        "sec_index_url": sec_index_url_for_document(document_row) if document_row else None,
+        "presentation": build_chunk_presentation(text, chunk.get("section")),
     }
+
+
+@app.get("/documents/{document_id}/original")
+async def original_manifest(document_id: str) -> dict[str, Any]:
+    """Return bounded local original-source availability without exposing paths."""
+    row = _find_document_row(document_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    try:
+        return await run_in_threadpool(
+            original_viewer.run,
+            f"manifest:{document_id}",
+            lambda: original_viewer.manifest(row),
+        )
+    except OriginalViewerError as error:
+        _raise_original_viewer_error(error)
+
+
+@app.get("/documents/{document_id}/reader", response_model=ReaderManifest)
+async def reader_manifest(document_id: str) -> dict[str, Any]:
+    """Return the typed local reader identity and representation manifest."""
+    if _state.get("pipeline") is None:
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    row = _find_document_row(document_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    try:
+        return await run_in_threadpool(
+            original_viewer.run,
+            f"reader:{document_id}",
+            lambda: build_reader_manifest(row, viewer=original_viewer),
+        )
+    except OriginalViewerError as error:
+        _raise_original_viewer_error(error)
+
+
+@app.post("/documents/{document_id}/reader/resolve", response_model=ReaderResolveResponse)
+async def reader_resolve(document_id: str, body: ReaderResolveRequest) -> dict[str, Any]:
+    """Resolve a local reader source or perform one bounded SEC acquisition."""
+    if _state.get("pipeline") is None:
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    row = _find_document_row(document_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    try:
+        manifest = await run_in_threadpool(
+            original_viewer.run,
+            f"reader-resolve-manifest:{document_id}",
+            lambda: build_reader_manifest(row, viewer=original_viewer),
+        )
+        if manifest["status"] != "unavailable" and not body.refresh:
+            return {"manifest": manifest, "acquisition": ReaderAcquisition(status="not_needed", code="local_available", message="A trusted local reader source is available.").model_dump(mode="json")}
+        client = SecReaderClient(settings.sec_reader_user_agent)
+        acquired = await run_in_threadpool(client.acquire, row, refresh=body.refresh)
+        return {
+            "manifest": manifest,
+            "acquisition": ReaderAcquisition(
+                status="acquired",
+                code="remote_source_acquired",
+                message="A bounded canonical SEC HTML source was acquired for the reader.",
+                canonical_url=acquired.canonical_url,
+                raw_sha256=acquired.raw_sha256,
+                bytes_received=acquired.bytes_received,
+                request_count=acquired.request_count,
+            ).model_dump(mode="json"),
+        }
+    except SecReaderError as error:
+        if error.status_code == 503:
+            detail = {"code": error.code, "message": error.message}
+            if error.retry_after is not None:
+                detail["retry_after_seconds"] = error.retry_after
+            raise HTTPException(status_code=503, detail=detail, headers={"Retry-After": str(error.retry_after or 1)}) from error
+        return {
+            "manifest": manifest,
+            "acquisition": ReaderAcquisition(status="unavailable", code=error.code, message=error.message).model_dump(mode="json"),
+        }
+    except OriginalViewerError as error:
+        _raise_original_viewer_error(error)
+
+
+def _reader_row_or_404(document_id: str) -> dict[str, Any]:
+    row = _find_document_row(document_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return row
+
+
+@app.get("/documents/{document_id}/reader/outline", response_model=StructuredOutlineResponse)
+async def reader_outline(
+    document_id: str,
+    source_document_id: str = Query(..., min_length=1, max_length=128),
+    source_set_revision: str = Query(..., min_length=1, max_length=128),
+    document_revision: str = Query(..., min_length=1, max_length=128),
+    cursor: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=50),
+) -> dict[str, Any]:
+    """Return a bounded outline from one revision-bound source."""
+    row = _reader_row_or_404(document_id)
+    try:
+        return await run_in_threadpool(
+            original_viewer.run,
+            f"reader-outline:{document_id}:{source_document_id}:{source_set_revision}:{document_revision}:{cursor}:{limit}",
+            lambda: structured_reader.outline(row, source_document_id, source_set_revision, document_revision, cursor, limit),
+        )
+    except OriginalViewerError as error:
+        _raise_original_viewer_error(error)
+
+
+@app.get("/documents/{document_id}/reader/content", response_model=StructuredContentResponse)
+async def reader_content(
+    document_id: str,
+    source_document_id: str = Query(..., min_length=1, max_length=128),
+    source_set_revision: str = Query(..., min_length=1, max_length=128),
+    document_revision: str = Query(..., min_length=1, max_length=128),
+    cursor: int = Query(default=0, ge=0),
+    limit: int = Query(default=64, ge=1, le=64),
+) -> dict[str, Any]:
+    """Return bounded application-owned structured blocks, never raw HTML."""
+    row = _reader_row_or_404(document_id)
+    try:
+        return await run_in_threadpool(
+            original_viewer.run,
+            f"reader-content:{document_id}:{source_document_id}:{source_set_revision}:{document_revision}:{cursor}:{limit}",
+            lambda: structured_reader.content(row, source_document_id, source_set_revision, document_revision, cursor, limit),
+        )
+    except OriginalViewerError as error:
+        _raise_original_viewer_error(error)
+
+
+@app.get("/documents/{document_id}/reader/search", response_model=StructuredSearchResponse)
+async def reader_search(
+    document_id: str,
+    source_document_id: str = Query(..., min_length=1, max_length=128),
+    source_set_revision: str = Query(..., min_length=1, max_length=128),
+    document_revision: str = Query(..., min_length=1, max_length=128),
+    q: str = Query(..., min_length=2, max_length=200),
+    cursor: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=50),
+) -> dict[str, Any]:
+    """Search only the selected structured source."""
+    row = _reader_row_or_404(document_id)
+    try:
+        return await run_in_threadpool(
+            original_viewer.run,
+            f"reader-search:{document_id}:{source_document_id}:{source_set_revision}:{document_revision}:{q}:{cursor}:{limit}",
+            lambda: structured_reader.search(row, source_document_id, source_set_revision, document_revision, q, cursor, limit),
+        )
+    except OriginalViewerError as error:
+        _raise_original_viewer_error(error)
+
+
+@app.get("/documents/{document_id}/reader/section-export")
+async def reader_section_export(
+    document_id: str,
+    source_document_id: str = Query(..., min_length=1, max_length=128),
+    source_set_revision: str = Query(..., min_length=1, max_length=128),
+    document_revision: str = Query(..., min_length=1, max_length=128),
+    format: Literal["html", "markdown"] = Query(default="html"),
+) -> Response:
+    """Export application-generated escaped structured content only."""
+    row = _reader_row_or_404(document_id)
+    try:
+        payload, media_type = await run_in_threadpool(
+            original_viewer.run,
+            f"reader-export:{document_id}:{source_document_id}:{source_set_revision}:{document_revision}:{format}",
+            lambda: structured_reader.export(row, source_document_id, source_set_revision, document_revision, format),
+        )
+        extension = "md" if format == "markdown" else "html"
+        return Response(content=payload, media_type=media_type, headers={"Content-Disposition": f"attachment; filename=structured-section.{extension}"})
+    except OriginalViewerError as error:
+        _raise_original_viewer_error(error)
+
+
+@app.get("/documents/{document_id}/original/content")
+async def original_content(
+    document_id: str,
+    source_document_id: str = Query(..., min_length=1, max_length=128),
+    source_set_revision: str = Query(..., min_length=1, max_length=128),
+    document_revision: str = Query(..., min_length=1, max_length=128),
+    start: int = Query(default=0, ge=0),
+    limit: int = Query(default=16_000, ge=1, le=32_000),
+    chunk_id: str | None = Query(default=None, max_length=256),
+    chunk_text_hash: str | None = Query(default=None, max_length=128),
+    find: str | None = Query(default=None, max_length=200),
+) -> dict[str, Any]:
+    """Return only a revision-bound normalized text window."""
+    row = _find_document_row(document_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if (chunk_id is None) != (chunk_text_hash is None):
+        raise HTTPException(status_code=422, detail={"code": "invalid_request", "message": "chunk_id and chunk_text_hash must be supplied together."})
+    chunk_text: str | None = None
+    if chunk_id is not None and chunk_text_hash is not None:
+        records = _chunk_records_index().get(chunk_id, [])
+        if not records:
+            raise HTTPException(status_code=404, detail={"code": "chunk_not_found", "message": "Chunk not found."})
+        if len(records) > 1:
+            raise HTTPException(status_code=409, detail={"code": "chunk_ambiguous", "message": "Chunk ID is ambiguous."})
+        chunk_text = str(records[0][1].get("text") or "")
+    try:
+        return await run_in_threadpool(
+            original_viewer.run,
+            f"content:{document_id}:{source_document_id}:{source_set_revision}:{document_revision}",
+            lambda: original_viewer.content(
+                row,
+                source_document_id,
+                source_set_revision,
+                document_revision,
+                start,
+                limit,
+                find,
+                chunk_text,
+                chunk_text_hash,
+            ),
+        )
+    except OriginalViewerError as error:
+        _raise_original_viewer_error(error)
+
+
+@app.get("/chunks/{chunk_id}/original-location")
+async def original_location(
+    chunk_id: str,
+    chunk_text_hash: str = Query(..., min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$"),
+    source_set_revision: str = Query(..., min_length=1, max_length=128),
+) -> dict[str, Any]:
+    """Return only a unique, revision-bound original correspondence."""
+    records = _chunk_records_index().get(chunk_id, [])
+    if not records:
+        raise HTTPException(status_code=404, detail={"code": "chunk_not_found", "message": "Chunk not found."})
+    if len(records) > 1:
+        raise HTTPException(status_code=409, detail={"code": "chunk_ambiguous", "message": "Chunk ID is ambiguous."})
+    document_id, chunk = records[0]
+    row = _find_document_row(document_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail={"code": "document_not_found", "message": "Document not found."})
+    chunk_text = str(chunk.get("text") or "")
+    try:
+        def locate() -> dict[str, Any]:
+            snapshot = original_viewer.snapshot(row)
+            if snapshot.source_set_revision != source_set_revision:
+                raise OriginalViewerError("source_changed", "The original source set changed. Reload the viewer.")
+            if hashlib.sha256(chunk_text.encode("utf-8")).hexdigest() != chunk_text_hash:
+                raise OriginalViewerError("chunk_changed", "The indexed chunk changed. Reload the evidence.")
+            presentation = build_chunk_presentation(chunk_text, chunk.get("section"))
+            result = original_viewer.table_location(row, chunk_text, chunk_text_hash, source_set_revision) if presentation["kind"] == "markdown_table" else locate_chunk(snapshot, chunk_text, chunk_text_hash, source_set_revision)
+            return {
+                "chunk_id": chunk_id,
+                "chunk_text_hash": chunk_text_hash,
+                "document_id": document_id,
+                "source_set_revision": source_set_revision,
+                "matcher_version": "sec-viewer-location-v1",
+                **result,
+            }
+        return await run_in_threadpool(original_viewer.run, f"location:{document_id}:{chunk_id}:{source_set_revision}", locate)
+    except OriginalViewerError as error:
+        if error.code == "chunk_changed":
+            _raise_original_viewer_error(error)
+        _raise_original_viewer_error(error)
+
+
+@app.get("/chunks/{chunk_id}/reader-location", response_model=EvidenceLocation)
+async def reader_location(
+    chunk_id: str,
+    chunk_text_hash: str = Query(..., min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$"),
+    source_set_revision: str = Query(..., min_length=1, max_length=128),
+) -> EvidenceLocation:
+    """Return exact structured correspondence without fuzzy source selection."""
+    records = _chunk_records_index().get(chunk_id, [])
+    if not records:
+        raise HTTPException(status_code=404, detail={"code": "chunk_not_found", "message": "Chunk not found."})
+    if len(records) > 1:
+        raise HTTPException(status_code=409, detail={"code": "chunk_ambiguous", "message": "Chunk ID is ambiguous."})
+    document_id, chunk = records[0]
+    row = _find_document_row(document_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail={"code": "document_not_found", "message": "Document not found."})
+    location = await run_in_threadpool(
+        original_viewer.run,
+        f"reader-location:{document_id}:{chunk_id}:{source_set_revision}",
+        lambda: structured_locations.locate(
+            row,
+            chunk_id,
+            str(chunk.get("text") or ""),
+            chunk_text_hash,
+            source_set_revision,
+            str(chunk.get("section")) if chunk.get("section") is not None else None,
+        ),
+    )
+    if location.status == "stale":
+        raise HTTPException(status_code=409, detail=location.model_dump(mode="json"))
+    return location
+
+
+@app.get("/documents/{document_id}/original/search")
+async def original_search(
+    document_id: str,
+    source_document_id: str = Query(..., min_length=1, max_length=128),
+    source_set_revision: str = Query(..., min_length=1, max_length=128),
+    document_revision: str = Query(..., min_length=1, max_length=128),
+    q: str = Query(..., min_length=2, max_length=200),
+    cursor: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> dict[str, Any]:
+    """Find literal text in one selected normalized source document."""
+    row = _find_document_row(document_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    try:
+        return await run_in_threadpool(
+            original_viewer.run,
+            f"search:{document_id}:{source_document_id}:{source_set_revision}:{document_revision}:{q}:{cursor}:{limit}",
+            lambda: original_viewer.search(
+                row,
+                source_document_id,
+                source_set_revision,
+                document_revision,
+                q,
+                cursor,
+                limit,
+            ),
+        )
+    except OriginalViewerError as error:
+        _raise_original_viewer_error(error)
 
 
 @app.get("/system/info")
@@ -1029,6 +1384,11 @@ async def system_info() -> dict:
             "stage_events": True,
             "comparative_stream": True,
             "document_indexed_viewer": True,
+            "original_document_viewer": {
+                "enabled": True,
+                "representation": "normalized_text",
+                "normalizer_version": NORMALIZER_VERSION,
+            },
         },
         "build": {
             key: os.environ[key]
@@ -1118,6 +1478,12 @@ async def retrieval_inspect(request: Request, body: RetrievalInspectRequest) -> 
     except Exception:
         logger.exception("Retrieval inspection failed")
         raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
+    chunk_records = _chunk_records_index()
+    for candidate in trace.get("candidates", []):
+        records = chunk_records.get(candidate.get("chunk_id"), [])
+        candidate["document_id"] = records[0][0] if len(records) == 1 else None
+    trace["candidate_count"] = len(trace.get("candidates", []))
+    trace["selected_count"] = len(trace.get("selected_chunk_ids", []))
     return {
         "query_interpretation": _query_interpretation(original_question, normalized),
         "trace": trace,

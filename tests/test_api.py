@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import inspect
 import threading
 import time
@@ -12,6 +13,7 @@ from fastapi.testclient import TestClient
 from configs.settings import Settings
 from src.api import app as app_module
 from src.api.telemetry import RequestTelemetry
+from src.api.document_reader_models import EvidenceLocation, EvidenceRange
 from src.generation.generator import RAGResponse
 from src.memory.conversation_memory import HistorySnapshot, Turn
 from src.retrieval.retriever import RetrievedChunk
@@ -101,6 +103,11 @@ def test_system_info_exposes_additive_pipeline_capabilities(client) -> None:
         "stage_events": True,
         "comparative_stream": True,
         "document_indexed_viewer": True,
+        "original_document_viewer": {
+            "enabled": True,
+            "representation": "normalized_text",
+            "normalizer_version": "sec-viewer-text-v1",
+        },
     }
 
 
@@ -513,6 +520,76 @@ def test_document_chunk_index_is_stable_and_direct_lookup_rejects_ambiguous_ids(
     assert ambiguous.status_code == 409
     missing = client.get("/chunks/does-not-exist")
     assert missing.status_code == 404
+
+
+def test_reader_manifest_route_returns_typed_local_contract(client, monkeypatch) -> None:
+    row = {
+        "document_id": "AAPL:0000320193-25-000079",
+        "ticker": "AAPL",
+        "filing_date": "2025-10-31",
+        "report_date": "2025-09-27",
+        "accession_number": "0000320193-25-000079",
+    }
+    manifest = {
+        "schema_version": "sec-reader-v4",
+        "document_id": row["document_id"],
+        "status": "available",
+        "reason_code": "available",
+        "reason": None,
+        "identity": {
+            "ticker": "AAPL",
+            "cik": 320193,
+            "accession_number": row["accession_number"],
+            "filing_date": row["filing_date"],
+            "report_date": row["report_date"],
+            "status": "verified",
+            "reason_code": "verified",
+        },
+        "source_set_revision": "revision-1",
+        "sources": [],
+        "representations": [
+            {"kind": "normalized_text", "status": "available", "reason_code": "available", "reason": None},
+            {"kind": "structured", "status": "unavailable", "reason_code": "structured_representation_unavailable", "reason": "Unavailable."},
+            {"kind": "pdf", "status": "unavailable", "reason_code": "pdf_representation_unavailable", "reason": "Unavailable."},
+        ],
+    }
+    monkeypatch.setattr(app_module, "_find_document_row", lambda _document_id: row)
+    monkeypatch.setattr(app_module, "build_reader_manifest", lambda _row, viewer: manifest)
+
+    response = client.get("/documents/AAPL:0000320193-25-000079/reader")
+
+    assert response.status_code == 200
+    assert response.json()["schema_version"] == "sec-reader-v4"
+    assert response.json()["identity"]["status"] == "verified"
+    assert {item["kind"] for item in response.json()["representations"]} == {"normalized_text", "structured", "pdf"}
+
+
+def test_structured_reader_location_returns_exact_revision_bound_range(client, monkeypatch) -> None:
+    chunk_text = "Apple faces competition risks."
+    chunk_id = "chunk-reader-1"
+    row = {"document_id": "AAPL:0001", "ticker": "AAPL", "accession_number": "0001"}
+    expected = EvidenceLocation(
+        chunk_id=chunk_id,
+        chunk_text_hash=hashlib.sha256(chunk_text.encode("utf-8")).hexdigest(),
+        document_id=row["document_id"],
+        source_set_revision="set-1",
+        status="exact",
+        reason_code="exact",
+        source_document_id="source-1",
+        document_revision="doc-1",
+        representation_revision="structured-1",
+        ranges=[EvidenceRange(block_id="block-1", block_index=0, kind="paragraph", start=0, end=len(chunk_text), method="text_whitespace")],
+        match_count=1,
+    )
+    monkeypatch.setattr(app_module, "_chunk_records_index", lambda: {chunk_id: [(row["document_id"], {"text": chunk_text, "section": "risk_factors"})]})
+    monkeypatch.setattr(app_module, "_find_document_row", lambda _document_id: row)
+    monkeypatch.setattr(app_module.structured_locations, "locate", lambda *args, **kwargs: expected)
+
+    response = client.get(f"/chunks/{chunk_id}/reader-location", params={"chunk_text_hash": expected.chunk_text_hash, "source_set_revision": "set-1"})
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "exact"
+    assert response.json()["ranges"][0]["block_id"] == "block-1"
 
 
 def test_query_strips_control_and_format_characters(client, mock_pipeline) -> None:

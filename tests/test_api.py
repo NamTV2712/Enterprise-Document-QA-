@@ -554,7 +554,7 @@ def test_reader_manifest_route_returns_typed_local_contract(client, monkeypatch)
         ],
     }
     monkeypatch.setattr(app_module, "_find_document_row", lambda _document_id: row)
-    monkeypatch.setattr(app_module, "build_reader_manifest", lambda _row, viewer: manifest)
+    monkeypatch.setattr(app_module, "build_reader_manifest", lambda _row, viewer, structured_reader=None: manifest)
 
     response = client.get("/documents/AAPL:0000320193-25-000079/reader")
 
@@ -562,6 +562,13 @@ def test_reader_manifest_route_returns_typed_local_contract(client, monkeypatch)
     assert response.json()["schema_version"] == "sec-reader-v4"
     assert response.json()["identity"]["status"] == "verified"
     assert {item["kind"] for item in response.json()["representations"]} == {"normalized_text", "structured", "pdf"}
+
+
+def test_reader_resolver_surface_is_retired() -> None:
+    assert not any(
+        getattr(route, "path", None) == "/documents/{document_id}/reader/resolve"
+        for route in app_module.app.routes
+    )
 
 
 def test_structured_reader_location_returns_exact_revision_bound_range(client, monkeypatch) -> None:

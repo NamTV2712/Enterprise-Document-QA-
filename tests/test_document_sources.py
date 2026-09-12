@@ -55,6 +55,10 @@ def test_reader_manifest_has_verified_identity_and_stable_sources(tmp_path: Path
     assert [item["source_document_id"] for item in first["sources"]] == [item["source_document_id"] for item in second["sources"]]
     assert first["sources"][0]["canonical_url"].endswith("0000051143-26-000010-index.html")
     assert {item["kind"] for item in first["representations"]} == {"normalized_text", "structured", "pdf"}
+    representations = {item["kind"]: item for item in first["representations"]}
+    assert representations["normalized_text"]["coverage_status"] == "complete"
+    assert representations["structured"]["coverage_status"] == "partial"
+    assert representations["structured"]["coverage_reason_code"] == "unsupported_visible_content"
 
 
 def test_reader_manifest_does_not_guess_unverified_identity(tmp_path: Path, monkeypatch):

@@ -44,7 +44,7 @@ from src.api.content_presentation import build_chunk_presentation
 from src.api.original_normalizer import NORMALIZER_VERSION
 from src.api.original_location import locate_chunk
 from src.api.original_viewer import OriginalViewerError, original_viewer, sec_index_url_for_document
-from src.api.document_reader_models import EvidenceLocation, ReaderAcquisition, ReaderManifest, ReaderResolveRequest, ReaderResolveResponse
+from src.api.document_reader_models import EvidenceLocation, ReaderManifest
 from src.api.document_sources import build_reader_manifest
 from src.api.structured_document import (
     StructuredContentResponse,
@@ -53,7 +53,6 @@ from src.api.structured_document import (
     StructuredSearchResponse,
 )
 from src.api.structured_location import StructuredLocationService
-from src.api.sec_reader_client import SecReaderClient, SecReaderError
 from src.evaluation.public_report import get_public_report, list_public_reports
 
 import json as json_lib
@@ -1069,52 +1068,8 @@ async def reader_manifest(document_id: str) -> dict[str, Any]:
         return await run_in_threadpool(
             original_viewer.run,
             f"reader:{document_id}",
-            lambda: build_reader_manifest(row, viewer=original_viewer),
+            lambda: build_reader_manifest(row, viewer=original_viewer, structured_reader=structured_reader),
         )
-    except OriginalViewerError as error:
-        _raise_original_viewer_error(error)
-
-
-@app.post("/documents/{document_id}/reader/resolve", response_model=ReaderResolveResponse)
-async def reader_resolve(document_id: str, body: ReaderResolveRequest) -> dict[str, Any]:
-    """Resolve a local reader source or perform one bounded SEC acquisition."""
-    if _state.get("pipeline") is None:
-        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
-    row = _find_document_row(document_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="Document not found")
-    try:
-        manifest = await run_in_threadpool(
-            original_viewer.run,
-            f"reader-resolve-manifest:{document_id}",
-            lambda: build_reader_manifest(row, viewer=original_viewer),
-        )
-        if manifest["status"] != "unavailable" and not body.refresh:
-            return {"manifest": manifest, "acquisition": ReaderAcquisition(status="not_needed", code="local_available", message="A trusted local reader source is available.").model_dump(mode="json")}
-        client = SecReaderClient(settings.sec_reader_user_agent)
-        acquired = await run_in_threadpool(client.acquire, row, refresh=body.refresh)
-        return {
-            "manifest": manifest,
-            "acquisition": ReaderAcquisition(
-                status="acquired",
-                code="remote_source_acquired",
-                message="A bounded canonical SEC HTML source was acquired for the reader.",
-                canonical_url=acquired.canonical_url,
-                raw_sha256=acquired.raw_sha256,
-                bytes_received=acquired.bytes_received,
-                request_count=acquired.request_count,
-            ).model_dump(mode="json"),
-        }
-    except SecReaderError as error:
-        if error.status_code == 503:
-            detail = {"code": error.code, "message": error.message}
-            if error.retry_after is not None:
-                detail["retry_after_seconds"] = error.retry_after
-            raise HTTPException(status_code=503, detail=detail, headers={"Retry-After": str(error.retry_after or 1)}) from error
-        return {
-            "manifest": manifest,
-            "acquisition": ReaderAcquisition(status="unavailable", code=error.code, message=error.message).model_dump(mode="json"),
-        }
     except OriginalViewerError as error:
         _raise_original_viewer_error(error)
 

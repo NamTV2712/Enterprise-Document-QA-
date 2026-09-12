@@ -23,10 +23,6 @@ class Settings(BaseSettings):
     data_processed_dir: Path = Path("data/processed")
     data_public_evaluations_dir: Path = Path("data/public_evaluations")
 
-    # Optional contact identity for bounded on-demand SEC reader acquisition.
-    # Acquisition fails closed when this is empty or lacks a contact address.
-    sec_reader_user_agent: str = ""
-
     # Bounded, local-only normalized original viewer. These values are
     # deliberately conservative; the viewer validates them against hard
     # ceilings before serving any source content.

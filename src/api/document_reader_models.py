@@ -15,6 +15,7 @@ AvailabilityCode = Literal[
     "structured_representation_unavailable",
     "pdf_representation_unavailable",
 ]
+CoverageStatus = Literal["complete", "partial", "unknown"]
 
 
 class ReaderFilingIdentity(BaseModel):
@@ -36,6 +37,13 @@ class ReaderAvailability(BaseModel):
     status: ReaderStatus
     reason_code: AvailabilityCode
     reason: str | None = None
+    # Coverage is scoped to this representation. Availability and
+    # completeness are separate claims, so older callers default safely.
+    coverage_status: CoverageStatus = "unknown"
+    coverage_reason: str | None = None
+    # Additive machine-readable detail used by the UI; coverage_reason remains
+    # the public explanatory text required by the reader contract.
+    coverage_reason_code: str | None = None
 
 
 class CanonicalSource(BaseModel):
@@ -65,25 +73,6 @@ class ReaderManifest(BaseModel):
     source_set_revision: str
     sources: list[CanonicalSource]
     representations: list[ReaderAvailability]
-
-
-class ReaderResolveRequest(BaseModel):
-    refresh: bool = False
-
-
-class ReaderAcquisition(BaseModel):
-    status: Literal["not_needed", "acquired", "unavailable"]
-    code: str
-    message: str
-    canonical_url: str | None = None
-    raw_sha256: str | None = None
-    bytes_received: int | None = Field(default=None, ge=0)
-    request_count: int = Field(default=0, ge=0, le=4)
-
-
-class ReaderResolveResponse(BaseModel):
-    manifest: ReaderManifest
-    acquisition: ReaderAcquisition
 
 
 class EvidenceRange(BaseModel):

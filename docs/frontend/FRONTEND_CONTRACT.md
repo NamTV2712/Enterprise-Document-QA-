@@ -42,3 +42,29 @@ still available. Unknown or stale data is labelled instead of silently replaced.
 Architecture diagrams are generated from verified source evidence and loaded
 only in Tools → Architecture. They do not run the query path, expose local
 paths, or add runtime dependencies to Chat.
+
+## Evidence and reader acceptance
+
+Reader labels, transitions, availability, and completeness are representation-
+and revision-bound. A Documents action with no submitted question must not use
+answer-scoped “this answer” or “retrieved sources” language. A successful fetch
+does not by itself prove reader admission, structured coverage, or search
+readiness. Structured no-match copy must stay scoped to the structured view
+when coverage is partial or unknown and must offer normalized local search. The
+direct document workspace owns identity/header chrome; embedded readers own
+reading controls and content without repeating that identity. The historical
+native browser-zoom gate remains an external manual check because the
+connected browser cannot report native chrome zoom values.
+
+## Library continuity acceptance
+
+Library is a derived view over the existing conversation and evidence stores;
+it does not create a second persistence index. Its order is Recent Research,
+Saved Answer Versions, and Evidence Collections. Saved answer actions carry
+exact conversation/message/variant identity, while evidence actions distinguish
+the historical captured snapshot from a separately verified current corpus
+source. Current-source handoffs require exact chunk/document/hash identity and
+must not substitute a nearby source. Browser-local, read-only, volatile, and
+storage-failure states are explicit, and raw IDs/revisions remain behind a
+provenance disclosure. Recent items are bounded and continuation fills a draft
+without submitting a query.

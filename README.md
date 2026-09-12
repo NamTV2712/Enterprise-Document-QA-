@@ -484,6 +484,15 @@ production-build fixture with 100 conversations and 10,000 messages measured
 Library search p95 at 40.49 ms in Chromium and 80.02 ms in Firefox on the
 latest one-worker freeze, below the 200 ms target.
 
+The Library continuity view organizes those same local artifacts into Recent
+Research, Saved Answer Versions, and Evidence Collections. Recent work is
+bounded and resumable; saved answers reopen by exact conversation/message/
+variant identity; evidence remains a readable historical snapshot. A separate
+current-source action is offered only after an exact local chunk/document/hash
+check, with stale or missing results reported honestly. Raw provenance IDs stay
+behind a disclosure, and browser-local/read-only/volatile limitations remain
+visible rather than implying cloud synchronization.
+
 ### Evaluation, analytics, and quota-safe campaign handoff
 
 The Evaluation view reads only reports published through the allowlisted
@@ -1151,8 +1160,6 @@ EMBEDDING_MODEL_REVISION=<exact-hugging-face-commit>
 EMBEDDING_GENERATIONS_DIR=data/embedding_generations
 EMBEDDING_GENERATION_PATH=data/embedding_generations/<generation-id>
 ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
-# Required only for optional on-demand SEC reader acquisition; use a real contact address.
-SEC_READER_USER_AGENT=Researcher Name researcher@example.com
 LLM_RATE_LIMIT_BURST=10/minute
 LLM_RATE_LIMIT_DAILY=100/day
 DECOMPOSED_RATE_LIMIT=5/minute
@@ -1508,3 +1515,23 @@ This project demonstrates the engineering work required to move RAG beyond a sim
 - Clear limitations and reproducible validation.
 
 The goal is not to hide the hard parts of enterprise document QA, but to expose them, measure them, and improve them systematically.
+
+### Skill governance
+
+Project-local agent contracts live under `.agents/skills/`. `rag-ui-ux` remains
+the frontend/product authority; the focused `rag-core`, `rag-retrieval-quality`,
+`rag-evaluation`, `rag-security`, `rag-performance`, and
+`rag-document-provenance` skills own their named RAG boundaries. Routing and
+external-source provenance are recorded in `.agents/skills/ROUTING.md` and
+`.agents/skills/SOURCES.md`. These contracts do not install remote skills or
+change application behavior.
+
+The reader is local-only and exposes representation-specific availability.
+Indexed excerpts, normalized text, structured content, and PDF availability
+are separate contracts; one representation never proves that another is
+available or complete. Structured responses also report `coverage_status`
+(`complete`, `partial`, or `unknown`) and a human/machine-readable reason. A
+structured no-match under partial or unknown coverage is explicitly scoped to
+that view and offers a search of the complete local normalized text. The
+retired resolver endpoint is not part of the supported reader surface, so the
+UI does not silently acquire or admit remote document bytes.

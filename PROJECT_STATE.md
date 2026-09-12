@@ -3763,13 +3763,10 @@ is known. Next: `V4-D04.1`.
 
 ### V4-D04.1 execution checkpoint (2026-09-11)
 
-D04.1 is complete for the hermetic implementation/security gate. Added
-`src/api/sec_reader_client.py` and `POST
-/documents/{document_id}/reader/resolve` with typed outcomes. The dedicated
-client accepts trusted identity only, requires a contact User-Agent, pins DNS
-to a public address while preserving SEC hostname/SNI TLS verification,
-disables proxy inheritance, permits only HTTPS/443 `www.sec.gov` archive
-paths, rejects redirects, and accepts HTML/XHTML only.
+D04.1 recorded an earlier hermetic experiment for a bounded remote reader
+transport. That experiment was retired by V4-R03.1 because a successful fetch
+did not admit bytes into any reader representation. The supported contract is
+now local-only; no transient remote-body path is exposed.
 
 The implementation enforces the frozen 2 MiB index, 20 MiB source, 40 MiB
 source-set, 5-second connect, 10-second inactivity/read, 30-second operation
@@ -4004,3 +4001,298 @@ The original native-zoom requirement is preserved; it was not weakened or
 deleted. No production-code workaround is warranted. CSS zoom,
 browser-specific behavior, or a simulated test would alter the requirement
 instead of verifying it.
+
+### Skill architecture reconciliation (2026-09-12)
+
+PASS 2 applied the frozen SEC RAG skill architecture under `.agents/skills/`.
+The existing `rag-ui-ux` was preserved and strengthened with task semantics,
+state ownership, async/stale handling, reader representation honesty, and
+conditional specialist routing. Six project-owned RAG specialists were added;
+Qdrant guidance and backend contracts were merged into retrieval/core
+references. External repositories remain reference-only and no third-party code
+or installer was used.
+
+This governance work does not resolve the current product evidence gaps found
+in PASS 1. The Documents → “Open document workspace” path can first present an
+answer-scoped inspector (“Retrieved sources” / “this answer”) without a
+question; structured search can disagree with normalized prose while reporting
+complete; and acquisition success is not proven reader admission. These are
+dated acceptance findings, not closed implementation claims.
+
+## V4-R00.1 execution checkpoint (2026-09-12)
+
+- Status: `[x] complete`.
+- Task-owned baseline fixtures were added for catalog-origin routing, direct-
+  document chrome, representation coverage, and resolver retirement.
+- Expected baseline failures were reproduced: 2 frontend failures and 2
+  backend failures, each matching a frozen V4-R defect; no unrelated failure
+  appeared.
+- Commands: `cd frontend; bun run test --
+  src/components/DocumentExplorerPanel.test.tsx
+  src/components/DocumentWorkspace.test.tsx` (4 passed, 2 expected failures);
+  `.venv\\Scripts\\python.exe -m pytest
+  tests/test_structured_document.py::test_structured_representation_reports_visible_content_outside_supported_blocks
+  tests/test_api.py::test_reader_resolver_surface_is_retired -q` (2 expected
+  failures).
+- Files changed by this task: `frontend/src/components/DocumentExplorerPanel.test.tsx`,
+  `frontend/src/components/DocumentWorkspace.test.tsx`,
+  `tests/test_structured_document.py`, and `tests/test_api.py`.
+- No API, persistence, corpus, index, retrieval, security, or performance
+  behavior changed. Existing dirty user files were preserved.
+- Existing processes were not started or stopped: one-worker backend PID 11844
+  on 8000; Vite previews PID 7292 on 4173 and PID 2360 on 5173.
+- Exact next task: `V4-R01.1`.
+
+## V4-R01.1 execution checkpoint (2026-09-12)
+
+- Status: `[x] complete`.
+- The frontend now uses a discriminated `WorkspaceTarget`: answer evidence
+  remains answer-scoped, while catalog and search entries open a direct
+  document workspace with stable document identity, representation/tab intent,
+  return view, and return-focus id. `App` owns the target; `useReaderSession`
+  remains the sole reader async owner. Catalog/search paths no longer create a
+  synthetic answer `Source` or answer-inspector chrome.
+- Files changed by this task: `frontend/src/types.ts`,
+  `frontend/src/App.tsx`, `frontend/src/components/DocumentExplorerPanel.tsx`,
+  `frontend/src/components/SearchWorkspace.tsx`,
+  `frontend/src/components/DocumentWorkspace.tsx`, and their three focused
+  component tests.
+- API/DTO contract: no backend endpoints or DTOs changed. The target is
+  frontend-only navigation state; no persistence, cache, acquisition, corpus,
+  retrieval, embedding, Qdrant, or evaluation behavior changed. No new reader
+  async owner or network path was introduced.
+- Validation: `cd frontend; bun run lint` passed; focused Vitest passed `13/13`
+  (`DocumentExplorerPanel`, `SearchWorkspace`, `DocumentWorkspace`); and
+  `$env:VITE_API_BASE_URL='http://localhost:8000'; bun run build` passed with
+  `1991` transformed modules.
+- Browser/runtime receipt: with the owned backend healthy at `127.0.0.1:8000`,
+  Documents opened a direct workspace showing `Back to Documents` without
+  “Retrieved sources”; Search opened a direct workspace showing `Back to
+  Search` without answer wording. Returning to Search preserved the submitted
+  query, results, and trace, and restored focus to the opener. AX inspection
+  confirmed labelled back/tabs and existing keyboard button semantics. Native
+  browser zoom was not rerun; the historical external gate remains optional
+  and does not block this task.
+- Known limitation intentionally carried forward: repeated reader identity /
+  toolbar chrome remains for `V4-R04.1`; structured coverage semantics and the
+  resolver surface remain for `V4-R02.1` and `V4-R03.1`.
+- Existing dirty user files, ignored `data/`, and owned processes were
+  preserved; no process was started or stopped. Exact next task:
+  `V4-R02.1`.
+
+## V4-R02.1 execution checkpoint (2026-09-12)
+
+- Status: `[x] complete`.
+- Reader availability now carries representation-scoped `coverage_status`
+  (`complete|partial|unknown`) and `coverage_reason` fields, with an additive
+  machine-readable reason companion. Structured document, outline, content,
+  and search responses carry the same fields while pagination `complete`
+  remains a separate claim.
+- The bounded structured parser now compares visible, non-executable source
+  text with emitted source-backed blocks and detects omitted unsupported
+  content. A simple `<div>Company Background</div>` fixture is `partial` with
+  `unsupported_visible_content`; safe supported markup is positively
+  `complete`. Representation revisions were incremented to bind the coverage
+  semantics.
+- Manifest construction assesses each admitted structured source through the
+  existing bounded reader service. Normalized text is complete only when its
+  local source set is complete; partial/unknown source availability does not
+  become a complete claim. PDF remains unavailable/unknown. No corpus, index,
+  retrieval, embedding, Qdrant, acquisition, or persistence path changed.
+- The structured reader now discloses the coverage state and, after a no-match
+  under partial/unknown coverage, says `No matches in this structured view.`
+  and offers `Search normalized text`. The existing normalized local reader is
+  mounted in the same document workspace with the shared reader session; its
+  back action returns to the structured view. EN/VI copy and semantic tokens
+  were added without a new async owner.
+- Files changed by this task: `src/api/document_reader_models.py`,
+  `src/api/structured_document.py`, `src/api/document_sources.py`, the reader
+  manifest call sites in `src/api/app.py`, frontend reader/types/workspace
+  files (`StructuredDocumentReader`, `OriginalDocumentReader`,
+  `DocumentWorkspace`, `types.ts`, and reader CSS), plus focused backend and
+  frontend tests.
+- Validation: backend structured/document-source/API contract selection passed
+  `8 passed` (22 existing parser warnings); the combined backend selection was
+  `70 passed, 1 expected V4-R03 resolver-retirement failure`; frontend focused
+  coverage passed `17/17`, `bun run lint` passed, and the production build
+  passed with `1992` transformed modules. The expected remaining failure is
+  only `test_reader_resolver_surface_is_retired`, owned by `V4-R03.1`.
+- Browser/runtime evidence was supplemented by direct local AAPL parsing:
+  normalized coverage is `complete`, structured coverage is `partial` with
+  `unsupported_visible_content`, and PDF is `unknown/unavailable`. The
+  pre-existing backend PID 11844 on port 8000 was not restarted, so its live
+  manifest still reflects the prior process image; no process was started or
+  stopped by this task. The browser fallback path is covered by the focused
+  reader test; native zoom remains the historical optional external gate.
+- Existing dirty user files, ignored `data/`, and user-owned services were
+  preserved. Exact next task: `V4-R03.1`.
+
+## V4-R03.1 execution checkpoint (2026-09-12)
+
+- Status: `[x] complete`.
+- The non-admitting remote reader acquisition experiment was retired rather
+  than replaced. Its request/response models, transport code and tests,
+  frontend client/types, settings, and setup documentation are gone. The
+  repository-wide reference search is clean except for the intentional
+  route-path retirement assertion in `tests/test_api.py`.
+- Local reader behavior remains unchanged and bounded: manifest, normalized
+  text, structured content/search, and canonical SEC links remain available;
+  no remote body, cache, queue, ingestion, persistence, corpus, index,
+  retrieval, embedding, Qdrant, or evaluation behavior was introduced.
+  Security scope is narrower because ordinary reader use can no longer issue
+  an acquisition request or report discarded bytes as admitted content.
+- Files changed by this task: `src/api/app.py`,
+  `src/api/document_reader_models.py`, `configs/settings.py`,
+  `frontend/src/lib/api.ts`, `frontend/src/types.ts`, `.env.example`,
+  `README.md`, and historical implementation notes; files removed:
+  `src/api/sec_reader_client.py` and `tests/test_sec_reader_client.py`.
+- Validation: focused backend `tests/test_api.py tests/test_document_sources.py
+  tests/test_structured_document.py` passed `71` tests with `22` existing
+  parser warnings. Frontend `bun run lint` passed; focused reader tests passed
+  `6/6`; production build passed with `1992` transformed modules. The route
+  retirement guard now passes as part of the backend selection.
+- No network request was made, and no process was started or stopped. The
+  pre-existing one-worker backend PID 11844 on port 8000 and Vite previews PID
+  7292 (4173) and PID 2360 (5173) were preserved. Native zoom remains the
+  historical optional external gate. Exact next task: `V4-R04.1`.
+
+## V4-R04.1 execution checkpoint (2026-09-12)
+
+- Status: `[x] complete`.
+- The direct document workspace now owns the document identity/header and the
+  embedded structured reader contributes only its reading tools, availability
+  state, outline, and content. The embedded reader no longer repeats the
+  `Structured document` identity block or ticker heading, while standalone
+  reader use retains its own header and identity. The normalized fallback keeps
+  the same workspace shell and returns to the structured view through the
+  existing reader session.
+- Files changed by this task: `frontend/src/components/StructuredDocumentReader.tsx`
+  and its focused test, plus the existing reader/workspace styles and
+  workspace components touched by the prior reader integration.
+- Accessibility/responsive checks: the embedded section remains labelled as
+  `Structured document`, the workspace retains labelled back/tabs and keyboard
+  controls, and the first useful toolbar/content canvas is visible in the
+  direct Search → document workspace path. No new focus trap or async owner was
+  introduced; the existing return-focus behavior remains intact.
+- Validation: the focused reader/workspace selection passed `18/18` tests
+  (including the new no-duplicate-identity regression), and the live browser
+  path showed one workspace document heading, zero embedded identity blocks,
+  one visible reading toolbar, and one visible content canvas. No backend/API,
+  persistence, corpus, index, retrieval, embedding, Qdrant, acquisition, or
+  evaluation behavior changed. Native zoom remains the historical optional
+  external gate.
+- Existing dirty user files, ignored `data/`, and user-owned services were
+  preserved; no process was started or stopped. Exact next task: `V4-R05.1`.
+
+## V4-R05.1 execution checkpoint (2026-09-12)
+
+- Status: `[x] complete` for every repository- and harness-verifiable gate.
+- Closure validation is green: frontend full Vitest `47 files / 231 tests`,
+  `bun run lint`, and production Vite build (`1,992` transformed modules);
+  backend full pytest `766 passed` with `178` existing parser/deprecation
+  warnings; and isolated local Playwright `6 passed` across Chromium and
+  Firefox. The focused reader/workspace selection is included in the full
+  frontend receipt and remains `18/18`.
+- Browser receipt: the connected browser verified both Documents and Search
+  direct-workspace back labels, one workspace-owned identity header, no
+  answer-scoped “Retrieved sources” wording, visible embedded toolbar/content,
+  and the unknown-coverage no-match → normalized local-reader fallback.
+  Native browser zoom at exact chrome values remains the previously recorded
+  external manual gate because the connected browser cannot report native
+  chrome zoom.
+- Documentation was aligned in `README.md`,
+  `docs/frontend/FRONTEND_CONTRACT.md`, and
+  `docs/implementation-progress.md` with local-only reader behavior,
+  representation coverage semantics, direct workspace ownership, retired
+  acquisition surface, and the final receipts. Exact reference search for
+  retired resolver symbols/routes is clean except the intentional route-path
+  assertion in `tests/test_api.py`; `git diff --check` reports no whitespace
+  errors.
+- No corpus, index, retrieval, embedding, Qdrant, acquisition, persistence,
+  or evaluation data was regenerated or changed. Existing dirty user files,
+  ignored `data/`, and pre-existing services (backend PID 11844; Vite PIDs
+  7292/2360) were preserved, and no process was started or stopped. The V4
+  sequence `V4-R00.1 → V4-R01.1 → V4-R02.1 → V4-R03.1 → V4-R04.1 → V4-R05.1`
+  is complete.
+
+## V4-P improvement audit closure — 2026-09-12
+
+The resumed product-improvement audit completed the frozen sequence
+`V4-P00.1 → P01.1 → P01.2 → P02.1 → P03.1 → P03.2 → P04.1 → P04.2 → P05.1 →
+P05.2 → P06.1 → P08.1 → P09.1`. `V4-P07.1` Library continuity remains
+explicitly deferred. The sequence adds a conservative versioned table
+presentation contract, source-layout/raw fallback, unified company labels,
+typed local action states, provenance-bearing local evidence snapshots,
+stateful inline/drawer evidence review, density tokens, direct document
+workspace composition, analyst/advanced Retrieval Lab disclosure, and a
+measurement-only reader performance gate. Retrieval algorithms, corpus/index,
+embeddings, Qdrant, acquisition, streaming/cancellation, and evaluation
+semantics remain frozen.
+
+Repository gates are green: frontend Vitest `48 files / 235 tests`, TypeScript
+lint, Vite build (`1,993` modules), serial Chromium/Firefox E2E `152 passed / 4
+intentional skips`, local synthetic E2E `6/6`, and backend pytest `770 passed`
+with `182` existing warnings. Real-backend P08 characterization measured
+AAPL/GOOGL/AMZN cold/warm reader open paths in Chromium and Firefox, recorded
+local table overflow with no global page overflow, and did not claim a memory
+benchmark because the provider did not expose one. The audit-owned one-worker
+backend was stopped after closure; no project listener remains on ports
+`3000`, `4173`, `5173`, or `8000`.
+
+The skill-system reconciliation and bounded external research are complete.
+External sources are pattern evidence only: Azure AI Search and OpenAI File
+Search support separate citation/reference artifacts; Docling and W3C support
+preserving merged-cell/table structure and readable local overflow; Elasticsearch
+Explain supports advanced-only score diagnostics; Langfuse and WCAG guidance
+support idempotent, action-local feedback and scoped status/error messaging.
+None is a new product dependency or proof of SEC representation truth.
+
+The sole remaining validation item is the historical external manual gate for
+native Chrome/Edge menu zoom at exactly `100%`, `125%`, `150%`, and `200%`.
+Connected Codex browser tooling cannot establish browser-chrome zoom values, so
+CSS viewport tests were not substituted for that requirement. Existing dirty
+worktree files, ignored `data/`, and user-owned state remain preserved.
+
+## V4-P07.1 Library continuity — 2026-09-12
+
+The previously deferred Library follow-up is now complete. The frontend
+Library is organized as a derived local continuation workspace with bounded
+Recent Research (eight most recent stored conversations), a complete
+conversation-history list, Saved Answer Versions (up to 100 immutable
+variants), and Evidence Collections (historical EvidenceSnapshot v2
+artifacts). Existing conversation persistence,
+answer-variant identity, bookmark/note models, backup import/export,
+IndexedDB/localStorage fallback, Web Locks, BroadcastChannel, and deterministic
+evidence deduplication remain the only owners of persisted state.
+
+Reopening a saved answer carries the exact conversation/message/variant IDs;
+it never falls back to the latest answer. Continue Research restores the saved
+scope and fills the composer without submitting. Evidence opens as the saved
+snapshot, while Current source performs an exact local chunk/document/hash
+check and reports current, stale, missing, or unavailable without nearby/fuzzy
+substitution. Raw IDs, revisions, hashes, locations, lineage, and capture time
+are behind a provenance disclosure; unknown company/source fields are omitted
+and known tickers use the shared `Company Name (TICKER)` formatter. A storage
+warning is not presented as durable “Saved on this device” state. Browser-local,
+read-only, volatile, malformed storage, and current-corpus limitations are
+explicit in EN/VI and both themes.
+
+Files for this follow-up are limited to the frontend Library/evidence surface,
+existing App/ChatMessage handoff plumbing, focused tests, styles, and the
+implementation receipts. No backend, retrieval, generation, evaluation,
+reader representation, corpus, index, Qdrant, model, prompt, or PDF path was
+changed. The full frontend suite passes `48 files / 245 tests`, TypeScript lint
+passes, and the production build transforms `1,993` modules. The saved-answer
+journey passes in both Chromium and Firefox (`2 passed`); the complete default
+preview matrix passes `152` tests with `4` intentional skips across both
+engines. Connected-browser responsive checks at 390, 768, 1024, 1280, 1366,
+1440, 1920, plus short 1366×520, show no global horizontal overflow. The current demo services were
+preserved: backend parent/listener `19104/16700` on `127.0.0.1:8000` and
+frontend parent/listener `19292/18944` on `127.0.0.1:4173`; backend health is
+`200`, pipeline ready, with 50 searchable companies and 10,053 indexed chunks.
+
+The historical manual native browser-chrome zoom gate remains unchanged and
+is not replaced by CSS viewport checks. The final preview matrix passed `152`
+tests with `4` intentional skips across Chromium and Firefox after restoring
+the complete history list and removing duplicate Recent Research action
+targets; no further step is required for V4-P07.1.

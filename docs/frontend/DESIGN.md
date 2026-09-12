@@ -39,3 +39,13 @@ hex values.
 Every substantial change records its first decision, primary action, states,
 mobile order, five self-review risks, and visual evidence. Build success is
 necessary but not sufficient; the rendered app must be inspected and iterated.
+
+## Current skill governance
+
+The repository-local `rag-ui-ux` skill is the product authority and routes
+retrieval, evaluation, security, performance, and document-provenance questions
+to their focused project skills. The fixed dimensions above describe intended
+design constraints; implementation and rendered evidence remain authoritative
+when they differ. A catalog-to-reader transition must be judged by its actual
+user intent and resulting surface, including whether an answer or retrieved
+sources exist.

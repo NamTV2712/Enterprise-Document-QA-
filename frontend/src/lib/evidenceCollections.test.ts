@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { createEvidenceCollection, exportEvidenceCollections, getEvidenceStorageStatus, importEvidenceCollections, listEvidenceCollections, mergeEvidenceCollections, preflightEvidenceCollectionsImport, saveEvidence, updateEvidenceNote } from "./evidenceCollections";
+import { createEvidenceCollection, exportEvidenceCollections, getEvidenceStorageStatus, importEvidenceCollections, listEvidenceCollections, mergeEvidenceCollections, preflightEvidenceCollectionsImport, saveEvidence, snapshotProvenanceFromSource, updateEvidenceNote } from "./evidenceCollections";
 
 const source = { citation: "AAPL 10-K [Source 1]", text_preview: "Revenue excerpt", text: "Revenue excerpt", chunk_id: "chunk-1", ticker: "AAPL", section: "financial_table", filing_date: "2025-10-31", score: 1 };
 
@@ -26,6 +26,82 @@ describe("evidenceCollections", () => {
       sourceConversationId: "conversation-1",
       sourceMessageId: "message-1",
     });
+  });
+
+  test("migrates a readable v1 collection without inventing provenance", () => {
+    localStorage.setItem("sec_qa_evidence_collections_v1", JSON.stringify([{
+      id: "legacy-collection",
+      name: "Legacy",
+      items: [{ id: "legacy-item", citation: "AAPL 10-K", excerpt: "Legacy excerpt", ticker: "AAPL", savedAt: 10 }],
+      createdAt: 10,
+      updatedAt: 10,
+    }]));
+
+    const migrated = listEvidenceCollections();
+    expect(migrated[0]).not.toHaveProperty("schemaVersion");
+    expect(migrated[0].items[0]).toMatchObject({ citation: "AAPL 10-K", ticker: "AAPL" });
+    expect(migrated[0].items[0]).not.toHaveProperty("documentRevision");
+
+    saveEvidence(source);
+    expect(JSON.parse(localStorage.getItem("sec_qa_evidence_collections_v2") ?? "[]")[0].schemaVersion).toBe(2);
+    expect(localStorage.getItem("sec_qa_evidence_collections_v1")).toBeTruthy();
+  });
+
+  test("stores only supplied reader provenance and labels the item as a captured snapshot", () => {
+    const collection = createEvidenceCollection("Provenance");
+    saveEvidence(source, {
+      collectionId: collection.id,
+      provenance: { documentId: "AAPL:filing", documentRevision: "rev-1", locationStatus: "exact", coverageStatus: "complete", representation: "structured_html" },
+    });
+    expect(listEvidenceCollections()[0].items[0]).toMatchObject({
+      documentId: "AAPL:filing",
+      documentRevision: "rev-1",
+      locationStatus: "exact",
+      coverageStatus: "complete",
+      representation: "structured_html",
+      snapshotState: "captured",
+    });
+    expect(listEvidenceCollections()[0].items[0]).not.toHaveProperty("sourceSetRevision");
+  });
+
+  test("preserves transient reader identity facts when capturing a snapshot", () => {
+    const collection = createEvidenceCollection("Reader snapshot");
+    saveEvidence({
+      ...source,
+      stored_snapshot: {
+        chunk_id: "chunk-1",
+        document_revision: "doc-rev-2",
+        source_set_revision: "set-rev-3",
+        representation: "structured_html",
+        coverage_status: "complete",
+        location_status: "exact",
+        snapshot_state: "captured",
+      },
+    }, { collectionId: collection.id, provenance: snapshotProvenanceFromSource({
+      ...source,
+      stored_snapshot: {
+        chunk_id: "chunk-1",
+        document_revision: "doc-rev-2",
+        source_set_revision: "set-rev-3",
+        representation: "structured_html",
+        coverage_status: "complete",
+        location_status: "exact",
+        snapshot_state: "captured",
+      },
+    }) });
+
+    expect(listEvidenceCollections()[0].items[0]).toMatchObject({
+      documentRevision: "doc-rev-2",
+      sourceSetRevision: "set-rev-3",
+      representation: "structured_html",
+      coverageStatus: "complete",
+      locationStatus: "exact",
+      snapshotState: "captured",
+    });
+  });
+
+  test("does not infer a representation when the source has no stored reader representation", () => {
+    expect(snapshotProvenanceFromSource(source)).not.toHaveProperty("representation");
   });
 
   test("does not report a successful evidence save when storage rejects the write", () => {

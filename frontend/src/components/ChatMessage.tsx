@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -26,6 +26,9 @@ import {
 } from "lucide-react";
 import {
   AnswerVariant,
+  AnswerActionKind,
+  AnswerActionState,
+  AnswerActionStatus,
   EvidenceSelection,
   FeedbackCategory,
   Message,
@@ -50,9 +53,11 @@ interface ChatMessageProps {
   onRetry?: (text: string, snapshot?: RequestSnapshot) => void;
   /** Bookmarked answers can be reopened from the Library filter. */
   bookmarked?: boolean;
-  onToggleBookmark?: () => void;
-  onSaveNote?: (note: string) => void;
-  onFeedback?: (feedback: MessageFeedback | undefined) => void;
+  onToggleBookmark?: () => void | Promise<unknown>;
+  onSaveNote?: (note: string) => void | Promise<unknown>;
+  onFeedback?: (feedback: MessageFeedback | undefined) => void | Promise<unknown>;
+  /** Local action states keyed to this exact answer/version target. */
+  answerActionStates?: Partial<Record<AnswerActionKind, AnswerActionState>>;
   variants?: AnswerVariant[];
   onSaveVariant?: (context: { messageId: string; variantId: string | null }) => void;
   saveVariantStatus?: SaveAnswerVersionStatus;
@@ -60,6 +65,8 @@ interface ChatMessageProps {
   onViewSavedVersion?: () => void;
   /** The article container is focusable so Library links can land on it. */
   tabIndex?: number;
+  /** Durable variant selected by an exact Library reopen action. */
+  initialVariantId?: string;
   onInspectSource?: (selection: Omit<EvidenceSelection, "conversationId">) => void;
   /** Publishes answer identity only on focus, pointer interaction, or variant changes. */
   onDisplayedAnswerContext?: (context: { messageId: string; variantId: string | null }) => void;
@@ -219,6 +226,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
   onToggleBookmark,
   onSaveNote,
   onFeedback,
+  answerActionStates,
   variants = [],
   onSaveVariant,
   saveVariantStatus = "idle",
@@ -230,6 +238,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
   pipelineStages,
   availableSections = [],
   onUseRelatedResearch,
+  initialVariantId,
 }) => {
   const { locale, t } = useLocale();
   const isUser = message.sender === "user";
@@ -237,16 +246,45 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
   const [focusSourceIndex, setFocusSourceIndex] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<"up" | "down" | null>(message.feedback?.rating ?? null);
   const [feedbackCategory, setFeedbackCategory] = useState<FeedbackCategory | null>(message.feedback?.category ?? null);
+  const [otherFeedbackDraft, setOtherFeedbackDraft] = useState(message.feedback?.otherText ?? "");
+  const [isOtherFeedbackOpen, setIsOtherFeedbackOpen] = useState(false);
+  const [feedbackValidationError, setFeedbackValidationError] = useState<string | null>(null);
   const [isNoteOpen, setIsNoteOpen] = useState(false);
   const [isSecondaryActionsOpen, setIsSecondaryActionsOpen] = useState(false);
   const [noteDraft, setNoteDraft] = useState(message.note ?? "");
-  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(initialVariantId ?? null);
+  const lastInitialVariantRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (initialVariantId === undefined) {
+      lastInitialVariantRef.current = undefined;
+      return;
+    }
+    if (lastInitialVariantRef.current === initialVariantId) return;
+    lastInitialVariantRef.current = initialVariantId;
+    if (variants.some((variant) => variant.id === initialVariantId)) setSelectedVariantId(initialVariantId);
+  }, [initialVariantId, message.id, variants]);
   const selectedVariant = variants.find((variant) => variant.id === selectedVariantId) ?? null;
   const displayedText = selectedVariant?.text ?? message.text;
   const displayedSources = selectedVariant?.sources ?? message.sources;
   const displayedExecution = selectedVariant?.execution ?? message.execution;
   const displayedVisualAnswer = selectedVariant?.visualAnswer ?? message.visualAnswer;
   const selectedVariantIndex = selectedVariant ? variants.findIndex((variant) => variant.id === selectedVariant.id) + 1 : 0;
+  const bookmarkAction = answerActionStates?.bookmark;
+  const feedbackAction = answerActionStates?.feedback;
+  const noteAction = answerActionStates?.note;
+  const actionPending = (action?: AnswerActionState) => action?.status === "pending";
+  const actionStatusLabel = (status: AnswerActionStatus, kind: AnswerActionKind): string => {
+    if (status === "pending") return locale === "vi" ? "Đang xử lý…" : "Working…";
+    if (status === "persisted") return kind === "feedback"
+      ? (locale === "vi" ? "Đã lưu đánh giá trên thiết bị." : "Feedback saved on this device.")
+      : kind === "note"
+        ? (locale === "vi" ? "Đã lưu ghi chú trên thiết bị." : "Note saved on this device.")
+        : (locale === "vi" ? "Đã lưu trên thiết bị." : "Saved on this device.");
+    if (status === "already_exists") return locale === "vi" ? "Đã tồn tại trong dữ liệu cục bộ." : "Already exists locally.";
+    if (status === "volatile") return locale === "vi" ? "Chỉ giữ trong tab này; hãy thử lại hoặc xuất Thư viện." : "Saved for this tab only; retry or export the Library.";
+    if (status === "cancelled") return locale === "vi" ? "Đã hủy do thay đổi ngữ cảnh." : "Cancelled after the answer context changed.";
+    return locale === "vi" ? "Không thể lưu; hãy thử lại." : "Could not save; retry.";
+  };
   const relatedSuggestions = onUseRelatedResearch && !isUser
     ? buildRelatedResearchSuggestions(message, availableSections)
     : [];
@@ -298,27 +336,64 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
   };
 
   useEffect(() => {
-    setFeedback(message.feedback?.rating ?? null);
-    setFeedbackCategory(message.feedback?.category ?? null);
-  }, [message.feedback, message.id]);
+    const appliesToVariant = (message.feedback?.variantId ?? null) === (selectedVariantId ?? null);
+    setFeedback(appliesToVariant ? message.feedback?.rating ?? null : null);
+    setFeedbackCategory(appliesToVariant ? message.feedback?.category ?? null : null);
+    setOtherFeedbackDraft(appliesToVariant ? message.feedback?.otherText ?? "" : "");
+    setIsOtherFeedbackOpen(false);
+    setFeedbackValidationError(null);
+  }, [message.feedback, message.id, selectedVariantId]);
 
   const updateFeedback = (rating: "up" | "down") => {
     if (feedback === rating) {
       setFeedback(null);
       setFeedbackCategory(null);
+      setIsOtherFeedbackOpen(false);
+      setFeedbackValidationError(null);
       onFeedback?.(undefined);
       return;
     }
     setFeedback(rating);
     const category = rating === "down" ? feedbackCategory ?? undefined : undefined;
-    if (rating === "up") setFeedbackCategory(null);
-    onFeedback?.({ rating, ...(category ? { category } : {}), at: Date.now() });
+    if (rating === "up") {
+      setFeedbackCategory(null);
+      setIsOtherFeedbackOpen(false);
+      setFeedbackValidationError(null);
+    }
+    onFeedback?.({ rating, ...(category ? { category } : {}), ...(selectedVariant?.id ? { variantId: selectedVariant.id } : {}), at: Date.now() });
   };
 
   const updateFeedbackCategory = (category: FeedbackCategory) => {
     setFeedback("down");
     setFeedbackCategory(category);
-    onFeedback?.({ rating: "down", category, at: Date.now() });
+    setFeedbackValidationError(null);
+    if (category === "other") {
+      setIsOtherFeedbackOpen(true);
+      return;
+    }
+    setIsOtherFeedbackOpen(false);
+    onFeedback?.({ rating: "down", category, ...(selectedVariant?.id ? { variantId: selectedVariant.id } : {}), at: Date.now() });
+  };
+
+  const submitOtherFeedback = () => {
+    const text = otherFeedbackDraft.trim().slice(0, 2_000);
+    if (!text) {
+      setFeedbackValidationError(locale === "vi" ? "Hãy nhập lý do trước khi gửi." : "Add a short reason before submitting.");
+      return;
+    }
+    setFeedbackValidationError(null);
+    setIsOtherFeedbackOpen(false);
+    onFeedback?.({ rating: "down", category: "other", otherText: text, ...(selectedVariant?.id ? { variantId: selectedVariant.id } : {}), at: Date.now() });
+  };
+
+  const cancelOtherFeedback = () => {
+    const persisted = message.feedback;
+    const appliesToVariant = (persisted?.variantId ?? null) === (selectedVariantId ?? null);
+    setIsOtherFeedbackOpen(false);
+    setFeedbackValidationError(null);
+    setFeedback(appliesToVariant ? persisted?.rating ?? null : null);
+    setFeedbackCategory(appliesToVariant ? persisted?.category ?? null : null);
+    setOtherFeedbackDraft(appliesToVariant ? persisted?.otherText ?? "" : "");
   };
 
   const handleCopy = async () => {
@@ -618,6 +693,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                       <button
                         type="button"
                         onClick={onToggleBookmark}
+                        disabled={actionPending(bookmarkAction)}
                         aria-label={bookmarked ? "Remove bookmark from this answer" : "Bookmark this answer"}
                         aria-pressed={bookmarked}
                         title={bookmarked ? "Remove bookmark" : "Bookmark answer"}
@@ -629,63 +705,91 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                     )}
                     {onFeedback && message.status !== "error" && (
                       <div className="message-feedback-actions" role="group" aria-label={locale === "vi" ? "Đánh giá câu trả lời" : "Rate this answer"}>
-                        <button type="button" onClick={() => updateFeedback("up")} aria-label={locale === "vi" ? "Câu trả lời hữu ích" : "Helpful answer"} aria-pressed={feedback === "up"} title={locale === "vi" ? "Hữu ích" : "Helpful"} className={`message-secondary-action ${feedback === "up" ? "is-active" : ""}`}><ThumbsUp className="h-3.5 w-3.5" /><span>{locale === "vi" ? "Hữu ích" : "Helpful"}</span></button>
-                        <button type="button" onClick={() => updateFeedback("down")} aria-label={locale === "vi" ? "Câu trả lời chưa hữu ích" : "Unhelpful answer"} aria-pressed={feedback === "down"} title={locale === "vi" ? "Chưa hữu ích" : "Unhelpful"} className={`message-secondary-action ${feedback === "down" ? "is-active is-negative" : ""}`}><ThumbsDown className="h-3.5 w-3.5" /><span>{locale === "vi" ? "Chưa hữu ích" : "Not helpful"}</span></button>
+                        <button type="button" onClick={() => updateFeedback("up")} disabled={actionPending(feedbackAction)} aria-label={locale === "vi" ? "Câu trả lời hữu ích" : "Helpful answer"} aria-pressed={feedback === "up"} title={locale === "vi" ? "Hữu ích" : "Helpful"} className={`message-secondary-action ${feedback === "up" ? "is-active" : ""}`}><ThumbsUp className="h-3.5 w-3.5" /><span>{locale === "vi" ? "Hữu ích" : "Helpful"}</span></button>
+                        <button type="button" onClick={() => updateFeedback("down")} disabled={actionPending(feedbackAction)} aria-label={locale === "vi" ? "Câu trả lời chưa hữu ích" : "Unhelpful answer"} aria-pressed={feedback === "down"} title={locale === "vi" ? "Chưa hữu ích" : "Unhelpful"} className={`message-secondary-action ${feedback === "down" ? "is-active is-negative" : ""}`}><ThumbsDown className="h-3.5 w-3.5" /><span>{locale === "vi" ? "Chưa hữu ích" : "Not helpful"}</span></button>
                       </div>
                     )}
                     {onSaveVariant && message.status !== "error" && !message.isStreaming && message.text && (
                       <button
                         type="button"
                         onClick={() => onSaveVariant({ messageId, variantId: selectedVariant?.id ?? null })}
-                        disabled={saveVariantStatus === "saving"}
+                        disabled={saveVariantStatus === "saving" || saveVariantStatus === "pending"}
                         aria-label={locale === "vi" ? "Lưu phiên bản câu trả lời" : "Save answer version"}
                         title={locale === "vi" ? "Lưu phiên bản" : "Save answer version"}
                         className="message-secondary-action"
                       >
-                        {saveVariantStatus === "saving" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Layers2 className="h-3.5 w-3.5" />}
+                        {saveVariantStatus === "saving" || saveVariantStatus === "pending" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Layers2 className="h-3.5 w-3.5" />}
                         <span>{locale === "vi" ? "Lưu phiên bản" : "Save answer version"}</span>
                       </button>
                     )}
                     {onSaveNote && message.status !== "error" && (
-                      <button type="button" onClick={() => setIsNoteOpen((open) => !open)} aria-label={locale === "vi" ? "Ghi chú cho câu trả lời" : "Add note to answer"} aria-pressed={isNoteOpen || Boolean(message.note)} title={locale === "vi" ? "Ghi chú" : "Add note"} className={`message-secondary-action ${message.note ? "is-active is-note" : ""}`}><StickyNote className="h-3.5 w-3.5" /><span>{locale === "vi" ? "Ghi chú" : "Add note"}</span></button>
+                      <button type="button" onClick={() => setIsNoteOpen((open) => !open)} disabled={actionPending(noteAction)} aria-label={locale === "vi" ? "Ghi chú cho câu trả lời" : "Add note to answer"} aria-pressed={isNoteOpen || Boolean(message.note)} title={locale === "vi" ? "Ghi chú" : "Add note"} className={`message-secondary-action ${message.note ? "is-active is-note" : ""}`}><StickyNote className="h-3.5 w-3.5" /><span>{locale === "vi" ? "Ghi chú" : "Add note"}</span></button>
                     )}
                   </div>
                   {saveVariantStatus !== "idle" && (
                     <div className="message-action-status" role="status" aria-live="polite">
                       <span>
                         {saveVariantStatus === "saving" && (locale === "vi" ? "Đang lưu phiên bản câu trả lời…" : "Saving answer version…")}
+                        {saveVariantStatus === "pending" && (locale === "vi" ? "Đang lưu phiên bản câu trả lời…" : "Saving answer version…")}
                         {saveVariantStatus === "saved" && (locale === "vi" ? "Đã lưu phiên bản vào Thư viện." : "Answer version saved to Library.")}
+                        {saveVariantStatus === "persisted" && (locale === "vi" ? "Đã lưu phiên bản trên thiết bị." : "Answer version saved on this device.")}
                         {saveVariantStatus === "already_saved" && (locale === "vi" ? "Phiên bản này đã được lưu." : "Already saved.")}
+                        {saveVariantStatus === "already_exists" && (locale === "vi" ? "Phiên bản này đã được lưu." : "Already saved.")}
                         {saveVariantStatus === "volatile" && (locale === "vi" ? "Chỉ giữ trong tab này; hãy thử lại hoặc xuất Thư viện." : "Only in this tab; retry or export the Library.")}
                         {saveVariantStatus === "failed" && (locale === "vi" ? "Không thể lưu phiên bản; hãy thử lại." : "Could not save this version; retry.")}
+                        {saveVariantStatus === "retryable" && (locale === "vi" ? "Không thể lưu phiên bản; hãy thử lại." : "Could not save this version; retry.")}
+                        {saveVariantStatus === "cancelled" && (locale === "vi" ? "Đã hủy do thay đổi ngữ cảnh." : "Cancelled after the answer context changed.")}
                       </span>
-                      {(saveVariantStatus === "saved" || saveVariantStatus === "already_saved") && onViewSavedVersion && (
+                      {(saveVariantStatus === "saved" || saveVariantStatus === "persisted" || saveVariantStatus === "already_saved" || saveVariantStatus === "already_exists") && onViewSavedVersion && (
                         <button type="button" onClick={onViewSavedVersion} className="message-action-status__link">
                           {locale === "vi" ? "Mở Thư viện" : "View in Library"}
                         </button>
                       )}
-                      {(saveVariantStatus === "failed" || saveVariantStatus === "volatile") && onRetrySaveVariant && (
+                      {(saveVariantStatus === "failed" || saveVariantStatus === "retryable" || saveVariantStatus === "volatile") && onRetrySaveVariant && (
                         <button type="button" onClick={() => onRetrySaveVariant({ messageId, variantId: selectedVariant?.id ?? null })} className="message-action-status__link">
                           {locale === "vi" ? "Thử lại" : "Retry"}
                         </button>
                       )}
                     </div>
                   )}
+                  {feedbackAction && feedbackAction.status !== "idle" && (
+                    <div className="message-action-status" role="status" aria-live="polite">
+                      <span>{actionStatusLabel(feedbackAction.status, "feedback")}{feedbackAction.warning ? ` ${feedbackAction.warning}` : ""}</span>
+                    </div>
+                  )}
+                  {bookmarkAction && bookmarkAction.status !== "idle" && (
+                    <div className="message-action-status" role="status" aria-live="polite">
+                      <span>{actionStatusLabel(bookmarkAction.status, "bookmark")}{bookmarkAction.warning ? ` ${bookmarkAction.warning}` : ""}</span>
+                    </div>
+                  )}
+                  {noteAction && noteAction.status !== "idle" && (
+                    <div className="message-action-status" role="status" aria-live="polite">
+                      <span>{actionStatusLabel(noteAction.status, "note")}{noteAction.warning ? ` ${noteAction.warning}` : ""}</span>
+                    </div>
+                  )}
                   {!isUser && feedback === "down" && !message.isStreaming && (
                     <div className="message-feedback-reasons" role="group" aria-label={locale === "vi" ? "Lý do đánh giá chưa hữu ích" : "Why was this answer unhelpful?"}>
                       <span className="font-semibold text-[var(--text-muted)]">{locale === "vi" ? "Lý do:" : "Reason:"}</span>
                       {FEEDBACK_CATEGORIES.map((category) => (
-                        <button key={category.value} type="button" onClick={() => updateFeedbackCategory(category.value)} aria-pressed={feedbackCategory === category.value} className={`rounded-full border px-2 py-1 transition-colors ${feedbackCategory === category.value ? "border-rose-500/50 bg-rose-500/15 text-rose-700 dark:text-rose-300" : "border-[var(--border-subtle)] text-[var(--text-muted)] hover:bg-[var(--surface-muted)]"}`}>
+                        <button key={category.value} type="button" onClick={() => updateFeedbackCategory(category.value)} disabled={actionPending(feedbackAction)} aria-pressed={feedbackCategory === category.value} className={`rounded-full border px-2 py-1 transition-colors ${feedbackCategory === category.value ? "border-rose-500/50 bg-rose-500/15 text-rose-700 dark:text-rose-300" : "border-[var(--border-subtle)] text-[var(--text-muted)] hover:bg-[var(--surface-muted)]"}`}>
                           {locale === "vi" ? category.vi : category.en}
                         </button>
                       ))}
+                    </div>
+                  )}
+                  {!isUser && feedback === "down" && feedbackCategory === "other" && isOtherFeedbackOpen && !message.isStreaming && (
+                    <div className="message-feedback-other rounded-xl border border-rose-500/25 bg-rose-500/5 p-3">
+                      <label className="block text-xs font-semibold text-[var(--text-muted)]" htmlFor={`feedback-other-${message.id}`}>{locale === "vi" ? "Mô tả ngắn (bắt buộc)" : "Short explanation (required)"}</label>
+                      <textarea id={`feedback-other-${message.id}`} value={otherFeedbackDraft} onChange={(event) => setOtherFeedbackDraft(event.target.value.slice(0, 2_000))} maxLength={2_000} rows={3} autoFocus placeholder={locale === "vi" ? "Điều gì cần cải thiện?" : "What should be improved?"} className="mt-2 w-full resize-y rounded-lg border border-[var(--border-strong)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-rose-500" />
+                      {feedbackValidationError && <p className="mt-2 text-xs text-rose-700 dark:text-rose-300" role="alert">{feedbackValidationError}</p>}
+                      <div className="mt-2 flex items-center justify-between gap-2"><span className="text-[11px] text-[var(--text-muted)]">{otherFeedbackDraft.length}/2000</span><div className="flex gap-2"><button type="button" onClick={cancelOtherFeedback} className="rounded-lg border border-[var(--border-subtle)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)]">{locale === "vi" ? "Hủy" : "Cancel"}</button><button type="button" onClick={submitOtherFeedback} disabled={actionPending(feedbackAction)} className="rounded-lg bg-rose-500/15 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-500/25 dark:text-rose-300">{locale === "vi" ? "Gửi" : "Submit"}</button></div></div>
                     </div>
                   )}
                   {!isUser && isNoteOpen && onSaveNote && !message.isStreaming && (
                     <div className="message-note-editor rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
                       <label className="block text-xs font-semibold text-[var(--text-muted)]" htmlFor={`note-${message.id}`}>{locale === "vi" ? "Ghi chú riêng trên thiết bị" : "Private device note"}</label>
                       <textarea id={`note-${message.id}`} value={noteDraft} onChange={(event) => setNoteDraft(event.target.value.slice(0, 10000))} maxLength={10000} rows={3} placeholder={locale === "vi" ? "Lưu ý, giả định hoặc việc cần kiểm tra…" : "Save an observation, assumption, or follow-up…"} className="mt-2 w-full resize-y rounded-lg border border-[var(--border-strong)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-amber-500" />
-                      <div className="mt-2 flex items-center justify-between gap-2"><span className="text-[11px] text-[var(--text-muted)]">{noteDraft.length}/10000</span><button type="button" onClick={() => { onSaveNote(noteDraft.trim()); setIsNoteOpen(false); }} className="rounded-lg bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-500/25 dark:text-amber-300">{locale === "vi" ? "Lưu ghi chú" : "Save note"}</button></div>
+                      <div className="mt-2 flex items-center justify-between gap-2"><span className="text-[11px] text-[var(--text-muted)]">{noteDraft.length}/10000</span><button type="button" disabled={actionPending(noteAction)} onClick={() => { void onSaveNote(noteDraft.trim()); }} className="rounded-lg bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-500/25 dark:text-amber-300">{locale === "vi" ? "Lưu ghi chú" : "Save note"}</button></div>
                     </div>
                   )}
                 </details>

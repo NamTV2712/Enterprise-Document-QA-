@@ -178,6 +178,10 @@ function isImportedMessage(value: unknown): boolean {
           feedback.category === "irrelevant" ||
           feedback.category === "citation_issue" ||
           feedback.category === "other") &&
+        (feedback.variantId === undefined || feedback.variantId === null || typeof feedback.variantId === "string") &&
+        (feedback.otherText === undefined || (typeof feedback.otherText === "string" && feedback.otherText.length <= 2_000)) &&
+        (feedback.category !== "other" || Boolean(feedback.otherText?.trim())) &&
+        (feedback.category === "other" || feedback.otherText === undefined) &&
         typeof feedback.at === "number" &&
         Number.isFinite(feedback.at)
       );

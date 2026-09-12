@@ -447,12 +447,18 @@ function normalizeMessageFeedback(value: unknown): MessageFeedback | undefined |
       feedback.category !== "irrelevant" &&
       feedback.category !== "citation_issue" &&
       feedback.category !== "other") ||
+    (feedback.variantId !== undefined && feedback.variantId !== null && typeof feedback.variantId !== "string") ||
+    (feedback.otherText !== undefined && (typeof feedback.otherText !== "string" || feedback.otherText.length > 2_000)) ||
     typeof feedback.at !== "number" ||
     !Number.isFinite(feedback.at)
   ) return null;
+  if (feedback.category === "other" && !feedback.otherText?.trim()) return null;
+  if (feedback.category !== "other" && feedback.otherText !== undefined) return null;
   return {
     rating: feedback.rating,
     ...(feedback.category ? { category: feedback.category } : {}),
+    ...(feedback.variantId ? { variantId: feedback.variantId } : {}),
+    ...(feedback.otherText ? { otherText: feedback.otherText.slice(0, 2_000) } : {}),
     at: feedback.at,
   };
 }

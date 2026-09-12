@@ -1,4 +1,4 @@
-import { Source } from "../types";
+import { ReaderCoverageStatus, Source } from "../types";
 import { getWriterStatus } from "./conversationStore";
 
 export interface EvidenceItem {
@@ -11,11 +11,27 @@ export interface EvidenceItem {
   filingDate?: string;
   sourceConversationId?: string;
   sourceMessageId?: string;
+  /** Optional facts captured from the exact reader/source response. */
+  documentId?: string;
+  sourceDocumentId?: string;
+  accessionNumber?: string;
+  reportDate?: string;
+  documentRevision?: string;
+  sourceSetRevision?: string;
+  representation?: "indexed_excerpt" | "structured_html" | "normalized_text";
+  coverageStatus?: ReaderCoverageStatus;
+  locationStatus?: "exact" | "ambiguous" | "not_found" | "unavailable" | "stale";
+  locationReason?: string;
+  sourceUrl?: string;
+  secIndexUrl?: string;
+  chunkTextHash?: string;
+  snapshotState?: "captured" | "stale" | "unknown";
   note?: string;
   savedAt: number;
 }
 
 export interface EvidenceCollection {
+  schemaVersion?: 2;
   id: string;
   name: string;
   items: EvidenceItem[];
@@ -23,7 +39,9 @@ export interface EvidenceCollection {
   updatedAt: number;
 }
 
-const STORAGE_KEY = "sec_qa_evidence_collections_v1";
+export const EVIDENCE_COLLECTION_SCHEMA_VERSION = 2;
+const STORAGE_KEY = "sec_qa_evidence_collections_v2";
+const LEGACY_STORAGE_KEY = "sec_qa_evidence_collections_v1";
 export const MAX_COLLECTIONS = 50;
 export const MAX_ITEMS_PER_COLLECTION = 100;
 export const MAX_EVIDENCE_NOTE_LENGTH = 10_000;
@@ -42,6 +60,22 @@ function isOptionalEvidenceNote(value: unknown): value is string | undefined {
   return value === undefined || (typeof value === "string" && value.length <= MAX_EVIDENCE_NOTE_LENGTH);
 }
 
+function isOptionalEvidenceState(value: unknown): value is EvidenceItem["snapshotState"] {
+  return value === undefined || value === "captured" || value === "stale" || value === "unknown";
+}
+
+function isOptionalEvidenceRepresentation(value: unknown): value is EvidenceItem["representation"] {
+  return value === undefined || value === "indexed_excerpt" || value === "structured_html" || value === "normalized_text";
+}
+
+function isOptionalCoverageStatus(value: unknown): value is ReaderCoverageStatus | undefined {
+  return value === undefined || value === "complete" || value === "partial" || value === "unknown";
+}
+
+function isOptionalLocationStatus(value: unknown): value is EvidenceItem["locationStatus"] {
+  return value === undefined || value === "exact" || value === "ambiguous" || value === "not_found" || value === "unavailable" || value === "stale";
+}
+
 function isEvidenceItem(value: unknown): value is EvidenceItem {
   if (!value || typeof value !== "object") return false;
   const item = value as Partial<EvidenceItem>;
@@ -50,6 +84,13 @@ function isEvidenceItem(value: unknown): value is EvidenceItem {
     isOptionalString(item.chunkId) && isOptionalString(item.ticker) &&
     isOptionalString(item.section) && isOptionalString(item.filingDate) &&
     isOptionalString(item.sourceConversationId) && isOptionalString(item.sourceMessageId) &&
+    isOptionalString(item.documentId) && isOptionalString(item.sourceDocumentId) &&
+    isOptionalString(item.accessionNumber) && isOptionalString(item.reportDate) &&
+    isOptionalString(item.documentRevision) && isOptionalString(item.sourceSetRevision) &&
+    isOptionalEvidenceRepresentation(item.representation) && isOptionalCoverageStatus(item.coverageStatus) &&
+    isOptionalLocationStatus(item.locationStatus) && isOptionalString(item.locationReason) &&
+    isOptionalString(item.sourceUrl) && isOptionalString(item.secIndexUrl) && isOptionalString(item.chunkTextHash) &&
+    isOptionalEvidenceState(item.snapshotState) &&
     isOptionalEvidenceNote(item.note) &&
     isFiniteNumber(item.savedAt);
 }
@@ -59,7 +100,8 @@ function validateCollections(value: unknown): value is EvidenceCollection[] {
   return value.every((entry) => {
     if (!entry || typeof entry !== "object") return false;
     const collection = entry as Partial<EvidenceCollection>;
-    return typeof collection.id === "string" && collection.id.length > 0 &&
+    return (collection.schemaVersion === undefined || collection.schemaVersion === EVIDENCE_COLLECTION_SCHEMA_VERSION) &&
+      typeof collection.id === "string" && collection.id.length > 0 &&
       typeof collection.name === "string" && collection.name.trim().length > 0 && collection.name.length <= 80 &&
       Array.isArray(collection.items) && collection.items.length <= MAX_ITEMS_PER_COLLECTION &&
       collection.items.every(isEvidenceItem) &&
@@ -74,7 +116,7 @@ export interface EvidenceStorageStatus {
 
 export function getEvidenceStorageStatus(): EvidenceStorageStatus {
   try {
-    if (localStorage.getItem(STORAGE_KEY) === null) storageReadError = null;
+    if (localStorage.getItem(STORAGE_KEY) === null && localStorage.getItem(LEGACY_STORAGE_KEY) === null) storageReadError = null;
   } catch {
     // The writer check below still reports a read-only state when storage is unavailable.
   }
@@ -98,7 +140,9 @@ export function assertEvidenceCollectionsWritable(): void {
 
 function readCollections(): EvidenceCollection[] {
   try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
+    const current = localStorage.getItem(STORAGE_KEY);
+    const legacy = current === null ? localStorage.getItem(LEGACY_STORAGE_KEY) : null;
+    const parsed = JSON.parse(current ?? legacy ?? "[]");
     if (!validateCollections(parsed)) throw new Error("invalid shape");
     storageReadError = null;
     return parsed;
@@ -112,9 +156,10 @@ function readCollections(): EvidenceCollection[] {
 
 function writeCollections(collections: EvidenceCollection[]): void {
   assertEvidenceCollectionsWritable();
-  if (!validateCollections(collections)) throw new Error("Evidence collection data is invalid and was not saved.");
+  const upgraded = collections.map((collection) => ({ ...collection, schemaVersion: 2 as const }));
+  if (!validateCollections(upgraded)) throw new Error("Evidence collection data is invalid and was not saved.");
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(collections));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(upgraded));
     window.dispatchEvent(new Event("sec-qa-evidence-updated"));
   } catch {
     // Callers must not announce a successful save when the browser rejected
@@ -177,6 +222,20 @@ export function importEvidenceCollections(value: unknown): EvidenceCollection[] 
         (item.filingDate !== undefined && typeof item.filingDate !== "string") ||
         (item.sourceConversationId !== undefined && typeof item.sourceConversationId !== "string") ||
         (item.sourceMessageId !== undefined && typeof item.sourceMessageId !== "string") ||
+        (item.documentId !== undefined && typeof item.documentId !== "string") ||
+        (item.sourceDocumentId !== undefined && typeof item.sourceDocumentId !== "string") ||
+        (item.accessionNumber !== undefined && typeof item.accessionNumber !== "string") ||
+        (item.reportDate !== undefined && typeof item.reportDate !== "string") ||
+        (item.documentRevision !== undefined && typeof item.documentRevision !== "string") ||
+        (item.sourceSetRevision !== undefined && typeof item.sourceSetRevision !== "string") ||
+        !isOptionalEvidenceRepresentation(item.representation) ||
+        !isOptionalCoverageStatus(item.coverageStatus) ||
+        !isOptionalLocationStatus(item.locationStatus) ||
+        (item.locationReason !== undefined && typeof item.locationReason !== "string") ||
+        (item.sourceUrl !== undefined && typeof item.sourceUrl !== "string") ||
+        (item.secIndexUrl !== undefined && typeof item.secIndexUrl !== "string") ||
+        (item.chunkTextHash !== undefined && typeof item.chunkTextHash !== "string") ||
+        !isOptionalEvidenceState(item.snapshotState) ||
         !isOptionalEvidenceNote(item.note) ||
         (item.savedAt !== undefined && (typeof item.savedAt !== "number" || !Number.isFinite(item.savedAt)))
       ) throw new Error("The backup contains an invalid evidence item.");
@@ -190,11 +249,26 @@ export function importEvidenceCollections(value: unknown): EvidenceCollection[] 
         ...(typeof item.filingDate === "string" ? { filingDate: item.filingDate } : {}),
         ...(typeof item.sourceConversationId === "string" ? { sourceConversationId: item.sourceConversationId } : {}),
         ...(typeof item.sourceMessageId === "string" ? { sourceMessageId: item.sourceMessageId } : {}),
+        ...(typeof item.documentId === "string" ? { documentId: item.documentId } : {}),
+        ...(typeof item.sourceDocumentId === "string" ? { sourceDocumentId: item.sourceDocumentId } : {}),
+        ...(typeof item.accessionNumber === "string" ? { accessionNumber: item.accessionNumber } : {}),
+        ...(typeof item.reportDate === "string" ? { reportDate: item.reportDate } : {}),
+        ...(typeof item.documentRevision === "string" ? { documentRevision: item.documentRevision } : {}),
+        ...(typeof item.sourceSetRevision === "string" ? { sourceSetRevision: item.sourceSetRevision } : {}),
+        ...(item.representation ? { representation: item.representation } : {}),
+        ...(item.coverageStatus ? { coverageStatus: item.coverageStatus } : {}),
+        ...(item.locationStatus ? { locationStatus: item.locationStatus } : {}),
+        ...(typeof item.locationReason === "string" ? { locationReason: item.locationReason } : {}),
+        ...(typeof item.sourceUrl === "string" ? { sourceUrl: item.sourceUrl } : {}),
+        ...(typeof item.secIndexUrl === "string" ? { secIndexUrl: item.secIndexUrl } : {}),
+        ...(typeof item.chunkTextHash === "string" ? { chunkTextHash: item.chunkTextHash } : {}),
+        ...(item.snapshotState ? { snapshotState: item.snapshotState } : {}),
         ...(typeof item.note === "string" ? { note: item.note } : {}),
         savedAt: typeof item.savedAt === "number" && Number.isFinite(item.savedAt) ? item.savedAt : now,
       });
     }
     imported.push({
+      schemaVersion: EVIDENCE_COLLECTION_SCHEMA_VERSION,
       id: collectionId,
       name: candidate.name.trim().slice(0, 80) || "Imported evidence",
       items,
@@ -234,12 +308,47 @@ export function createEvidenceCollection(name: string): EvidenceCollection {
   const collections = readCollections();
   if (collections.length >= MAX_COLLECTIONS) throw new Error("Collection limit reached");
   const now = Date.now();
-  const collection: EvidenceCollection = { id: `collection-${now}-${Math.random().toString(36).slice(2, 8)}`, name: trimmed, items: [], createdAt: now, updatedAt: now };
+  const collection: EvidenceCollection = { schemaVersion: EVIDENCE_COLLECTION_SCHEMA_VERSION, id: `collection-${now}-${Math.random().toString(36).slice(2, 8)}`, name: trimmed, items: [], createdAt: now, updatedAt: now };
   writeCollections([...collections, collection]);
   return collection;
 }
 
-export function saveEvidence(source: Source, options: { collectionId?: string; conversationId?: string; messageId?: string } = {}): EvidenceCollection {
+export interface EvidenceSnapshotProvenance {
+  documentId?: string;
+  sourceDocumentId?: string;
+  accessionNumber?: string;
+  reportDate?: string;
+  documentRevision?: string;
+  sourceSetRevision?: string;
+  representation?: EvidenceItem["representation"];
+  coverageStatus?: ReaderCoverageStatus;
+  locationStatus?: EvidenceItem["locationStatus"];
+  locationReason?: string;
+  sourceUrl?: string;
+  secIndexUrl?: string;
+  chunkTextHash?: string;
+  snapshotState?: EvidenceItem["snapshotState"];
+}
+
+/** Copy only source facts already present in the current response. */
+export function snapshotProvenanceFromSource(source: Source): EvidenceSnapshotProvenance {
+  const stored = source.stored_snapshot;
+  return {
+    ...(source.document_id ? { documentId: source.document_id } : {}),
+    ...(source.report_date ? { reportDate: source.report_date } : {}),
+    ...(source.source_url ? { sourceUrl: source.source_url } : {}),
+    ...(source.sec_index_url ? { secIndexUrl: source.sec_index_url } : {}),
+    ...(source.chunk_text_hash ? { chunkTextHash: source.chunk_text_hash } : {}),
+    ...(stored?.document_revision ? { documentRevision: stored.document_revision } : {}),
+    ...(stored?.source_set_revision ? { sourceSetRevision: stored.source_set_revision } : {}),
+    ...(stored?.representation ? { representation: stored.representation } : {}),
+    ...(stored?.coverage_status ? { coverageStatus: stored.coverage_status } : {}),
+    ...(stored?.location_status ? { locationStatus: stored.location_status } : {}),
+    snapshotState: stored?.snapshot_state ?? "captured",
+  };
+}
+
+export function saveEvidence(source: Source, options: { collectionId?: string; conversationId?: string; messageId?: string; provenance?: EvidenceSnapshotProvenance } = {}): EvidenceCollection {
   assertEvidenceCollectionsWritable();
   const collections = readCollections();
   let collection = options.collectionId
@@ -247,6 +356,7 @@ export function saveEvidence(source: Source, options: { collectionId?: string; c
     : collections[0];
   if (options.collectionId && !collection) throw new Error("The selected evidence collection does not exist.");
   const now = Date.now();
+  const provenance = options.provenance;
   const item: EvidenceItem = {
     id: `evidence-${now}-${Math.random().toString(36).slice(2, 8)}`,
     citation: source.citation,
@@ -257,12 +367,27 @@ export function saveEvidence(source: Source, options: { collectionId?: string; c
     ...(source.filing_date ? { filingDate: source.filing_date } : {}),
     ...(options.conversationId ? { sourceConversationId: options.conversationId } : {}),
     ...(options.messageId ? { sourceMessageId: options.messageId } : {}),
+    ...(provenance?.documentId ? { documentId: provenance.documentId } : {}),
+    ...(provenance?.sourceDocumentId ? { sourceDocumentId: provenance.sourceDocumentId } : {}),
+    ...(provenance?.accessionNumber ? { accessionNumber: provenance.accessionNumber } : {}),
+    ...(provenance?.reportDate ? { reportDate: provenance.reportDate } : {}),
+    ...(provenance?.documentRevision ? { documentRevision: provenance.documentRevision } : {}),
+    ...(provenance?.sourceSetRevision ? { sourceSetRevision: provenance.sourceSetRevision } : {}),
+    ...(provenance?.representation ? { representation: provenance.representation } : {}),
+    ...(provenance?.coverageStatus ? { coverageStatus: provenance.coverageStatus } : {}),
+    ...(provenance?.locationStatus ? { locationStatus: provenance.locationStatus } : {}),
+    ...(provenance?.locationReason ? { locationReason: provenance.locationReason } : {}),
+    ...(provenance?.sourceUrl ? { sourceUrl: provenance.sourceUrl } : {}),
+    ...(provenance?.secIndexUrl ? { secIndexUrl: provenance.secIndexUrl } : {}),
+    ...(provenance?.chunkTextHash ? { chunkTextHash: provenance.chunkTextHash } : {}),
+    snapshotState: provenance?.snapshotState ?? "captured",
     savedAt: now,
   };
 
   if (!collection) {
     const createdAt = now;
     collection = {
+      schemaVersion: EVIDENCE_COLLECTION_SCHEMA_VERSION,
       id: `collection-${now}-${Math.random().toString(36).slice(2, 8)}`,
       name: "Research evidence",
       items: [],
@@ -310,6 +435,7 @@ export function clearEvidenceCollections(): void {
   assertEvidenceCollectionsWritable();
   try {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
     window.dispatchEvent(new Event("sec-qa-evidence-updated"));
   } catch {
     throw new Error("Evidence storage is unavailable. Collections were not cleared.");
@@ -318,6 +444,6 @@ export function clearEvidenceCollections(): void {
 
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (event) => {
-    if (event.key === STORAGE_KEY) window.dispatchEvent(new Event("sec-qa-evidence-updated"));
+    if (event.key === STORAGE_KEY || event.key === LEGACY_STORAGE_KEY) window.dispatchEvent(new Event("sec-qa-evidence-updated"));
   });
 }

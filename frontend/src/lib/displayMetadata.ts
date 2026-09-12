@@ -51,9 +51,14 @@ export const COMPANY_NAMES: Record<string, string> = {
   T: "AT&T Inc.",
 };
 
-export function formatCompanyLabel(ticker: string): string {
-  const companyName = COMPANY_NAMES[ticker];
-  return companyName ? `${companyName} (${ticker})` : ticker;
+/** Versioned local display metadata; this is not a filing-identity claim. */
+export const COMPANY_DISPLAY_METADATA_VERSION = "sec-company-display-v1";
+
+export function formatCompanyLabel(ticker: string | null | undefined): string {
+  const normalized = typeof ticker === "string" ? ticker.trim().toUpperCase() : "";
+  if (!normalized) return "—";
+  const companyName = COMPANY_NAMES[normalized];
+  return companyName ? `${companyName} (${normalized})` : normalized;
 }
 
 export interface SectionMetadata {

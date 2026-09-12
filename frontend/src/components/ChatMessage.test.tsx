@@ -339,4 +339,30 @@ describe("ChatMessage", () => {
       category: "citation_issue",
     }));
   });
+
+  test("requires text before submitting Other feedback and supports cancel", () => {
+    const onFeedback = vi.fn();
+    render(
+      <ChatMessage
+        message={{ id: "assistant-other-feedback", sender: "assistant", text: "Revenue was reported." }}
+        onFeedback={onFeedback}
+      />,
+    );
+
+    fireEvent.click(document.querySelector(".message-secondary-actions summary")!);
+    fireEvent.click(screen.getByRole("button", { name: "Unhelpful answer" }));
+    onFeedback.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Other" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+    expect(onFeedback).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent("Add a short reason");
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Short explanation (required)" }), { target: { value: "The cited period is unclear." } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+    expect(onFeedback).toHaveBeenLastCalledWith(expect.objectContaining({ rating: "down", category: "other", otherText: "The cited period is unclear." }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Other" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("textbox", { name: "Short explanation (required)" })).not.toBeInTheDocument();
+  });
 });

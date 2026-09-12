@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AnswerVariant, ConversationNote, DisplayedAnswerContext, Message, RequestSnapshot, SaveAnswerVersionStatus, SessionHistoryResponse } from "../types";
+import { AnswerVariant, ConversationNote, DisplayedAnswerContext, Message, MessageFeedback, RequestSnapshot, SaveAnswerVersionStatus, SessionHistoryResponse } from "../types";
 import { getSessionHistory } from "../lib/api";
 import {
   buildConversationRecord,
@@ -182,8 +182,8 @@ export interface ConversationLibraryController {
   /** Start a new session while keeping the draft text and current filters. */
   startNewConversation: () => Promise<void>;
   renameConversation: (conversationId: string, title: string) => void;
-  toggleAnswerBookmark: (messageId: string) => void;
-  toggleConversationBookmark: (conversationId: string, messageId: string) => void;
+  toggleAnswerBookmark: (messageId: string) => Promise<ConversationWriteResult>;
+  toggleConversationBookmark: (conversationId: string, messageId: string) => Promise<ConversationWriteResult>;
   deleteConversation: (conversationId: string) => Promise<void>;
   /** Import already validated records without overwriting existing IDs. */
   importConversationRecords: (records: ConversationRecord[]) => Promise<ConversationImportResult>;
@@ -191,6 +191,7 @@ export interface ConversationLibraryController {
   requestLibraryWriter: () => Promise<WriterStatus>;
   updateConversationMetadata: (conversationId: string, patch: { tags?: string[]; notes?: ConversationNote[]; variants?: AnswerVariant[] }) => Promise<ConversationWriteResult>;
   saveMessageNote: (messageId: string, note: string) => Promise<ConversationWriteResult>;
+  saveMessageFeedback: (messageId: string, feedback: MessageFeedback | undefined) => Promise<ConversationWriteResult>;
   saveAnswerVersion: (target: DisplayedAnswerContext) => Promise<SaveAnswerVersionResult>;
 }
 
@@ -443,6 +444,45 @@ export function useConversationLibrary(
       return result;
     },
     [syncConversationsFromRepository],
+  );
+
+  const saveMessageFeedback = useCallback(
+    async (messageId: string, feedback: MessageFeedback | undefined): Promise<ConversationWriteResult> => {
+      const conversationId = activeIdRef.current;
+      const epoch = epochRef.current;
+      const failed = (warning: string): ConversationWriteResult => ({ status: "failed", storageMode, warning });
+      if (feedback?.category === "other" && !feedback.otherText?.trim()) {
+        return failed("Other feedback requires a short explanation.");
+      }
+      skipNextDraftPersistRef.current = true;
+      setMessages((previous) => previous.map((message) => {
+        if (message.id !== messageId) return message;
+        if (!feedback) {
+          const { feedback: _ignored, ...withoutFeedback } = message;
+          return withoutFeedback;
+        }
+        return { ...message, feedback };
+      }));
+      const result = await mutateConversationRecord(conversationId, (latest) => {
+        if (!latest.messages.some((message) => message.id === messageId)) return null;
+        return {
+          ...latest,
+          messages: latest.messages.map((message) => {
+            if (message.id !== messageId) return message;
+            if (!feedback) {
+              const { feedback: _ignored, ...withoutFeedback } = message;
+              return withoutFeedback;
+            }
+            return { ...message, feedback };
+          }),
+          updatedAt: Date.now(),
+        };
+      });
+      applyWriteResult(result, { setStorageMode, setStorageWarning });
+      if (epochRef.current === epoch && activeIdRef.current === conversationId) syncConversationsFromRepository();
+      return result;
+    },
+    [storageMode, syncConversationsFromRepository],
   );
 
   // Hydrate the local library first; backend history is only consulted for
@@ -886,9 +926,15 @@ export function useConversationLibrary(
   );
 
   const toggleConversationBookmark = useCallback(
-    (conversationId: string, messageId: string) => {
+    async (conversationId: string, messageId: string): Promise<ConversationWriteResult> => {
+      const unavailable = (warning: string): ConversationWriteResult => ({
+        status: "failed",
+        storageMode,
+        warning,
+      });
       const conversation = conversationsRef.current.find((item) => item.id === conversationId);
-      if (!conversation || conversation.deletionPending) return;
+      if (!conversation) return unavailable("Conversation not found.");
+      if (conversation.deletionPending) return unavailable("This conversation is pending deletion.");
       const currentBookmarks = conversationId === activeIdRef.current
         ? bookmarksRef.current
         : conversation.bookmarkedMessageIds;
@@ -906,19 +952,23 @@ export function useConversationLibrary(
       );
       conversationsRef.current = optimisticConversations;
       setConversations(optimisticConversations);
-      void mutateConversationRecord(conversationId, (latest) => {
+      const result = await mutateConversationRecord(conversationId, (latest) => {
         if (latest.deletionPending) return null;
         const isBookmarked = latest.bookmarkedMessageIds.includes(messageId);
         const nextBookmarks = isBookmarked
           ? latest.bookmarkedMessageIds.filter((id) => id !== messageId)
           : [...latest.bookmarkedMessageIds, messageId];
         return { ...latest, bookmarkedMessageIds: nextBookmarks, updatedAt: Date.now() };
-      }).then((result) => {
-        applyWriteResult(result, { setStorageMode, setStorageWarning });
-        syncConversationsFromRepository();
       });
+      applyWriteResult(result, { setStorageMode, setStorageWarning });
+      syncConversationsFromRepository();
+      if (conversationId === activeIdRef.current && result.status === "failed") {
+        const durable = listConversations().find((item) => item.id === conversationId);
+        if (durable) setBookmarkedMessageIds(durable.bookmarkedMessageIds);
+      }
+      return result;
     },
-    [syncConversationsFromRepository],
+    [storageMode, syncConversationsFromRepository],
   );
 
   const deleteConversation = useCallback(
@@ -1095,6 +1145,7 @@ export function useConversationLibrary(
     requestLibraryWriter,
     updateConversationMetadata,
     saveMessageNote,
+    saveMessageFeedback,
     saveAnswerVersion,
   };
 }

@@ -1,69 +1,59 @@
-# SEC Research Workspace Design System
+# SEC research workspace design system
 
 ## Product character
 
-Calm, precise, evidence-first research workbench. The distinctive element is
+Calm, precise, evidence-first research workbench. The distinctive quality is
 the visible connection between an answer citation and the source excerpt it
-opens. The product should feel like a focused financial research tool with a
-developer inspection layer, not a generic AI dashboard.
+opens. It should feel like a focused financial research tool with a developer
+inspection layer, not a generic AI dashboard.
 
-## Layout contract
+## Hierarchy and copy
 
-- Global header: 56px; context, search/commands, connection, settings.
-- Primary navigation: 216px expanded, 56px collapsed; Chat, Documents,
-  Search, Library. Tools is secondary and collapsed by default.
-- Chat desktop: answer first; Sources/Reader are an inspector, not equal
-  dashboard columns. Use 480px answer, 240px source, 300px reader minimums
-  only when the available width supports them.
-- Medium widths use Sources/Reader tabs or a drawer. Mobile uses one primary
-  surface and a source/reader sheet. No accidental page-level horizontal scroll.
-- Composer stays with Chat. Documents, Search, Library, and Tools own their
-  own content width.
+- Research task and source identity are primary; IDs, paths, scores, models,
+  and raw status are secondary details.
+- Primary action > secondary action > utility action. Use labels that describe
+  the current task: a catalog action must not say “this answer” or “retrieved
+  sources” without a submitted answer and retrieved evidence.
+- Chat, Documents, Search, and Library are primary. Retrieval Lab, Evaluation,
+  Analytics, System, and Architecture are secondary Tools surfaces.
+- Prefer one coherent surface with progressive disclosure for filters and
+  diagnostics. Do not turn an inspector, source list, and reader into equal
+  dashboard columns unless the task and width support it.
 
-## Palette
+## Layout and responsive composition
 
-| Role | Light | Dark |
-|---|---|---|
-| Canvas | `#F6F8FB` | `#08111E` |
-| Surface | `#FFFFFF` | `#0D1828` |
-| Nested surface | `#F4F7FA` | `#111F32` |
-| Primary text | `#172033` | `#EDF3FB` |
-| Secondary text | `#526174` | `#A8B6C9` |
-| Primary action | `#2563EB` | `#3B82F6` |
-| Retrieval accent | `#0891B2` | `#22D3EE` |
-| Embedding accent | `#0D9488` | `#2DD4BF` |
-| Reranking accent | `#7C3AED` | `#A78BFA` |
-| Success | `#059669` | `#34D399` |
-| Warning | `#D97706` | `#FBBF24` |
-| Danger | `#DC2626` | `#F87171` |
+- Read current CSS/container ownership before changing dimensions. The former
+  56px/216px/300px values are historical guidance, not unconditional runtime
+  constants.
+- Chat puts the answer first; sources and reader are contextual inspectors.
+  At medium widths use tabs or a drawer; mobile uses one primary surface and a
+  source/reader sheet.
+- Evaluate the containing rail and its header stack, not only an inner reader
+  canvas. First useful document content must not be displaced by repeated
+  identity chrome.
+- No accidental page-level horizontal scroll. Intentional table/code scrolling
+  must be local and keyboard reachable.
 
-Use accents on icons, selected states, links, small indicators, and progress.
-Neutral surfaces and typography carry most of the interface. Validate actual
-foreground/background pairs in the rendered UI.
+## Tokens and type
 
-## Type and geometry
+Use the current semantic CSS tokens for canvas, surfaces, text, borders, focus,
+and state. Validate actual foreground/background pairs in both themes; do not
+copy a stale palette into components or map one alias to incompatible roles.
 
-- Inter/system sans for UI and answers; monospace only for IDs, code, and
-  tabular diagnostics.
-- 14px UI, 15–16px answer/reader, 12–13px metadata, 20–24px page headings.
-- Line-height 1.5–1.7; keep answer lines around 60–75 characters on desktop.
-- Spacing scale 4/8/12/16/24px; 6–10px radius for controls and panels.
-- 1px borders and restrained shadow; reserve shadow for overlays.
-- Minimum touch target 44px; mobile input text 16px.
+- UI and answers use the repository’s current sans stack; monospace is for IDs,
+  code, and diagnostics. Do not prescribe a font migration.
+- Keep answer and reader text comfortably readable, metadata visibly secondary,
+  and desktop lines near 60–75 characters when the container permits.
+- Preserve the current spacing/radius language unless the implementation and
+  rendered evidence justify a change. Minimum interactive target is 44px and
+  mobile input text is 16px.
+- State uses text/icon plus a visual signal; color alone is insufficient.
 
-## Hierarchy
+## Evidence language
 
-Primary action > secondary action > utility action. Human labels are primary;
-document IDs, URLs, scores, and raw technical status are secondary. Selected
-state uses at least two signals, such as border + surface or icon + label.
-
-## RAG visual language
-
-- User question: quiet context block, not a chat-app bubble wall.
-- Answer: readable document block with inline citations.
-- Source: document identity, filing date, section, excerpt, retrieval score.
-- Reader: one selected excerpt with honest preview/full-content boundaries.
-- Pipeline: compact stage/timing list using semantic small accents, never neon
-  circles or a decorative graph.
-- Evidence: say “N sources retrieved” and explain limitations; do not display
-  made-up confidence percentages.
+User question is quiet context, answer is a readable document block, and source
+cards show identity, filing date, section, excerpt, and ranking metadata only
+when present. A reader must state whether it is indexed, normalized, structured,
+or unavailable. Never invent confidence, pages, exact matches, official PDFs,
+or retrieved sources. Detailed provenance rules live in
+`../../rag-document-provenance/references/` and are handed off when needed.

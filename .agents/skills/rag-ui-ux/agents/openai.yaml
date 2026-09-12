@@ -1,3 +1,4 @@
 interface:
-  display_name: "Rag UI Ux"
-  short_description: "Help with Rag UI Ux tasks"
+  display_name: "SEC Research UI/UX"
+  short_description: "Improve SEC research workspace UI journeys and evidence UX"
+  default_prompt: "Use $rag-ui-ux to review or improve this SEC workspace UI task."

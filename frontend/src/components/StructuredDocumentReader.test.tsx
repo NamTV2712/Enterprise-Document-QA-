@@ -48,9 +48,9 @@ const manifest = {
     text_length: 120,
   }],
   representations: [
-    { kind: "normalized_text" as const, status: "available" as const, reason_code: "available" as const, reason: null },
-    { kind: "structured" as const, status: "available" as const, reason_code: "available" as const, reason: null },
-    { kind: "pdf" as const, status: "unavailable" as const, reason_code: "pdf_representation_unavailable" as const, reason: "PDF is not available." },
+    { kind: "normalized_text" as const, status: "available" as const, reason_code: "available" as const, reason: null, coverage_status: "complete" as const, coverage_reason: "All normalized text is available.", coverage_reason_code: "verified_complete" },
+    { kind: "structured" as const, status: "available" as const, reason_code: "available" as const, reason: null, coverage_status: "complete" as const, coverage_reason: "All structured text is represented.", coverage_reason_code: "verified_complete" },
+    { kind: "pdf" as const, status: "unavailable" as const, reason_code: "pdf_representation_unavailable" as const, reason: "PDF is not available.", coverage_status: "unknown" as const, coverage_reason: "PDF is not available.", coverage_reason_code: "pdf_representation_unavailable" },
   ],
 };
 
@@ -125,5 +125,95 @@ describe("StructuredDocumentReader", () => {
     fireEvent.click(screen.getByRole("button", { name: "Find" }));
     await waitFor(() => expect(searchMock).toHaveBeenCalledWith(manifest.document_id, expect.objectContaining({ q: "competition", source_set_revision: "set-1", document_revision: "doc-1" }), expect.any(AbortSignal)));
     expect(screen.getByText("1 matches")).toBeInTheDocument();
+  });
+
+  test("does not claim a document-wide negative when structured coverage is partial", async () => {
+    manifestMock.mockResolvedValue({
+      ...manifest,
+      representations: manifest.representations.map((representation) => representation.kind === "structured"
+        ? { ...representation, coverage_status: "partial" as const, coverage_reason: "Visible prose is omitted.", coverage_reason_code: "unsupported_visible_content" }
+        : representation),
+    });
+    outlineMock.mockResolvedValue({
+      document_id: manifest.document_id,
+      source_document_id: "source-1",
+      source_set_revision: "set-1",
+      document_revision: "doc-1",
+      items: [],
+      next_cursor: null,
+      complete: true,
+      limitations: [],
+    });
+    contentMock.mockResolvedValue({
+      document_id: manifest.document_id,
+      source_document_id: "source-1",
+      source_set_revision: "set-1",
+      document_revision: "doc-1",
+      blocks: [],
+      previous_cursor: null,
+      next_cursor: null,
+      complete: true,
+      limitations: [],
+      coverage_status: "partial",
+      coverage_reason: "Visible prose is omitted.",
+      coverage_reason_code: "unsupported_visible_content",
+    });
+    searchMock.mockResolvedValue({
+      document_id: manifest.document_id,
+      source_document_id: "source-1",
+      source_set_revision: "set-1",
+      document_revision: "doc-1",
+      query: "background",
+      matches: [],
+      total: 0,
+      next_cursor: null,
+      complete: true,
+      coverage_status: "partial",
+      coverage_reason: "Visible prose is omitted.",
+      coverage_reason_code: "unsupported_visible_content",
+    });
+    const onOpenNormalized = vi.fn();
+
+    render(<LocaleProvider><StructuredDocumentReader documentId={manifest.document_id} onBack={vi.fn()} onOpenNormalized={onOpenNormalized} /></LocaleProvider>);
+    expect(await screen.findByText("Structured view has partial coverage; search normalized text for complete local text.", { exact: true })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Find in document" }), { target: { value: "background" } });
+    fireEvent.click(screen.getByRole("button", { name: "Find" }));
+    expect(await screen.findByText("No matches in this structured view.", { exact: true })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Search normalized text" }));
+    expect(onOpenNormalized).toHaveBeenCalledTimes(1);
+  });
+
+  test("omits duplicate identity chrome when embedded in a document workspace", async () => {
+    manifestMock.mockResolvedValue(manifest);
+    outlineMock.mockResolvedValue({
+      document_id: manifest.document_id,
+      source_document_id: "source-1",
+      source_set_revision: "set-1",
+      document_revision: "doc-1",
+      items: [],
+      next_cursor: null,
+      complete: true,
+      limitations: [],
+    });
+    contentMock.mockResolvedValue({
+      document_id: manifest.document_id,
+      source_document_id: "source-1",
+      source_set_revision: "set-1",
+      document_revision: "doc-1",
+      blocks: [],
+      previous_cursor: null,
+      next_cursor: null,
+      complete: true,
+      limitations: [],
+      coverage_status: "complete",
+      coverage_reason: "All structured text is represented.",
+      coverage_reason_code: "verified_complete",
+    });
+
+    render(<LocaleProvider><StructuredDocumentReader documentId={manifest.document_id} onBack={vi.fn()} embedded /></LocaleProvider>);
+
+    expect(await screen.findByText("Structured HTML source ready", { exact: true })).toBeInTheDocument();
+    expect(document.querySelector(".structured-reader__identity")).toBeNull();
+    expect(document.querySelector(".structured-reader__toolbar")).toBeInTheDocument();
   });
 });

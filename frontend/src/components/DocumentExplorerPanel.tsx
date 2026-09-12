@@ -1,16 +1,18 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, ExternalLink, FileText, Search, X } from "lucide-react";
 import { getDocumentChunks, getDocuments } from "../lib/api";
-import { DocumentChunk, DocumentRow, Source } from "../types";
+import { CatalogWorkspaceTarget, DocumentChunk, DocumentRow, Source } from "../types";
 import { useLocale } from "../lib/i18n";
 import { describeRequestError } from "../lib/requestError";
 import { SelectField } from "./ui/SelectField";
 import { getWorkspaceNavItem } from "../lib/workspace";
 import { getSemanticIcon } from "../lib/semanticIcons";
+import { formatCompanyLabel } from "../lib/displayMetadata";
 
 interface DocumentExplorerPanelProps {
   tickers: string[];
   sections: string[];
+  onOpenDocument?: (target: CatalogWorkspaceTarget) => void;
   onOpenSource?: (source: Source) => void;
 }
 
@@ -40,7 +42,11 @@ function useDebouncedValue(value: string): string {
   return debounced;
 }
 
-export const DocumentExplorerPanel = memo(function DocumentExplorerPanel({ tickers, sections, onOpenSource }: DocumentExplorerPanelProps) {
+function focusId(documentId: string): string {
+  return `document-workspace-${documentId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
+export const DocumentExplorerPanel = memo(function DocumentExplorerPanel({ tickers, sections, onOpenDocument, onOpenSource }: DocumentExplorerPanelProps) {
   const { locale, t } = useLocale();
   const vi = locale === "vi";
   const ToolIcon = getSemanticIcon(WORKSPACE_META.icon);
@@ -134,7 +140,7 @@ export const DocumentExplorerPanel = memo(function DocumentExplorerPanel({ ticke
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const tickerOptions = useMemo(
-    () => [{ value: "", label: vi ? "Tất cả công ty" : "All companies" }, ...tickers.map((item) => ({ value: item, label: item }))],
+    () => [{ value: "", label: vi ? "Tất cả công ty" : "All companies" }, ...tickers.map((item) => ({ value: item, label: formatCompanyLabel(item) }))],
     [tickers, vi],
   );
   const sectionOptions = useMemo(
@@ -208,7 +214,7 @@ export const DocumentExplorerPanel = memo(function DocumentExplorerPanel({ ticke
         <div className="divide-y divide-[var(--border-subtle)]">
           {documents.map((document) => (
             <button key={document.document_id} type="button" onClick={() => selectDocument(document)} className="flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-[var(--surface-muted)]">
-              <span className="min-w-0"><span className="block font-semibold text-[var(--text-primary)]">{document.ticker ?? "—"} · {document.filing_date ?? "Unknown date"}</span><span className="block truncate text-xs text-[var(--text-muted)]">{document.document_id}</span></span>
+              <span className="min-w-0"><span className="block font-semibold text-[var(--text-primary)]">{document.ticker ? formatCompanyLabel(document.ticker) : "SEC filing"} · {document.filing_date ?? "Unknown date"}</span><span className="block truncate text-xs text-[var(--text-muted)]">{document.document_id}</span></span>
               <span className="flex items-center gap-3 text-xs text-[var(--text-muted)]"><span>{document.chunk_count} chunks</span><span>{document.sections.length} sections</span><ExternalLink className="h-4 w-4" aria-hidden="true" /></span>
             </button>
           ))}
@@ -224,9 +230,9 @@ export const DocumentExplorerPanel = memo(function DocumentExplorerPanel({ ticke
       {selected && (
         <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-raised)]">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--border-subtle)] px-4 py-4">
-            <div><div className="text-sm font-bold text-[var(--text-primary)]">{selected.ticker} · {selected.filing_date}</div><div className="mt-1 text-xs text-[var(--text-muted)]">{selected.document_id} · {selected.chunk_count} chunks</div></div>
+            <div><div className="text-sm font-bold text-[var(--text-primary)]">{selected.ticker ? formatCompanyLabel(selected.ticker) : "SEC filing"} · {selected.filing_date}</div><div className="mt-1 text-xs text-[var(--text-muted)]">{selected.document_id} · {selected.chunk_count} chunks</div></div>
             <div className="flex flex-wrap items-center justify-end gap-2">
-              {onOpenSource && <button type="button" onClick={() => onOpenSource({ citation: `${selected.ticker ?? "SEC"} filing · ${selected.filing_date ?? "date unavailable"}`, text_preview: "", document_id: selected.document_id, ticker: selected.ticker, filing_date: selected.filing_date, report_date: selected.report_date, source_url: selected.source_url })} className="rounded-lg border border-[var(--primary)] px-3 py-1.5 text-xs font-semibold text-[var(--primary)]">{vi ? "Mở không gian tài liệu" : "Open document workspace"}</button>}
+              {onOpenDocument && <button id={focusId(selected.document_id)} type="button" onClick={() => onOpenDocument({ kind: "catalog", documentId: selected.document_id, title: `${selected.ticker ? formatCompanyLabel(selected.ticker) : "SEC filing"} · ${selected.filing_date ?? "date unavailable"}`, ticker: selected.ticker, filingDate: selected.filing_date, reportDate: selected.report_date, accessionNumber: selected.accession_number, sourceUrl: selected.source_url, returnView: "documents", returnFocusId: focusId(selected.document_id) })} className="rounded-lg border border-[var(--primary)] px-3 py-1.5 text-xs font-semibold text-[var(--primary)]">{vi ? "Mở không gian tài liệu" : "Open document workspace"}</button>}
               <button type="button" onClick={() => setSelected(null)} aria-label={vi ? "Đóng chi tiết" : "Close document details"} className="rounded-lg p-2 text-[var(--text-muted)] hover:bg-[var(--surface-muted)]"><X className="h-4 w-4" /></button>
             </div>
           </div>
@@ -236,7 +242,12 @@ export const DocumentExplorerPanel = memo(function DocumentExplorerPanel({ ticke
           </div>
           <div className="space-y-3 p-4">
             {chunkError && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg state-warning-surface p-3 text-xs" role="alert"><span>{chunkError}</span><button type="button" onClick={() => setChunkRequestNonce((value) => value + 1)} className="rounded border border-current px-2 py-1 font-semibold">{vi ? "Thử lại" : "Retry"}</button></div>}
-            {chunks.map((chunk) => <article key={chunk.chunk_id} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] p-3"><div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-muted)]"><span className="font-semibold text-[var(--text-primary)]">{chunk.section ?? "Unknown section"}</span><span>{chunk.chunk_id} · {chunk.text_length} chars</span></div><p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--text-primary)]">{chunk.text_preview}</p><div className="mt-2 flex flex-wrap items-center gap-3">{onOpenSource && <button type="button" className="text-xs font-semibold text-[var(--primary)] hover:underline" onClick={() => onOpenSource({ citation: `${chunk.ticker ?? "SEC"} indexed excerpt · ${chunk.section ?? "Unknown section"}`, text_preview: chunk.text_preview, chunk_id: chunk.chunk_id, document_id: selected.document_id, ticker: chunk.ticker, section: chunk.section, filing_date: chunk.filing_date, report_date: chunk.report_date, source_url: chunk.source_url })}>{vi ? "Mở đoạn indexed" : "Open indexed excerpt"}</button>}{chunk.source_url && <a href={chunk.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--primary)] hover:underline">{vi ? "Mở nguồn SEC" : "Open SEC source"}<ExternalLink className="h-3 w-3" /></a>}</div></article>)}
+            {chunks.map((chunk) => {
+              const selectedSource: Source = { citation: `${chunk.ticker ?? "SEC"} indexed excerpt · ${chunk.section ?? "Unknown section"}`, text_preview: chunk.text_preview, chunk_id: chunk.chunk_id, document_id: selected.document_id, ticker: chunk.ticker, section: chunk.section, filing_date: chunk.filing_date, report_date: chunk.report_date, source_url: chunk.source_url };
+              return <article key={chunk.chunk_id} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] p-3"><div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-muted)]"><span className="font-semibold text-[var(--text-primary)]">{chunk.section ?? "Unknown section"}</span><span>{chunk.chunk_id} · {chunk.text_length} chars</span></div><p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--text-primary)]">{chunk.text_preview}</p><div className="mt-2 flex flex-wrap items-center gap-3">{(onOpenDocument || onOpenSource) && <button type="button" className="text-xs font-semibold text-[var(--primary)] hover:underline" onClick={() => onOpenDocument
+                ? onOpenDocument({ kind: "catalog", documentId: selected.document_id, ticker: selected.ticker, filingDate: selected.filing_date, reportDate: selected.report_date, accessionNumber: selected.accession_number, sourceUrl: selected.source_url, selectedSource, initialTab: "excerpt", returnView: "documents", returnFocusId: focusId(selected.document_id) })
+                : onOpenSource?.(selectedSource)}>{vi ? "Mở đoạn indexed" : "Open indexed excerpt"}</button>}{chunk.source_url && <a href={chunk.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--primary)] hover:underline">{vi ? "Mở nguồn SEC" : "Open SEC source"}<ExternalLink className="h-3 w-3" /></a>}</div></article>;
+            })}
             {!isLoadingChunks && !chunkError && chunks.length === 0 && <p className="py-5 text-center text-sm text-[var(--text-muted)]">{vi ? "Không có đoạn phù hợp." : "No matching excerpts."}</p>}
           </div>
           <div className="flex items-center justify-between border-t border-[var(--border-subtle)] px-4 py-3"><button type="button" disabled={chunkPage <= 1 || isLoadingChunks} onClick={() => setChunkPage((value) => value - 1)} className="rounded-lg border border-[var(--border-strong)] px-3 py-1.5 text-xs font-semibold disabled:opacity-40">{vi ? "Trước" : "Previous"}</button><span className="text-xs text-[var(--text-muted)]">Page {chunkPage}</span><button type="button" disabled={chunks.length < 8 || isLoadingChunks} onClick={() => setChunkPage((value) => value + 1)} className="rounded-lg border border-[var(--border-strong)] px-3 py-1.5 text-xs font-semibold disabled:opacity-40">{vi ? "Sau" : "Next"}</button></div>

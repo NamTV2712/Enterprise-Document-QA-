@@ -60,13 +60,13 @@ describe("SearchWorkspace", () => {
   });
 
   test("opens a candidate's document workspace without changing the submitted query", async () => {
-    const onOpenSource = vi.fn();
+    const onOpenDocument = vi.fn();
     inspectMock.mockResolvedValue(makeResponse("risk-1", "Macroeconomic risks.", "AAPL 10-K p. 12"));
-    render(<LocaleProvider><SearchWorkspace selectedTicker="AAPL" selectedSection={null} isBackendConnected={true} onUseQuestion={vi.fn()} onOpenSource={onOpenSource} /></LocaleProvider>);
+    render(<LocaleProvider><SearchWorkspace selectedTicker="AAPL" selectedSection={null} isBackendConnected={true} onUseQuestion={vi.fn()} onOpenDocument={onOpenDocument} /></LocaleProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Run search" }));
     await screen.findByText("AAPL 10-K p. 12");
     fireEvent.click(screen.getByRole("button", { name: "Open document workspace" }));
-    expect(onOpenSource).toHaveBeenCalledWith(expect.objectContaining({ document_id: "AAPL:0001", ticker: "AAPL" }));
+    expect(onOpenDocument).toHaveBeenCalledWith(expect.objectContaining({ kind: "search", documentId: "AAPL:0001", returnView: "search" }));
   });
 
   test("does not let a late success mutate results after the submitted scope changes", async () => {

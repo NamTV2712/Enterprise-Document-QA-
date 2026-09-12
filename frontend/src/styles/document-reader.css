@@ -14,6 +14,7 @@
 .structured-reader__controls a svg { width: 1rem; height: 1rem; }
 .structured-reader__availability { justify-content: space-between; flex-wrap: wrap; border-left: 3px solid var(--accent-text); padding: .6rem .75rem; color: var(--text-secondary); background: color-mix(in srgb, var(--accent-text) 8%, transparent); }
 .structured-reader__find { flex-wrap: wrap; }
+.structured-reader__fallback-action { border: 1px solid var(--accent-text); border-radius: .65rem; background: var(--surface-2); color: var(--accent-text); padding: .55rem .75rem; font: inherit; font-weight: 700; cursor: pointer; }
 .structured-reader__find > svg { width: 1rem; }
 .structured-reader__find input { flex: 1 1 18rem; min-width: 0; }
 .structured-reader__find span { color: var(--text-secondary); }
@@ -63,5 +64,28 @@
 .document-workspace__metadata dl > div { display: grid; grid-template-columns: minmax(7rem, 12rem) minmax(0, 1fr); gap: .65rem; padding-bottom: .65rem; border-bottom: 1px solid var(--border-subtle); }
 .document-workspace__metadata dt { color: var(--text-secondary); font-size: .8rem; font-weight: 750; }
 .document-workspace__metadata dd { margin: 0; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .78rem; }
-.document-workspace--three-column .document-workspace__document .structured-reader__layout { grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr); }
+.document-workspace--wide-reading .document-workspace__document .structured-reader__layout { grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr); }
 @container (max-width: 720px) { .document-workspace__header { padding: .65rem .75rem; }.document-workspace__title-row h2 { font-size: .95rem; }.document-workspace__document .structured-reader { padding: .55rem; }.document-workspace__metadata dl > div { grid-template-columns: 1fr; gap: .2rem; } }
+
+/* V4-P01.2: table semantics are driven by the backend mode, never by visual
+   guesses in the browser. Keep wide source layouts locally scrollable. */
+.structured-reader__table-mode { margin: 0; padding: .35rem .6rem; color: var(--text-secondary); font-size: .82rem; line-height: 1.45; }
+.structured-reader__table--semantic .structured-reader__table-mode { border-left: 3px solid var(--accent-text); }
+.structured-reader__table--source_layout .structured-reader__table-mode { border-left: 3px solid var(--warning-text); }
+.structured-reader__table--unsupported .structured-reader__table-mode { border-left: 3px solid var(--danger-text); }
+.structured-reader__table-scroll { overflow-x: auto; max-width: 100%; overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
+.structured-reader__table table { width: max-content; min-width: 100%; table-layout: auto; }
+.structured-reader__table th, .structured-reader__table td { min-width: 4.25rem; white-space: normal; }
+.structured-reader__table .structured-reader__numeric-cell { min-width: 6.25rem; white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+.structured-reader__source-layout-text { max-width: 100%; margin: .65rem 0 0; padding: .75rem; overflow-x: auto; border: 1px solid var(--border-subtle); border-radius: .55rem; background: var(--surface-1); color: var(--text-primary); font: inherit; font-size: .86rem; line-height: 1.55; white-space: pre; }
+
+/* V4-P04.2: keep reader metadata legible at the default browser zoom. */
+.structured-reader__availability,
+.structured-reader__location,
+.structured-reader__limitation,
+.structured-reader__table-mode,
+.structured-reader__anchor-link {
+  font-size: var(--font-size-meta);
+  line-height: var(--line-height-readable);
+}
+.structured-reader__table--unsupported .structured-reader__fallback-action { margin-top: .65rem; }

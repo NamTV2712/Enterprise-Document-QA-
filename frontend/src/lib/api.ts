@@ -19,7 +19,6 @@ import {
   OriginalContent,
   OriginalManifest,
   ReaderManifest,
-  ReaderResolveResponse,
   EvidenceLocation,
   StructuredOutlineResponse,
   StructuredContentResponse,
@@ -256,23 +255,6 @@ export async function getReaderManifest(documentId: string, signal?: AbortSignal
     method: "GET", headers: { Accept: "application/json" }, cache: "no-store", signal,
   });
   if (!response.ok) await throwApiError(response, `Failed to fetch reader manifest: ${response.status}`);
-  return response.json();
-}
-
-export async function resolveReaderDocument(
-  documentId: string,
-  refresh = false,
-  signal?: AbortSignal,
-): Promise<ReaderResolveResponse> {
-  const baseUrl = getApiBaseUrl();
-  const response = await apiFetch(`${baseUrl}/documents/${encodeURIComponent(documentId)}/reader/resolve`, {
-    method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh }),
-    cache: "no-store",
-    signal,
-  });
-  if (!response.ok) await throwApiError(response, `Failed to resolve reader source: ${response.status}`);
   return response.json();
 }
 

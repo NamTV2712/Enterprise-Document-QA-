@@ -11,11 +11,12 @@ interface OriginalDocumentReaderProps {
   indexedSource?: Source;
   onBack: () => void;
   readerSession?: ReaderSessionController;
+  backLabel?: string;
 }
 
 const WINDOW_SIZE = 16_000;
 
-export function OriginalDocumentReader({ documentId, indexedSource, onBack, readerSession }: OriginalDocumentReaderProps) {
+export function OriginalDocumentReader({ documentId, indexedSource, onBack, readerSession, backLabel }: OriginalDocumentReaderProps) {
   const { locale } = useLocale();
   const vi = locale === "vi";
   const [manifest, setManifest] = useState<OriginalManifest | null>(null);
@@ -171,11 +172,11 @@ export function OriginalDocumentReader({ documentId, indexedSource, onBack, read
   };
 
   if (loadingManifest) {
-    return <section className="original-reader" aria-labelledby="original-reader-title"><div className="original-reader__header"><button type="button" onClick={onBack} className="original-reader__back"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{vi ? "Về indexed excerpt" : "Back to indexed excerpt"}</button><h2 id="original-reader-title">{vi ? "Original source" : "Original source"}</h2></div><p role="status" className="original-reader__status">{vi ? "Đang kiểm tra bản gốc…" : "Checking original source…"}</p></section>;
+    return <section className="original-reader" aria-labelledby="original-reader-title"><div className="original-reader__header"><button type="button" onClick={onBack} className="original-reader__back"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{backLabel ?? (vi ? "Về indexed excerpt" : "Back to indexed excerpt")}</button><h2 id="original-reader-title">{vi ? "Original source" : "Original source"}</h2></div><p role="status" className="original-reader__status">{vi ? "Đang kiểm tra bản gốc…" : "Checking original source…"}</p></section>;
   }
 
   if (error && !manifest) {
-    return <section className="original-reader" aria-labelledby="original-reader-title"><div className="original-reader__header"><button type="button" onClick={onBack} className="original-reader__back"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{vi ? "Về indexed excerpt" : "Back to indexed excerpt"}</button><h2 id="original-reader-title">{vi ? "Original source" : "Original source"}</h2></div><div className="original-reader__error" role="alert">{error}</div></section>;
+    return <section className="original-reader" aria-labelledby="original-reader-title"><div className="original-reader__header"><button type="button" onClick={onBack} className="original-reader__back"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{backLabel ?? (vi ? "Về indexed excerpt" : "Back to indexed excerpt")}</button><h2 id="original-reader-title">{vi ? "Original source" : "Original source"}</h2></div><div className="original-reader__error" role="alert">{error}</div></section>;
   }
 
   const availableSources = manifest?.sources ?? [];
@@ -184,7 +185,7 @@ export function OriginalDocumentReader({ documentId, indexedSource, onBack, read
     <section className="original-reader" aria-labelledby="original-reader-title">
       <div className="original-reader__header">
         <div>
-          <button type="button" onClick={onBack} className="original-reader__back"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{vi ? "Về indexed excerpt" : "Back to indexed excerpt"}</button>
+          <button type="button" onClick={onBack} className="original-reader__back"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{backLabel ?? (vi ? "Về indexed excerpt" : "Back to indexed excerpt")}</button>
           <p className="evidence-rail-eyebrow">{vi ? "Bản gốc an toàn" : "Safe original browsing"}</p>
           <h2 id="original-reader-title">Original source — normalized text</h2>
         </div>

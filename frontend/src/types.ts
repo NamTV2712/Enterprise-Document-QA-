@@ -52,6 +52,12 @@ export interface Source {
   /** Transient UI marker; never persisted in evidence collection storage. */
   stored_snapshot?: {
     chunk_id?: string | null;
+    document_revision?: string | null;
+    source_set_revision?: string | null;
+    representation?: "indexed_excerpt" | "structured_html" | "normalized_text";
+    coverage_status?: ReaderCoverageStatus;
+    location_status?: EvidenceLocation["status"];
+    snapshot_state?: "captured" | "stale" | "unknown";
   };
 }
 
@@ -81,7 +87,40 @@ export type SaveAnswerVersionStatus =
   | "saved"
   | "already_saved"
   | "failed"
-  | "volatile";
+  | "volatile"
+  | "pending"
+  | "persisted"
+  | "already_exists"
+  | "retryable"
+  | "cancelled";
+
+/** Shared local action state used by answer controls. */
+export type AnswerActionStatus =
+  | "idle"
+  | "pending"
+  | "persisted"
+  | "already_exists"
+  | "volatile"
+  | "failed"
+  | "retryable"
+  | "cancelled";
+
+export type AnswerActionKind = "bookmark" | "save_version" | "feedback" | "note";
+
+/** Exact answer/version target for local actions and late-result guards. */
+export interface AnswerTarget {
+  conversationId: string;
+  messageId: string;
+  variantId: string | null;
+}
+
+export interface AnswerActionState {
+  kind: AnswerActionKind;
+  target: AnswerTarget;
+  status: AnswerActionStatus;
+  warning: string | null;
+  updatedAt: number;
+}
 
 export type RetrievalPreset = "bm25" | "dense" | "hybrid" | "hybrid_rerank";
 
@@ -139,6 +178,39 @@ export interface DocumentRow {
   chunk_count: number;
   source_url: string | null;
 }
+
+export interface AnswerWorkspaceTarget {
+  kind: "answer";
+  selection: EvidenceSelection;
+  source: Source;
+}
+
+export interface CatalogWorkspaceTarget {
+  kind: "catalog";
+  documentId: string;
+  title?: string;
+  ticker?: string | null;
+  filingDate?: string | null;
+  reportDate?: string | null;
+  accessionNumber?: string | null;
+  sourceUrl?: string | null;
+  selectedSource?: Source;
+  initialTab?: "document" | "excerpt" | "metadata";
+  returnView: "documents";
+  returnFocusId: string;
+}
+
+export interface SearchWorkspaceTarget {
+  kind: "search";
+  documentId: string;
+  selectedSource?: Source;
+  initialTab?: "document" | "excerpt" | "metadata";
+  returnView: "search";
+  returnFocusId: string;
+}
+
+export type DocumentWorkspaceTarget = CatalogWorkspaceTarget | SearchWorkspaceTarget;
+export type WorkspaceTarget = AnswerWorkspaceTarget | CatalogWorkspaceTarget | SearchWorkspaceTarget;
 
 export interface DocumentChunk {
   chunk_id: string | null;
@@ -228,6 +300,8 @@ export interface ReaderFilingIdentity {
   reason_code: "verified" | "identity_unverified";
 }
 
+export type ReaderCoverageStatus = "complete" | "partial" | "unknown";
+
 export interface ReaderAvailability {
   kind: "normalized_text" | "structured" | "pdf";
   status: "available" | "partial" | "unavailable";
@@ -238,6 +312,9 @@ export interface ReaderAvailability {
     | "structured_representation_unavailable"
     | "pdf_representation_unavailable";
   reason: string | null;
+  coverage_status?: ReaderCoverageStatus;
+  coverage_reason?: string | null;
+  coverage_reason_code?: string | null;
 }
 
 export interface CanonicalSource {
@@ -265,21 +342,6 @@ export interface ReaderManifest {
   representations: ReaderAvailability[];
 }
 
-export interface ReaderAcquisition {
-  status: "not_needed" | "acquired" | "unavailable";
-  code: string;
-  message: string;
-  canonical_url: string | null;
-  raw_sha256: string | null;
-  bytes_received: number | null;
-  request_count: number;
-}
-
-export interface ReaderResolveResponse {
-  manifest: ReaderManifest;
-  acquisition: ReaderAcquisition;
-}
-
 export interface StructuredRun {
   text: string;
   emphasis: boolean;
@@ -293,7 +355,12 @@ export interface StructuredCell {
   rowspan: number;
   colspan: number;
   header: boolean;
+  cell_id?: string | null;
+  source_row?: number | null;
+  source_column?: number | null;
 }
+
+export type StructuredTableMode = "semantic" | "source_layout" | "unsupported";
 
 export interface StructuredBlock {
   block_id: string;
@@ -307,6 +374,11 @@ export interface StructuredBlock {
   units?: string | null;
   columns: string[];
   rows: StructuredCell[][];
+  table_mode?: StructuredTableMode | null;
+  table_adapter_version?: string | null;
+  table_reason?: string | null;
+  header_rows?: StructuredCell[][];
+  header_row_count?: number;
   continuation_index?: number | null;
   continuation_count?: number | null;
   source_text?: string;
@@ -328,6 +400,9 @@ export interface StructuredOutlineResponse {
   next_cursor: number | null;
   complete: boolean;
   limitations: string[];
+  coverage_status?: ReaderCoverageStatus;
+  coverage_reason?: string | null;
+  coverage_reason_code?: string | null;
 }
 
 export interface StructuredContentResponse {
@@ -340,6 +415,9 @@ export interface StructuredContentResponse {
   next_cursor: number | null;
   complete: boolean;
   limitations: string[];
+  coverage_status?: ReaderCoverageStatus;
+  coverage_reason?: string | null;
+  coverage_reason_code?: string | null;
 }
 
 export interface StructuredSearchMatch {
@@ -360,6 +438,9 @@ export interface StructuredSearchResponse {
   total: number;
   next_cursor: number | null;
   complete: boolean;
+  coverage_status?: ReaderCoverageStatus;
+  coverage_reason?: string | null;
+  coverage_reason_code?: string | null;
 }
 
 export interface EvidenceRange {
@@ -511,6 +592,10 @@ export type FeedbackCategory =
 export interface MessageFeedback {
   rating: FeedbackRating;
   category?: FeedbackCategory;
+  /** Optional answer-version binding; absent/null means the original answer. */
+  variantId?: string | null;
+  /** Required for the `other` category; kept as bounded local text. */
+  otherText?: string;
   at: number;
 }
 

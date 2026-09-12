@@ -1,9 +1,10 @@
 import { ArrowLeft, ChevronLeft, ChevronRight, Download, FileText, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getReaderContent, getReaderLocation, getReaderManifest, getReaderOutline, getReaderSectionExportUrl, searchReader } from "../lib/api";
-import type { CanonicalSource, EvidenceLocation, EvidenceRange, ReaderManifest, Source, StructuredBlock, StructuredSearchMatch } from "../types";
+import type { CanonicalSource, EvidenceLocation, EvidenceRange, ReaderCoverageStatus, ReaderManifest, Source, StructuredBlock, StructuredCell, StructuredSearchMatch, StructuredTableMode } from "../types";
 import { describeRequestError } from "../lib/requestError";
 import { useLocale } from "../lib/i18n";
+import { formatCompanyLabel } from "../lib/displayMetadata";
 import type { ReaderSessionController } from "../hooks/useReaderSession";
 import "../styles/document-reader.css";
 import type { ReactNode } from "react";
@@ -14,6 +15,7 @@ interface StructuredDocumentReaderProps {
   onBack: () => void;
   readerSession?: ReaderSessionController;
   embedded?: boolean;
+  onOpenNormalized?: () => void;
 }
 
 const CONTENT_LIMIT = 64;
@@ -33,7 +35,29 @@ function EvidenceText({ text, range }: { text: string; range?: EvidenceRange }) 
   return <>{text.slice(0, start)}<mark className="structured-reader__evidence-match">{text.slice(start, end)}</mark>{text.slice(end)}</>;
 }
 
-function Block({ block, onAnchor, evidenceRange }: { block: StructuredBlock; onAnchor: (id: string) => void; evidenceRange?: EvidenceRange }) {
+function isNumericCell(text: string): boolean {
+  return /^\s*(?:[$€£¥]\s*)?\(?[-+]?\d[\d,]*(?:\.\d+)?%?\)?\s*$/.test(text);
+}
+
+function renderTableRow(row: StructuredCell[], rowIndex: number, mode: StructuredTableMode) {
+  return <tr key={`row-${rowIndex}`}>{row.map((cell, cellIndex) => {
+    const Cell = mode === "semantic" && cell.header ? "th" : "td";
+    const numeric = isNumericCell(cell.text);
+    return <Cell
+      key={cell.cell_id ?? `${rowIndex}-${cellIndex}`}
+      scope={Cell === "th" ? (rowIndex === 0 ? "col" : "row") : undefined}
+      rowSpan={cell.rowspan}
+      colSpan={cell.colspan}
+      className={numeric ? "structured-reader__numeric-cell" : undefined}
+    >{cell.text}</Cell>;
+  })}</tr>;
+}
+
+function SourceLayoutText({ rows }: { rows: StructuredCell[][] }) {
+  return <pre className="structured-reader__source-layout-text">{rows.map((row) => row.map((cell) => cell.text).join("\t")).join("\n")}</pre>;
+}
+
+function Block({ block, onAnchor, evidenceRange, onOpenNormalized, vi }: { block: StructuredBlock; onAnchor: (id: string) => void; evidenceRange?: EvidenceRange; onOpenNormalized?: () => void; vi: boolean }) {
   if (block.kind === "heading") {
     const Heading = `h${block.level ?? 2}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
     return <Heading id={block.anchor ?? block.block_id} data-reader-block={block.block_id}><EvidenceText text={block.text} range={evidenceRange} /></Heading>;
@@ -51,25 +75,37 @@ function Block({ block, onAnchor, evidenceRange }: { block: StructuredBlock; onA
   if (block.kind === "list") return <ul data-reader-block={block.block_id}>{block.items.map((item) => <li key={item}><EvidenceText text={item} range={evidenceRange} /></li>)}</ul>;
   if (block.kind === "separator") return <hr data-reader-block={block.block_id} />;
   if (block.kind === "unsupported") return <aside className="structured-reader__unsupported" role="note" data-reader-block={block.block_id}>{block.text}</aside>;
+  const mode: StructuredTableMode = block.table_mode ?? "source_layout";
+  const headerRows = block.header_rows ?? [];
+  const bodyRows = mode === "semantic" && headerRows.length > 0 ? block.rows.slice(block.header_row_count ?? headerRows.length) : block.rows;
+  const label = block.caption || (vi ? "Bảng nguồn" : "Source table");
   return (
-    <figure className={`structured-reader__table ${evidenceRange ? "is-evidence" : ""}`} data-reader-block={block.block_id}>
+    <figure className={`structured-reader__table structured-reader__table--${mode} ${evidenceRange ? "is-evidence" : ""}`} data-reader-block={block.block_id}>
       {block.caption && <figcaption>{block.caption}</figcaption>}
+      <p className="structured-reader__table-mode" role="status">
+        {mode === "semantic"
+          ? (vi ? "Bảng có tiêu đề cấu trúc được xác minh." : "Semantic headers verified from the source.")
+          : mode === "source_layout"
+            ? (vi ? "Bố cục nguồn: giữ nguyên thứ tự ô, không suy diễn tiêu đề tài chính." : "Source layout: cell order is preserved; financial headers are not inferred.")
+            : (vi ? "Không thể xác minh cấu trúc bảng; dùng văn bản chuẩn hóa." : "Table structure could not be verified; use normalized text.")}
+      </p>
       {block.continuation_index && block.continuation_count && block.continuation_count > 1 && <p className="structured-reader__continuation">Continuation {block.continuation_index} of {block.continuation_count}</p>}
-      <div className="structured-reader__table-scroll" tabIndex={0} role="region" aria-label={block.caption || "Financial table"}>
+      {mode === "unsupported" ? <>
+        <aside className="structured-reader__unsupported" role="note">{block.table_reason || (vi ? "Bảng không được hỗ trợ ở chế độ có cấu trúc." : "This table is not supported in the structured representation.")}</aside>
+        {block.rows.length > 0 && <SourceLayoutText rows={block.rows} />}
+        {onOpenNormalized && <button type="button" className="structured-reader__fallback-action" onClick={onOpenNormalized}>{vi ? "Mở văn bản chuẩn hóa" : "Open normalized text"}</button>}
+      </> : <div className="structured-reader__table-scroll" tabIndex={0} role="region" aria-label={label}>
         <table>
-          <thead><tr>{block.columns.map((column) => <th scope="col" key={column}>{column}</th>)}</tr></thead>
-          <tbody>{block.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, cellIndex) => {
-            const Cell = cell.header ? "th" : "td";
-            return <Cell key={`${rowIndex}-${cellIndex}`} scope={cell.header ? "row" : undefined} rowSpan={cell.rowspan} colSpan={cell.colspan}>{cell.text}</Cell>;
-          })}</tr>)}</tbody>
+          {mode === "semantic" && headerRows.length > 0 && <thead>{headerRows.map((row, rowIndex) => renderTableRow(row, rowIndex, mode))}</thead>}
+          <tbody>{bodyRows.map((row, rowIndex) => renderTableRow(row, rowIndex + (mode === "semantic" ? headerRows.length : 0), mode))}</tbody>
         </table>
-      </div>
-      <button type="button" className="structured-reader__anchor-link" onClick={() => onAnchor(block.block_id)}>Keep this table in view</button>
+      </div>}
+      <button type="button" className="structured-reader__anchor-link" onClick={() => onAnchor(block.block_id)}>{vi ? "Đặt bảng vào tiêu điểm" : "Focus table"}</button>
     </figure>
   );
 }
 
-export function StructuredDocumentReader({ documentId, indexedSource, onBack, readerSession, embedded = false }: StructuredDocumentReaderProps) {
+export function StructuredDocumentReader({ documentId, indexedSource, onBack, readerSession, embedded = false, onOpenNormalized }: StructuredDocumentReaderProps) {
   const { locale } = useLocale();
   const vi = locale === "vi";
   const [manifest, setManifest] = useState<ReaderManifest | null>(null);
@@ -82,6 +118,9 @@ export function StructuredDocumentReader({ documentId, indexedSource, onBack, re
   const [loadingContent, setLoadingContent] = useState(false);
   const [findQuery, setFindQuery] = useState("");
   const [findStatus, setFindStatus] = useState<string | null>(null);
+  const [showNormalizedFallback, setShowNormalizedFallback] = useState(false);
+  const [coverageStatus, setCoverageStatus] = useState<ReaderCoverageStatus>("unknown");
+  const [coverageReason, setCoverageReason] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [textScale, setTextScale] = useState(100);
   const [wide, setWide] = useState(false);
@@ -110,12 +149,17 @@ export function StructuredDocumentReader({ documentId, indexedSource, onBack, re
     setLoadingManifest(true);
     setError(null);
     setManifest(null);
+    setCoverageStatus("unknown");
+    setCoverageReason(null);
     setSourceId("");
     setBlocks([]);
     setOutline([]);
     void getReaderManifest(documentId, controller.signal).then((response) => {
       if (requestId !== manifestRequestId.current || !isCurrentSession()) return;
       setManifest(response);
+      const structuredRepresentation = response.representations.find((representation) => representation.kind === "structured");
+      setCoverageStatus(structuredRepresentation?.coverage_status ?? "unknown");
+      setCoverageReason(structuredRepresentation?.coverage_reason ?? null);
       setSourceId(response.sources.find((source) => source.status === "available")?.source_document_id ?? "");
     }).catch((reason) => {
       if (requestId !== manifestRequestId.current || !isCurrentSession() || isAbortError(reason)) return;
@@ -132,9 +176,13 @@ export function StructuredDocumentReader({ documentId, indexedSource, onBack, re
     source_set_revision: manifest.source_set_revision,
     document_revision: selectedSource.document_revision ?? "",
   } : null, [manifest, selectedSource]);
+  const structuredRepresentation = useMemo(
+    () => manifest?.representations.find((representation) => representation.kind === "structured") ?? null,
+    [manifest],
+  );
 
   useEffect(() => {
-    if (!sourceParams?.document_revision || !selectedSource || selectedSource.status !== "available") return;
+    if (!sourceParams?.document_revision || !selectedSource || selectedSource.status !== "available" || structuredRepresentation?.status === "unavailable") return;
     const controller = new AbortController();
     const requestId = ++outlineRequestId.current;
     void getReaderOutline(documentId, { ...sourceParams, limit: 50 }, controller.signal).then((response) => {
@@ -143,13 +191,14 @@ export function StructuredDocumentReader({ documentId, indexedSource, onBack, re
       if (requestId === outlineRequestId.current && isCurrentSession() && !isAbortError(reason)) setOutline([]);
     });
     return () => controller.abort();
-  }, [documentId, isCurrentSession, selectedSource, sourceParams]);
+  }, [documentId, isCurrentSession, selectedSource, sourceParams, structuredRepresentation]);
 
   useEffect(() => {
     setCursor(0);
     setNextCursor(null);
     setBlocks([]);
     setFindStatus(null);
+    setShowNormalizedFallback(false);
   }, [sourceId]);
 
   useEffect(() => {
@@ -184,7 +233,7 @@ export function StructuredDocumentReader({ documentId, indexedSource, onBack, re
   }, [documentId, indexedSource?.chunk_id, indexedSource?.chunk_text_hash, isCurrentSession, sourceId, sourceParams]);
 
   useEffect(() => {
-    if (!sourceParams?.document_revision || !selectedSource || selectedSource.status !== "available") {
+    if (!sourceParams?.document_revision || !selectedSource || selectedSource.status !== "available" || structuredRepresentation?.status === "unavailable") {
       setLoadingContent(false);
       return;
     }
@@ -196,6 +245,8 @@ export function StructuredDocumentReader({ documentId, indexedSource, onBack, re
       if (requestId !== contentRequestId.current || !isCurrentSession()) return;
       setBlocks(response.blocks);
       setNextCursor(response.next_cursor);
+      if (response.coverage_status) setCoverageStatus(response.coverage_status);
+      if (response.coverage_reason !== undefined) setCoverageReason(response.coverage_reason ?? null);
     }).catch((reason) => {
       if (requestId !== contentRequestId.current || !isCurrentSession() || isAbortError(reason)) return;
       setError(describeRequestError(reason, vi ? "Không thể tải nội dung có cấu trúc." : "Could not load structured document content.", vi ? "vi" : "en").message);
@@ -203,7 +254,7 @@ export function StructuredDocumentReader({ documentId, indexedSource, onBack, re
       if (requestId === contentRequestId.current && isCurrentSession()) setLoadingContent(false);
     });
     return () => controller.abort();
-  }, [cursor, documentId, isCurrentSession, selectedSource, sourceParams, vi]);
+  }, [cursor, documentId, isCurrentSession, selectedSource, sourceParams, structuredRepresentation, vi]);
 
   useEffect(() => {
     if (!focusBlockId) return;
@@ -220,11 +271,16 @@ export function StructuredDocumentReader({ documentId, indexedSource, onBack, re
     }
     const controller = new AbortController();
     setFindStatus(null);
+    setShowNormalizedFallback(false);
     try {
       const response = await searchReader(documentId, { ...sourceParams, q: query, limit: 50 }, controller.signal);
+      if (response.coverage_status) setCoverageStatus(response.coverage_status);
+      if (response.coverage_reason !== undefined) setCoverageReason(response.coverage_reason ?? null);
       const match: StructuredSearchMatch | undefined = response.matches[0];
       if (!match) {
-        setFindStatus(vi ? "Không tìm thấy trong tài liệu này." : "No matches in this document.");
+        const incomplete = (response.coverage_status ?? coverageStatus) !== "complete";
+        setFindStatus(incomplete ? (vi ? "Không tìm thấy trong chế độ xem có cấu trúc này." : "No matches in this structured view.") : (vi ? "Không tìm thấy trong tài liệu này." : "No matches in this document."));
+        setShowNormalizedFallback(incomplete);
         return;
       }
       setFocusBlockId(match.block_id);
@@ -234,36 +290,42 @@ export function StructuredDocumentReader({ documentId, indexedSource, onBack, re
     }
   };
 
-  if (loadingManifest) return <section className="structured-reader" aria-labelledby="structured-reader-title">{!embedded && <ReaderHeader onBack={onBack} vi={vi} />}<p className="structured-reader__status" role="status">{vi ? "Đang kiểm tra tài liệu…" : "Checking document…"}</p></section>;
-  if (error && !manifest) return <section className="structured-reader" aria-labelledby="structured-reader-title">{!embedded && <ReaderHeader onBack={onBack} vi={vi} />}<div className="structured-reader__error" role="alert">{error}</div></section>;
+  if (loadingManifest) return <section className="structured-reader" aria-labelledby={!embedded ? "structured-reader-title" : undefined} aria-label={embedded ? (vi ? "Tài liệu có cấu trúc" : "Structured document") : undefined}>{!embedded && <ReaderHeader onBack={onBack} vi={vi} />}<p className="structured-reader__status" role="status">{vi ? "Đang kiểm tra tài liệu…" : "Checking document…"}</p></section>;
+  if (error && !manifest) return <section className="structured-reader" aria-labelledby={!embedded ? "structured-reader-title" : undefined} aria-label={embedded ? (vi ? "Tài liệu có cấu trúc" : "Structured document") : undefined}>{!embedded && <ReaderHeader onBack={onBack} vi={vi} />}<div className="structured-reader__error" role="alert">{error}</div></section>;
 
-  const available = Boolean(selectedSource && selectedSource.status === "available" && sourceParams?.document_revision);
+  const available = Boolean(selectedSource && selectedSource.status === "available" && sourceParams?.document_revision && structuredRepresentation?.status !== "unavailable");
   const identity = manifest?.identity;
   const primaryUrl = manifest?.sources.find((source) => source.role === "primary_filing")?.canonical_url;
   const sourceSet = manifest?.sources ?? [];
+  const coverageLabel = coverageStatus === "complete"
+    ? (vi ? "Đã xác minh phạm vi văn bản của chế độ xem có cấu trúc" : "Structured view coverage verified")
+    : coverageStatus === "partial"
+      ? (vi ? "Chế độ xem có cấu trúc chỉ bao phủ một phần; hãy tìm trong văn bản chuẩn hóa để có đầy đủ văn bản cục bộ." : "Structured view has partial coverage; search normalized text for complete local text.")
+      : (vi ? "Chưa xác minh phạm vi của chế độ xem có cấu trúc; hãy tìm trong văn bản chuẩn hóa." : "Structured view coverage is unknown; search normalized text for complete local text.");
   return (
-    <section className={`structured-reader ${wide ? "is-wide" : ""}`} aria-labelledby="structured-reader-title">
+    <section className={`structured-reader ${wide ? "is-wide" : ""}`} aria-labelledby={!embedded ? "structured-reader-title" : undefined} aria-label={embedded ? (vi ? "Tài liệu có cấu trúc" : "Structured document") : undefined}>
       {!embedded && <ReaderHeader onBack={onBack} vi={vi} />}
-      <header className="structured-reader__identity">
+      {!embedded && <header className="structured-reader__identity">
         <div>
           <p className="evidence-rail-eyebrow">{vi ? "Tài liệu có cấu trúc" : "Structured document"}</p>
-          <h2 id="structured-reader-title">{identity?.ticker ?? documentId}</h2>
+          <h2 id="structured-reader-title">{identity?.ticker ? formatCompanyLabel(identity.ticker) : documentId}</h2>
           <p>{identity?.accession_number ?? (vi ? "Chưa xác minh accession" : "Accession not verified")} {identity?.filing_date ? ` · ${identity.filing_date}` : ""}</p>
         </div>
         <FileText aria-hidden="true" />
-      </header>
+      </header>}
       <div className="structured-reader__toolbar" aria-label={vi ? "Công cụ đọc tài liệu" : "Document reading tools"}>
         <label><span>{vi ? "Nguồn" : "Source"}</span><select value={sourceId} onChange={(event) => setSourceId(event.target.value)} aria-label={vi ? "Chọn nguồn tài liệu" : "Select document source"}>{sourceSet.map((source) => <option key={source.source_document_id} value={source.source_document_id} disabled={source.status !== "available"}><SourceLabel source={source} /></option>)}</select></label>
         <div className="structured-reader__controls"><button type="button" onClick={() => setTextScale((value) => Math.max(90, value - 10))} disabled={textScale <= 90} aria-label={vi ? "Giảm cỡ chữ" : "Decrease text size"}>A−</button><span>{textScale}%</span><button type="button" onClick={() => setTextScale((value) => Math.min(130, value + 10))} disabled={textScale >= 130} aria-label={vi ? "Tăng cỡ chữ" : "Increase text size"}>A+</button><button type="button" onClick={() => setWide((value) => !value)} aria-pressed={wide}>{wide ? (vi ? "Độ rộng chuẩn" : "Standard width") : (vi ? "Mở rộng" : "Widen")}</button>{primaryUrl && <a href={primaryUrl} target="_blank" rel="noreferrer">{vi ? "Mở SEC" : "Open SEC"}</a>}<a href={sourceParams ? getReaderSectionExportUrl(documentId, { ...sourceParams, format: "html" }) : undefined} download>{<Download aria-hidden="true" />}{vi ? "Xuất mục đọc" : "Export reading"}</a></div>
       </div>
-      <div className="structured-reader__availability" role="status"><span>{available ? (vi ? "Nguồn HTML có cấu trúc sẵn sàng" : "Structured HTML source ready") : (vi ? "Nguồn đầy đủ chưa khả dụng" : "Full source unavailable")}</span><span>{vi ? "PDF chưa khả dụng trong corpus hiện tại" : "PDF is not available in the current corpus"}</span></div>
+      <div className="structured-reader__availability" role="status"><span>{available ? (vi ? "Nguồn HTML có cấu trúc sẵn sàng" : "Structured HTML source ready") : (vi ? "Nguồn đầy đủ chưa khả dụng" : "Full source unavailable")}</span><span>{coverageLabel}</span><span>{vi ? "PDF chưa khả dụng trong corpus hiện tại" : "PDF is not available in the current corpus"}</span></div>
       {!available ? <div className="structured-reader__fallback" role="status">{vi ? "Bản đọc có cấu trúc chưa khả dụng; indexed excerpt vẫn được giữ nguyên." : "The structured document is unavailable; the indexed excerpt remains available."}</div> : <>
-        <div className="structured-reader__find"><Search aria-hidden="true" /><label className="sr-only" htmlFor="structured-reader-find">{vi ? "Tìm trong tài liệu" : "Find in document"}</label><input id="structured-reader-find" value={findQuery} onChange={(event) => setFindQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void runFind(); }} placeholder={vi ? "Tìm trong tài liệu…" : "Find in document…"} maxLength={200} /><button type="button" onClick={() => void runFind()}>{vi ? "Tìm" : "Find"}</button>{findStatus && <span role="status">{findStatus}</span>}</div>
+        <div className="structured-reader__find"><Search aria-hidden="true" /><label className="sr-only" htmlFor="structured-reader-find">{vi ? "Tìm trong tài liệu" : "Find in document"}</label><input id="structured-reader-find" value={findQuery} onChange={(event) => setFindQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void runFind(); }} placeholder={vi ? "Tìm trong tài liệu…" : "Find in document…"} maxLength={200} /><button type="button" onClick={() => void runFind()}>{vi ? "Tìm" : "Find"}</button>{findStatus && <span role="status">{findStatus}</span>}{showNormalizedFallback && onOpenNormalized && <button type="button" className="structured-reader__fallback-action" onClick={onOpenNormalized}>{vi ? "Tìm trong văn bản chuẩn hóa" : "Search normalized text"}</button>}</div>
         {locationError && <p className="structured-reader__limitation" role="status">{locationError}</p>}
+        {coverageReason && coverageStatus !== "complete" && <p className="structured-reader__limitation" role="status">{coverageReason}</p>}
         {location && <p className={`structured-reader__location structured-reader__location--${location.status}`} role="status">{location.status === "exact" ? (vi ? "Evidence đã được xác minh trong tài liệu có cấu trúc." : "Evidence correspondence verified in the structured document.") : location.reason}</p>}
         <div className="structured-reader__layout">
           <nav className="structured-reader__outline" aria-label={vi ? "Mục lục tài liệu" : "Document outline"}><h3>{vi ? "Mục lục" : "Outline"}</h3>{outline.length === 0 ? <p>{vi ? "Không phát hiện tiêu đề." : "No source headings detected."}</p> : outline.map((item) => <button type="button" key={item.block_id} onClick={() => { manualNavigationRef.current = true; setFocusBlockId(item.block_id); if (!blocks.some((block) => block.block_id === item.block_id)) setFindStatus(vi ? "Tiếp tục đọc để tải mục này." : "Continue reading to load this section."); }}>{item.label}</button>)}</nav>
-          <article className="structured-reader__canvas" ref={contentRef} data-original-window style={{ fontSize: `${textScale / 100}em` }} aria-busy={loadingContent}>{loadingContent && <p role="status">{vi ? "Đang tải nội dung…" : "Loading document content…"}</p>}{blocks.map((block) => <Block key={block.block_id} block={block} evidenceRange={location?.status === "exact" ? location.ranges.find((range) => range.block_id === block.block_id) : undefined} onAnchor={setFocusBlockId} />)}{manifest?.reason && <p className="structured-reader__limitation">{manifest.reason}</p>}{nextCursor !== null && <button type="button" className="structured-reader__continue" onClick={() => { manualNavigationRef.current = true; setCursor(nextCursor); }} disabled={loadingContent}>{vi ? "Tiếp tục đọc" : "Continue reading"}<ChevronRight aria-hidden="true" /></button>}{cursor > 0 && <button type="button" className="structured-reader__previous" onClick={() => { manualNavigationRef.current = true; setCursor(Math.max(0, cursor - CONTENT_LIMIT)); }} disabled={loadingContent}><ChevronLeft aria-hidden="true" />{vi ? "Về phần trước" : "Previous section"}</button>}</article>
+          <article className="structured-reader__canvas" ref={contentRef} data-original-window style={{ fontSize: `${textScale / 100}em` }} aria-busy={loadingContent}>{loadingContent && <p role="status">{vi ? "Đang tải nội dung…" : "Loading document content…"}</p>}{blocks.map((block) => <Block key={block.block_id} block={block} evidenceRange={location?.status === "exact" ? location.ranges.find((range) => range.block_id === block.block_id) : undefined} onAnchor={setFocusBlockId} onOpenNormalized={onOpenNormalized} vi={vi} />)}{manifest?.reason && <p className="structured-reader__limitation">{manifest.reason}</p>}{nextCursor !== null && <button type="button" className="structured-reader__continue" onClick={() => { manualNavigationRef.current = true; setCursor(nextCursor); }} disabled={loadingContent}>{vi ? "Tiếp tục đọc" : "Continue reading"}<ChevronRight aria-hidden="true" /></button>}{cursor > 0 && <button type="button" className="structured-reader__previous" onClick={() => { manualNavigationRef.current = true; setCursor(Math.max(0, cursor - CONTENT_LIMIT)); }} disabled={loadingContent}><ChevronLeft aria-hidden="true" />{vi ? "Về phần trước" : "Previous section"}</button>}</article>
         </div>
         {manifest?.representations.filter((representation) => representation.status !== "available").map((representation) => <p key={representation.kind} className="structured-reader__limitation">{representation.reason}</p>)}
       </>}

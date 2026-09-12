@@ -36,4 +36,19 @@ describe("DocumentWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close document workspace" }));
     expect(onBack).toHaveBeenCalledTimes(1);
   });
+
+  test("does not expose answer-inspector chrome for a direct catalog entry", () => {
+    const props = {
+      documentId: "AAPL:fixture",
+      indexedSource: { citation: "AAPL 10-K", document_id: "AAPL:fixture", text_preview: "Company background." },
+      indexedExcerpt: <p>Company background.</p>,
+      metadata: <dl><div><dt>Document ID</dt><dd>AAPL:fixture</dd></div></dl>,
+      onBack: vi.fn(),
+      origin: "catalog" as const,
+    };
+    render(<LocaleProvider><DocumentWorkspace {...props} /></LocaleProvider>);
+
+    expect(screen.queryByRole("button", { name: "Back to inspector" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Answer origin")).not.toBeInTheDocument();
+  });
 });

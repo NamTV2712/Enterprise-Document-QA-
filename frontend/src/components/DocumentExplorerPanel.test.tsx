@@ -49,21 +49,23 @@ describe("DocumentExplorerPanel", () => {
 
   test("loads filings and opens read-only source excerpts", async () => {
     render(<LocaleProvider><DocumentExplorerPanel tickers={["AAPL"]} sections={["financial_table"]} /></LocaleProvider>);
-    expect(await screen.findByText("AAPL · 2024-11-01")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /AAPL · 2024-11-01/i }));
+    expect(await screen.findByText("Apple Inc. (AAPL) · 2024-11-01")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Apple Inc\. \(AAPL\) · 2024-11-01/i }));
     await waitFor(() => expect(getChunksMock).toHaveBeenCalledWith("AAPL:0001", expect.any(Object), expect.any(AbortSignal)));
     expect(await screen.findByText("Revenue was $100B.")).toBeInTheDocument();
   });
 
   test("opens the selected filing in the document workspace with stable identity", async () => {
-    const onOpenSource = vi.fn();
-    render(<LocaleProvider><DocumentExplorerPanel tickers={["AAPL"]} sections={["financial_table"]} onOpenSource={onOpenSource} /></LocaleProvider>);
-    fireEvent.click(await screen.findByRole("button", { name: /AAPL · 2024-11-01/i }));
+    const onOpenDocument = vi.fn();
+    render(<LocaleProvider><DocumentExplorerPanel tickers={["AAPL"]} sections={["financial_table"]} onOpenDocument={onOpenDocument} /></LocaleProvider>);
+    fireEvent.click(await screen.findByRole("button", { name: /Apple Inc\. \(AAPL\) · 2024-11-01/i }));
     fireEvent.click(await screen.findByRole("button", { name: "Open document workspace" }));
-    expect(onOpenSource).toHaveBeenCalledWith(expect.objectContaining({
-      document_id: "AAPL:0001",
+    expect(onOpenDocument).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "catalog",
+      documentId: "AAPL:0001",
       ticker: "AAPL",
-      filing_date: "2024-11-01",
+      filingDate: "2024-11-01",
+      returnView: "documents",
     }));
   });
 
@@ -84,6 +86,6 @@ describe("DocumentExplorerPanel", () => {
     expect(screen.queryByText("No documents")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    expect(await screen.findByText("AAPL · 2024-11-01")).toBeInTheDocument();
+    expect(await screen.findByText("Apple Inc. (AAPL) · 2024-11-01")).toBeInTheDocument();
   });
 });

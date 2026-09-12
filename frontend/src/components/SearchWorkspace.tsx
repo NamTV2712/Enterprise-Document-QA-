@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, FileSearch, Search, ShieldCheck } from "lucide-react";
 import { inspectRetrieval } from "../lib/api";
-import type { RetrievalCandidate, RetrievalPreset, RetrievalTrace, Source } from "../types";
+import type { RetrievalCandidate, RetrievalPreset, RetrievalTrace, SearchWorkspaceTarget, Source } from "../types";
 import { useLocale } from "../lib/i18n";
 import { describeRequestError } from "../lib/requestError";
 import { getWorkspaceNavItem } from "../lib/workspace";
 import { getSemanticIcon } from "../lib/semanticIcons";
+import { formatCompanyLabel } from "../lib/displayMetadata";
 
 interface SearchWorkspaceProps {
   selectedTicker: string | null;
   selectedSection: string | null;
   isBackendConnected: boolean | null;
   onUseQuestion: (question: string, scope?: { ticker: string | null; section: string | null }) => void;
+  onOpenDocument?: (target: SearchWorkspaceTarget) => void;
   onOpenSource?: (source: Source) => void;
 }
 
@@ -34,7 +36,11 @@ function score(candidate: RetrievalCandidate, preset: RetrievalPreset): string {
   return typeof value === "number" ? value.toFixed(3) : "—";
 }
 
-export function SearchWorkspace({ selectedTicker, selectedSection, isBackendConnected, onUseQuestion, onOpenSource }: SearchWorkspaceProps) {
+function focusId(chunkId: string): string {
+  return `search-document-workspace-${chunkId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
+export function SearchWorkspace({ selectedTicker, selectedSection, isBackendConnected, onUseQuestion, onOpenDocument, onOpenSource }: SearchWorkspaceProps) {
   const { locale, t } = useLocale();
   const vi = locale === "vi";
   const ToolIcon = getSemanticIcon(WORKSPACE_META.icon);
@@ -104,7 +110,7 @@ export function SearchWorkspace({ selectedTicker, selectedSection, isBackendConn
   };
 
   const submittedScopeLabel = submittedScope
-    ? `${submittedScope.ticker ?? (vi ? "Tất cả công ty" : "All companies")} · ${submittedScope.section ?? (vi ? "Tất cả mục" : "All sections")}`
+    ? `${submittedScope.ticker ? formatCompanyLabel(submittedScope.ticker) : (vi ? "Tất cả công ty" : "All companies")} · ${submittedScope.section ?? (vi ? "Tất cả mục" : "All sections")}`
     : null;
 
   return (
@@ -129,7 +135,7 @@ export function SearchWorkspace({ selectedTicker, selectedSection, isBackendConn
 
       <div className="workspace-filter-line">
         <span>{vi ? "Phạm vi" : "Scope"}</span>
-        <span className="workspace-token">{selectedTicker ?? (vi ? "Tất cả công ty" : "All companies")}</span>
+        <span className="workspace-token">{selectedTicker ? formatCompanyLabel(selectedTicker) : (vi ? "Tất cả công ty" : "All companies")}</span>
         <span className="workspace-token">{selectedSection ?? (vi ? "Tất cả mục" : "All sections")}</span>
         <button type="button" onClick={() => onUseQuestion(query, { ticker: selectedTicker, section: selectedSection })} className="workspace-link-button">{vi ? "Dùng trong Research" : "Use in Research"}<ArrowRight className="h-3.5 w-3.5" /></button>
       </div>
@@ -155,7 +161,7 @@ export function SearchWorkspace({ selectedTicker, selectedSection, isBackendConn
                 {items.map((candidate) => (
                   <article key={candidate.chunk_id} className={`search-result ${candidate.selected ? "is-selected" : ""}`}>
                     <div className="search-result__rank">{candidate.final_rank ?? "—"}</div>
-                    <div className="min-w-0"><div className="search-result__title"><span>{candidate.citation}</span><span className="search-result__score">{selectedGroup ? `${vi ? "Điểm cuối" : "Final score"}: ${score(candidate, trace.preset)}` : (vi ? "Không có hạng cuối" : "No final rank")}</span></div><p>{candidate.text_preview}</p><div className="search-result__meta"><span>{candidate.ticker ?? "SEC"}</span><span>{candidate.section ?? (vi ? "Không rõ mục" : "Unknown section")}</span><span>{vi ? "Hạng fusion" : "Fusion rank"}: {candidate.fusion_rank ?? "—"}</span><code>{candidate.chunk_id}</code></div><details><summary>{vi ? "Điểm các giai đoạn" : "Stage scores"}</summary><div className="search-result__meta"><span>BM25 {candidate.bm25_score ?? "—"} ({candidate.bm25_rank ?? "—"})</span><span>Dense {candidate.dense_score ?? "—"} ({candidate.dense_rank ?? "—"})</span><span>RRF {candidate.rrf_score ?? "—"}</span><span>Reranker {candidate.cross_encoder_score ?? "—"}</span></div></details><div className="flex flex-wrap items-center gap-3">{onOpenSource && <button type="button" className="search-result__open" onClick={() => onOpenSource({ citation: candidate.citation, text_preview: candidate.text_preview, chunk_id: candidate.chunk_id, document_id: candidate.document_id, ticker: candidate.ticker, section: candidate.section, filing_date: candidate.filing_date, score: score(candidate, trace.preset) === "—" ? null : Number(score(candidate, trace.preset)), score_kind: trace.preset === "hybrid_rerank" ? "cross_encoder" : trace.preset === "hybrid" ? "rrf" : "retrieval" })}>{vi ? "Mở đoạn indexed" : "Open indexed excerpt"}</button>}{onOpenSource && candidate.document_id && <button type="button" className="search-result__open" onClick={() => onOpenSource({ citation: candidate.citation, text_preview: "", document_id: candidate.document_id, ticker: candidate.ticker, section: candidate.section, filing_date: candidate.filing_date })}>{vi ? "Mở không gian tài liệu" : "Open document workspace"}</button>}</div></div>
+                  <div className="min-w-0"><div className="search-result__title"><span>{candidate.citation}</span><span className="search-result__score">{selectedGroup ? `${vi ? "Điểm cuối" : "Final score"}: ${score(candidate, trace.preset)}` : (vi ? "Không có hạng cuối" : "No final rank")}</span></div><p>{candidate.text_preview}</p><div className="search-result__meta"><span>{candidate.ticker ? formatCompanyLabel(candidate.ticker) : "SEC"}</span><span>{candidate.section ?? (vi ? "Không rõ mục" : "Unknown section")}</span><span>{vi ? "Hạng fusion" : "Fusion rank"}: {candidate.fusion_rank ?? "—"}</span><code>{candidate.chunk_id}</code></div><details><summary>{vi ? "Điểm các giai đoạn" : "Stage scores"}</summary><div className="search-result__meta"><span>BM25 {candidate.bm25_score ?? "—"} ({candidate.bm25_rank ?? "—"})</span><span>Dense {candidate.dense_score ?? "—"} ({candidate.dense_rank ?? "—"})</span><span>RRF {candidate.rrf_score ?? "—"}</span><span>Reranker {candidate.cross_encoder_score ?? "—"}</span></div></details><div className="flex flex-wrap items-center gap-3">{(onOpenDocument || onOpenSource) && <button id={focusId(candidate.chunk_id)} type="button" className="search-result__open" onClick={() => { const source: Source = { citation: candidate.citation, text_preview: candidate.text_preview, chunk_id: candidate.chunk_id, document_id: candidate.document_id, ticker: candidate.ticker, section: candidate.section, filing_date: candidate.filing_date, score: score(candidate, trace.preset) === "—" ? null : Number(score(candidate, trace.preset)), score_kind: trace.preset === "hybrid_rerank" ? "cross_encoder" : trace.preset === "hybrid" ? "rrf" : "retrieval" }; if (onOpenDocument && candidate.document_id) onOpenDocument({ kind: "search", documentId: candidate.document_id, selectedSource: source, initialTab: "excerpt", returnView: "search", returnFocusId: focusId(candidate.chunk_id) }); else onOpenSource?.(source); }}>{vi ? "Mở đoạn indexed" : "Open indexed excerpt"}</button>}{onOpenDocument && candidate.document_id && <button id={`search-document-workspace-${candidate.document_id.replace(/[^a-zA-Z0-9_-]/g, "-")}`} type="button" className="search-result__open" onClick={() => { const source: Source = { citation: candidate.citation, text_preview: candidate.text_preview, chunk_id: candidate.chunk_id, document_id: candidate.document_id, ticker: candidate.ticker, section: candidate.section, filing_date: candidate.filing_date }; onOpenDocument({ kind: "search", documentId: candidate.document_id, selectedSource: source, returnView: "search", returnFocusId: `search-document-workspace-${candidate.document_id.replace(/[^a-zA-Z0-9_-]/g, "-")}` }); }}>{vi ? "Mở không gian tài liệu" : "Open document workspace"}</button>}</div></div>
                   </article>
                 ))}
               </div>

@@ -471,6 +471,9 @@ test("citation deep links survive reload and Markdown export keeps evidence anch
   await page.reload();
   await expect(page).toHaveURL(deepLink);
   await expect(page.getByRole("button", { name: "Close evidence inspector" })).toBeVisible();
+  // The evidence inspector is a modal at this viewport. Close it before
+  // navigating the inert application shell to the Library.
+  await page.getByRole("button", { name: "Close evidence inspector" }).click();
 
   await openLibrary(page);
   const downloadPromise = page.waitForEvent("download");

@@ -12,7 +12,8 @@ test.describe("V4 structured document reader", () => {
     await page.getByRole("button", { name: "Open source 1", exact: true }).first().click();
     await page.getByRole("button", { name: "Open normalized original", exact: true }).click();
 
-    await expect(page.getByText("Structured document", { exact: true })).toBeVisible();
+    await expect(page.locator(".document-workspace")).toBeVisible();
+    await expect(page.locator(".structured-reader__availability")).toContainText("Structured HTML source ready");
     await expect(page.getByText("Evidence correspondence verified in the structured document.", { exact: true })).toBeVisible();
     const heading = page.getByRole("heading", { name: "Risk factors", exact: true });
     await expect(heading).toBeAttached();

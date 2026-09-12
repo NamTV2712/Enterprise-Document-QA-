@@ -52,9 +52,9 @@ async function openTools(page: Page): Promise<void> {
 test("opens the exact citation in the indexed context viewer", async ({ page }) => {
   await setup(page);
   await askQuestion(page, "What are Apple's main business risks?");
-  const sourceButton = page.getByRole("button", { name: "Open source 1" }).first();
-  await expect(sourceButton).toBeVisible();
-  await sourceButton.click();
+  const sourcesButton = page.getByRole("button", { name: "Open 2 sources", exact: true });
+  await expect(sourcesButton).toBeVisible();
+  await sourcesButton.click();
 
   const contextPanel = page.locator(".context-panel");
   await expect(contextPanel).toBeVisible();
@@ -69,15 +69,16 @@ test("evidence inspector uses the remaining-width mode and closes without losing
   await page.setViewportSize({ width: 1440, height: 900 });
   await setup(page);
   await askQuestion(page, "What are Apple's main business risks?");
-  const sourceButton = page.getByRole("button", { name: "Open source 1" }).first();
-  await expect(sourceButton).toBeVisible();
-  await sourceButton.click();
+  const sourcesButton = page.getByRole("button", { name: "Open 2 sources", exact: true });
+  await expect(sourcesButton).toBeVisible();
+  await sourcesButton.click();
   await expect(page.locator(".context-panel")).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Evidence inspector" })).toHaveCount(0);
   await page.getByRole("button", { name: "Close evidence inspector" }).click();
   await expect(page.locator(".context-panel")).toHaveCount(0);
 
   await page.setViewportSize({ width: 1024, height: 900 });
+  const sourceButton = page.getByRole("button", { name: "Open source 1" }).first();
   await sourceButton.click();
   await expect(page.getByRole("dialog", { name: "Evidence inspector" })).toBeVisible();
   await page.getByRole("button", { name: "Close evidence inspector" }).click();
@@ -86,8 +87,7 @@ test("evidence inspector uses the remaining-width mode and closes without losing
 
   await page.getByRole("button", { name: "Use compact navigation" }).click();
   await sourceButton.click();
-  await expect(page.locator(".context-panel")).toBeVisible();
-  await expect(page.getByRole("dialog", { name: "Evidence inspector" })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Evidence inspector" })).toBeVisible();
 });
 
 test("conversation keeps the message scroller and composer inside the primary column", async ({ page }) => {
@@ -452,9 +452,11 @@ test("Documents and Search open the exact chunk in the shared indexed reader", a
 
   await page.getByRole("button", { name: "Documents", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Document Explorer" })).toBeVisible();
-  await page.getByRole("button", { name: /AAPL · 2025-10-31/ }).click();
+  await page.getByRole("button", { name: /Apple Inc\. \(AAPL\) · 2025-10-31/ }).click();
   await page.getByRole("button", { name: "Open indexed excerpt" }).click();
-  await expect(page.locator(".context-viewer-text")).toContainText("Total revenue was reported in fiscal 2024.");
+  await expect(page.locator(".document-workspace")).toBeVisible();
+  await expect(page.locator(".document-workspace__excerpt")).toContainText("Total revenue was reported in fiscal 2024.");
+  await expect(page.getByRole("heading", { name: "Selected indexed excerpt", exact: true })).toBeVisible();
 });
 
 test("wide tool views retain a usable canvas without evidence-rail geometry", async ({ page }) => {

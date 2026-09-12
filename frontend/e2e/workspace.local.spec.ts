@@ -41,7 +41,7 @@ test("renders real stage events and exact indexed reader identity", async ({ pag
   await expect(page.getByText("Execution stages", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Open 1 sources", exact: true }).click();
-  await page.getByRole("button", { name: "Open source 1" }).click();
+  await page.getByRole("button", { name: /Open source excerpt/ }).click();
   await expect(page.locator(".context-viewer-text").getByText("Harness indexed excerpt for AAPL.", { exact: true })).toBeVisible();
   await page.getByText("About this source", { exact: true }).click();
   await expect(page.locator(".context-metadata")).toContainText("Chunk: AAPL_harness_0000");

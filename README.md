@@ -33,6 +33,10 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 | [`AGENTS.md`](AGENTS.md) | Stable repository rules and operational traps for coding agents |
 | [`frontend/README.md`](frontend/README.md) | Frontend-specific local development, Vercel setup, and API usage |
 | [`docs/LOCAL_RELEASE_RUNBOOK.md`](docs/LOCAL_RELEASE_RUNBOOK.md) | Provider-free local Docker build, smoke test, provenance, and receipt |
+| [`docs/ARCHITECTURE_API_GUIDE.md`](docs/ARCHITECTURE_API_GUIDE.md) | Retrieval flow, read-only API surfaces, and frontend state boundaries |
+| [`docs/IMPROVEMENT_ROUND_REPORT.md`](docs/IMPROVEMENT_ROUND_REPORT.md) | M0-M11 improvement receipt, provider accounting, and final verification gates |
+| [`docs/UX_IMPROVEMENT_ROUND_REPORT.md`](docs/UX_IMPROVEMENT_ROUND_REPORT.md) | P0-P14 SEC Research Workspace UX, performance, Archify, and KEY5 receipt |
+| [`docs/EVALUATION_REVIEW_GUIDE.md`](docs/EVALUATION_REVIEW_GUIDE.md) | Evaluation and experiments workflow for live, recorded, and missing reports |
 
 ## Key Features
 
@@ -48,17 +52,31 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 | RAG generation | Grounded answer generation with source citations and fallback behavior |
 | API | FastAPI service with Swagger UI and SSE streaming |
 | Cache | Filter-aware semantic response cache for repeated stateless queries |
-| Memory | Multi-turn backend memory, query rewriting, and a searchable local conversation library with bookmarks and Markdown export |
+| Memory | Multi-turn backend memory, query rewriting, and a searchable local conversation library with bookmarks, Markdown export, and versioned JSON backup/restore |
 | Decomposition | Comparative and enumeration queries decomposed into focused sub-queries |
 | Evaluation | Fixed benchmark with faithfulness, relevancy, and context precision metrics |
-| Research workspace | Vite/React interface with searchable company and section controls, streaming answers, evidence inspection with per-panel search and copy, per-answer bookmarks, a reliable local conversation Library, session context status, and a help dialog with shortcuts |
-| Conversation UX | Separate Overview and Conversation views, bounded answer cards, interpreted-query metadata, and a resizable desktop control sidebar |
+| Research workspace | Vite/React interface with searchable company and section controls, English/Vietnamese UI and answer selection, streaming answers, measured request-stage traces when the backend provides them, conservative source-bound financial metric cards when the retrieved evidence supports them, a resizable existing-evidence source rail/reader backed by indexed excerpts, accent-insensitive evidence inspection with per-panel search and copy, per-answer bookmarks, feedback, private notes, local evidence collections, a reliable conversation Library, JSON backup/restore, session context status, glossary/help, research templates, command palette, keyboard shortcuts, lazy tool panels, and responsive Light/Dark themes |
+| Research tools | Provider-free Retrieval Lab for BM25/dense/RRF/reranker trace inspection with preset comparison and JSON/CSV export, read-only Document Explorer with filing/chunk search, Search workspace, Evaluation & experiments with validated/recorded modes, local Analytics, System & provenance metadata without filesystem paths or secrets, and three lazy-loaded Archify diagrams under Architecture |
+| Conversation UX | Separate Overview and Conversation views, a fixed 216px desktop navigation rail, mobile workspace navigation, bounded answer cards, contextual scope controls beside the composer, and interpreted-query metadata |
+
+The frontend's document reader caches indexed chunk details for five minutes
+with in-flight deduplication and a 100-entry bound. The production browser
+gate covers Chromium and Firefox responsive states from 320px through desktop,
+reduced-motion behavior, keyboard/focus flows, color contrast, and measured
+input/search performance against the local fixture API.
 
 ## Architecture
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for component boundaries, request flows,
 state ownership, reliability controls, deployment constraints, and extension
-paths.
+paths. The source-controlled diagrams below are rendered from Archify IR and
+are also available as standalone interactive viewers:
+
+- [System architecture](docs/architecture/sec-research-workspace.html)
+- [Query data flow](docs/architecture/sec-research-query.html)
+- [Research workflow](docs/architecture/sec-research-workflow.html)
+
+[![System architecture: browser request, FastAPI, hybrid retrieval, evidence stores, and Groq generation](docs/architecture/sec-research-workspace.visual-check.1440x900.light.png)](docs/architecture/sec-research-workspace.html)
 
 ```text
 SEC 10-K Filing
@@ -140,6 +158,14 @@ http://localhost:8000/docs
 | `POST` | `/query/stream` | SSE streaming RAG answer |
 | `POST` | `/query/decomposed` | Comparative or complex RAG answer |
 | `GET` | `/supported-tickers` | Supported tickers and sections |
+| `POST` | `/retrieval/inspect` | Provider-free retrieval-stage trace for BM25/dense/hybrid/rerank |
+| `GET` | `/documents` | Paginated loaded-filing catalog with safe filters |
+| `GET` | `/documents/{document_id}` | One safe document metadata record |
+| `GET` | `/documents/{document_id}/chunks` | Paginated source previews for a loaded filing |
+| `GET` | `/chunks/{chunk_id}` | Full safe source text and metadata for one indexed chunk; filesystem paths are never returned |
+| `GET` | `/system/info` | Allowlisted corpus, retrieval, and build metadata |
+| `GET` | `/evaluation/runs` | List validated public evaluation summaries with safe filters |
+| `GET` | `/evaluation/runs/{run_id}` | Read one validated public evaluation report |
 | `GET` | `/cache/stats` | Semantic cache metrics |
 | `POST` | `/cache/clear` | Clear semantic cache when explicitly enabled |
 | `POST` | `/cache/test` | Rate-limited query embedding comparison |
@@ -163,7 +189,8 @@ curl -X POST "http://localhost:8000/query" \
     "question": "What was Apple total revenue in 2024?",
     "ticker": "AAPL",
     "section": "financial_table",
-    "top_k": 5
+    "top_k": 5,
+    "answer_language": "en"
   }'
 ```
 
@@ -439,6 +466,67 @@ failures are reported, and the composer handles IME composition and trimmed
 length validation. Mobile sidebar focus is trapped while open and restored on
 close. Frontend verification covers both theme behavior and evidence navigation
 with Vitest and TypeScript checks.
+
+The local Library persists conversation schema v4 and exports backup JSON v2
+(v1 backups remain importable). Tags, bounded conversation notes, saved answer
+variants, bookmarks, Markdown evidence anchors, local evidence collections, and
+feedback categories are included with strict limits and fresh IDs on import.
+Backup import validates and previews the bundle before the user confirms it;
+existing local records are never overwritten. In browsers with Web Locks, only
+the tab owning the Library writer lock may durably write; other tabs remain
+readable and exportable until ownership is acquired. The current offline gate
+is `108/108` frontend tests, `106/106` Chromium/Firefox browser checks, and
+`727` backend tests; provider campaigns and production hosting remain separate
+from this local release candidate. The final browser freeze includes backup
+import preview/confirm, the guided portfolio route, responsive
+Light/Dark/system-theme coverage, and the provider-free tool views. A
+production-build fixture with 100 conversations and 10,000 messages measured
+Library search p95 at 40.49 ms in Chromium and 80.02 ms in Firefox on the
+latest one-worker freeze, below the 200 ms target.
+
+The Library continuity view organizes those same local artifacts into Recent
+Research, Saved Answer Versions, and Evidence Collections. Recent work is
+bounded and resumable; saved answers reopen by exact conversation/message/
+variant identity; evidence remains a readable historical snapshot. A separate
+current-source action is offered only after an exact local chunk/document/hash
+check, with stale or missing results reported honestly. Raw provenance IDs stay
+behind a disclosure, and browser-local/read-only/volatile limitations remain
+visible rather than implying cloud synchronization.
+
+### Evaluation, analytics, and quota-safe campaign handoff
+
+The Evaluation view reads only reports published through the allowlisted
+`data/public_evaluations/` contract. It exposes provenance, case evidence, and
+aggregate scores without browsing arbitrary diagnostic files. The Recorded
+demo is explicitly labelled and is provider-free; it is not an official
+benchmark. The Analytics view stores only local operational metadata (event
+kind, language, ticker, duration, and timestamp). Its export never includes
+questions, answers, source text, session IDs, or secrets.
+
+Selected evaluation reports can also be exported from the workspace as
+provenance-preserving JSON or case-level CSV. These exports are local UI
+artifacts and do not invoke a provider.
+
+The bilingual campaign is registered before execution. Its manifest freezes
+five intents in English and Vietnamese, the canonical artifact hash, and a
+60-request ledger (12 calibration, 40 sentinel generation/judging, and an
+8-request explicit retry reserve). SDK retries are disabled. When quota is
+unavailable, the safe preflight still runs with zero provider calls and the
+campaign remains `NOT_STARTED`; a provider interruption is recorded as
+`INCOMPLETE`. After a new provider window is granted, start a new campaign ID
+and use `--execute`; do not mutate an incomplete ledger or select a best-of
+replicate.
+
+The latest controlled probe using only `GROQ_API_KEY5` completed generation and
+judging with HTTP 200. This confirms the key is accepted, but does not increase
+the campaign-wide request budget or prove that a full A/B campaign can bypass
+account-level rate limits.
+
+The subsequent key5-only bounded receipts are recorded in
+[`docs/IMPROVEMENT_ROUND_REPORT.md`](docs/IMPROVEMENT_ROUND_REPORT.md). The
+final bilingual improvement campaign is
+`bilingual_evaluation_improvement_round7_key5`: `54/60` requests, both
+replicates passed, and `candidate_decision=GO`.
 
 ### Historical evaluation log
 
@@ -1061,6 +1149,7 @@ GROQ_API_KEY4=optional_fourth_failover_key
 GROQ_API_KEY5=optional_fifth_failover_key
 GROQ_API_KEY_FALL_BACK=optional_first_evaluation_generation_key
 GROQ_API_KEY_FALL_BACK2=optional_second_evaluation_generation_key
+GROQ_KEY_POLICY=key5_only
 QDRANT_MODE=local
 QDRANT_LOCAL_PATH=data/processed/qdrant
 QDRANT_INDEX_MANIFEST_PATH=data/processed/qdrant_index_manifest.json
@@ -1079,7 +1168,14 @@ ENABLE_CACHE_CLEAR=false
 TRUSTED_PROXY_CIDRS=
 ```
 
-`ALLOWED_ORIGINS` is a comma-separated allowlist. Add the final Vercel domain before public deployment; do not use `*`. `TRUSTED_PROXY_CIDRS` is empty by default; set it to the proxy CIDR ranges only when the API runs behind ngrok or another reverse proxy, as described in the rate-limit section above.
+`GROQ_KEY_POLICY=key5_only` makes all generator, judge, correction, and
+decomposer calls resolve only `GROQ_API_KEY5`; use this for the improvement and
+evaluation round. The legacy `pool` value remains available for serving
+failover when that is an explicit operational choice. `ALLOWED_ORIGINS` is a
+comma-separated allowlist. Add the final Vercel domain before public
+deployment; do not use `*`. `TRUSTED_PROXY_CIDRS` is empty by default; set it
+to the proxy CIDR ranges only when the API runs behind ngrok or another reverse
+proxy, as described in the rate-limit section above.
 
 Build local artifacts in order:
 
@@ -1278,9 +1374,15 @@ Demo frontend: `https://frontend-one-gamma-f9jf11u8ec.vercel.app`
 The workspace supports full legal company names, professional section labels,
 streamed conversation cards, collapsible filing evidence, a desktop evidence
 side panel, Overview/Conversation navigation, a searchable local Library with
-bookmarks and Markdown export, viewport-safe help tooltips, and a desktop
-sidebar that can be resized from `280` to `480` pixels. Light, dark, and system
-theme choices share the same semantic token system; reduced-motion preferences
+bookmarks, feedback, private notes, tags, saved answer variants, evidence
+collections, schema-versioned Markdown/JSON backup export, provider-free
+Retrieval Lab and Document Explorer views, safe System & provenance metadata,
+viewport-safe help tooltips, and a desktop sidebar that can be resized from
+`280` to `480` pixels. Library records write schema v4 and backup exports use
+format v2 while reading older records/backups. Browsers with Web Locks give one
+tab write ownership; secondary or unsupported-lock tabs remain read-only but
+can still read and export local research. Light, dark, and system theme choices
+share the same semantic blue/slate token system; reduced-motion preferences
 disable nonessential effects.
 
 ```powershell
@@ -1413,3 +1515,23 @@ This project demonstrates the engineering work required to move RAG beyond a sim
 - Clear limitations and reproducible validation.
 
 The goal is not to hide the hard parts of enterprise document QA, but to expose them, measure them, and improve them systematically.
+
+### Skill governance
+
+Project-local agent contracts live under `.agents/skills/`. `rag-ui-ux` remains
+the frontend/product authority; the focused `rag-core`, `rag-retrieval-quality`,
+`rag-evaluation`, `rag-security`, `rag-performance`, and
+`rag-document-provenance` skills own their named RAG boundaries. Routing and
+external-source provenance are recorded in `.agents/skills/ROUTING.md` and
+`.agents/skills/SOURCES.md`. These contracts do not install remote skills or
+change application behavior.
+
+The reader is local-only and exposes representation-specific availability.
+Indexed excerpts, normalized text, structured content, and PDF availability
+are separate contracts; one representation never proves that another is
+available or complete. Structured responses also report `coverage_status`
+(`complete`, `partial`, or `unknown`) and a human/machine-readable reason. A
+structured no-match under partial or unknown coverage is explicitly scoped to
+that view and offers a search of the complete local normalized text. The
+retired resolver endpoint is not part of the supported reader surface, so the
+UI does not silently acquire or admit remote document bytes.

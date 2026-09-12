@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { conversationToMarkdown } from "./conversationExport";
+import {
+  conversationToMarkdown,
+  conversationsToJson,
+  parseConversationBackup,
+} from "./conversationExport";
 import { ConversationRecord } from "./conversationStore";
 
 describe("conversation export", () => {
@@ -41,5 +45,109 @@ describe("conversation export", () => {
     expect(markdown).not.toContain("session-secret-id");
     expect(markdown).not.toContain("conversation-secret-id");
     expect(markdown).not.toContain("Technical details");
+  });
+
+  test("round-trips a backup with fresh local identities", () => {
+    const conversation: ConversationRecord = {
+      schemaVersion: 2,
+      titleMode: "custom",
+      revision: 4,
+      id: "conversation-original",
+      sessionId: "session-original",
+      title: "Revenue review",
+      createdAt: 1,
+      updatedAt: 2,
+      draft: "follow up",
+      bookmarkedMessageIds: ["a-1"],
+      messages: [
+        { id: "u-1", sender: "user", text: "What was revenue?" },
+        {
+          id: "a-1",
+          sender: "assistant",
+          text: "Revenue was $100B.",
+          feedback: { rating: "down", category: "incomplete", at: 3 },
+        },
+      ],
+    };
+
+    const imported = parseConversationBackup(conversationsToJson([conversation]));
+
+    expect(imported).toHaveLength(1);
+    expect(imported[0].id).not.toBe(conversation.id);
+    expect(imported[0].sessionId).not.toBe(conversation.sessionId);
+    expect(imported[0].title).toBe(conversation.title);
+    expect(imported[0].messages.map((message) => message.id)).not.toEqual(["u-1", "a-1"]);
+    expect(imported[0].bookmarkedMessageIds).toEqual([
+      imported[0].messages[1].id,
+    ]);
+    expect(imported[0].messages[1].feedback).toMatchObject({
+      rating: "down",
+      category: "incomplete",
+    });
+  });
+
+  test("rejects an unsupported or malformed backup", () => {
+    expect(() => parseConversationBackup(JSON.stringify({ format: "other", version: 1 }))).toThrow(
+      "not supported",
+    );
+    expect(() => parseConversationBackup(JSON.stringify({
+      format: "enterprise-document-qa.conversations",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      conversations: [{ title: "broken", messages: [{ sender: "robot" }] }],
+    }))).toThrow("invalid conversation");
+  });
+
+  test("rejects a malformed source instead of importing unsafe evidence metadata", () => {
+    expect(() => parseConversationBackup(JSON.stringify({
+      format: "enterprise-document-qa.conversations",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      conversations: [{
+        id: "conversation-1",
+        sessionId: "session-1",
+        title: "Unsafe source",
+        messages: [{
+          id: "assistant-1",
+          sender: "assistant",
+          text: "Answer",
+          sources: [{ citation: "source", score: "not-a-number", text_preview: "preview" }],
+        }],
+      }],
+    }))).toThrow("invalid conversation");
+  });
+
+  test("rejects unknown answer references and malformed evidence collections", () => {
+    const validConversation = {
+      id: "conversation-1",
+      sessionId: "session-1",
+      title: "Reference validation",
+      messages: [{ id: "assistant-1", sender: "assistant", text: "Answer" }],
+    };
+    expect(() => parseConversationBackup(JSON.stringify({
+      format: "enterprise-document-qa.conversations",
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      conversations: [{
+        ...validConversation,
+        variants: [{
+          id: "variant-1",
+          originMessageId: "missing-message",
+          text: "Alternative",
+          sources: [],
+          answerLanguage: "en",
+          status: "completed",
+          createdAt: 1,
+          updatedAt: 1,
+        }],
+      }],
+    }))).toThrow("invalid conversation");
+    expect(() => parseConversationBackup(JSON.stringify({
+      format: "enterprise-document-qa.conversations",
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      conversations: [validConversation],
+      collections: [{ name: "Broken", items: [null] }],
+    }))).toThrow("invalid evidence item");
   });
 });

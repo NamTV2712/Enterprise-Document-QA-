@@ -118,6 +118,33 @@ describe("conversation store repository", () => {
 
   // --- Title and metadata preservation -----------------------------------
 
+  it("serializes field-scoped mutations against the latest record", async () => {
+    const store = await freshStore();
+    await store.loadConversationLibrary("session-live", "conversation-live");
+    const created = store.createConversationRecord("conversation-live", "session-live", [
+      userMessage("u1", "Apple total revenue"),
+      assistantMessage("a1", "Apple reported total revenue.", { status: "completed" }),
+    ]);
+    await store.saveConversationRecord(created);
+
+    const [tagResult, noteResult] = await Promise.all([
+      store.mutateConversationRecord(created.id, (latest) => ({
+        ...latest,
+        tags: ["revenue"],
+      })),
+      store.mutateConversationRecord(created.id, (latest) => ({
+        ...latest,
+        notes: [{ id: "note-1", text: "Verify against the filing table.", createdAt: 1, updatedAt: 1 }],
+      })),
+    ]);
+
+    expect(tagResult.status).toBe("persisted");
+    expect(noteResult.status).toBe("persisted");
+    const saved = store.listConversations().find((record) => record.id === created.id);
+    expect(saved?.tags).toEqual(["revenue"]);
+    expect(saved?.notes?.[0]?.text).toBe("Verify against the filing table.");
+  });
+
   it("keeps a custom title when autosave rebuilds the record from messages", async () => {
     const store = await freshStore();
     await store.loadConversationLibrary("session-live", "conversation-live");
@@ -226,7 +253,7 @@ describe("conversation store repository", () => {
   });
 
   it("locks localStorage writes when it holds a future-schema record and preserves the payload", async () => {
-    seedLocal([makeRecord({ id: "conversation-now", schemaVersion: 3, revision: 9 })]);
+    seedLocal([makeRecord({ id: "conversation-now", schemaVersion: 5, revision: 9 })]);
     const rawBefore = window.localStorage.getItem(V3_KEY);
     const store = await freshStore();
     const state = await store.loadConversationLibrary();
@@ -258,7 +285,7 @@ describe("conversation store repository", () => {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(["conversations", "tombstones"], "readwrite");
       tx.objectStore("conversations").put(
-        makeRecord({ id: "conversation-future", schemaVersion: 3, revision: 9 }),
+        makeRecord({ id: "conversation-future", schemaVersion: 5, revision: 9 }),
       );
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
@@ -714,7 +741,7 @@ describe("conversation store repository", () => {
     const store = await freshStore();
     const state = await store.loadConversationLibrary("session-legacy", "conversation-legacy");
     const record = state.conversations.find((item) => item.id === "conversation-legacy");
-    expect(record?.schemaVersion).toBe(2);
+    expect(record?.schemaVersion).toBe(4);
     expect(record?.titleMode).toBe("custom");
     expect(record?.title).toBe("My renamed research");
     expect(record?.bookmarkedMessageIds).toEqual(["a1"]);
@@ -964,7 +991,7 @@ describe("tombstone and envelope validation", () => {
 
   it("locks the envelope when the container version is unsupported or missing", async () => {
     for (const envelope of [
-      { envelopeVersion: 4, records: [], tombstones: [] },
+      { envelopeVersion: 5, records: [], tombstones: [] },
       { envelopeVersion: "3", records: [], tombstones: [] },
       { records: [], tombstones: [] },
     ]) {

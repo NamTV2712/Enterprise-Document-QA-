@@ -52,8 +52,65 @@ rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
        trusted local index; then run deterministic retrieval checks.
 4. [x] Add evaluation cases for newly searchable tickers without changing the
        official clean N=30 benchmark.
-5. [ ] Extend Vietnamese retrieval translation only from labelled EN/VI tests;
-       current support is intentionally limited to explicit financial metrics.
+5. [x] Extend Vietnamese retrieval translation only from labelled EN/VI tests;
+       current support remains conservative for explicit financial metrics,
+       comparison terms, and accentless input. Unsupported intent is preserved
+       instead of being guessed. The output language is an explicit `en`/`vi`
+       API contract and is isolated in the semantic cache.
+5a. [x] Add bilingual research-workspace support: persisted system/English/
+       Vietnamese UI preference, per-question answer language, localized help
+       and glossary, accent-insensitive company/library/evidence search, and
+       localized evidence/status surfaces. Offline frontend coverage is
+       currently 95/95 with typecheck green.
+5b. [x] Add versioned JSON backup/restore for the local conversation Library.
+       Validate format, schema, message shape, and 25 MiB size before writing;
+       imports receive fresh IDs and never overwrite existing records.
+5f. [x] Add the next provider-free workspace surfaces without changing
+       production retrieval defaults: query interpretation metadata, guarded
+       multi-tab Library refreshes, Retrieval Lab stage traces, Document
+       Explorer catalog/chunk previews, System & provenance metadata, mobile
+       workspace navigation, local answer feedback, and private answer notes. Changed contracts have
+       targeted frontend/backend tests; no corpus or index rebuild was made.
+5g. [x] Rerun the complete post-change offline release matrix: full backend,
+       frontend build/contrast, Chromium/Firefox browser matrix, and HTTP/SSE
+       integration. Results and the final commit-bound receipt are recorded
+       above; the prior release receipt was not reused as evidence.
+5c. [x] Offline release gates for the bilingual branch are green: backend
+       `718 passed` + compileall, frontend `107/107` + typecheck/build/contrast,
+       browser `106/106` Chromium/Firefox with one worker, HTTP/SSE integration
+       `14/14`, and the prior Docker build/readiness/receipt remain PASS. The
+       source-bound receipt is ignored at
+       `data/diagnostics/local_release_receipt_bilingual_workspace.json`; no
+       canonical data or index rebuild was made.
+5h. [x] Add the provider-free evaluation workspace contract: strict public
+       report publisher/API, provenance allowlist, recorded demo fixture,
+       Evaluation and Analytics views, redacted local analytics export, and
+       tests for invalid/arbitrary-path reports.
+5i. [x] Add offline research utilities: EN/VI templates, command palette,
+       local evidence collections, Retrieval Lab preset comparison with
+       JSON/CSV export, 10,000-character private-note limit, and a 40-case
+       EN/VI/accentless matrix (120 authored query variants).
+5j. [x] Register the quota-safe bilingual campaign protocol: five intents x
+       two languages, 12 calibration + 40 sentinel operations + 8 retry
+       reserve, SDK retries disabled, append-only checkpoints, and explicit
+       `NOT_STARTED`/`INCOMPLETE` status. Preflight used zero provider calls;
+       execute only after a new provider window and use a new campaign ID
+       after an incomplete run.
+5d. [x] After the offline gates and final source freeze, run Provider A and B
+       under separate fresh ledgers (maximum 60 real requests each, maximum
+       120 total including explicit retries). Keep the earlier incomplete
+       Evidence Contract v3 ledger historical and do not resume it. The
+       2026-09-07 continuation passed both two-call Groq probes, but Provider B
+       still stopped at 24/60 (`window_03`) and 39/60 (`window_04`) on HTTP
+       429; Provider A `window_04` was preflight-only because only 53 shared
+       slots remained. The later explicit key5-only continuation completed
+       Provider A `window_07_key5` as `GO` (`48/60`) and Provider B
+       `window_06_key5` as `NO-GO` (`52/60`, semantic gate failure with zero
+       transport errors). The original 120-call cap was explicitly overridden
+       for this key5-only continuation; old incomplete ledgers remain closed.
+5e. [x] Push the implementation and final status/docs commits, keep PR #3
+        open, and verify green CI. Merge/deploy remains a separate explicit
+        follow-up decision.
 6. [ ] Keep `/metrics` disabled unless the deployment protects it. Monitor
        429, 5xx, request count, and latency through aggregate telemetry.
 7. [x] Finalize the FY2026 corpus recovery and table fallback: NOW/NVDA/ORCL

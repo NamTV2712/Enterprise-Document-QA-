@@ -1,5 +1,258 @@
 # Project State
 
+## Current SEC Research Workspace UX closure — P0–P14 (2026-09-08)
+
+The P0–P14 UX, utility, performance, architecture, and KEY5 smoke plan is
+implemented on `codex/bilingual-research-workspace`. The detailed receipt is in
+[`docs/UX_IMPROVEMENT_ROUND_REPORT.md`](docs/UX_IMPROVEMENT_ROUND_REPORT.md).
+
+- The project-local `.agents/skills/rag-ui-ux` skill coordinates the four
+  external UI/UX reference layers and was validated with the skill creator
+  checker. `AGENTS.md` points future UI work to that skill and the frontend
+  design/contract documents.
+- The frontend now has explicit Overview, Conversation, Documents, Search,
+  Library, Retrieval Lab, Architecture, Evaluation, Analytics, and System
+  destinations. Search and Architecture are lazy-loaded; the Tools group keeps
+  advanced RAG diagnostics available without crowding the primary research
+  journey.
+- A safe `GET /chunks/{chunk_id}` reader endpoint returns full indexed source
+  text plus allowlisted metadata without filesystem paths. The evidence reader
+  uses abortable loading and explicit loading/fallback/error states.
+- Archify revision
+  `06bd6fea5752bc06b8170a1f09085c798df5aa13` generated three source-backed
+  diagrams under `docs/architecture/`, with standalone copies under
+  `frontend/public/architecture/`. All three passed showcase validation with
+  zero errors and warnings; final Light/Dark visual checks reported no overflow.
+- The generator now honors the effective `GROQ_KEY_POLICY` when selecting keys;
+  `key5_only` no longer accidentally constructs a multi-key pool. A six-case
+  live smoke ran with `GROQ_API_KEY5` only and is recorded in
+  [`docs/KEY5_SMOKE_RECEIPT.json`](docs/KEY5_SMOKE_RECEIPT.json). No secret
+  values were recorded.
+- Frontend lint, unit tests, production build, backend compile/API/key-policy
+  tests, and the local Chromium/Firefox browser matrix were run. The final
+  frontend unit suite passed `108/108`, and the stateful browser gate passed
+  all `106/106` checks with `--workers=1`; the
+  parallel exploratory run exposed timing sensitivity in IndexedDB/Web Locks,
+  which is why the documented gate remains one worker. This does not change the
+  documented official benchmark or campaign results.
+- No corpus, embedding, Qdrant, benchmark, deployment, or Vercel state was
+  changed. The local `frontend/.env.local` remains configured for the ngrok demo
+  origin; loopback browser verification used an explicit build-time override.
+
+## Latest improvement round — M0-M11 complete (2026-09-07)
+
+The full improvement plan is implemented and verified on
+`codex/bilingual-research-workspace`. The detailed milestone receipt is in
+[`docs/IMPROVEMENT_ROUND_REPORT.md`](docs/IMPROVEMENT_ROUND_REPORT.md).
+
+- Strict provider policy is implemented through `GROQ_KEY_POLICY=key5_only`;
+  every provider-backed campaign call in this round resolved to
+  `GROQ_API_KEY5`. The append-only round budget contains `319/2000` reserved
+  attempts, `316` completed attempts, `3` terminal transport errors, and no
+  unknown reservations.
+- Fresh campaign `bilingual_evaluation_improvement_round7_key5` completed
+  `54/60` requests with both replicates passing (`COMPLETE / GO`). Earlier
+  incomplete or semantic `NO-GO` campaign ledgers remain immutable and are not
+  reclassified. The official benchmark and canonical corpus/index remain
+  unchanged.
+- The workspace now has a compact desktop evidence rail and reader backed only
+  by existing excerpts/metadata, semantic Light/Dark tokens, contrast-safe
+  state colors, lazy tool panels, indexed Library search, debounced/stale-safe
+  Document Explorer requests, analytics ranges, backend metadata indexes, and
+  structured provider/rate-limit errors.
+- Final gates: backend `727 passed` plus compileall; frontend `107/107`,
+  typecheck, lint, and production build; mocked browser `106/106`; HTTP/SSE
+  integration `14/14`; CPU Docker image build and readiness smoke green.
+- No merge, deploy, public benchmark promotion, or corpus/index regeneration
+  was performed.
+
+## Latest continuation — final offline workspace closure and Groq validation (2026-09-07)
+
+This section supersedes older test counts and provider-pending wording below;
+historical entries remain unchanged for provenance.
+
+- The local Library now persists answer feedback categories (`inaccurate`,
+  `incomplete`, `irrelevant`, `citation_issue`, or `other`) through schema v4
+  backup/export validation. Backup import validates and previews the bundle
+  before confirmation, then writes fresh IDs without overwriting existing
+  records.
+- Evaluation reports now support local provenance-preserving JSON and case-level
+  CSV export. Browser coverage now asserts citation deep links survive reload,
+  Markdown retains evidence anchors, the live evaluation fixture renders, and
+  both evaluation export formats download.
+- Two-context Playwright coverage proves that a second tab becomes the Library
+  writer after the first tab closes. The final browser gate is `106/106`
+  Chromium/Firefox checks with one worker; frontend unit coverage is `107/107`,
+  and the production build, lint, and typecheck are green.
+- The production-build Library performance fixture (100 conversations × 100
+  messages, 100 warmed search operations) passed the `p95 < 200 ms` gate at
+  `42.69 ms` in Chromium and `54.08 ms` in Firefox. The provider-free guided
+  portfolio route now reaches research, Retrieval Lab, Evaluation, and System
+  views in both browser engines.
+- The theme cleanup replaced shell/card/composer gradients and glow effects
+  with semantic light/dark surfaces, borders, and shadows. Legacy utility
+  color aliases now resolve through the semantic token layer, so both existing
+  and new controls follow the selected palette.
+- The updated Groq key passed isolated `window_03` and `window_04` probes
+  (2/2 HTTP 200 calls each, complete generation/judging preflight). Bounded
+  Provider B execution still stopped on rate limits: `window_03` at `24/60`
+  and `window_04` at `39/60`, both `INCOMPLETE`. A fresh Provider A
+  `evidence_contract_v3_window_04` manifest was created provider-free but not
+  executed because the continuation had used `67` of the shared `120` real
+  request slots, leaving `53`, which is insufficient for a fresh 60-call run.
+  `GROQ_API_KEY5` is configured locally and is already included in the
+  generation/judging key pools; it does not change the shared campaign cap. A
+  controlled key5-only probe then completed both calls with HTTP 200 and passed
+  quality/acceptance preflight, so there is no evidence that key5 itself is out
+  of quota. The probe used two more slots, bringing the continuation total to
+  `69/120` and leaving `51`.
+- Following the explicit user override to continue with key5 until provider
+  quota stops the work, fresh bounded campaigns were run without resuming old
+  ledgers. Provider A `evidence_contract_v3_window_07_key5` completed at
+  `48/60` with both replicates, legacy comparison, and reproducibility green;
+  its decision is `GO`. Provider B `bilingual_evaluation_v1_window_06_key5`
+  completed at `52/60` with zero transport errors, but both replicates failed
+  semantic bilingual gates, so its decision is `NO-GO`.
+- A runner invocation was initially started without the key5-only environment
+  and was stopped at `21/60`; its ledger is closed. A key5-only A run then
+  reached `36/60` before exposing a runner `ground_truth` lookup bug; that
+  ledger is also closed. The bug was fixed to use versioned Evidence Contract
+  references, regression-tested, and the full backend suite is now `718 passed`
+  with `121` warnings plus compileall.
+- Recorded provider slots across this continuation total `226`: prior `69`,
+  accidental five-key `21`, A key5-only `36`, A key5-only `48`, and B key5-only
+  `52`. No corpus/index rebuild or merge/deploy was performed. The Docker
+  runtime receipt remains a valid previous candidate because Docker copies
+  `src/` and `configs/`, while this fix changed only campaign scripts/tests.
+- The full 120-variant authored query matrix now executes provider-free at the
+  normalizer boundary with explicit period, language, and comparison checks.
+  The new browser backup-import and guided-portfolio routes are also included
+  in the final `106/106` freeze. No corpus/index rebuild, merge, deploy, or new
+  Docker receipt was needed: this closure changed frontend styling/tests and a
+  provider-free diagnostic script only. The official benchmark remains
+  unchanged.
+- The source-bound completion receipt is
+  `data/diagnostics/workspace_completion_manifest_final.json`. It records
+  `provider_calls: 0`, a clean worktree, a passing commit diff check, final
+  production asset hashes, and both Library p95 values below the 200 ms gate.
+- GitHub CI passed for source `4c26727f50741777ffe8923e1e8bb843fbe1df44`:
+  Backend CI #73 and Frontend CI #44/#45. The branch remains pushed with PR #3
+  open; merge and deploy were intentionally not performed.
+
+## Bilingual research workspace and local portability round — IMPLEMENTATION COMPLETE / OFFLINE VALIDATION GREEN (2026-09-07)
+
+This round is implemented on `codex/bilingual-research-workspace` from
+`main` at `108e729`, source commit `4e3e413021826086245f4dfedb08ce4f77f6485a`.
+The goal is to make the existing research workspace
+usable for English and Vietnamese users without changing retrieval defaults or
+rebuilding the canonical corpus/index.
+
+Completed in the current working tree:
+
+- Added an explicit `answer_language` contract (`en`/`vi`) to query requests,
+  responses, streaming metadata, the semantic-cache key, generator prompts,
+  and decomposed synthesis. English remains the default and the legacy English
+  system-prompt fingerprint is unchanged.
+- Added conservative Vietnamese retrieval normalization for labelled metrics,
+  comparisons, and accentless input. Complex questions preserve entities and
+  intent while adding lexical retrieval hints; unsupported intent is not
+  guessed.
+- Added a browser locale provider with English/Vietnamese UI controls,
+  persisted preference, system-language detection, answer-language selection,
+  localized help/glossary, and localized evidence/status/workspace surfaces.
+- Added accent-insensitive search for companies, saved conversations, and
+  evidence excerpts.
+- Added a versioned JSON conversation backup. Imports validate size, format,
+  schema, and messages, then assign fresh local IDs and write through the
+  existing repository so current records are not overwritten.
+- Added a provider-free query interpretation contract to API responses and
+  the UI, including normalized retrieval text, detected ticker, requested
+  periods, and comparison intent.
+- Added multi-tab conversation write coordination with a Web Locks writer
+  guard, BroadcastChannel refresh notifications, and test-safe fallback when
+  the browser does not expose a usable channel.
+- Added read-only `/retrieval/inspect`, `/documents`, document detail/chunk
+  previews, and `/system/info` endpoints. The new Retrieval Lab, Document
+  Explorer, and System & provenance views use only loaded metadata and never
+  rebuild the corpus/index or call an LLM.
+- Added local answer feedback controls, mobile workspace-view navigation, and
+  English/Vietnamese surfaces for the new tools.
+- Added private per-answer notes with bounded input, local conversation
+  persistence, and Markdown export; notes never enter generation prompts or
+  provider requests.
+- Added a strict allowlisted public evaluation report publisher and read-only
+  `/evaluation/runs` and `/evaluation/runs/{run_id}` APIs. The Evaluation view
+  separates validated published reports from a clearly labelled provider-free
+  Recorded demo; invalid schemas, missing provenance, duplicate cases, and
+  arbitrary report paths are rejected or hidden.
+- Added the Analytics view and metadata-only local event ledger. Export and
+  clear operations exclude questions, answers, excerpts, session IDs, and
+  secrets. Added twelve English/Vietnamese research templates, a command
+  palette, local evidence collections, Retrieval Lab preset comparison, and
+  JSON/CSV export.
+- Registered Provider B as a separate bilingual protocol: five authored
+  intents in English and Vietnamese, 12 calibration requests, 40 sentinel
+  generation/judging requests, eight explicit retry slots, SDK retries zero,
+  and ledger-backed append-only checkpoints. The preflight for
+  `bilingual_evaluation_v1_window_02` made zero provider calls; execution is
+  intentionally deferred until a new provider window is available.
+- Added the 40-case × English/Vietnamese/accentless authored query matrix
+  (120 variants), public report tests, campaign manifest/ledger tests, and an
+  architecture/API guide.
+- The pre-existing baseline for this round was `100/100` frontend tests. The
+  post-change offline verification is green: frontend typecheck/lint,
+  `105/105` unit tests across `19/19` files, production build, and light/dark
+  contrast; Chromium + Firefox browser matrix `94/94` using one worker on this
+  Windows host; backend full suite `716 passed` with `121` warnings plus
+  compileall. The provider-free browser harness required an explicit
+  `VITE_API_BASE_URL=http://127.0.0.1:8000` override because the ignored local
+  environment file points at a deployed URL.
+- Docker release preflight is `PASS`, the pinned image builds successfully,
+  Compose readiness reports 50 searchable companies and 10,053 chunks, the
+  new `/documents` catalog reports 50 loaded filings, and `/system/info`
+  reports the expected `hybrid_rerank` default. The source-bound receipt is
+  `data/diagnostics/local_release_receipt_bilingual_workspace.json`, SHA-256
+  `875d28878e24bf36f1ccb35ca1cfa4bdb6024cd3110507d250fcb339b8f6f23d`,
+  for image `edqa-api:4e3e413021826086245f4dfedb08ce4f77f6485a` with
+  `provider_calls: 0` and `overall: PASS`.
+
+The provider campaign is still pending a newly authorized provider
+window/quota, so this branch remains an offline candidate rather than a
+provider-backed GO. The implementation and status commits are pushed through
+branch head `67a2492940e53190ccde5d090489921e7b31f35e` in PR #3; backend,
+frontend, HTTP-integration, and Vercel checks are green. No provider request or
+data/index rebuild has been made in this round. The earlier incomplete
+Evidence Contract v3 ledger remains historical and must not be resumed; after
+quota recovery create fresh campaign IDs for Provider A and Provider B, run
+the preflight first, then execute only within the registered request budget.
+
+## Current working-tree milestone — local Library v4 and evidence UX (2026-09-07)
+
+This working tree extends the bilingual workspace without changing backend
+retrieval defaults, the canonical corpus, index artifacts, or provider ledgers.
+
+- Conversation persistence now normalizes schema v1–v3 to schema v4, adds
+  bounded tags, conversation notes, and saved answer variants, and keeps
+  malformed/future records write-locked rather than silently repairing them.
+- Backup JSON is version 2, remains compatible with version 1, validates
+  request snapshots/references/limits, remaps imported identities, and carries
+  evidence collections with fresh collection/item IDs. Markdown evidence
+  headings expose stable local source anchors for citation focus.
+- Web Locks writer ownership is required for durable Library writes in capable
+  browsers; non-owning tabs remain read/export-only and retry ownership after
+  the writer is released. BroadcastChannel remains notification-only.
+- The Light/Dark workspace palette now uses blue/slate semantic tokens and the
+  browser gate covers keyboard theme selection, reduced motion, responsive
+  widths, persistence, and WCAG serious/critical contrast.
+- Retrieval Lab experiment comparison now rejects incompatible provenance and
+  reports paired bootstrap deltas with `2,000` resamples and seed `42`.
+
+Remaining evidence gaps are deliberately not marked PASS: two-context Web Lock
+handoff/crash coverage, production-render p95 for the 100-conversation search
+fixture, the full 120-variant acceptance freeze, Provider A/B execution, and a
+new Docker receipt for this frontend-only working tree. No provider call, merge,
+deploy, or corpus/index rebuild was made.
+
 ## Current Milestone
 
 ### Local release readiness M3 — candidate GO, CI green (2026-09-06)
@@ -3066,3 +3319,980 @@ new in-app browser smoke attempt was blocked by the local browser surface with
 hermetic behavioral suite and production build rather than an unverified
 visual screenshot. No provider request, canonical artifact, index, official
 benchmark, or production default was changed in this improvement.
+
+### UX recovery correction pass (2026-09-08)
+
+The screenshots collected after the prior UI round exposed material defects
+that the earlier completion claim did not cover: tool views inherited the
+conversation evidence-rail geometry, saved sidebar width could consume the
+workspace, mobile header controls overlapped, and browser tests were silently
+building against a developer-specific ngrok URL instead of their local API
+fixtures. This correction pass replaces the resizable control sidebar with a
+fixed 216px navigation rail, reserves the evidence rail for conversations
+with evidence only, moves scope/retrieval settings to the composer or tool
+that owns them, and makes tool grids responsive at their own breakpoints.
+
+Documents now distinguish transport failure from an empty result and offer a
+local retry. Retrieval, Search, Documents, Evaluation, and query flows share
+safe action-oriented error presentation; raw browser text such as `Failed to
+fetch` is no longer the user-facing state. The chat view has a genuine empty
+research start state, the composer preserves drafts while offline, and the
+mobile header uses a clear current-view picker rather than overlapping product
+text. Tool-only Architecture now launches validated standalone Archify
+viewers instead of embedding a heavy iframe.
+
+Frontend verification on this binding: `bun run lint`, `bun run test`
+(`110/110`), and `bun run build` passed. Chromium browser checks passed for
+the 320px/640px responsive smokes, keyboard theme menu, guided tool journey,
+wide-tool geometry, and Library-search p95 (`40.59 ms`, budget `<200 ms`).
+Archify architecture delivery passed 9/9 showcase checks; its artifact-bound
+browser visual check passed in Light/Dark through 2048×1320, and the rendered
+light viewer was manually inspected. This pass made no provider, Groq,
+corpus, index, evaluation, or deployment request; `GROQ_API_KEY5` therefore
+was not invoked.
+
+### Evidence-bound execution transparency follow-up (2026-09-09)
+
+The streaming RAG path now emits measured request-local execution stages for
+query preparation, embedding, cache lookup, retrieval, generation, and cached
+answer replay. The frontend renders this payload only when it is returned by
+the backend; it does not infer timings or fabricate pipeline stages. A narrow
+structured metric sidecar is also available only for direct total-net-sales
+questions where one retrieved chunk contains the exact table value, an explicit
+millions unit, and a local evidence quote. Both cache hits and fresh responses
+recompute that sidecar from their own displayed sources, so the evidence action
+continues to open the matching source rather than a guessed document location.
+
+This is additive presentation metadata: retrieval ranking, generation prompts,
+evaluation defaults, corpus data, embeddings, Qdrant data, and official
+benchmark artifacts remain unchanged. Focused backend tests passed `62/62`;
+frontend typecheck, `131/131` Vitest tests, production build, and five updated
+Chromium regression scenarios passed. The intentional storage fault-injection
+warnings in Vitest were retained as assertions of recovery behavior. No live
+provider request, deployment, or secret exposure occurred.
+
+### Verification addendum (2026-09-09)
+
+The current working tree was re-verified after migrating the last four direct
+component color utilities to the semantic token layer and updating one stale
+HTTP/SSE integration selector for the scope popover/listbox contract. Frontend
+typecheck/lint, `131/131` Vitest, and production build passed; the existing
+one-worker production browser matrix remains `108/108`. The real local
+FastAPI/fragmented-SSE integration suite passed `14/14` across Chromium and
+Firefox, and the full hermetic backend suite passed `730` tests with the same
+121 parser warnings. No provider call, corpus/index operation, deployment, or
+secret exposure occurred. The redacted 2026-09-08 six-case `key5_only` receipt
+remains the current live-provider evidence; no new provider run is claimed.
+
+### Plan V2 implementation closure (2026-09-09)
+
+The remaining P2.4-P4.2 execution gates are now implemented. The workspace has
+a citation-ordered indexed ContextPanel with exact chunk/document identity,
+abortable detail loading, pagination/search, verified SEC links, and a bounded
+five-minute/100-entry document cache. Ordinary and comparative requests expose
+request-scoped measured stage events over bounded SSE queues with cancellation;
+the frontend renders those stages without fabricated timing or progress.
+
+Conversation evidence width is keyboard/pointer resizable and persisted, local
+evidence imports preserve provenance, command actions share one typed registry,
+and the final performance/a11y browser coverage includes responsive layouts,
+reduced motion, 200-message input, indexed reader behavior, and contrast.
+
+Final provider-free verification: frontend Vitest `162/162`, typecheck/lint,
+production build, backend `737 passed`, Firefox browser matrix `58/58`, and
+Chromium coverage of all 58 scenarios with the two stateful IndexedDB/Web Locks
+cases passing on isolated reruns. Performance p95 was `51.67 ms` for 100-item
+Library search and `43.30 ms` for 200-message composer input in Chromium; the
+Firefox measurements were `79.08 ms` and `30.00 ms`. No provider, corpus,
+embedding, index, deployment, or secret state was changed.
+
+### Plan V2 execution checkpoint — displayed answer identity (2026-09-10)
+
+V2-B03.4 is complete. Command-palette Copy, Inspect Sources, and Save Source
+now resolve an ID-only transient `{conversationId, messageId, variantId}`
+against current records at invocation time, so an older answer or selected
+saved variant cannot silently fall through to the newest answer. Missing or
+changed variants and conversation switches fail closed with a contextual
+notice. ChatMessage publishes context on answer focus, answer/action pointer
+interaction, and variant selection without publishing per-token stream
+updates; nested citation clicks retain their deep-link behavior.
+
+The final provider-free frontend gates passed: Vitest `198/198`, full
+Chromium/Firefox app coverage `76/76`, regression `60/60`, HTTP/SSE
+integration `14/14`, local-provider `4/4`, typecheck, production build, and
+`git diff --check`. Regression p95 remained within budget for Library search
+(`38.15 ms` Chromium, `109.61 ms` Firefox; budget `<200 ms`) and 200-message
+composer input (`30.20 ms`, `48.00 ms`; budget `<100 ms`). The real local
+FastAPI readiness gate remains unavailable at `127.0.0.1:8000/health/live`,
+as recorded earlier; no provider, corpus, index, deployment, or secret state
+was changed.
+
+### Plan V2 execution checkpoint — honest execution presentation (2026-09-10)
+
+V2-B04.1 is complete. PipelineExecution now presents only reported stage
+events and timing: counters are labelled, server elapsed/final durations are
+explicitly separated from the local 250 ms running-view timer, valid
+same-request parent stages receive bounded indentation, and unknown stages use
+a neutral label/icon. Cache, skipped, cancelled, out-of-order, and trace-only
+states remain visible without fabricated progress. Stage changes use a
+dedicated polite live region while timer ticks remain out of the announcement
+stream.
+
+Provider-free frontend verification passed: Vitest `202/202`, typecheck/lint,
+production build, full Chromium/Firefox app coverage `76/76`, regression
+coverage `60/60`, HTTP/SSE integration `14/14`, local harness `4/4`, and
+`git diff --check`. Regression p95 remained within budget for Library search
+(`42.59 ms` Chromium, `76.22 ms` Firefox; budget `<200 ms`) and 200-message
+composer input (`35.20 ms`, `36.00 ms`; budget `<100 ms`). The production
+preview was visually inspected at the offline overview with no visible
+clipping. The real local FastAPI readiness gate remains unavailable at
+`127.0.0.1:8000/health/live`; no provider, corpus, index, deployment, or
+secret state was changed.
+
+### Plan V2 execution checkpoint — discoverability and metadata parity (2026-09-10)
+
+V2-B04.2 is complete. Overview and tool introductions now use truthful
+service-reported metadata: configured ticker lists are not presented as
+searchable corpus counts, readiness copy does not imply a wait estimate, and
+offline/index-not-ready states remain explicit. Source-panel copy clarifies
+that counts are local retrieved sources and ranking scores are ordering
+signals, not confidence. Search, Documents, Retrieval Lab, Architecture,
+Evaluation, Analytics, System, and Library introductions consume the existing
+workspace registry and semantic icon mapping for their tool identity.
+
+Provider-free frontend verification passed: Vitest `203/203`, typecheck/lint,
+production build, full Chromium/Firefox app coverage `76/76`, HTTP/SSE
+integration `14/14`, local harness `4/4`, and `git diff --check`. Regression
+performance remained within budget for Library search (`49.81 ms` Chromium,
+`90.87 ms` Firefox; budget `<200 ms`) and 200-message composer input
+(`28.50 ms`, `35.00 ms`; budget `<100 ms`). The full regression runner had one
+runner-only Chromium evidence-drawer timing failure (`59/60` in each final
+attempt); the exact scenario passed in a focused Chromium/Firefox rerun before
+the reverted wait experiment. The final production preview showed explicit
+offline readiness copy and no visible narrow-layout clipping. The real local
+FastAPI readiness gate remains unavailable at `127.0.0.1:8000/health/live`;
+no provider, corpus, index, deployment, or secret state was changed.
+
+### Plan V2 execution checkpoint — compact brand refinement (2026-09-10)
+
+V2-B05.1 is complete. The compact mark now uses an original folded filing
+page with one search/evidence connection rather than a filing checkmark. The
+inert glow node is gone; SVG strokes remain `currentColor`; the decorative
+mark stays hidden from assistive technology beside the unchanged product
+lockup; and explicit 16/24/32/48px semantic sizes plus a forced-colors
+monochrome path are covered.
+
+Provider-free frontend verification passed: BrandMark tests `2/2`, typecheck,
+production build, full Vitest with `--retry=2` (`204/204`), and
+`git diff --check`. The retry-free full Vitest run had one timing-sensitive
+failure in the unrelated App session-history test (`203/204`); the isolated
+test passed. Light/dark production-preview screenshots at 1440×900 showed
+legible header/sidebar marks, unchanged lockup text, and no visible clipping.
+No backend, provider, corpus, index, deployment, or secret state changed.
+
+### Plan V2 execution checkpoint — measured optimization decision (2026-09-10)
+
+V2-B02.3 is complete as `NO CODE CHANGE REQUIRED`. Three identical
+provider-free `workspace-performance.spec.ts` runs, each with one worker and
+zero retries, kept warm composer input p95 within `15.00/13.70/15.90 ms`
+(Chromium) and `25.00/39.00/46.00 ms` (Firefox) against the `100 ms` budget.
+Warm view-switch p95 stayed within `139.40/117.40/130.20 ms` and
+`154.00/139.00/153.00 ms` against the `200 ms` budget. No measured hotspot
+justified changing message-row ownership, resize/motion handling, batching,
+or architecture, so the existing implementation remains the evidence-backed
+choice.
+
+Each run passed `4` tests and skipped only the two real-backend cases because
+the local API is unavailable. No source, data, provider, corpus, index,
+deployment, or secret state changed; `git diff --check` passed.
+
+### Plan V2 execution checkpoint — integrated product gates (2026-09-10)
+
+V2-B06.1 reached the final gate with all implementation and available
+provider-free validation green. Closing the evidence inspector now clears its
+URL anchor, so responsive drawer-to-inline transitions cannot reopen a modal
+that the user closed. The regular Playwright config now keeps dedicated
+local-backend specs out of the hermetic browser gate, and the A–G layout test
+waits for transition hit-testing to settle without weakening geometry or focus
+assertions.
+
+Static/unit/build verification passed: typecheck/lint, one-worker Vitest
+`204/204`, and production build. Regular Chromium passed `71` tests with one
+intentional real-backend skip on both required runs; Firefox passed `71` with
+the same skip. Provider-free HTTP/SSE integration passed `14/14`, the local
+harness passed `4/4`, backend pytest passed `738` with `121` existing warnings,
+and `git diff --check` passed. Final browser performance probes remained below
+budget: Library search p95 `42.43 ms` Chromium / `89.88 ms` Firefox and
+200-message composer input p95 `30.10 ms` / `34.00 ms` against `<200 ms` and
+`<100 ms` budgets respectively.
+
+The production preview was inspected at the offline overview with no visible
+clipping across the available browser surface. Native browser zoom at 100%,
+125%, 150%, and 200% could not be driven or observed through the connected
+browser surface, so that mandatory product checkpoint remains `[!]`. The
+real local FastAPI gate also remains `[!]` at
+`127.0.0.1:8000/health/live`; its provider-free local harness is green. No
+provider, corpus, index, deployment, or secret state changed. Per the final
+plan, this is documented partial delivery rather than a completion claim.
+
+### Plan V2 execution checkpoint — real backend gate reopened (2026-09-10)
+
+The local FastAPI process was started from the existing local artifacts and
+models after the earlier unavailable-endpoint receipt. `/health/live`,
+`/health/ready`, and `/health` all returned `200`; readiness reported
+`pipeline_ready=true`, 50 searchable companies, and 10,053 indexed chunks.
+The provider-free real-backend performance/feasibility check passed in both
+Chromium and Firefox with `PLAYWRIGHT_REAL_BACKEND=1` (`2 passed, 4 intentional
+synthetic-test skips`), including documents, chunks, chunk detail, system
+metadata, and retrieval inspection without a generation request. Final
+retrieval-inspect timings were 244.25 ms in Chromium and 256.95 ms in Firefox.
+The API was stopped cleanly after verification.
+
+This clears the real local API blocker for B06.1. The only remaining mandatory
+verification gap is native browser-chrome zoom at 100%, 125%, 150%, and 200%,
+which the connected browser surface cannot drive or observe; CSS-viewport
+equivalents remain green. No source, corpus, index, provider, deployment, or
+secret state changed.
+
+### Plan V2 execution checkpoint — native zoom surface audit (2026-09-10)
+
+The connected-computer inventory still exposes only the Codex in-app browser;
+named Chrome and Edge surfaces are unavailable. The in-app browser can render
+the production preview but does not expose browser-chrome zoom controls or a
+native zoom value. A scoped temporary-profile headed-Chrome/CDP probe was
+attempted, but the environment policy rejected launching the native Chrome
+process; the temporary directory was removed and no user profile was touched.
+The master plan therefore remains `[!]` for native zoom at 100%, 125%, 150%,
+and 200%. CSS viewport equivalents remain verified.
+
+### Plan V2 final closure review (2026-09-10)
+
+Status is `IMPLEMENTATION COMPLETE` and `VALIDATION COMPLETE EXCEPT ONE
+EXTERNAL MANUAL-VERIFICATION GATE`. All V2-B implementation tasks are complete:
+B01.1, B02.4, B02.1, B01.2, B01.3, B01.7, B01.4, B01.5, B01.6, B02.2, B02.5,
+B03.1, B03.2, B03.3, B03.4, B04.1, B04.2, B05.1, B02.3, and the available B06.1
+closure gates. The final evidence remains green: lint, production build,
+one-worker Vitest 204/204, backend pytest 738 passed, two regular Chromium
+runs with 71 passed plus one intentional real-backend skip each, Firefox 71
+passed plus one intentional skip, HTTP/SSE integration 14/14, local harness
+4/4, and real-local backend feasibility in both engines. This evidence covers
+layout, accessibility, source identity, persistence, streaming/cancellation,
+integration, and measured performance; no implementation defect is masked by
+the zoom limitation.
+
+The sole active `[!]` is unchanged native browser zoom at 100%, 125%, 150%,
+and 200%. The in-app browser lacks browser-chrome zoom state/control, named
+Chrome/Edge surfaces are unavailable, and environment policy rejected the
+temporary headed-Chrome/CDP probe. This is an external environment/policy
+limitation, not an implementation defect. A human should build and preview the
+frontend, open it in visible Chrome or Edge, set each exact zoom through the
+browser menu, record the displayed zoom plus `window.innerWidth ×
+window.innerHeight`, capture overview and conversation/evidence screens, and
+check for overflow, overlay, clipping, focus loss, and inaccessible controls.
+No production-code workaround is warranted: CSS/browser-specific changes or a
+simulated zoom test would weaken rather than meet the original requirement.
+
+### V3-C00.1 execution checkpoint (2026-09-11)
+
+V3 execution began with the identity-fixture hard gate. The isolated local
+browser fixture now performs exact chunk lookup and returns an explicit 404 for
+unknown identities; it no longer falls back to the first source. Chromium
+local harness validation passed 3/3 scenarios, including exact indexed-reader
+identity, readiness recovery, and unknown-chunk rejection. No production
+retrieval, corpus, index, provider, or user persistence state changed. Next:
+V3-C01.1.
+
+### V3 final closure review (2026-09-11)
+
+Project status is `IMPLEMENTATION COMPLETE` and `VALIDATION COMPLETE EXCEPT
+ONE EXTERNAL MANUAL-VERIFICATION GATE`.
+
+All V3 implementation tasks are complete in the mandated sequence:
+`V3-C00.1`, `V3-C01.1`, `V3-C02.1`, `V3-C04.1`, `V3-C03.1`, `V3-C06.1`,
+`V3-C07.1`, `V3-C08.1`, `V3-C05.1a`, `V3-C05.1b`, `V3-C05.2`, and `V3-C09.1`.
+`V3-C08.2` was deliberately not executed. The work preserves existing
+retrieval ranking, corpus/index data, conversation behavior, and provider
+boundaries while adding truthful inspection, reader identity, bounded
+normalized original viewing, and lossless evidence-collection persistence.
+
+Final non-environment-dependent evidence is green: backend pytest `752 passed`
+with `136` existing parser/deprecation warnings; frontend typecheck/lint; full
+Vitest `42 files / 211 tests`; production build with `1986 modules
+transformed`; HTTP/SSE integration `14/14`; local identity/readiness harness
+`6/6`; live local-backend Chromium and Firefox feasibility `2 passed` plus
+`4` intentional synthetic skips; and `git diff --check`. The browser matrix
+covered Chromium and Firefox accessibility, layout, source identity,
+persistence, streaming/cancellation, Search/Documents/Library, reader,
+Retrieval Lab, exports, and performance. The initially host-contended
+bookmark/performance observations were re-run with one worker; all affected
+cases passed, including three consecutive Firefox bookmark repetitions and
+the isolated `6/6` performance set. No code, layout, accessibility, backend,
+integration, persistence, source-identity, streaming, cancellation, or
+performance defect is hidden by the remaining gate, and no production code is
+unfinished.
+
+The frontend is currently running at `http://localhost:3000/`. The backend is
+currently running at `http://127.0.0.1:8000` with one worker; readiness reports
+`pipeline_ready=true`, `50` searchable companies, and `10053` indexed chunks.
+
+The only current `[!]` item is native browser-zoom verification. Reason: the
+required native browser-chrome settings of `100%`, `125%`, `150%`, and `200%`
+cannot be driven or observed in the connected Codex in-app browser. Attempted
+verification used CSS-viewport Playwright coverage, in-app browser inspection,
+and a scoped temporary-profile headed-Chrome/CDP probe. The in-app browser has
+no browser-chrome zoom control/value, and environment policy rejected the
+native Chrome launch. This is an external environment/policy limitation, not
+an implementation defect.
+
+Manual verification steps: in a visible Chrome or Edge window, from the repo
+run `cd frontend`, `bun run build`, and
+`bunx vite preview --host 127.0.0.1 --port 4173 --strictPort`; open
+`http://127.0.0.1:4173/`. Set browser zoom through the browser menu to exactly
+`100%`, `125%`, `150%`, and `200%`, checking overview,
+conversation/composer, evidence inspector/source reader, Documents, Search,
+Retrieval Lab, and Library at each value. Confirm no horizontal overflow,
+clipping, overlap, hidden control, focus loss, or inaccessible header,
+navigation, or composer action. Record the browser-reported zoom and
+DevTools `window.innerWidth × window.innerHeight`, and capture screenshots or
+notes for all four checkpoints. Restore `100%` afterward.
+
+The original native-zoom requirement remains unchanged. No production-code
+workaround is warranted or permitted; CSS zoom, browser-specific behavior, or
+simulated zoom tests would weaken the requirement rather than verify it.
+
+### V4-D00.1 execution checkpoint (2026-09-11)
+
+V4 Goal execution began after reading the authoritative objective and final
+V4 plan. The frozen dependency order is preserved. The worktree still has the
+same dirty boundary recorded by the planning audit (26 tracked files modified,
+14 untracked entries; 1,356 insertions and 112 deletions), and unrelated work
+is preserved. V2/V3 closure claims remain historical receipts; current V4
+implementation truth includes the independently reproduced Inspector overlap
+at 1366×768 without native browser zoom.
+
+The old audit services were checked for ownership before reuse. Ports 3000,
+4173, and 8000 currently have no listening process, so no service was reused
+or stopped. D00.1 changed no production code, corpus, index, provider config,
+or user data. Next task: V4-D01.1, the demonstrated reader-layout repair.
+
+### V4-D01.1 execution checkpoint (2026-09-11)
+
+D01.1 is complete. The Evidence Inspector now uses an opaque bounded grid
+shell at desktop and a bounded drawer at short widths. Its source list and
+reader are explicit scroll owners, while the excerpt body is not a nested
+vertical scroller. The implementation also removes silent invalid-source
+fallbacks and adds an app-mounted reader-session controller with generation,
+abort, exact source/document identity, and stale-response guards across
+indexed detail, nearby chunks, normalized manifest/content, location, and
+find requests.
+
+Changed files are `frontend/src/hooks/useReaderSession.ts` and its test,
+`frontend/src/components/ContextPanel.tsx`,
+`frontend/src/components/OriginalDocumentReader.tsx`, `frontend/src/App.tsx`,
+the V4 rules in `frontend/src/styles/components.css`, and
+`frontend/e2e/document-workspace.spec.ts`. Existing retrieval, corpus/index,
+provider, persistence, and public API contracts were preserved.
+
+Validation is green: frontend lint/typecheck, focused Vitest `13/13`, build
+(`1987` modules), Playwright Chromium + Firefox `4/4`, and backend
+reader/presentation pytest `13/13` (only the existing `15` BeautifulSoup
+deprecation warnings). Runtime evidence covered `1366×768`, `768×480`, and
+`390×844`; source/reader boundaries, drawer bounds, SEC-link identity, and
+horizontal overflow checks passed. The full twenty-cycle stress gate remains
+part of the final V4 matrix and is not falsely claimed here. No D01 defect is
+known. Next: `V4-D02.1`.
+
+### V4-D02.1 execution checkpoint (2026-09-11)
+
+D02.1 is complete. The save action is now user-facing `Save answer version`
+and sends the displayed answer identity `{conversationId, messageId,
+variantId}`. Persistence resolves that identity against the latest record,
+captures immutable answer text/ordered sources/request provenance, awaits the
+existing repository queue, deduplicates equivalent snapshots, and reports
+truthful saving outcomes. The UI exposes live saving/saved/already-saved,
+failed, and volatile states; durable states link to Library, while recovery
+states offer retry and never claim a volatile write is saved.
+
+`mutateConversationRecord` was added without replacing the storage engine or
+schema. Autosave, bookmarks, notes, renames, versions, and Library metadata
+now mutate the latest record inside the serialized queue, preserving newer
+fields and existing writer-lock, tombstone, mirror, quota, and deletion
+semantics. A real runtime race was reproduced where autosave could overwrite
+a newly saved version; the latest-record mutation path fixed it, and stable
+identity canonicalization removed duplicate versions.
+
+Validation is green: full Vitest deterministic rerun `43 files / 215 tests`,
+frontend lint/typecheck, production build `1987` modules, and Playwright
+Chromium + Firefox `6/6` covering D01 geometry plus save → duplicate
+deduplication → Library → exact Version 1 reopen. The default parallel Vitest
+run had one existing App cancellation test timing failure under host-shared
+storage contention; the test passed alone and in the required one-worker
+rerun. Backend is N/A for this frontend-only task; the task-owned FastAPI
+service remains ready. No D02 defect is known. Next: `V4-D03.1`.
+
+### V4-D03.1 execution checkpoint (2026-09-11)
+
+D03.1 is complete. The new `src/api/document_reader_models.py` and
+`src/api/document_sources.py` modules define a typed, local-only V4 reader
+manifest. `GET /documents/{document_id}/reader` returns verified filing
+identity, stable source IDs, revision binding, canonical SEC index URL only
+when exact catalog and processed metadata agree, and explicit availability for
+normalized text, structured representation, and PDF. Existing `/original`
+routes and source IDs are preserved.
+
+The resolver requires the exact `ticker:accession` document identity and a
+matching positive integer CIK from the corresponding processed metadata. It
+does not infer CIK prefixes, accession numbers, URLs, or filesystem paths.
+Unknown or mismatched identities are explicit unverified/404 states; indexed
+retrieval is unaffected. IBM runtime exposes primary and companion sources;
+companions keep stable local identity without an invented canonical URL.
+
+The existing viewer cache was corrected to account for UTF-8 encoded bytes on
+eviction. No ingestion, corpus, chunk, embedding, index, retrieval, provider,
+or remote acquisition behavior changed. The current local corpus remains 50
+primary HTML filings plus one HTML companion and no PDF. PDF acquisition and
+official/derived feasibility handling are deferred to D04.1.
+
+Validation is green: focused D03 backend/API/identity/cache selection passed
+`17/17`; the expanded reader selection passed `22` tests with only the
+existing warnings; frontend lint and TypeScript checks passed; production
+build passed with `1987` modules transformed. The owned backend returned
+AAPL verified/available, IBM primary+companion, and unknown identity 404
+runtime results without external network access. No D03 implementation defect
+is known. Next: `V4-D04.1`.
+
+### V4-D04.1 execution checkpoint (2026-09-11)
+
+D04.1 recorded an earlier hermetic experiment for a bounded remote reader
+transport. That experiment was retired by V4-R03.1 because a successful fetch
+did not admit bytes into any reader representation. The supported contract is
+now local-only; no transient remote-body path is exposed.
+
+The implementation enforces the frozen 2 MiB index, 20 MiB source, 40 MiB
+source-set, 5-second connect, 10-second inactivity/read, 30-second operation
+budget, one transient retry, 0.5-second request spacing, one active and four
+pending acquisition limits. It never writes ingestion, Qdrant, or user
+storage; partial/non-HTML/PDF/private-address/wrong-identity/ambiguous/
+rate-limit/redirect responses fail closed. Same-document calls are
+single-flight and bytes are operation-local.
+
+SEC index parsing admits exactly one filing-type HTML row and uses the dashed
+accession index URL. The existing ingestion downloader is untouched. Local
+sources short-circuit resolve; AAPL runtime returned `not_needed`,
+`local_available`, with no network request. Hermetic client/API tests passed
+`24/24`; frontend lint/typecheck and the `1987`-module production build
+passed. No bounded live SEC request is claimed from this run; that external
+gate remains explicit. No D04 defect is known. PDF remains deferred. Next:
+`V4-D05.1`.
+
+### V4-D05.1 execution checkpoint (2026-09-11)
+
+D05.1 is complete. The structured reader now parses bounded, application-owned
+blocks for headings, paragraphs, lists, tables, separators, and explicit
+unsupported-content notices. Executable/remote markup is omitted; source text
+and table order are preserved; excessive bytes, nodes, depth, code points,
+cells, and response size fail safely. Each parsed representation has a stable
+representation revision.
+
+Revision-bound outline/content/search/export routes and an LRU parsed cache were
+added. The cache accounts serialized UTF-8 bytes and validates the current
+source-set/document revisions before serving a hit. No persistence, ingestion,
+Qdrant, indexed chunk, retrieval, or generation behavior changed.
+
+`StructuredDocumentReader` renders semantic React content with outline,
+explicit find, source selection, text scale, wide mode, safe export, Open SEC,
+and honest PDF-unavailable state. Its evidence/session lifecycle remains shared
+with the repaired inspector. E2E found and fixed request churn from unstable
+session/parameter identities and a rail-width overflow caused by viewport-only
+breakpoints; duplicate paragraphs are now retained so ambiguous evidence is
+not silently collapsed.
+
+Validation is green: backend structured/source/API selection `25/25`, frontend
+structured-reader component test `1/1`, production Vite build `1988` modules,
+and hermetic structured-reader Playwright Chromium + Firefox `2/2` (with the
+existing D01 workspace checks also green). Restarted runtime confirms local
+AAPL and IBM manifests are verified and structured-available, with IBM's
+companion exposed; an unlisted JPM identity is correctly `404`. The local
+corpus has no PDF, and no PDF capability is claimed. No D05.1 defect is known.
+Next: `V4-D05.2`.
+
+### V4-D05.2 execution checkpoint (2026-09-11)
+
+D05.2 is complete. Structured evidence correspondence now requires the exact
+chunk ID, SHA-256 text hash, complete declared source set, and matching
+revision-bound structured representation. The result is explicitly
+`exact`/`ambiguous`/`not_found`/`unavailable`/`stale`; only exact results carry
+source, document, representation, and Unicode code-point ranges. Numeric-only
+financial values are never treated as proof. The new reader-location route and
+UI keep evidence marks distinct from search marks and reject late navigation
+responses after manual movement.
+
+Validation is green: backend structured/location/source/API selection `25/25`,
+focused reader component `1/1`, TypeScript, and structured-reader Playwright
+Chromium + Firefox `2/2`. Runtime after restart verified AAPL/IBM manifests and
+exercised a real AAPL location request; the current HTML corpus returned an
+explicit `not_found` where the full table caption/header/unit/row correspondence
+is absent, so the UI made no false exact claim. No persistence, ingestion,
+Qdrant, retrieval, generation, or PDF behavior changed. No D05.2 defect is
+known. Next: V4-D06.1.
+
+### V4-D06.1 execution checkpoint (2026-09-11)
+
+D06.1 is complete. `DocumentWorkspace` is now the shared adaptive composition
+around the existing reader session. It exposes explicit Document, Indexed
+excerpt, and Metadata views without creating a second document state owner.
+Container width selects three-column, two-column, or single-surface reading;
+narrow widths change architecture instead of compressing the document. The
+embedded reader has one vertical scroll owner, tables retain labelled horizontal
+scrolling, and tabs/actions remain keyboard reachable. The existing inspector
+continues to act as the compatibility entry point.
+
+Validation is green: TypeScript, focused reader/rail/workspace component tests
+`11/11`, and Playwright workspace/reader flows Chromium + Firefox `6/6`; the
+production webserver build transformed `1988` modules. Reader APIs,
+persistence, retrieval, source identity, and PDF contracts were preserved. No
+D06.1 defect is known. Next: V4-D07.1.
+
+### V4-D07.1 execution checkpoint (2026-09-11)
+
+D07.1 is complete. Saved evidence remains an independent immutable excerpt
+snapshot carrying chunk and answer lineage, with a bounded plain-text evidence
+note capped at 10,000 characters. Notes use field-scoped collection mutation;
+conversation edits or deletion cannot rewrite saved evidence.
+
+Backup import now validates/remaps collection and item IDs before mutation,
+preflights writer authority and collection capacity before conversation writes,
+preserves malformed bytes, and reports a later evidence-storage failure
+separately instead of claiming a fully successful import. Existing writer locks,
+tombstones, quotas, storage fallback, export recovery, and schema remain in
+place.
+
+Validation is green: TypeScript and focused evidence/library/workspace tests
+`13/13`, including note persistence, lineage round-trip, malformed-storage
+preservation, bounded import preflight, and saved-evidence reopen. No backend,
+reader API, corpus, or retrieval behavior changed. No D07.1 defect is known.
+Next: V4-D08.1.
+
+### V4-D08.1 execution checkpoint (2026-09-11)
+
+D08.1 is complete. Documents and Search now enter the shared full document
+workspace with stable filing, source, chunk, citation, and revision identity.
+The integration does not create a second reader state owner, expose local
+filesystem paths, or alter indexed retrieval.
+
+Validation is green: focused Documents/Search/workspace coverage `11/11` and
+frontend lint/typecheck. Reader, source-identity, and indexed-excerpt
+contracts remained green. No backend, ingestion, persistence, or PDF behavior
+changed. No D08.1 defect is known. Next: V4-D09.1.
+
+### V4-D09.1 execution checkpoint (2026-09-11)
+
+D09.1 is complete. Related research suggestions use only available indexed
+sections and preserve active scope. A selected suggestion fills a non-empty
+composer draft without auto-submitting, keeping query, company, section, and
+send under analyst control.
+
+Validation is green: focused related-research/Chat coverage `14/14` and
+frontend lint/typecheck. No unsupported Web/Deep Research behavior or new
+source, provider, streaming, cancellation, or persistence capability was
+added. No D09.1 defect is known. Next: V4-D10.1.
+
+### V4-D10.1 execution checkpoint (2026-09-11)
+
+D10.1 is complete. Retrieval Lab now has analyst and advanced paths, clear
+preset/Top K/candidate-pool explanations, stage scores and ranks, submitted
+configuration visibility, exact JSON/CSV export, and source actions.
+Comparison diagnostics are truthful and provider-free; immutable source
+identity is preserved.
+
+Validation is green: focused Retrieval Lab/save-evidence coverage `10/10` and
+frontend lint/typecheck. The final browser matrix covered retrieval controls,
+exports, source actions, and persistence. Retrieval ranking and backend
+contracts were not redesigned. No D10.1 defect is known. Next: V4-D11.1.
+
+### V4-D11.1 execution checkpoint (2026-09-11)
+
+D11.1 is complete. System and provenance now provide safe refresh, reader
+availability, provenance, and next-action states. Refresh is asynchronous and
+clipboard actions are guarded; secrets and filesystem paths remain excluded.
+
+Validation is green: focused SystemInfoPanel coverage `2/2`, frontend
+lint/typecheck, and runtime `/system/info` contract checks. No backend security
+or provenance contract was weakened. No D11.1 defect is known. Next: V4-D12.1.
+
+### V4-D12.1 execution checkpoint (2026-09-11)
+
+D12.1 is complete. `docs/EVALUATION_REVIEW_GUIDE.md` documents the analyst
+workflow, and Evaluation now provides live/recorded source choice, status
+filtering, reload, actionable empty-state guidance, and distinct OK/error/
+missing states. Recorded mode remains provider-free; no report, metric,
+confidence, or provider result is fabricated. The guide is linked from
+`README.md`.
+
+Validation is green: focused Evaluation coverage `2/2` and frontend
+lint/typecheck. Evaluation data and benchmark semantics were not changed. No
+D12.1 defect is known. Next: V4-D13.1.
+
+### V4-D13.1 final closure checkpoint (2026-09-11)
+
+D13.1 closes implementation and all non-environment-dependent gates. The
+complete task sequence is green:
+`V4-D00.1`, `V4-D01.1`, `V4-D02.1`, `V4-D03.1`, `V4-D04.1`, `V4-D05.1`,
+`V4-D05.2`, `V4-D06.1`, `V4-D07.1`, `V4-D08.1`, `V4-D09.1`, `V4-D10.1`,
+`V4-D11.1`, `V4-D12.1`, and `V4-D13.1`.
+
+Final frontend receipts: `bun run lint`; Vitest `47 files / 228 tests`;
+production build `1991` transformed modules; hermetic Playwright `152 passed,
+2 skipped` across Chromium and Firefox. Final performance budgets were green,
+including Chromium warm composer/view-switch p95 `17.6/57.1 ms` and Firefox
+`44/160 ms`, plus the measured reader/source, Library, search, and
+200-message composer cases.
+
+Final backend/integration receipts: pytest `771 passed` with `172` existing
+parser/deprecation warnings; SEC live smoke passed for AAPL CIK `320193` and
+accession `0000320193-25-000079`; local identity/readiness `6/6`; real-backend
+feasibility `2 passed` plus `4` intentional synthetic skips. Runtime checks
+returned frontend `200`, healthy live/ready services, `50` searchable
+companies, `50` catalog filings, AAPL `91` chunks, verified reader identity,
+structured representation available, PDF unavailable, `3` reader matches,
+and retrieval `22` candidates with `5` selected. AAPL's empty outline is the
+declared no-heading limitation; content returns structured blocks.
+
+The PDF decision remains explicit and conservative: the local corpus contains
+`50` primary HTML filings plus `1` HTML companion and no PDF. The bounded
+official acquisition path is HTML-only; no fake PDF, page count, confidence,
+or unsupported viewer capability is claimed. A future PDF source needs a new
+verified artifact and contract decision.
+
+Closure review found no code, layout, accessibility, backend, integration,
+persistence, source-identity, streaming, cancellation, or performance defect
+hidden behind the remaining gate. No production code remains unfinished. The
+owned services remain frontend `http://127.0.0.1:3000/` and one-worker backend
+`http://127.0.0.1:8000`.
+
+Project status:
+
+`IMPLEMENTATION COMPLETE`
+
+`VALIDATION COMPLETE EXCEPT ONE EXTERNAL MANUAL-VERIFICATION GATE`
+
+The only remaining `[!]` item is native browser-zoom verification. The reason
+is that the required native browser-chrome values `100%`, `125%`, `150%`, and
+`200%` cannot be established from the connected Codex in-app browser. The
+attempted method was CSS-viewport Playwright coverage, in-app browser
+inspection, and a scoped temporary-profile headed-Chrome/CDP probe. The
+in-app browser exposes no native chrome zoom control/value, and environment
+policy rejected the native Chrome launch. This is an external
+environment/policy limitation, not an implementation defect.
+
+Manual human verification: in visible Chrome or Edge, from the repository run
+`cd frontend`, `bun run build`, and
+`bunx vite preview --host 127.0.0.1 --port 4173 --strictPort`; open
+`http://127.0.0.1:4173/`. Set native browser zoom to exactly `100%`, `125%`,
+`150%`, and `200%`, checking Overview, Conversation/composer, Evidence
+Inspector/source reader, Documents, Search, Retrieval Lab, and Library at
+each value. Confirm no horizontal overflow, clipping, overlap, hidden
+control, lost focus, or inaccessible header/navigation/composer action.
+Record the browser-reported zoom and DevTools
+`window.innerWidth × window.innerHeight`, capture screenshots/notes for all
+four checkpoints, and restore `100%` afterward.
+
+The original native-zoom requirement is preserved; it was not weakened or
+deleted. No production-code workaround is warranted. CSS zoom,
+browser-specific behavior, or a simulated test would alter the requirement
+instead of verifying it.
+
+### Skill architecture reconciliation (2026-09-12)
+
+PASS 2 applied the frozen SEC RAG skill architecture under `.agents/skills/`.
+The existing `rag-ui-ux` was preserved and strengthened with task semantics,
+state ownership, async/stale handling, reader representation honesty, and
+conditional specialist routing. Six project-owned RAG specialists were added;
+Qdrant guidance and backend contracts were merged into retrieval/core
+references. External repositories remain reference-only and no third-party code
+or installer was used.
+
+This governance work does not resolve the current product evidence gaps found
+in PASS 1. The Documents → “Open document workspace” path can first present an
+answer-scoped inspector (“Retrieved sources” / “this answer”) without a
+question; structured search can disagree with normalized prose while reporting
+complete; and acquisition success is not proven reader admission. These are
+dated acceptance findings, not closed implementation claims.
+
+## V4-R00.1 execution checkpoint (2026-09-12)
+
+- Status: `[x] complete`.
+- Task-owned baseline fixtures were added for catalog-origin routing, direct-
+  document chrome, representation coverage, and resolver retirement.
+- Expected baseline failures were reproduced: 2 frontend failures and 2
+  backend failures, each matching a frozen V4-R defect; no unrelated failure
+  appeared.
+- Commands: `cd frontend; bun run test --
+  src/components/DocumentExplorerPanel.test.tsx
+  src/components/DocumentWorkspace.test.tsx` (4 passed, 2 expected failures);
+  `.venv\\Scripts\\python.exe -m pytest
+  tests/test_structured_document.py::test_structured_representation_reports_visible_content_outside_supported_blocks
+  tests/test_api.py::test_reader_resolver_surface_is_retired -q` (2 expected
+  failures).
+- Files changed by this task: `frontend/src/components/DocumentExplorerPanel.test.tsx`,
+  `frontend/src/components/DocumentWorkspace.test.tsx`,
+  `tests/test_structured_document.py`, and `tests/test_api.py`.
+- No API, persistence, corpus, index, retrieval, security, or performance
+  behavior changed. Existing dirty user files were preserved.
+- Existing processes were not started or stopped: one-worker backend PID 11844
+  on 8000; Vite previews PID 7292 on 4173 and PID 2360 on 5173.
+- Exact next task: `V4-R01.1`.
+
+## V4-R01.1 execution checkpoint (2026-09-12)
+
+- Status: `[x] complete`.
+- The frontend now uses a discriminated `WorkspaceTarget`: answer evidence
+  remains answer-scoped, while catalog and search entries open a direct
+  document workspace with stable document identity, representation/tab intent,
+  return view, and return-focus id. `App` owns the target; `useReaderSession`
+  remains the sole reader async owner. Catalog/search paths no longer create a
+  synthetic answer `Source` or answer-inspector chrome.
+- Files changed by this task: `frontend/src/types.ts`,
+  `frontend/src/App.tsx`, `frontend/src/components/DocumentExplorerPanel.tsx`,
+  `frontend/src/components/SearchWorkspace.tsx`,
+  `frontend/src/components/DocumentWorkspace.tsx`, and their three focused
+  component tests.
+- API/DTO contract: no backend endpoints or DTOs changed. The target is
+  frontend-only navigation state; no persistence, cache, acquisition, corpus,
+  retrieval, embedding, Qdrant, or evaluation behavior changed. No new reader
+  async owner or network path was introduced.
+- Validation: `cd frontend; bun run lint` passed; focused Vitest passed `13/13`
+  (`DocumentExplorerPanel`, `SearchWorkspace`, `DocumentWorkspace`); and
+  `$env:VITE_API_BASE_URL='http://localhost:8000'; bun run build` passed with
+  `1991` transformed modules.
+- Browser/runtime receipt: with the owned backend healthy at `127.0.0.1:8000`,
+  Documents opened a direct workspace showing `Back to Documents` without
+  “Retrieved sources”; Search opened a direct workspace showing `Back to
+  Search` without answer wording. Returning to Search preserved the submitted
+  query, results, and trace, and restored focus to the opener. AX inspection
+  confirmed labelled back/tabs and existing keyboard button semantics. Native
+  browser zoom was not rerun; the historical external gate remains optional
+  and does not block this task.
+- Known limitation intentionally carried forward: repeated reader identity /
+  toolbar chrome remains for `V4-R04.1`; structured coverage semantics and the
+  resolver surface remain for `V4-R02.1` and `V4-R03.1`.
+- Existing dirty user files, ignored `data/`, and owned processes were
+  preserved; no process was started or stopped. Exact next task:
+  `V4-R02.1`.
+
+## V4-R02.1 execution checkpoint (2026-09-12)
+
+- Status: `[x] complete`.
+- Reader availability now carries representation-scoped `coverage_status`
+  (`complete|partial|unknown`) and `coverage_reason` fields, with an additive
+  machine-readable reason companion. Structured document, outline, content,
+  and search responses carry the same fields while pagination `complete`
+  remains a separate claim.
+- The bounded structured parser now compares visible, non-executable source
+  text with emitted source-backed blocks and detects omitted unsupported
+  content. A simple `<div>Company Background</div>` fixture is `partial` with
+  `unsupported_visible_content`; safe supported markup is positively
+  `complete`. Representation revisions were incremented to bind the coverage
+  semantics.
+- Manifest construction assesses each admitted structured source through the
+  existing bounded reader service. Normalized text is complete only when its
+  local source set is complete; partial/unknown source availability does not
+  become a complete claim. PDF remains unavailable/unknown. No corpus, index,
+  retrieval, embedding, Qdrant, acquisition, or persistence path changed.
+- The structured reader now discloses the coverage state and, after a no-match
+  under partial/unknown coverage, says `No matches in this structured view.`
+  and offers `Search normalized text`. The existing normalized local reader is
+  mounted in the same document workspace with the shared reader session; its
+  back action returns to the structured view. EN/VI copy and semantic tokens
+  were added without a new async owner.
+- Files changed by this task: `src/api/document_reader_models.py`,
+  `src/api/structured_document.py`, `src/api/document_sources.py`, the reader
+  manifest call sites in `src/api/app.py`, frontend reader/types/workspace
+  files (`StructuredDocumentReader`, `OriginalDocumentReader`,
+  `DocumentWorkspace`, `types.ts`, and reader CSS), plus focused backend and
+  frontend tests.
+- Validation: backend structured/document-source/API contract selection passed
+  `8 passed` (22 existing parser warnings); the combined backend selection was
+  `70 passed, 1 expected V4-R03 resolver-retirement failure`; frontend focused
+  coverage passed `17/17`, `bun run lint` passed, and the production build
+  passed with `1992` transformed modules. The expected remaining failure is
+  only `test_reader_resolver_surface_is_retired`, owned by `V4-R03.1`.
+- Browser/runtime evidence was supplemented by direct local AAPL parsing:
+  normalized coverage is `complete`, structured coverage is `partial` with
+  `unsupported_visible_content`, and PDF is `unknown/unavailable`. The
+  pre-existing backend PID 11844 on port 8000 was not restarted, so its live
+  manifest still reflects the prior process image; no process was started or
+  stopped by this task. The browser fallback path is covered by the focused
+  reader test; native zoom remains the historical optional external gate.
+- Existing dirty user files, ignored `data/`, and user-owned services were
+  preserved. Exact next task: `V4-R03.1`.
+
+## V4-R03.1 execution checkpoint (2026-09-12)
+
+- Status: `[x] complete`.
+- The non-admitting remote reader acquisition experiment was retired rather
+  than replaced. Its request/response models, transport code and tests,
+  frontend client/types, settings, and setup documentation are gone. The
+  repository-wide reference search is clean except for the intentional
+  route-path retirement assertion in `tests/test_api.py`.
+- Local reader behavior remains unchanged and bounded: manifest, normalized
+  text, structured content/search, and canonical SEC links remain available;
+  no remote body, cache, queue, ingestion, persistence, corpus, index,
+  retrieval, embedding, Qdrant, or evaluation behavior was introduced.
+  Security scope is narrower because ordinary reader use can no longer issue
+  an acquisition request or report discarded bytes as admitted content.
+- Files changed by this task: `src/api/app.py`,
+  `src/api/document_reader_models.py`, `configs/settings.py`,
+  `frontend/src/lib/api.ts`, `frontend/src/types.ts`, `.env.example`,
+  `README.md`, and historical implementation notes; files removed:
+  `src/api/sec_reader_client.py` and `tests/test_sec_reader_client.py`.
+- Validation: focused backend `tests/test_api.py tests/test_document_sources.py
+  tests/test_structured_document.py` passed `71` tests with `22` existing
+  parser warnings. Frontend `bun run lint` passed; focused reader tests passed
+  `6/6`; production build passed with `1992` transformed modules. The route
+  retirement guard now passes as part of the backend selection.
+- No network request was made, and no process was started or stopped. The
+  pre-existing one-worker backend PID 11844 on port 8000 and Vite previews PID
+  7292 (4173) and PID 2360 (5173) were preserved. Native zoom remains the
+  historical optional external gate. Exact next task: `V4-R04.1`.
+
+## V4-R04.1 execution checkpoint (2026-09-12)
+
+- Status: `[x] complete`.
+- The direct document workspace now owns the document identity/header and the
+  embedded structured reader contributes only its reading tools, availability
+  state, outline, and content. The embedded reader no longer repeats the
+  `Structured document` identity block or ticker heading, while standalone
+  reader use retains its own header and identity. The normalized fallback keeps
+  the same workspace shell and returns to the structured view through the
+  existing reader session.
+- Files changed by this task: `frontend/src/components/StructuredDocumentReader.tsx`
+  and its focused test, plus the existing reader/workspace styles and
+  workspace components touched by the prior reader integration.
+- Accessibility/responsive checks: the embedded section remains labelled as
+  `Structured document`, the workspace retains labelled back/tabs and keyboard
+  controls, and the first useful toolbar/content canvas is visible in the
+  direct Search → document workspace path. No new focus trap or async owner was
+  introduced; the existing return-focus behavior remains intact.
+- Validation: the focused reader/workspace selection passed `18/18` tests
+  (including the new no-duplicate-identity regression), and the live browser
+  path showed one workspace document heading, zero embedded identity blocks,
+  one visible reading toolbar, and one visible content canvas. No backend/API,
+  persistence, corpus, index, retrieval, embedding, Qdrant, acquisition, or
+  evaluation behavior changed. Native zoom remains the historical optional
+  external gate.
+- Existing dirty user files, ignored `data/`, and user-owned services were
+  preserved; no process was started or stopped. Exact next task: `V4-R05.1`.
+
+## V4-R05.1 execution checkpoint (2026-09-12)
+
+- Status: `[x] complete` for every repository- and harness-verifiable gate.
+- Closure validation is green: frontend full Vitest `47 files / 231 tests`,
+  `bun run lint`, and production Vite build (`1,992` transformed modules);
+  backend full pytest `766 passed` with `178` existing parser/deprecation
+  warnings; and isolated local Playwright `6 passed` across Chromium and
+  Firefox. The focused reader/workspace selection is included in the full
+  frontend receipt and remains `18/18`.
+- Browser receipt: the connected browser verified both Documents and Search
+  direct-workspace back labels, one workspace-owned identity header, no
+  answer-scoped “Retrieved sources” wording, visible embedded toolbar/content,
+  and the unknown-coverage no-match → normalized local-reader fallback.
+  Native browser zoom at exact chrome values remains the previously recorded
+  external manual gate because the connected browser cannot report native
+  chrome zoom.
+- Documentation was aligned in `README.md`,
+  `docs/frontend/FRONTEND_CONTRACT.md`, and
+  `docs/implementation-progress.md` with local-only reader behavior,
+  representation coverage semantics, direct workspace ownership, retired
+  acquisition surface, and the final receipts. Exact reference search for
+  retired resolver symbols/routes is clean except the intentional route-path
+  assertion in `tests/test_api.py`; `git diff --check` reports no whitespace
+  errors.
+- No corpus, index, retrieval, embedding, Qdrant, acquisition, persistence,
+  or evaluation data was regenerated or changed. Existing dirty user files,
+  ignored `data/`, and pre-existing services (backend PID 11844; Vite PIDs
+  7292/2360) were preserved, and no process was started or stopped. The V4
+  sequence `V4-R00.1 → V4-R01.1 → V4-R02.1 → V4-R03.1 → V4-R04.1 → V4-R05.1`
+  is complete.
+
+## V4-P improvement audit closure — 2026-09-12
+
+The resumed product-improvement audit completed the frozen sequence
+`V4-P00.1 → P01.1 → P01.2 → P02.1 → P03.1 → P03.2 → P04.1 → P04.2 → P05.1 →
+P05.2 → P06.1 → P08.1 → P09.1`. `V4-P07.1` Library continuity remains
+explicitly deferred. The sequence adds a conservative versioned table
+presentation contract, source-layout/raw fallback, unified company labels,
+typed local action states, provenance-bearing local evidence snapshots,
+stateful inline/drawer evidence review, density tokens, direct document
+workspace composition, analyst/advanced Retrieval Lab disclosure, and a
+measurement-only reader performance gate. Retrieval algorithms, corpus/index,
+embeddings, Qdrant, acquisition, streaming/cancellation, and evaluation
+semantics remain frozen.
+
+Repository gates are green: frontend Vitest `48 files / 235 tests`, TypeScript
+lint, Vite build (`1,993` modules), serial Chromium/Firefox E2E `152 passed / 4
+intentional skips`, local synthetic E2E `6/6`, and backend pytest `770 passed`
+with `182` existing warnings. Real-backend P08 characterization measured
+AAPL/GOOGL/AMZN cold/warm reader open paths in Chromium and Firefox, recorded
+local table overflow with no global page overflow, and did not claim a memory
+benchmark because the provider did not expose one. The audit-owned one-worker
+backend was stopped after closure; no project listener remains on ports
+`3000`, `4173`, `5173`, or `8000`.
+
+The skill-system reconciliation and bounded external research are complete.
+External sources are pattern evidence only: Azure AI Search and OpenAI File
+Search support separate citation/reference artifacts; Docling and W3C support
+preserving merged-cell/table structure and readable local overflow; Elasticsearch
+Explain supports advanced-only score diagnostics; Langfuse and WCAG guidance
+support idempotent, action-local feedback and scoped status/error messaging.
+None is a new product dependency or proof of SEC representation truth.
+
+The sole remaining validation item is the historical external manual gate for
+native Chrome/Edge menu zoom at exactly `100%`, `125%`, `150%`, and `200%`.
+Connected Codex browser tooling cannot establish browser-chrome zoom values, so
+CSS viewport tests were not substituted for that requirement. Existing dirty
+worktree files, ignored `data/`, and user-owned state remain preserved.
+
+## V4-P07.1 Library continuity — 2026-09-12
+
+The previously deferred Library follow-up is now complete. The frontend
+Library is organized as a derived local continuation workspace with bounded
+Recent Research (eight most recent stored conversations), a complete
+conversation-history list, Saved Answer Versions (up to 100 immutable
+variants), and Evidence Collections (historical EvidenceSnapshot v2
+artifacts). Existing conversation persistence,
+answer-variant identity, bookmark/note models, backup import/export,
+IndexedDB/localStorage fallback, Web Locks, BroadcastChannel, and deterministic
+evidence deduplication remain the only owners of persisted state.
+
+Reopening a saved answer carries the exact conversation/message/variant IDs;
+it never falls back to the latest answer. Continue Research restores the saved
+scope and fills the composer without submitting. Evidence opens as the saved
+snapshot, while Current source performs an exact local chunk/document/hash
+check and reports current, stale, missing, or unavailable without nearby/fuzzy
+substitution. Raw IDs, revisions, hashes, locations, lineage, and capture time
+are behind a provenance disclosure; unknown company/source fields are omitted
+and known tickers use the shared `Company Name (TICKER)` formatter. A storage
+warning is not presented as durable “Saved on this device” state. Browser-local,
+read-only, volatile, malformed storage, and current-corpus limitations are
+explicit in EN/VI and both themes.
+
+Files for this follow-up are limited to the frontend Library/evidence surface,
+existing App/ChatMessage handoff plumbing, focused tests, styles, and the
+implementation receipts. No backend, retrieval, generation, evaluation,
+reader representation, corpus, index, Qdrant, model, prompt, or PDF path was
+changed. The full frontend suite passes `48 files / 245 tests`, TypeScript lint
+passes, and the production build transforms `1,993` modules. The saved-answer
+journey passes in both Chromium and Firefox (`2 passed`); the complete default
+preview matrix passes `152` tests with `4` intentional skips across both
+engines. Connected-browser responsive checks at 390, 768, 1024, 1280, 1366,
+1440, 1920, plus short 1366×520, show no global horizontal overflow. The current demo services were
+preserved: backend parent/listener `19104/16700` on `127.0.0.1:8000` and
+frontend parent/listener `19292/18944` on `127.0.0.1:4173`; backend health is
+`200`, pipeline ready, with 50 searchable companies and 10,053 indexed chunks.
+
+The historical manual native browser-chrome zoom gate remains unchanged and
+is not replaced by CSS viewport checks. The final preview matrix passed `152`
+tests with `4` intentional skips across Chromium and Firefox after restoring
+the complete history list and removing duplicate Recent Research action
+targets; no further step is required for V4-P07.1.

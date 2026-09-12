@@ -1,0 +1,4 @@
+interface:
+  display_name: "SEC RAG Performance"
+  short_description: "Measure and attribute SEC RAG latency and memory"
+  default_prompt: "Use $rag-performance to diagnose a measured SEC RAG performance regression."

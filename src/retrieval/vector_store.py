@@ -90,6 +90,7 @@ class VectorStore:
                     "chunk_index": c["chunk_index"],
                     "token_count": c["token_count"],
                     "text": c["text"],
+                    **({"source_url": c["source_url"]} if c.get("source_url") else {}),
                 },
             )
             for c in chunks

@@ -557,8 +557,25 @@ def _run_legacy_comparison(
 ) -> dict[str, Any]:
     from src.evaluation.phase2_runtime import build_production_judge_prompt
 
+    # The bound Phase 2 result is an answer/score report, not the source of
+    # ground-truth references. Use the versioned Evidence Contract mapping so
+    # legacy judging remains stable even when the report omits ground_truth.
     reference_payload = json.loads(REFERENCE_PATH.read_text(encoding="utf-8"))
-    legacy_references = {case["question"]: case["ground_truth"] for case in reference_payload.get("cases", []) if case.get("question") in SENTINEL_QUESTIONS}
+    reference_questions = {
+        case.get("question")
+        for case in reference_payload.get("cases", [])
+        if case.get("question") in SENTINEL_QUESTIONS
+    }
+    missing_questions = set(SENTINEL_QUESTIONS) - reference_questions
+    if missing_questions:
+        raise ValueError(
+            "bound legacy report is missing sentinel questions: "
+            + ", ".join(sorted(missing_questions))
+        )
+    legacy_references = {
+        question: reference_for(question)
+        for question in SENTINEL_QUESTIONS
+    }
     rows: list[dict[str, Any]] = []
     for report in reports:
         run_id = report["run_id"]

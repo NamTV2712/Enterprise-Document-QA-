@@ -11,33 +11,84 @@ import {
   useRef,
   useCallback,
   useMemo,
+  type CSSProperties,
 } from "react";
 import { AlertTriangle, BookMarked, ChevronDown, RefreshCw, X } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { ChatInput } from "./components/ChatInput";
-import { SampleQuestion } from "./components/SampleQuestionChips";
+import { TemplateQuestionDialog } from "./components/TemplateQuestionDialog";
+import { SampleQuestion, SampleQuestionChips } from "./components/SampleQuestionChips";
 import { OverviewPanel } from "./components/OverviewPanel";
 import { WorkspaceHeader } from "./components/WorkspaceHeader";
+import { ConversationLibrary } from "./components/ConversationLibrary";
 import { HelpDialog } from "./components/HelpDialog";
+import { ModalDialog } from "./components/ui/ModalDialog";
+import { CommandPalette, PaletteView } from "./components/CommandPalette";
+import { EvidenceWorkspaceRail } from "./components/EvidenceWorkspaceRail";
+import { DocumentWorkspace } from "./components/DocumentWorkspace";
 import {
+  CatalogWorkspaceTarget,
+  DocumentWorkspaceTarget,
   HealthResponse,
   RequestSnapshot,
   ThemePreference,
+  AnswerVariant,
+  DisplayedAnswerContext,
+  EvidenceSelection,
+  Message,
+  MessageFeedback,
+  AnswerTarget,
+  SearchWorkspaceTarget,
+  Source,
+  StageEvent,
 } from "./types";
 import {
   checkHealth,
   getSupportedTickers,
+  getChunkDetail,
   queryDecomposed,
   streamQuery,
+  streamDecomposedQuery,
+  ApiError,
 } from "./lib/api";
 import { formatCompanyLabel, SECTION_METADATA } from "./lib/displayMetadata";
 import { ConversationRecord } from "./lib/conversationStore";
-import { saveConversationRecord } from "./lib/conversationStore";
-import { downloadConversationMarkdown } from "./lib/conversationExport";
+import {
+  downloadConversationBackup,
+  downloadConversationMarkdown,
+} from "./lib/conversationExport";
+import type { ConversationBackupBundle } from "./lib/conversationExport";
 import { useConversationLibrary, SessionContextStatus } from "./hooks/useConversationLibrary";
+import { useAnswerActions, toLegacySaveStatus } from "./hooks/useAnswerActions";
+import { useResearchDraft } from "./hooks/useResearchDraft";
+import type { ResearchScope } from "./hooks/useResearchDraft";
+import { useNavigationLayout } from "./hooks/useNavigationLayout";
+import { useEvidenceSelection } from "./hooks/useEvidenceSelection";
+import { useReaderSession } from "./hooks/useReaderSession";
+import { useResearchSession } from "./hooks/useResearchSession";
+import { useLocale, type Locale } from "./lib/i18n";
+import { recordAnalyticsEvent } from "./lib/analyticsStore";
+import { getResearchTemplateCopy, isSendableResearchQuestion, RESEARCH_TEMPLATES, type ResearchTemplate, type ResearchTemplateApplyPayload } from "./lib/researchTemplates";
+import { importEvidenceCollections, mergeEvidenceCollections, preflightEvidenceCollectionsImport, saveEvidence, snapshotProvenanceFromSource } from "./lib/evidenceCollections";
+import type { EvidenceItem } from "./lib/evidenceCollections";
+import type { CurrentSourceCheckResult } from "./components/EvidenceCollectionsPanel";
+import type { ContextualCommandDefinition } from "./lib/commandRegistry";
+import { isWorkspaceView } from "./lib/workspace";
+import { getWorkspaceNavItem, type WorkspaceView } from "./lib/workspace";
+import { getSemanticIcon } from "./lib/semanticIcons";
+import { describeRequestError } from "./lib/requestError";
+import { createEvidenceSelection, getSourceKey, sourceMatchesSelection } from "./lib/sourceIdentity";
+import { appendStageEvent, isStageEvent } from "./lib/stageEvents";
 
 const STREAM_FLUSH_INTERVAL_MS = 80;
 const HEALTH_REFRESH_INTERVAL_MS = 15_000;
+const CONTEXT_RAIL_MIN_WIDTH = 360;
+const CONTEXT_RAIL_MAX_WIDTH = 560;
+const CONTEXT_INLINE_MIN_WORKSPACE_WIDTH = 1_120;
+const CONTEXT_INLINE_MIN_PRIMARY_WIDTH = 760;
+const CONTEXT_INLINE_MIN_HEIGHT = 640;
+const CONTEXT_RAIL_STORAGE_KEY = "sec_qa_context_rail_width_v1";
+const NAVIGATION_DESKTOP_MIN_WIDTH = 1024;
 const COMPARATIVE_KEYWORDS = [
   "compare",
   "vs",
@@ -53,37 +104,42 @@ const ChatMessage = lazy(() =>
   })),
 );
 
+// Secondary workspaces are route-level panels. Keep the initial chat shell
+// small and load diagnostics only when the user opens that workspace.
+const RetrievalLabPanel = lazy(() =>
+  import("./components/RetrievalLabPanel").then(({ RetrievalLabPanel }) => ({ default: RetrievalLabPanel })),
+);
+const DocumentExplorerPanel = lazy(() =>
+  import("./components/DocumentExplorerPanel").then(({ DocumentExplorerPanel }) => ({ default: DocumentExplorerPanel })),
+);
+const SystemInfoPanel = lazy(() =>
+  import("./components/SystemInfoPanel").then(({ SystemInfoPanel }) => ({ default: SystemInfoPanel })),
+);
+const EvaluationPanel = lazy(() =>
+  import("./components/EvaluationPanel").then(({ EvaluationPanel }) => ({ default: EvaluationPanel })),
+);
+const AnalyticsPanel = lazy(() =>
+  import("./components/AnalyticsPanel").then(({ AnalyticsPanel }) => ({ default: AnalyticsPanel })),
+);
+const SearchWorkspace = lazy(() =>
+  import("./components/SearchWorkspace").then(({ SearchWorkspace }) => ({ default: SearchWorkspace })),
+);
+const ArchitecturePanel = lazy(() =>
+  import("./components/ArchitecturePanel").then(({ ArchitecturePanel }) => ({ default: ArchitecturePanel })),
+);
+
+function WorkspacePanelFallback() {
+  return (
+    <div className="mx-auto flex w-full max-w-6xl items-center gap-2 px-3 py-8 text-sm text-[var(--text-muted)] md:px-6" role="status">
+      <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--primary)]" />
+      Loading workspace…
+    </div>
+  );
+}
+
 function isComparativeQuery(question: string): boolean {
   const lower = question.toLowerCase();
   return COMPARATIVE_KEYWORDS.some((keyword) => lower.includes(keyword));
-}
-
-function describeRequestError(
-  error: unknown,
-  fallback: string,
-): { message: string; detail: string } {
-  const detail = error instanceof Error ? error.message : String(error);
-  const candidateStatus =
-    error && typeof error === "object" && "status" in error
-      ? (error as { status?: unknown }).status
-      : null;
-  const status = typeof candidateStatus === "number" ? candidateStatus : null;
-  if (status === 429) {
-    return {
-      message: "The provider is temporarily out of quota. Please wait and try again later.",
-      detail,
-    };
-  }
-  if (status === 408 || status === 504) {
-    return { message: "The request timed out. Try a narrower question or try again.", detail };
-  }
-  if (status !== null && status >= 500) {
-    return { message: "The research service is temporarily unavailable. Please try again.", detail };
-  }
-  if (error instanceof TypeError) {
-    return { message: "The backend could not be reached. Check the connection and try again.", detail };
-  }
-  return { message: fallback, detail };
 }
 
 function getSystemTheme(): "light" | "dark" {
@@ -100,15 +156,211 @@ function prefersReducedMotion(): boolean {
   );
 }
 
+function readContextRailWidth(): number {
+  try {
+    const parsed = Number(localStorage.getItem(CONTEXT_RAIL_STORAGE_KEY));
+    if (Number.isFinite(parsed)) return Math.min(CONTEXT_RAIL_MAX_WIDTH, Math.max(CONTEXT_RAIL_MIN_WIDTH, Math.round(parsed)));
+  } catch {
+    // Layout preference is optional and must never block the workspace.
+  }
+  return 384;
+}
+
+function readInitialWorkspaceWidth(isDesktopNavigation: boolean, navigationLayout: string): number {
+  if (typeof window === "undefined") return 0;
+  const navigationWidth = !isDesktopNavigation ? 0 : navigationLayout === "compact" ? 56 : 216;
+  return Math.max(0, window.innerWidth - navigationWidth);
+}
+
+function scopeFromRequestSnapshot(snapshot: RequestSnapshot): ResearchScope {
+  return {
+    ticker: snapshot.ticker,
+    section: snapshot.section,
+    topK: snapshot.topK,
+    enableComparative: snapshot.enableComparative,
+  };
+}
+
+interface TemplateOpeningSnapshot {
+  conversationId: string;
+  draft: string;
+  locale: Locale;
+  scope: ResearchScope;
+  templateId: ResearchTemplate["id"];
+}
+
+function scopesMatch(left: ResearchScope, right: ResearchScope): boolean {
+  return left.ticker === right.ticker &&
+    left.section === right.section &&
+    left.topK === right.topK &&
+    left.enableComparative === right.enableComparative;
+}
+
+interface DisplayedAnswerTarget {
+  message: Message;
+  variant: AnswerVariant | null;
+  text: string;
+  sources: Source[];
+}
+
+export interface CommandEvidenceTarget {
+  selection: EvidenceSelection;
+  source: Source;
+}
+
+function isUsableGroundedAnswer(message: Message): boolean {
+  return message.sender === "assistant" &&
+    !message.isStreaming &&
+    !message.error &&
+    message.status !== "error" &&
+    Boolean(message.text.trim());
+}
+
+/** Resolve an answer by durable IDs, never by position or recency when context is present. */
+export function resolveDisplayedAnswerTarget(
+  context: DisplayedAnswerContext | null,
+  messages: Message[],
+  record: ConversationRecord | null,
+  conversationId: string,
+): DisplayedAnswerTarget | null {
+  if (context && context.conversationId !== conversationId) return null;
+  const message = context
+    ? messages.find((candidate) => candidate.id === context.messageId)
+    : [...messages].reverse().find(isUsableGroundedAnswer);
+  if (!message || !isUsableGroundedAnswer(message)) return null;
+
+  if (context?.variantId !== null && context?.variantId !== undefined) {
+    const variant = record?.variants?.find((candidate) =>
+      candidate.id === context.variantId &&
+      candidate.originMessageId === message.id &&
+      candidate.status !== "error" &&
+      Boolean(candidate.text.trim()),
+    );
+    if (!variant) return null;
+    return { message, variant, text: variant.text, sources: variant.sources };
+  }
+
+  return { message, variant: null, text: message.text, sources: message.sources ?? [] };
+}
+
+/** Resolve the source command target against current records at invocation time. */
+export function resolveEvidenceCommandTarget(
+  context: DisplayedAnswerContext | null,
+  evidenceSelection: EvidenceSelection | null,
+  messages: Message[],
+  record: ConversationRecord | null,
+  conversationId: string,
+): CommandEvidenceTarget | null {
+  const displayed = resolveDisplayedAnswerTarget(context, messages, record, conversationId);
+  const selectionMatchesDisplayed = Boolean(
+    context &&
+    evidenceSelection &&
+    evidenceSelection.conversationId === context.conversationId &&
+    evidenceSelection.messageId === context.messageId &&
+    (evidenceSelection.variantId ?? null) === context.variantId,
+  );
+
+  if (displayed && context && !selectionMatchesDisplayed) {
+    const source = displayed.sources[0];
+    return source
+      ? {
+          source,
+          selection: createEvidenceSelection(
+            conversationId,
+            displayed.message.id,
+            0,
+            source,
+            displayed.variant?.id,
+          ),
+        }
+      : null;
+  }
+
+  if (evidenceSelection) {
+    if (evidenceSelection.conversationId !== conversationId) return null;
+    const message = messages.find((candidate) => candidate.id === evidenceSelection.messageId);
+    if (!message || message.sender !== "assistant" || message.isStreaming || message.error || message.status === "error") return null;
+    const variant = evidenceSelection.variantId
+      ? record?.variants?.find((candidate) =>
+          candidate.id === evidenceSelection.variantId &&
+          candidate.originMessageId === message.id &&
+          candidate.status !== "error",
+        )
+      : null;
+    if (evidenceSelection.variantId && !variant) return null;
+    const sources = variant?.sources ?? message.sources ?? [];
+    const source = sources[evidenceSelection.citationIndex];
+    return source && sourceMatchesSelection(source, evidenceSelection, evidenceSelection.citationIndex)
+      ? { source, selection: evidenceSelection }
+      : null;
+  }
+
+  if (!displayed) return null;
+  const source = displayed.sources[0];
+  return source
+    ? {
+        source,
+        selection: createEvidenceSelection(
+          conversationId,
+          displayed.message.id,
+          0,
+          source,
+          displayed.variant?.id,
+        ),
+      }
+    : null;
+}
+
+function scopeForConversationDraft(record: ConversationRecord | null): Partial<ResearchScope> | null {
+  if (!record) return null;
+
+  const draft = record.draft.trim();
+  if (draft) {
+    const matchingTemplate = RESEARCH_TEMPLATES.find((template) =>
+      (["en", "vi"] as const).some(
+        (locale) => getResearchTemplateCopy(template, locale).question === draft,
+      ),
+    );
+    if (matchingTemplate) return matchingTemplate.scope;
+  }
+
+  const latestSnapshot = [...record.messages]
+    .reverse()
+    .find((message) => message.sender === "user" && message.requestSnapshot)?.requestSnapshot;
+  return latestSnapshot ? scopeFromRequestSnapshot(latestSnapshot) : null;
+}
+
+function initialWorkspaceView(): WorkspaceView {
+  if (typeof window === "undefined") return "overview";
+  if (import.meta.env.MODE === "test") return "overview";
+  const value = new URLSearchParams(window.location.search).get("view");
+  return isWorkspaceView(value)
+    ? value
+    : "overview";
+}
+
+function evidenceAnchorMessageId(messageId: string): string {
+  return messageId.replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
+function writeEvidenceAnchor(messageId: string, citationIndex: number): void {
+  window.history.replaceState(
+    window.history.state,
+    "",
+    `${window.location.pathname}${window.location.search}#evidence=${evidenceAnchorMessageId(messageId)}-${citationIndex}`,
+  );
+}
+
+function clearEvidenceAnchor(): void {
+  window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}`);
+}
+
 export default function App() {
+  const { locale, t } = useLocale();
+  const libraryNavItem = getWorkspaceNavItem("library");
+  const LibraryIcon = getSemanticIcon(libraryNavItem.icon);
   const [tickers, setTickers] = useState<string[]>([]);
   const [sections, setSections] = useState<string[]>([]);
-  const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
-  const [selectedSection, setSelectedSection] = useState<string | null>(null);
-  const [topK, setTopK] = useState<number>(5);
-  const [enableComparative, setEnableComparative] = useState<boolean>(true);
-
-  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isBackendConnected, setIsBackendConnected] = useState<boolean | null>(
     null,
   );
@@ -118,11 +370,62 @@ export default function App() {
   const [isClearingSession, setIsClearingSession] = useState<boolean>(false);
   const [showResetDialog, setShowResetDialog] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
-  const [activeView, setActiveView] = useState<"overview" | "conversation">(
-    "overview",
-  );
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
+  const [templateToCustomize, setTemplateToCustomize] = useState<ResearchTemplate | null>(null);
+  const templateOpeningSnapshotRef = useRef<TemplateOpeningSnapshot | null>(null);
+  const [contextualCommandNotice, setContextualCommandNotice] = useState<string | null>(null);
+  const [displayedAnswerContext, setDisplayedAnswerContext] = useState<DisplayedAnswerContext | null>(null);
+  const [activeView, setActiveView] = useState<WorkspaceView>(initialWorkspaceView);
+  const [documentsViewMounted, setDocumentsViewMounted] = useState(initialWorkspaceView() === "documents");
   const [pendingFocusMessageId, setPendingFocusMessageId] = useState<string | null>(null);
+  const [pendingOpenVariant, setPendingOpenVariant] = useState<{ conversationId: string; messageId: string; variantId: string } | null>(null);
+  const [shouldFocusLibrarySearch, setShouldFocusLibrarySearch] = useState(false);
   const [activeSidebarPanel, setActiveSidebarPanel] = useState<"research" | "library">("research");
+  const [stageEventsByMessage, setStageEventsByMessage] = useState<Record<string, StageEvent[]>>({});
+  const [contextRailWidth, setContextRailWidth] = useState(readContextRailWidth);
+  const [workspaceWidth, setWorkspaceWidth] = useState(0);
+  const [workspaceHeight, setWorkspaceHeight] = useState(0);
+  const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
+  const [standaloneReaderSource, setStandaloneReaderSource] = useState<Source | null>(null);
+  const [documentWorkspaceTarget, setDocumentWorkspaceTarget] = useState<DocumentWorkspaceTarget | null>(null);
+  const [isScopeEditorOpen, setIsScopeEditorOpen] = useState(false);
+  const [isDesktopNavigation, setIsDesktopNavigation] = useState(() =>
+    typeof window === "undefined" || typeof window.matchMedia !== "function"
+      ? true
+      : window.matchMedia(`(min-width: ${NAVIGATION_DESKTOP_MIN_WIDTH}px)`).matches,
+  );
+  const { layout: navigationLayout, toggleLayout: toggleNavigationLayout } = useNavigationLayout();
+
+  useEffect(() => {
+    setWorkspaceWidth(readInitialWorkspaceWidth(isDesktopNavigation, navigationLayout));
+  }, [isDesktopNavigation, navigationLayout]);
+
+  useEffect(() => {
+    if (activeView === "documents") setDocumentsViewMounted(true);
+  }, [activeView]);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const mediaQuery = window.matchMedia(`(min-width: ${NAVIGATION_DESKTOP_MIN_WIDTH}px)`);
+    const syncNavigationMode = () => setIsDesktopNavigation(mediaQuery.matches);
+    syncNavigationMode();
+    mediaQuery.addEventListener?.("change", syncNavigationMode);
+    return () => mediaQuery.removeEventListener?.("change", syncNavigationMode);
+  }, []);
+
+  useEffect(() => {
+    // A drawer opened below the breakpoint must not remain logically open when
+    // the same tab crosses into the inline desktop shell.
+    if (isDesktopNavigation && isSidebarOpen) setIsSidebarOpen(false);
+  }, [isDesktopNavigation, isSidebarOpen]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CONTEXT_RAIL_STORAGE_KEY, String(contextRailWidth));
+    } catch {
+      // A blocked preference store does not affect citation reading.
+    }
+  }, [contextRailWidth]);
 
   // Theme state. Keep the preference separate from the resolved color so a
   // system preference can follow OS changes without overwriting user choice.
@@ -142,17 +445,51 @@ export default function App() {
   );
   const resolvedTheme = themePreference === "system" ? systemTheme : themePreference;
 
+  useEffect(() => {
+    const handlePopState = () => setActiveView(initialWorkspaceView());
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (import.meta.env.MODE === "test") return;
+    const url = new URL(window.location.href);
+    if (activeView === "overview") url.searchParams.delete("view");
+    else url.searchParams.set("view", activeView);
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [activeView]);
+
+  useEffect(() => {
+    if (documentWorkspaceTarget && documentWorkspaceTarget.returnView !== activeView) {
+      setDocumentWorkspaceTarget(null);
+    }
+  }, [activeView, documentWorkspaceTarget]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const requestAbortRef = useRef<AbortController | null>(null);
-  // Buffered SSE text that has not been flushed to the message yet. The
-  // cancel path flushes it so switching conversations never loses the last
-  // buffered tokens of a partial answer.
-  const streamingBufferRef = useRef<{ messageId: string; text: string } | null>(null);
+  const workspaceMainRef = useRef<HTMLElement>(null);
   const resetCancelRef = useRef<HTMLButtonElement>(null);
   const healthRequestRef = useRef<Promise<HealthResponse> | null>(null);
   const lastHealthRefreshRef = useRef(0);
   const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
+  const isNearConversationBottomRef = useRef(true);
+
+  useEffect(() => {
+    const element = workspaceMainRef.current;
+    if (!element) return;
+    const syncWorkspaceWidth = () => {
+      setWorkspaceWidth(element.clientWidth);
+      setWorkspaceHeight(element.clientHeight);
+    };
+    syncWorkspaceWidth();
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(syncWorkspaceWidth);
+      observer.observe(element);
+      return () => observer.disconnect();
+    }
+    window.addEventListener("resize", syncWorkspaceWidth);
+    return () => window.removeEventListener("resize", syncWorkspaceWidth);
+  }, [isDesktopNavigation, navigationLayout]);
 
   // Indirection so the library hook can trigger the cancel path (which
   // needs updateMessages) before that function is declared below.
@@ -163,6 +500,7 @@ export default function App() {
   });
   const {
     conversations,
+    activeRecord,
     messages,
     inputText,
     bookmarkedMessageIds,
@@ -172,6 +510,7 @@ export default function App() {
     saveIndicator,
     sessionContext,
     isReadOnly,
+    isPreflightRunning,
     setInputText,
     updateMessages,
     beginSend,
@@ -183,28 +522,264 @@ export default function App() {
     startNewConversation,
     renameConversation,
     toggleAnswerBookmark,
+    toggleConversationBookmark,
     deleteConversation,
+    importConversationRecords,
     recheckSessionContext,
+    writerStatus,
+    requestLibraryWriter,
+    updateConversationMetadata,
+    saveMessageNote,
+    saveMessageFeedback,
+    saveAnswerVersion,
   } = library;
   const activeConversationId = library.activeConversationId;
-
-  const cancelActiveRequest = useCallback(() => {
-    const buffer = streamingBufferRef.current;
-    if (buffer && buffer.text) {
-      updateMessages((prev) =>
-        prev.map((message) =>
-          message.id === buffer.messageId && message.isStreaming
-            ? { ...message, text: buffer.text }
-            : message,
-        ),
-      );
+  const answerActions = useAnswerActions({
+    activeConversationId,
+    toggleBookmark: toggleAnswerBookmark,
+    saveNote: saveMessageNote,
+    saveFeedback: saveMessageFeedback,
+    saveVersion: async (target: AnswerTarget) => saveAnswerVersion(target),
+  });
+  const inputTextRef = useRef(inputText);
+  inputTextRef.current = inputText;
+  const displayedAnswerContextRef = useRef<DisplayedAnswerContext | null>(null);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const activeRecordRef = useRef(activeRecord);
+  activeRecordRef.current = activeRecord;
+  const activeConversationIdRef = useRef(activeConversationId);
+  activeConversationIdRef.current = activeConversationId;
+  const handleDisplayedAnswerContext = useCallback(
+    ({ messageId, variantId }: { messageId: string; variantId: string | null }) => {
+      const nextContext = { conversationId: activeConversationId, messageId, variantId };
+      displayedAnswerContextRef.current = nextContext;
+      setDisplayedAnswerContext(nextContext);
+    },
+    [activeConversationId],
+  );
+  const previousScopeRef = useRef<ResearchScope | null>(null);
+  const draftScopeFallback = useMemo(
+    () => scopeForConversationDraft(activeRecord) ?? previousScopeRef.current ?? {},
+    [activeRecord],
+  );
+  const {
+    scope: { ticker: selectedTicker, section: selectedSection, topK, enableComparative },
+    patchScope,
+    setTicker: setSelectedTicker,
+    setSection: setSelectedSection,
+    setTopK,
+    setEnableComparative,
+  } = useResearchDraft(activeConversationId, draftScopeFallback, isLibraryReady);
+  previousScopeRef.current = { ticker: selectedTicker, section: selectedSection, topK, enableComparative };
+  const recentConversations = useMemo(
+    () => conversations
+      .filter((conversation) => conversation.messages.length > 0)
+      .sort((left, right) => right.updatedAt - left.updatedAt)
+      .slice(0, 3),
+    [conversations],
+  );
+  const [evidenceSelection, setEvidenceSelection] = useEvidenceSelection(activeConversationId);
+  const readerSession = useReaderSession();
+  const evidenceSelectionRef = useRef<EvidenceSelection | null>(evidenceSelection);
+  evidenceSelectionRef.current = evidenceSelection;
+  const evidenceReturnFocusRef = useRef<{ messageId: string; citationIndex: number } | null>(null);
+  const evidenceFocusRestorePendingRef = useRef(false);
+  const evidenceFocusRestoreTimeoutRef = useRef<number | null>(null);
+  const clearEvidenceFocusRestoreTimer = useCallback(() => {
+    if (evidenceFocusRestoreTimeoutRef.current !== null) {
+      window.clearTimeout(evidenceFocusRestoreTimeoutRef.current);
+      evidenceFocusRestoreTimeoutRef.current = null;
     }
-    streamingBufferRef.current = null;
-    const controller = requestAbortRef.current;
-    requestAbortRef.current = null;
-    controller?.abort();
-    setIsLoading(false);
-  }, [updateMessages]);
+  }, []);
+  const cancelEvidenceFocusRestore = useCallback(() => {
+    clearEvidenceFocusRestoreTimer();
+    evidenceFocusRestorePendingRef.current = false;
+  }, [clearEvidenceFocusRestoreTimer]);
+  useEffect(() => {
+    setIsEvidenceOpen(false);
+  }, [activeConversationId]);
+  useEffect(() => {
+    displayedAnswerContextRef.current = null;
+    setDisplayedAnswerContext(null);
+  }, [activeConversationId]);
+  useEffect(() => {
+    if (!isLibraryReady || !window.location.hash) return;
+    const match = window.location.hash.match(/^#evidence=([a-zA-Z0-9_-]+)-(\d+)$/);
+    if (!match) return;
+    const message = messages.find(
+      (candidate) => evidenceAnchorMessageId(candidate.id) === match[1],
+    );
+    const citationIndex = Number(match[2]);
+    const source = message?.sources?.[citationIndex];
+    if (!message || !source || !Number.isInteger(citationIndex)) return;
+    if (
+      evidenceSelection?.messageId === message.id &&
+      evidenceSelection.citationIndex === citationIndex &&
+      evidenceSelection.sourceKey === getSourceKey(source)
+    ) {
+      setIsEvidenceOpen(true);
+      return;
+    }
+    setActiveView("conversation");
+    setEvidenceSelection(
+      createEvidenceSelection(activeConversationId, message.id, citationIndex, source),
+    );
+    setIsEvidenceOpen(true);
+  }, [activeConversationId, evidenceSelection, isLibraryReady, messages, setEvidenceSelection]);
+  const handleInspectSource = useCallback(
+    (selection: Omit<EvidenceSelection, "conversationId">) => {
+      cancelEvidenceFocusRestore();
+      evidenceReturnFocusRef.current = {
+        messageId: selection.messageId,
+        citationIndex: selection.citationIndex,
+      };
+      writeEvidenceAnchor(selection.messageId, selection.citationIndex);
+      setEvidenceSelection({ conversationId: activeConversationId, ...selection });
+      setIsEvidenceOpen(true);
+    },
+    [activeConversationId, cancelEvidenceFocusRestore, setEvidenceSelection],
+  );
+  const handleCloseEvidence = useCallback(() => {
+    cancelEvidenceFocusRestore();
+    evidenceFocusRestorePendingRef.current = true;
+    clearEvidenceAnchor();
+    setIsEvidenceOpen(false);
+    setStandaloneReaderSource(null);
+    setDocumentWorkspaceTarget(null);
+    readerSession.clear();
+  }, [cancelEvidenceFocusRestore, readerSession]);
+
+  const handleOpenStandaloneSource = useCallback((source: Source) => {
+    cancelEvidenceFocusRestore();
+    clearEvidenceAnchor();
+    setDocumentWorkspaceTarget(null);
+    setStandaloneReaderSource(source);
+    setIsEvidenceOpen(true);
+  }, [cancelEvidenceFocusRestore]);
+
+  const handleOpenDocumentWorkspace = useCallback((target: DocumentWorkspaceTarget) => {
+    cancelEvidenceFocusRestore();
+    clearEvidenceAnchor();
+    setIsEvidenceOpen(false);
+    setStandaloneReaderSource(null);
+    setDocumentWorkspaceTarget(target);
+    readerSession.clear();
+  }, [cancelEvidenceFocusRestore, readerSession]);
+
+  const handleCloseDocumentWorkspace = useCallback(() => {
+    const target = documentWorkspaceTarget;
+    setDocumentWorkspaceTarget(null);
+    readerSession.clear();
+    window.requestAnimationFrame(() => {
+      if (target?.returnFocusId) document.getElementById(target.returnFocusId)?.focus();
+    });
+  }, [documentWorkspaceTarget, readerSession]);
+  const handleOpenCurrentSource = useCallback((source: Source) => {
+    const chunkId = source.stored_snapshot?.chunk_id ?? source.chunk_id;
+    const { stored_snapshot: _storedSnapshot, ...currentSource } = source;
+    handleOpenStandaloneSource({ ...currentSource, chunk_id: chunkId });
+  }, [handleOpenStandaloneSource]);
+  const handleOpenSavedEvidence = useCallback((item: EvidenceItem) => {
+    handleOpenStandaloneSource({
+      citation: item.citation,
+      text_preview: item.excerpt,
+      text: item.excerpt,
+      chunk_id: item.chunkId ?? null,
+      document_id: item.documentId ?? null,
+      ticker: item.ticker ?? null,
+      section: item.section ?? null,
+      filing_date: item.filingDate ?? null,
+      report_date: item.reportDate ?? null,
+      source_url: item.sourceUrl ?? null,
+      sec_index_url: item.secIndexUrl ?? null,
+      ...(item.chunkTextHash ? { chunk_text_hash: item.chunkTextHash } : {}),
+      stored_snapshot: {
+        chunk_id: item.chunkId ?? null,
+        ...(item.documentRevision ? { document_revision: item.documentRevision } : {}),
+        ...(item.sourceSetRevision ? { source_set_revision: item.sourceSetRevision } : {}),
+        ...(item.representation ? { representation: item.representation } : {}),
+        ...(item.coverageStatus ? { coverage_status: item.coverageStatus } : {}),
+        ...(item.locationStatus ? { location_status: item.locationStatus } : {}),
+        ...(item.snapshotState ? { snapshot_state: item.snapshotState } : {}),
+      },
+    });
+  }, [handleOpenStandaloneSource]);
+
+  const handleOpenCurrentEvidence = useCallback(async (item: EvidenceItem): Promise<CurrentSourceCheckResult> => {
+    if (!item.chunkId) {
+      return { status: "unknown", message: locale === "vi" ? "Snapshot này không có chunk ID exact nên không thể mở corpus hiện tại." : "This snapshot has no exact chunk ID, so the current corpus cannot be opened." };
+    }
+    try {
+      const detail = await getChunkDetail(item.chunkId);
+      if (detail.chunk_id !== item.chunkId || (item.documentId && detail.document_id !== item.documentId)) {
+        return { status: "stale", message: locale === "vi" ? "Định danh nguồn hiện tại không khớp; chỉ giữ bản chụp lịch sử." : "The current source identity did not match; only the historical snapshot remains available." };
+      }
+      if (item.chunkTextHash && item.chunkTextHash !== detail.chunk_text_hash) {
+        return { status: "stale", message: locale === "vi" ? "Hash văn bản đã thay đổi; chỉ giữ bản chụp lịch sử." : "The text hash changed; only the historical snapshot remains available." };
+      }
+      handleOpenStandaloneSource({
+        citation: item.citation,
+        text_preview: detail.text_preview,
+        text: detail.text,
+        chunk_id: detail.chunk_id,
+        document_id: detail.document_id,
+        ticker: detail.ticker,
+        section: detail.section,
+        filing_date: detail.filing_date,
+        report_date: detail.report_date,
+        source_url: detail.source_url,
+        sec_index_url: detail.sec_index_url,
+        chunk_text_hash: detail.chunk_text_hash,
+      });
+      return { status: "current" };
+    } catch (error) {
+      const status = error instanceof ApiError ? error.status : null;
+      if (status === 404) return { status: "missing", message: locale === "vi" ? "Chunk exact không còn trong corpus; bản chụp lịch sử vẫn đọc được." : "The exact chunk is missing from the corpus; the historical snapshot remains readable." };
+      if (status === 409) return { status: "unavailable", message: locale === "vi" ? "Chunk ID không xác định duy nhất; không mở nguồn gần kề." : "The chunk ID is not uniquely resolvable; no nearby source was substituted." };
+      return { status: "unavailable", message: locale === "vi" ? "Không thể kiểm tra corpus hiện tại; bản chụp lịch sử vẫn được giữ." : "The current corpus could not be checked; the historical snapshot is preserved." };
+    }
+  }, [handleOpenStandaloneSource, locale]);
+  useEffect(() => {
+    if (isEvidenceOpen || !evidenceFocusRestorePendingRef.current) return;
+    evidenceFocusRestorePendingRef.current = false;
+    const target = evidenceReturnFocusRef.current;
+    let attempts = 0;
+    let timeout: number | null = null;
+    const restoreFocus = () => {
+      const opener = target
+        ? document.getElementById(`message-${target.messageId}`)
+          ?.querySelector<HTMLButtonElement>(`button[aria-label="Open source ${target.citationIndex + 1}"]`)
+        : null;
+      if (opener && !opener.hasAttribute("disabled")) {
+        opener.focus({ preventScroll: true });
+      }
+      if (attempts < 12) {
+        attempts += 1;
+        timeout = window.setTimeout(() => {
+          evidenceFocusRestoreTimeoutRef.current = null;
+          restoreFocus();
+        }, 16);
+        evidenceFocusRestoreTimeoutRef.current = timeout;
+      }
+    };
+    const frame = window.requestAnimationFrame(restoreFocus);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      clearEvidenceFocusRestoreTimer();
+    };
+  }, [clearEvidenceFocusRestoreTimer, isEvidenceOpen]);
+  const researchSession = useResearchSession({ updateMessages });
+  const {
+    isLoading,
+    streamingBufferRef,
+    beginRequest,
+    isCurrentRequest: isCurrentResearchRequest,
+    markRequestIdle,
+    finishRequest,
+    cancelActiveRequest,
+    stopGenerating,
+  } = researchSession;
   cancelActiveRequestRef.current = cancelActiveRequest;
 
   const applyHealth = useCallback((health: HealthResponse) => {
@@ -291,14 +866,6 @@ export default function App() {
     return () => controller.abort();
   }, [applyHealth]);
 
-  useEffect(() => {
-    return () => {
-      const controller = requestAbortRef.current;
-      requestAbortRef.current = null;
-      controller?.abort();
-    };
-  }, []);
-
   // Adopted backend history moves the user into the conversation view once.
   const historyAdoptedRef = useRef(false);
   useEffect(() => {
@@ -316,10 +883,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (activeView !== "conversation") return;
+    if (activeView !== "conversation" || !isNearConversationBottomRef.current) return;
 
-    // Repeated smooth-scroll animations overlap while tokens arrive every
-    // 80ms. Batch the layout read/write to the next animation frame.
+    // Follow a live answer only while the reader is already at the end. A
+    // user inspecting an older answer must never be pulled away by stream
+    // updates.
     const scroll = () => {
       scrollToBottom(isLoading ? "auto" : "smooth");
     };
@@ -336,6 +904,17 @@ export default function App() {
     };
   }, [activeView, isLoading, messages, scrollToBottom]);
 
+  useEffect(() => {
+    if (activeView === "conversation") return;
+    const container = workspaceMainRef.current;
+    if (!container) return;
+    if (typeof container.scrollTo === "function") {
+      container.scrollTo({ top: 0, behavior: "auto" });
+    } else {
+      container.scrollTop = 0;
+    }
+  }, [activeView]);
+
   // Focus a bookmarked message opened from the Library.
   useEffect(() => {
     if (!pendingFocusMessageId) return;
@@ -351,6 +930,17 @@ export default function App() {
     return () => window.cancelAnimationFrame(frame);
   }, [pendingFocusMessageId, activeView, messages.length]);
 
+  // Library is rendered lazily with the workspace view. Wait for the view
+  // transition before focusing its search input so Ctrl/Cmd+K is dependable.
+  useEffect(() => {
+    if (!shouldFocusLibrarySearch || activeView !== "library") return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById("library-search-input")?.focus();
+      setShouldFocusLibrarySearch(false);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeView, shouldFocusLibrarySearch]);
+
   // Detect scroll position to show/hide scroll-to-bottom button
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current;
@@ -359,6 +949,7 @@ export default function App() {
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
       const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+      isNearConversationBottomRef.current = isNearBottom;
       setShowScrollButton(!isNearBottom && messages.length > 0);
     };
 
@@ -369,19 +960,29 @@ export default function App() {
   const handleSendMessage = useCallback(async (text: string, snapshot?: RequestSnapshot) => {
     if (!isBackendConnected || !isPipelineReady) return;
     if (isReadOnly) return;
+    if (!isSendableResearchQuestion(text)) return;
 
-    const requestSnapshot: RequestSnapshot = snapshot ?? {
-      ticker: selectedTicker,
-      section: selectedSection,
-      topK,
-      enableComparative,
-    };
+    const requestSnapshot: RequestSnapshot = snapshot
+      ? { ...snapshot, answerLanguage: snapshot.answerLanguage ?? locale }
+      : {
+          ticker: selectedTicker,
+          section: selectedSection,
+          topK,
+          enableComparative,
+          answerLanguage: locale,
+        };
 
     // One identity is captured before the preflight and carried through
     // message creation, the provider request, buffering, completion, and
     // the final save. Duplicate sends are blocked while one is in flight.
     const identity = beginSend(text);
     if (!identity) return;
+    const analyticsStartedAt = Date.now();
+    recordAnalyticsEvent({
+      kind: "query_started",
+      ticker: requestSnapshot.ticker,
+      language: requestSnapshot.answerLanguage,
+    });
 
     // Re-check a saved conversation's backend session before spending the
     // question; the session can expire while the user is reading. A
@@ -399,12 +1000,14 @@ export default function App() {
       return;
     }
 
+    // Clear only the draft that was actually accepted. If the user edited a
+    // next question while session preflight was pending, leave that newer
+    // draft untouched; a failed preflight never erases input.
+    if (inputTextRef.current.trim() === text) setInputText("");
+
     setActiveView("conversation");
-    requestAbortRef.current?.abort();
-    const controller = new AbortController();
-    requestAbortRef.current = controller;
-    const isCurrentRequest = () =>
-      requestAbortRef.current === controller && !controller.signal.aborted;
+    const controller = beginRequest();
+    const isCurrentRequest = () => isCurrentResearchRequest(controller);
 
     const userMessage = {
       id: "user-" + Date.now(),
@@ -414,8 +1017,6 @@ export default function App() {
     };
 
     updateMessages((prev) => [...prev, userMessage]);
-    setIsLoading(true);
-
     const isComparative =
       requestSnapshot.enableComparative && isComparativeQuery(text);
     const assistantMsgId = "assistant-" + Date.now();
@@ -429,6 +1030,7 @@ export default function App() {
       section: requestSnapshot.section,
       top_k: requestSnapshot.topK,
       session_id: identity.sessionId,
+      answer_language: requestSnapshot.answerLanguage,
     };
 
     try {
@@ -446,39 +1048,21 @@ export default function App() {
       };
       updateMessages((prev) => [...prev, placeholder]);
 
-      try {
-        const response = await queryDecomposed(payload, controller.signal);
-        if (!isCurrentRequest()) return;
-        updateMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMsgId
-              ? {
-                  ...m,
-                  text: response.answer,
-                  model_used: response.model_used,
-                  sources: response.sources,
-                  subQueries: response.sub_queries,
-                  wasDecomposed: response.was_decomposed,
-                  numChunks: response.num_total_chunks,
-                  isStreaming: false,
-                  status: "completed" as const,
-                }
-              : m,
-          ),
-        );
-        registerBackendExchange();
-      } catch (err: any) {
+      setStageEventsByMessage((prev) => ({ ...prev, [assistantMsgId]: [] }));
+      let comparativeText = "";
+      const finishComparativeError = (error: unknown) => {
         if (!isCurrentRequest()) return;
         const requestError = describeRequestError(
-          err,
+          error,
           "We couldn't complete this comparison. Check the connection and try again.",
+          locale,
         );
         updateMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
               ? {
                   ...m,
-                  text: requestError.message,
+                  text: comparativeText + (comparativeText ? "\n\n" : "") + requestError.message,
                   error: true,
                   isStreaming: false,
                   status: "error" as const,
@@ -488,11 +1072,99 @@ export default function App() {
               : m,
           ),
         );
-      } finally {
-        if (requestAbortRef.current === controller) {
-          requestAbortRef.current = null;
-          setIsLoading(false);
+        markRequestIdle();
+        recordAnalyticsEvent({
+          kind: "query_error",
+          ticker: requestSnapshot.ticker,
+          language: requestSnapshot.answerLanguage,
+          durationMs: Date.now() - analyticsStartedAt,
+          status: "error",
+        });
+      };
+
+      try {
+        const useComparativeStream = import.meta.env.MODE !== "test" && typeof streamDecomposedQuery === "function";
+        if (!useComparativeStream) {
+          // Compatibility for older embedders that only provide the JSON
+          // client; the backend JSON route remains supported by contract.
+          const response = await queryDecomposed(payload, controller.signal);
+          if (!isCurrentRequest()) return;
+          comparativeText = response.answer;
+          updateMessages((prev) => prev.map((m) => m.id === assistantMsgId ? {
+            ...m,
+            text: response.answer,
+            model_used: response.model_used,
+            sources: response.sources,
+            subQueries: response.sub_queries,
+            wasDecomposed: response.was_decomposed,
+            numChunks: response.num_total_chunks,
+            queryInterpretation: response.query_interpretation,
+            isStreaming: false,
+            status: "completed" as const,
+          } : m));
+          registerBackendExchange();
+          markRequestIdle();
+          recordAnalyticsEvent({
+            kind: "query_completed",
+            ticker: requestSnapshot.ticker,
+            language: requestSnapshot.answerLanguage,
+            durationMs: Date.now() - analyticsStartedAt,
+            status: "completed",
+          });
+        } else {
+          await streamDecomposedQuery(
+            payload,
+            (event) => {
+            if (!isCurrentRequest()) return;
+            if (event.type === "stage" && isStageEvent(event.data)) {
+              setStageEventsByMessage((prev) => ({
+                ...prev,
+                [assistantMsgId]: appendStageEvent(prev[assistantMsgId] ?? [], event.data),
+              }));
+            } else if (event.type === "sources") {
+              updateMessages((prev) => prev.map((m) => m.id === assistantMsgId ? { ...m, sources: event.data || [] } : m));
+            } else if (event.type === "token") {
+              comparativeText += typeof event.data === "string" ? event.data : "";
+              updateMessages((prev) => prev.map((m) => m.id === assistantMsgId ? { ...m, text: comparativeText } : m));
+            } else if (event.type === "done") {
+              updateMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId
+                    ? {
+                        ...m,
+                        text: comparativeText,
+                        model_used: event.data?.model_used,
+                        subQueries: event.data?.sub_queries,
+                        wasDecomposed: event.data?.was_decomposed,
+                        numChunks: event.data?.num_total_chunks,
+                        queryInterpretation: event.data?.query_interpretation,
+                        isStreaming: false,
+                        status: "completed" as const,
+                      }
+                    : m,
+                ),
+              );
+              registerBackendExchange();
+              markRequestIdle();
+              recordAnalyticsEvent({
+                kind: "query_completed",
+                ticker: requestSnapshot.ticker,
+                language: requestSnapshot.answerLanguage,
+                durationMs: Date.now() - analyticsStartedAt,
+                status: "completed",
+              });
+            } else if (event.type === "error") {
+              finishComparativeError(event.data);
+            }
+            },
+            finishComparativeError,
+            controller.signal,
+          );
         }
+      } catch (error) {
+        finishComparativeError(error);
+      } finally {
+        finishRequest(controller);
       }
     } else {
       // Streamed query over POST EventStream
@@ -505,6 +1177,8 @@ export default function App() {
         requestSnapshot,
       };
       updateMessages((prev) => [...prev, placeholder]);
+
+      setStageEventsByMessage((prev) => ({ ...prev, [assistantMsgId]: [] }));
 
       let streamingText = "";
       let pendingFlush: ReturnType<typeof setTimeout> | null = null;
@@ -535,7 +1209,12 @@ export default function App() {
           payload,
           (event) => {
             if (!isCurrentRequest()) return;
-            if (event.type === "sources") {
+            if (event.type === "stage" && isStageEvent(event.data)) {
+              setStageEventsByMessage((prev) => ({
+                ...prev,
+                [assistantMsgId]: appendStageEvent(prev[assistantMsgId] ?? [], event.data),
+              }));
+            } else if (event.type === "sources") {
               const sourcesList = event.data || [];
               updateMessages((prev) =>
                 prev.map((m) =>
@@ -560,6 +1239,9 @@ export default function App() {
                     ? {
                         ...m,
                         text: streamingText,
+                        queryInterpretation: event.data?.query_interpretation,
+                        execution: event.data?.execution,
+                        visualAnswer: event.data?.visual_answer,
                         isStreaming: false,
                         status: "completed" as const,
                       }
@@ -567,7 +1249,14 @@ export default function App() {
                 ),
               );
               registerBackendExchange();
-              setIsLoading(false);
+              recordAnalyticsEvent({
+                kind: "query_completed",
+                ticker: requestSnapshot.ticker,
+                language: requestSnapshot.answerLanguage,
+                durationMs: Date.now() - analyticsStartedAt,
+                status: "completed",
+              });
+              markRequestIdle();
             } else if (event.type === "error") {
               cancelPendingFlush();
               streamingBufferRef.current = null;
@@ -589,7 +1278,14 @@ export default function App() {
                     : m,
                 ),
               );
-              setIsLoading(false);
+              markRequestIdle();
+              recordAnalyticsEvent({
+                kind: "query_error",
+                ticker: requestSnapshot.ticker,
+                language: requestSnapshot.answerLanguage,
+                durationMs: Date.now() - analyticsStartedAt,
+                status: "error",
+              });
             }
           },
           (error) => {
@@ -597,6 +1293,7 @@ export default function App() {
             const requestError = describeRequestError(
               error,
               "The connection closed before the answer finished. Please try again.",
+              locale,
             );
             cancelPendingFlush();
             streamingBufferRef.current = null;
@@ -615,15 +1312,23 @@ export default function App() {
                   : m,
               ),
             );
-            setIsLoading(false);
+            markRequestIdle();
+            recordAnalyticsEvent({
+              kind: "query_error",
+              ticker: requestSnapshot.ticker,
+              language: requestSnapshot.answerLanguage,
+              durationMs: Date.now() - analyticsStartedAt,
+              status: "connection_closed",
+            });
           },
           controller.signal,
         );
       } catch (err: any) {
         if (!isCurrentRequest()) return;
-        const requestError = describeRequestError(
-          err,
-          "We couldn't complete this answer. Please try again.",
+          const requestError = describeRequestError(
+            err,
+            "We couldn't complete this answer. Please try again.",
+            locale,
         );
         cancelPendingFlush();
         streamingBufferRef.current = null;
@@ -642,13 +1347,17 @@ export default function App() {
               : m,
           ),
         );
-        setIsLoading(false);
+        markRequestIdle();
+        recordAnalyticsEvent({
+          kind: "query_error",
+          ticker: requestSnapshot.ticker,
+          language: requestSnapshot.answerLanguage,
+          durationMs: Date.now() - analyticsStartedAt,
+          status: "error",
+        });
       } finally {
         cancelPendingFlush();
-        if (requestAbortRef.current === controller) {
-          requestAbortRef.current = null;
-          setIsLoading(false);
-        }
+        finishRequest(controller);
       }
 
       // The connection closed. If the server never sent a done or error
@@ -690,14 +1399,20 @@ export default function App() {
       }
     }
   }, [
+    beginRequest,
     beginSend,
     enableComparative,
     ensureSendable,
     finishSend,
+    finishRequest,
     isBackendConnected,
     isIdentityActive,
+    isCurrentResearchRequest,
     isPipelineReady,
     isReadOnly,
+    setInputText,
+    locale,
+    markRequestIdle,
     registerBackendExchange,
     selectedSection,
     selectedTicker,
@@ -761,9 +1476,89 @@ export default function App() {
     [activeConversationId, conversations, selectConversation],
   );
 
+  // Reopen an immutable answer variant by durable conversation/message/variant
+  // IDs. The renderer receives the pending ID for one render and never falls
+  // back to the latest answer by position.
+  const handleOpenVariant = useCallback(
+    async (conversationId: string, messageId: string, variantId: string) => {
+      const conversation = conversations.find((item) => item.id === conversationId);
+      const message = conversation?.messages.find((item) => item.id === messageId && item.sender === "assistant");
+      const variant = conversation?.variants?.find((item) => item.id === variantId && item.originMessageId === messageId);
+      if (!conversation || !message || !variant || variant.status === "error") {
+        setContextualCommandNotice(locale === "vi" ? "Phiên bản đã lưu không còn khả dụng; bản lưu không bị thay thế." : "That saved version is unavailable; the stored snapshot was not replaced.");
+        return;
+      }
+      setPendingOpenVariant({ conversationId, messageId, variantId });
+      if (conversation.id !== activeConversationId) await selectConversation(conversation);
+      setPendingFocusMessageId(messageId);
+      setActiveView("conversation");
+    },
+    [activeConversationId, conversations, locale, selectConversation],
+  );
+
+  useEffect(() => {
+    if (!pendingOpenVariant || activeView !== "conversation" || activeConversationId !== pendingOpenVariant.conversationId) return;
+    const message = messages.find((item) => item.id === pendingOpenVariant.messageId && item.sender === "assistant");
+    const variant = activeRecord?.variants?.find((item) => item.id === pendingOpenVariant.variantId && item.originMessageId === pendingOpenVariant.messageId);
+    if (!message || !variant || variant.status === "error") {
+      setContextualCommandNotice(locale === "vi" ? "Không thể mở phiên bản exact; bản lưu lịch sử vẫn được giữ nguyên." : "The exact saved version could not be opened; its historical snapshot remains preserved.");
+      setPendingOpenVariant(null);
+      return;
+    }
+    setDisplayedAnswerContext({ conversationId: activeConversationId, messageId: message.id, variantId: variant.id });
+    const frame = window.requestAnimationFrame(() => setPendingOpenVariant(null));
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeConversationId, activeRecord?.variants, activeView, locale, messages, pendingOpenVariant]);
+
+  const handleContinueResearch = useCallback(
+    async (conversation: ConversationRecord) => {
+      if (conversation.id !== activeConversationId) await selectConversation(conversation);
+      const latestUser = [...conversation.messages].reverse().find((message) => message.sender === "user");
+      const latestContext = [...conversation.messages].reverse().find((message) => message.requestSnapshot)?.requestSnapshot;
+      if (latestContext) {
+        patchScope({
+          ticker: latestContext.ticker,
+          section: latestContext.section,
+          topK: latestContext.topK,
+          enableComparative: latestContext.enableComparative,
+        });
+      }
+      setInputText(conversation.draft.trim() || latestUser?.text || "");
+      setActiveView("conversation");
+      window.requestAnimationFrame(() => document.getElementById("chat-textarea")?.focus());
+    },
+    [activeConversationId, patchScope, selectConversation, setInputText],
+  );
+
   const handleExportConversation = useCallback((conversation: ConversationRecord) => {
     downloadConversationMarkdown(conversation);
   }, []);
+
+  const handleExportBackup = useCallback(() => {
+    downloadConversationBackup(conversations);
+  }, [conversations]);
+
+  const handleImportBackup = useCallback(
+    async (bundle: ConversationBackupBundle) => {
+      const importedCollections = importEvidenceCollections(bundle.collections);
+      preflightEvidenceCollectionsImport(importedCollections);
+      const result = await importConversationRecords(bundle.conversations);
+      if (result.imported === 0) throw new Error("No conversation could be imported into storage.");
+      if (importedCollections.length === 0) return { ...result, evidencePersisted: 0, evidenceFailed: 0, evidenceWarning: null };
+      try {
+        mergeEvidenceCollections(importedCollections);
+        return { ...result, evidencePersisted: importedCollections.length, evidenceFailed: 0, evidenceWarning: null };
+      } catch (error) {
+        return {
+          ...result,
+          evidencePersisted: 0,
+          evidenceFailed: importedCollections.length,
+          evidenceWarning: error instanceof Error ? error.message : "Evidence collections were not imported.",
+        };
+      }
+    },
+    [importConversationRecords],
+  );
 
   // Bookmark toggle that works from Library cards for any conversation,
   // not only the one currently open.
@@ -775,18 +1570,46 @@ export default function App() {
         toggleAnswerBookmark(messageId);
         return;
       }
-      const bookmarked = conversation.bookmarkedMessageIds.includes(messageId);
-      const next = bookmarked
-        ? conversation.bookmarkedMessageIds.filter((id) => id !== messageId)
-        : [...conversation.bookmarkedMessageIds, messageId];
-      void saveConversationRecord({
-        ...conversation,
-        bookmarkedMessageIds: next,
-        updatedAt: Date.now(),
-      });
+      toggleConversationBookmark(conversationId, messageId);
     },
-    [activeConversationId, conversations, toggleAnswerBookmark],
+    [activeConversationId, conversations, toggleAnswerBookmark, toggleConversationBookmark],
   );
+
+  const handleSaveMessageNote = useCallback((messageId: string, note: string) => {
+    const target: AnswerTarget = { conversationId: activeConversationId, messageId, variantId: null };
+    void answerActions.note(target, note);
+  }, [activeConversationId, answerActions]);
+
+  const handleMessageFeedback = useCallback((messageId: string, feedback: MessageFeedback | undefined) => {
+    const target: AnswerTarget = {
+      conversationId: activeConversationId,
+      messageId,
+      variantId: feedback?.variantId ?? null,
+    };
+    void answerActions.feedback(target, feedback);
+    recordAnalyticsEvent({
+      kind: "feedback",
+      status: feedback
+        ? `${feedback.rating}${feedback.category ? `:${feedback.category}` : ""}`
+        : "cleared",
+    });
+  }, [activeConversationId, answerActions]);
+
+  const handleSaveAnswerVersion = useCallback(async (target: { messageId: string; variantId: string | null }) => {
+    const identity: AnswerTarget = {
+      conversationId: activeConversationId,
+      messageId: target.messageId,
+      variantId: target.variantId,
+    };
+    await answerActions.saveVersion(identity);
+  }, [activeConversationId, answerActions]);
+
+  const handleViewSavedVersion = useCallback(() => {
+    setActiveView("library");
+    setActiveSidebarPanel("library");
+    setIsEvidenceOpen(false);
+    setStandaloneReaderSource(null);
+  }, []);
 
   useEffect(() => {
     if (!showResetDialog) return;
@@ -804,14 +1627,20 @@ export default function App() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setActiveSidebarPanel("library");
-        setIsSidebarOpen(true);
-        window.requestAnimationFrame(() => {
-          document.getElementById("library-search-input")?.focus();
-        });
+        setShouldFocusLibrarySearch(true);
+        handleSelectWorkspaceView("library");
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        setIsCommandPaletteOpen(true);
         return;
       }
       if (event.key === "Escape") {
+        if (isCommandPaletteOpen) {
+          setIsCommandPaletteOpen(false);
+          return;
+        }
         if (isHelpOpen) {
           setIsHelpOpen(false);
           return;
@@ -823,49 +1652,97 @@ export default function App() {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isHelpOpen, showResetDialog]);
+  }, [isCommandPaletteOpen, isHelpOpen, showResetDialog]);
 
-  const handleStopGenerating = useCallback(() => {
-    const controller = requestAbortRef.current;
-    if (!controller) return;
+  const handleStopGenerating = stopGenerating;
 
-    requestAbortRef.current = null;
-    controller.abort();
-    setIsLoading(false);
-    updateMessages((prev) =>
-      prev.map((message) =>
-        message.isStreaming
-          ? {
-              ...message,
-              text: message.text || "Generation stopped.",
-              isStreaming: false,
-              status: "stopped" as const,
-            }
-          : message,
-      ),
-    );
-  }, [updateMessages]);
+  const closeTemplateQuestion = useCallback(() => {
+    templateOpeningSnapshotRef.current = null;
+    setTemplateToCustomize(null);
+  }, []);
 
-  const handleSelectSample = useCallback((sample: SampleQuestion) => {
-    if (sample.ticker !== undefined) {
-      setSelectedTicker(sample.ticker || null);
+  const openTemplateQuestion = useCallback((template: ResearchTemplate) => {
+    templateOpeningSnapshotRef.current = {
+      conversationId: activeConversationId,
+      draft: inputTextRef.current,
+      locale,
+      scope: { ticker: selectedTicker, section: selectedSection, topK, enableComparative },
+      templateId: template.id,
+    };
+    setTemplateToCustomize(template);
+  }, [activeConversationId, enableComparative, locale, selectedSection, selectedTicker, topK]);
+
+  const handleApplyTemplate = useCallback((payload: ResearchTemplateApplyPayload) => {
+    const opening = templateOpeningSnapshotRef.current;
+    const currentScope = { ticker: selectedTicker, section: selectedSection, topK, enableComparative };
+    const contextChanged = !opening ||
+      opening.templateId !== payload.templateId ||
+      opening.conversationId !== activeConversationId ||
+      opening.draft !== inputTextRef.current ||
+      opening.locale !== locale ||
+      !scopesMatch(opening.scope, currentScope);
+
+    if (contextChanged) {
+      setContextualCommandNotice(locale === "vi"
+        ? "Ngữ cảnh nghiên cứu đã thay đổi; hãy mở lại mẫu này."
+        : "Research context changed; reopen this template.");
+      closeTemplateQuestion();
+      return;
     }
-    if (sample.section !== undefined) {
-      setSelectedSection(sample.section || null);
+    if (!isSendableResearchQuestion(payload.question)) {
+      setContextualCommandNotice(locale === "vi"
+        ? "Câu hỏi mẫu không hợp lệ; các thay đổi hiện tại vẫn được giữ nguyên."
+        : "This template question is invalid; your current draft and scope were preserved.");
+      return;
     }
-    setInputText(sample.text);
+
+    // The dialog has already validated and normalized the payload. Apply the
+    // question and its derived scope in the same event, without sending it.
+    setInputText(payload.question);
+    patchScope(payload.scope);
+    closeTemplateQuestion();
+    setActiveView("conversation");
+    window.requestAnimationFrame(() => {
+      document.getElementById("chat-textarea")?.focus();
+    });
+  }, [activeConversationId, closeTemplateQuestion, enableComparative, locale, patchScope, selectedSection, selectedTicker, setInputText, topK]);
+
+  const handleSelectSample = useCallback((sample: ResearchTemplate | SampleQuestion) => {
+    if ("id" in sample) {
+      openTemplateQuestion(sample);
+    } else {
+      patchScope({
+        ...(sample.ticker !== undefined ? { ticker: sample.ticker || null } : {}),
+        ...(sample.section !== undefined ? { section: sample.section || null } : {}),
+      });
+      setInputText(sample.text);
+    }
     setIsSidebarOpen(false); // Close sidebar on mobile if clicked
     window.requestAnimationFrame(() => {
       document.getElementById("chat-textarea")?.focus();
     });
-  }, [setInputText]);
+  }, [locale, openTemplateQuestion, patchScope, setInputText]);
 
   const handleCloseSidebar = useCallback(() => {
+    cancelEvidenceFocusRestore();
     setIsSidebarOpen(false);
-  }, []);
+  }, [cancelEvidenceFocusRestore]);
 
   const handleToggleSidebar = useCallback(() => {
+    cancelEvidenceFocusRestore();
     setIsSidebarOpen((open) => !open);
+  }, [cancelEvidenceFocusRestore]);
+
+  const handleSelectWorkspaceView = useCallback((view: WorkspaceView) => {
+    setActiveView(view);
+    setIsSidebarOpen(false);
+    if (view !== "conversation") setIsEvidenceOpen(false);
+    setStandaloneReaderSource(null);
+    setDocumentWorkspaceTarget(null);
+    if (view === "library") setActiveSidebarPanel("library");
+    if (view === "overview" || view === "conversation" || view === "search" || view === "documents" || view === "retrieval" || view === "architecture") {
+      setActiveSidebarPanel("research");
+    }
   }, []);
 
   const handleSelectTheme = useCallback((nextTheme: ThemePreference) => {
@@ -875,6 +1752,45 @@ export default function App() {
   const handleReturnToConversation = useCallback(() => {
     setActiveView("conversation");
   }, []);
+
+  const handleUseRetrievalQuestion = useCallback((question: string, scope?: { ticker: string | null; section: string | null }) => {
+    if (scope) {
+      patchScope(scope);
+    }
+    setInputText(question);
+    setActiveView("conversation");
+    window.requestAnimationFrame(() => {
+      document.getElementById("chat-textarea")?.focus();
+    });
+  }, [patchScope, setInputText]);
+
+  const handleUseRelatedResearch = useCallback((question: string, scope: { ticker: string | null; section: string | null }) => {
+    if (inputTextRef.current.trim()) {
+      setContextualCommandNotice(locale === "vi"
+        ? "Bản nháp hiện tại được giữ nguyên; hãy gửi hoặc xóa bản nháp trước khi chọn nghiên cứu tiếp theo."
+        : "Your current draft was preserved; send or clear it before choosing related research.");
+      return;
+    }
+    handleUseRetrievalQuestion(question, scope);
+  }, [handleUseRetrievalQuestion, locale]);
+
+  const handleSaveRetrievedEvidence = useCallback((source: Source) => {
+    try {
+      saveEvidence(source, { provenance: snapshotProvenanceFromSource(source) });
+      setContextualCommandNotice(locale === "vi" ? "Đã lưu evidence vào Thư viện." : "Evidence saved to Library.");
+    } catch (error) {
+      setContextualCommandNotice(error instanceof Error ? error.message : (locale === "vi" ? "Không thể lưu evidence." : "Could not save evidence."));
+    }
+  }, [locale]);
+
+  const handlePaletteNavigate = useCallback((view: PaletteView) => {
+    handleSelectWorkspaceView(view);
+    if (view === "conversation") {
+      window.requestAnimationFrame(() => document.getElementById("chat-textarea")?.focus());
+    }
+  }, [handleSelectWorkspaceView]);
+
+  const handlePaletteTemplate = openTemplateQuestion;
 
   const handleRetryConnection = useCallback(async () => {
     try {
@@ -894,18 +1810,207 @@ export default function App() {
     [messages],
   );
   const scopeLabel = useMemo(() => {
-    const labels: string[] = [];
-    if (selectedTicker) labels.push(`Company: ${formatCompanyLabel(selectedTicker)}`);
-    if (selectedSection) {
-      labels.push(SECTION_METADATA[selectedSection]?.shortLabel || selectedSection);
-    }
+    const labels = [
+      selectedTicker ? formatCompanyLabel(selectedTicker) : (locale === "vi" ? "Tất cả công ty" : "All companies"),
+      selectedSection ? (SECTION_METADATA[selectedSection]?.shortLabel || selectedSection) : (locale === "vi" ? "Tất cả mục" : "All sections"),
+      `Top ${topK}`,
+    ];
+    if (enableComparative) labels.push(locale === "vi" ? "So sánh" : "Comparison");
     return labels.join(" · ");
-  }, [selectedSection, selectedTicker]);
+  }, [enableComparative, locale, selectedSection, selectedTicker, topK]);
 
   const hasExchanges = messages.length > 0;
+  const evidenceTarget = useMemo(() => {
+    if (evidenceSelection) {
+      if (evidenceSelection.conversationId !== activeConversationId) return null;
+      const message = messages.find((candidate) => candidate.id === evidenceSelection.messageId);
+      const variant = evidenceSelection.variantId
+        ? activeRecord?.variants?.find((candidate) => candidate.id === evidenceSelection.variantId && candidate.originMessageId === message?.id)
+        : null;
+      const sources = evidenceSelection.variantId ? variant?.sources : message?.sources;
+      const selectedSource = sources?.[evidenceSelection.citationIndex];
+      if (sources?.length && sourceMatchesSelection(selectedSource, evidenceSelection, evidenceSelection.citationIndex)) {
+        return { sources, selectedIndex: evidenceSelection.citationIndex, selection: evidenceSelection, unavailable: false };
+      }
+      return { sources: [] as Source[], selectedIndex: -1, selection: evidenceSelection, unavailable: true };
+    }
+    const latestMessage = [...messages].reverse().find((message) => message.sender === "assistant" && message.sources?.length);
+    return latestMessage?.sources?.length && latestMessage.sources[0]
+      ? {
+          sources: latestMessage.sources,
+          selectedIndex: 0,
+          selection: createEvidenceSelection(activeConversationId, latestMessage.id, 0, latestMessage.sources[0]),
+          unavailable: false,
+        }
+      : null;
+  }, [activeConversationId, activeRecord?.variants, evidenceSelection, messages]);
+  const hasGroundedAnswer = useMemo(
+    () => Boolean(resolveDisplayedAnswerTarget(null, messages, activeRecord, activeConversationId)),
+    [activeConversationId, activeRecord, messages],
+  );
+  const commandEvidenceTarget = useMemo(
+    () => resolveEvidenceCommandTarget(
+      displayedAnswerContext,
+      evidenceSelection,
+      messages,
+      activeRecord,
+      activeConversationId,
+    ),
+    [activeConversationId, activeRecord, displayedAnswerContext, evidenceSelection, messages],
+  );
+  const contextualCommands = useMemo<ContextualCommandDefinition[]>(() => {
+    const commands: ContextualCommandDefinition[] = [];
+    const unavailableAnswerNotice = locale === "vi"
+      ? "Câu trả lời đang chọn không còn khả dụng."
+      : "The selected answer is no longer available.";
+    const unavailableSourceNotice = locale === "vi"
+      ? "Source đang chọn không còn khả dụng."
+      : "The selected source is no longer available.";
+    if (hasGroundedAnswer) {
+      commands.push({
+        id: "copy-current-answer",
+        labelKey: "palette.copyAnswer",
+        descriptionKey: "palette.copyAnswerDescription",
+        icon: "copy",
+        accentFamily: "evidence",
+        run: () => {
+          const target = resolveDisplayedAnswerTarget(
+            displayedAnswerContextRef.current,
+            messagesRef.current,
+            activeRecordRef.current,
+            activeConversationIdRef.current,
+          );
+          if (!target) {
+            setContextualCommandNotice(unavailableAnswerNotice);
+            return;
+          }
+          if (!navigator.clipboard) {
+            setContextualCommandNotice(locale === "vi" ? "Không thể sao chép câu trả lời." : "Could not copy the current answer.");
+            return;
+          }
+          void navigator.clipboard.writeText(target.text).then(
+            () => setContextualCommandNotice(locale === "vi" ? "Đã sao chép câu trả lời hiện tại." : "Current answer copied."),
+            () => setContextualCommandNotice(locale === "vi" ? "Không thể sao chép câu trả lời." : "Could not copy the current answer."),
+          );
+        },
+      });
+    }
+    if (commandEvidenceTarget) {
+      commands.push({
+        id: "inspect-current-sources",
+        labelKey: "palette.inspectSources",
+        descriptionKey: "palette.inspectSourcesDescription",
+        icon: "sources",
+        accentFamily: "evidence",
+        run: () => {
+          const target = resolveEvidenceCommandTarget(
+            displayedAnswerContextRef.current,
+            evidenceSelectionRef.current,
+            messagesRef.current,
+            activeRecordRef.current,
+            activeConversationIdRef.current,
+          );
+          if (!target) {
+            setContextualCommandNotice(unavailableSourceNotice);
+            return;
+          }
+          setActiveView("conversation");
+          setEvidenceSelection(target.selection);
+          setIsEvidenceOpen(true);
+        },
+      });
+      commands.push({
+        id: "save-selected-source",
+        labelKey: "palette.saveSource",
+        descriptionKey: "palette.saveSourceDescription",
+        icon: "saveSource",
+        accentFamily: "evidence",
+        run: () => {
+          const target = resolveEvidenceCommandTarget(
+            displayedAnswerContextRef.current,
+            evidenceSelectionRef.current,
+            messagesRef.current,
+            activeRecordRef.current,
+            activeConversationIdRef.current,
+          );
+          if (!target) {
+            setContextualCommandNotice(unavailableSourceNotice);
+            return;
+          }
+          try {
+            saveEvidence(target.source, {
+              conversationId: target.selection.conversationId,
+              messageId: target.selection.messageId,
+              provenance: snapshotProvenanceFromSource(target.source),
+            });
+            setContextualCommandNotice(locale === "vi" ? "Đã lưu source đang chọn." : "Selected source saved.");
+          } catch (error) {
+            setContextualCommandNotice(error instanceof Error ? error.message : (locale === "vi" ? "Không thể lưu source." : "Could not save the selected source."));
+          }
+        },
+      });
+    }
+    commands.push({
+      id: "open-scope-editor",
+      labelKey: "palette.openScope",
+      descriptionKey: "palette.openScopeDescription",
+      icon: "metadata",
+      accentFamily: "research",
+      run: () => {
+        setActiveView("conversation");
+        setIsScopeEditorOpen(true);
+      },
+    });
+    return commands;
+  }, [commandEvidenceTarget, hasGroundedAnswer, locale, setEvidenceSelection]);
   const showContextBanner =
     activeView === "conversation" && hasExchanges &&
     (sessionContext === "checking" || isReadOnly);
+  const effectiveContextRailWidth = Math.min(
+    CONTEXT_RAIL_MAX_WIDTH,
+    Math.max(CONTEXT_RAIL_MIN_WIDTH, workspaceWidth > 0 ? workspaceWidth - 496 : contextRailWidth),
+    contextRailWidth,
+  );
+  const readablePrimaryWidth = workspaceWidth - effectiveContextRailWidth;
+  const evidenceInline = workspaceWidth >= CONTEXT_INLINE_MIN_WORKSPACE_WIDTH &&
+    readablePrimaryWidth >= CONTEXT_INLINE_MIN_PRIMARY_WIDTH &&
+    workspaceHeight >= CONTEXT_INLINE_MIN_HEIGHT;
+  const showComposer = !["retrieval", "documents", "library", "search", "architecture", "evaluation", "analytics", "system"].includes(activeView);
+  const composer = showComposer ? (
+    <div className="composer-shell flex-shrink-0 z-10">
+      <ChatInput
+        inputText={inputText}
+        setInputText={setInputText}
+        onSendMessage={handleSendMessage}
+        onStopGenerating={handleStopGenerating}
+        isLoading={isLoading}
+        isStreaming={isStreaming}
+        isPreflightRunning={isPreflightRunning}
+        isBackendConnected={isBackendConnected}
+        isPipelineReady={isPipelineReady}
+        isReadOnly={isReadOnly && hasExchanges}
+        readOnlyMessage={
+          sessionContext === "missing"
+            ? "The backend session for this saved conversation has expired. Start a new conversation to ask follow-up questions."
+            : "The backend could not be reached. Check the connection again before asking follow-up questions."
+        }
+        showBanner={activeView === "conversation" && hasExchanges}
+        scopeLabel={scopeLabel || undefined}
+        tickers={tickers}
+        sections={sections}
+        selectedTicker={selectedTicker}
+        onSelectTicker={setSelectedTicker}
+        selectedSection={selectedSection}
+        onSelectSection={setSelectedSection}
+        topK={topK}
+        onChangeTopK={setTopK}
+        enableComparative={enableComparative}
+        onToggleComparative={setEnableComparative}
+        scopeOpen={isScopeEditorOpen}
+        onScopeOpenChange={setIsScopeEditorOpen}
+      />
+    </div>
+  ) : null;
 
   return (
     <div className="app-shell flex w-screen max-w-full h-dvh font-sans text-[var(--text-primary)] overflow-hidden bg-grid-pattern">
@@ -926,9 +2031,14 @@ export default function App() {
         healthData={healthData}
         isOpen={isSidebarOpen}
         onClose={handleCloseSidebar}
+        isDesktopNavigation={isDesktopNavigation}
+        navigationLayout={navigationLayout}
         isClearingSession={isClearingSession}
         activePanel={activeSidebarPanel}
         onChangePanel={setActiveSidebarPanel}
+        activeView={activeView}
+        onSelectView={handleSelectWorkspaceView}
+        hasMessages={hasExchanges}
         conversations={conversations}
         activeConversationId={activeConversationId}
         storageMode={storageMode}
@@ -942,6 +2052,11 @@ export default function App() {
           void deleteConversation(conversationId);
         }}
         onExportConversation={handleExportConversation}
+        onExportBackup={handleExportBackup}
+        onImportBackup={handleImportBackup}
+        onUpdateMetadata={updateConversationMetadata}
+        writerStatus={writerStatus}
+        onRequestWriter={requestLibraryWriter}
       />
 
       {/* Main chat window area */}
@@ -950,24 +2065,27 @@ export default function App() {
         <WorkspaceHeader
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={handleToggleSidebar}
+          navigationLayout={navigationLayout}
+          onToggleNavigationLayout={toggleNavigationLayout}
           activeView={activeView}
-          onSelectView={setActiveView}
+          onSelectView={handleSelectWorkspaceView}
           hasMessages={hasExchanges}
           isBackendConnected={isBackendConnected}
           isPipelineReady={isPipelineReady}
-          companyCount={healthData?.corpus?.searchable_company_count ?? (tickers.length || undefined)}
+          companyCount={healthData?.corpus?.searchable_company_count}
           theme={themePreference}
           resolvedTheme={resolvedTheme}
           onSelectTheme={handleSelectTheme}
           isClearingSession={isClearingSession}
           onReset={requestNewConversation}
           onOpenHelp={() => setIsHelpOpen(true)}
+          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         />
         {/* Content stream area */}
         <main
           aria-label="Research workspace"
-          ref={scrollContainerRef}
-          className="workspace-scroll flex-1 overflow-y-auto overflow-x-hidden min-h-0 relative z-10"
+          ref={workspaceMainRef}
+          className={`workspace-scroll flex-1 overflow-y-auto overflow-x-hidden min-h-0 relative z-10 ${activeView === "conversation" ? "workspace-scroll--conversation" : ""}`}
         >
           {showContextBanner && (
             <SessionContextBanner
@@ -975,20 +2093,156 @@ export default function App() {
               onRecheck={() => void recheckSessionContext()}
               onNewConversation={requestNewConversation}
             />
-          )}          {activeView === "overview" ? (
-            <OverviewPanel
-              hasMessages={hasExchanges}
-              companyCount={healthData?.corpus?.searchable_company_count ?? (tickers.length || null)}
-              indexedChunkCount={healthData?.corpus?.indexed_chunk_count ?? null}
-              onReturnToConversation={handleReturnToConversation}
-              isBackendConnected={isBackendConnected}
-              isPipelineReady={isPipelineReady}
-              onRetryConnection={handleRetryConnection}
-              onSelectQuestion={handleSelectSample}
-            />
-          ) : (
+          )}
+          {contextualCommandNotice && (
+            <div className="mx-auto mt-3 flex max-w-6xl items-center justify-between gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3 py-2 text-sm text-[var(--text-muted)]" role="status">
+              <span>{contextualCommandNotice}</span>
+              <button type="button" className="text-xs font-semibold text-[var(--accent-text)]" onClick={() => setContextualCommandNotice(null)}>
+                {locale === "vi" ? "Đóng" : "Dismiss"}
+              </button>
+            </div>
+          )}
+          <div
+            className={`workspace-main-grid ${activeView === "conversation" ? "workspace-main-grid--conversation" : ""} ${((activeView === "conversation" && evidenceTarget) || (activeView !== "conversation" && standaloneReaderSource)) && isEvidenceOpen && evidenceInline ? "workspace-main-grid--with-evidence" : ""}`}
+            style={{ "--context-rail-width": `${effectiveContextRailWidth}px` } as CSSProperties}
+          >
+            <div className="workspace-primary-column">
+              <Suspense fallback={<WorkspacePanelFallback />}>
+                {documentsViewMounted || activeView === "documents" ? (
+                  <div hidden={activeView !== "documents" || documentWorkspaceTarget?.kind === "catalog"} aria-hidden={activeView !== "documents" || documentWorkspaceTarget?.kind === "catalog"}>
+                    <DocumentExplorerPanel tickers={tickers} sections={sections} onOpenDocument={handleOpenDocumentWorkspace} onOpenSource={handleOpenStandaloneSource} />
+                  </div>
+                ) : null}
+                {activeView === "documents" && documentWorkspaceTarget?.kind === "catalog" && (
+                  <DocumentWorkspace
+                    key={`catalog:${documentWorkspaceTarget.documentId}:${documentWorkspaceTarget.selectedSource?.chunk_id ?? "document"}`}
+                    documentId={documentWorkspaceTarget.documentId}
+                    title={documentWorkspaceTarget.title}
+                    indexedSource={documentWorkspaceTarget.selectedSource}
+                    indexedExcerpt={documentWorkspaceTarget.selectedSource ? <div className="document-workspace__excerpt-content"><p className="context-viewer-citation">{documentWorkspaceTarget.selectedSource.citation}</p><p>{documentWorkspaceTarget.selectedSource.text_preview}</p></div> : undefined}
+                    metadata={<dl>{[
+                      ["Document ID", documentWorkspaceTarget.documentId],
+                      documentWorkspaceTarget.ticker ? [locale === "vi" ? "Công ty" : "Company", formatCompanyLabel(documentWorkspaceTarget.ticker)] : null,
+                      documentWorkspaceTarget.filingDate ? [locale === "vi" ? "Ngày nộp" : "Filed", documentWorkspaceTarget.filingDate] : null,
+                      documentWorkspaceTarget.reportDate ? [locale === "vi" ? "Ngày báo cáo" : "Report date", documentWorkspaceTarget.reportDate] : null,
+                      documentWorkspaceTarget.accessionNumber ? ["Accession", documentWorkspaceTarget.accessionNumber] : null,
+                    ].filter(Boolean).map(([label, value]) => <div key={`${label}-${value}`}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>}
+                    onBack={handleCloseDocumentWorkspace}
+                    readerSession={readerSession}
+                    origin="catalog"
+                    initialTab={documentWorkspaceTarget.initialTab}
+                  />
+                )}
+                {activeView === "search" ? (
+              <>
+                <div hidden={documentWorkspaceTarget?.kind === "search"} aria-hidden={documentWorkspaceTarget?.kind === "search"}>
+                  <SearchWorkspace
+                    selectedTicker={selectedTicker}
+                    selectedSection={selectedSection}
+                    isBackendConnected={isBackendConnected}
+                    onUseQuestion={handleUseRetrievalQuestion}
+                    onOpenDocument={handleOpenDocumentWorkspace}
+                    onOpenSource={handleOpenStandaloneSource}
+                  />
+                </div>
+                {documentWorkspaceTarget?.kind === "search" && (
+                  <DocumentWorkspace
+                    key={`search:${documentWorkspaceTarget.documentId}:${documentWorkspaceTarget.selectedSource?.chunk_id ?? "document"}`}
+                    documentId={documentWorkspaceTarget.documentId}
+                    indexedSource={documentWorkspaceTarget.selectedSource}
+                    indexedExcerpt={documentWorkspaceTarget.selectedSource ? <div className="document-workspace__excerpt-content"><p className="context-viewer-citation">{documentWorkspaceTarget.selectedSource.citation}</p><p>{documentWorkspaceTarget.selectedSource.text_preview}</p></div> : undefined}
+                    metadata={<dl>{[
+                      ["Document ID", documentWorkspaceTarget.documentId],
+                      documentWorkspaceTarget.selectedSource?.ticker ? [locale === "vi" ? "Công ty" : "Company", formatCompanyLabel(documentWorkspaceTarget.selectedSource.ticker)] : null,
+                      documentWorkspaceTarget.selectedSource?.section ? [locale === "vi" ? "Mục" : "Section", documentWorkspaceTarget.selectedSource.section] : null,
+                      documentWorkspaceTarget.selectedSource?.filing_date ? [locale === "vi" ? "Ngày nộp" : "Filed", documentWorkspaceTarget.selectedSource.filing_date] : null,
+                    ].filter(Boolean).map(([label, value]) => <div key={`${label}-${value}`}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>}
+                    onBack={handleCloseDocumentWorkspace}
+                    readerSession={readerSession}
+                    origin="search"
+                    initialTab={documentWorkspaceTarget.initialTab}
+                  />
+                )}
+              </>
+                ) : activeView === "architecture" ? (
+              <ArchitecturePanel />
+                ) : activeView === "retrieval" ? (
+              <RetrievalLabPanel
+                tickers={tickers}
+                sections={sections}
+                selectedTicker={selectedTicker}
+                selectedSection={selectedSection}
+                isBackendConnected={isBackendConnected}
+                onUseQuestion={handleUseRetrievalQuestion}
+                onOpenSource={handleOpenStandaloneSource}
+                onSaveEvidence={handleSaveRetrievedEvidence}
+              />
+                ) : activeView === "documents" ? (
+              null
+                ) : activeView === "library" ? (
+              <section className="workspace-page" aria-labelledby="library-workspace-title">
+                <div className="workspace-page__intro">
+                  <div>
+                    <div className="workspace-eyebrow"><LibraryIcon className="h-3.5 w-3.5" />{locale === "vi" ? "Kho nghiên cứu" : "Research library"}</div>
+                    <h1 id="library-workspace-title">{locale === "vi" ? "Thư viện cuộc trò chuyện" : "Conversation library"}</h1>
+                    <p>{t(libraryNavItem.descriptionKey)}</p>
+                  </div>
+                </div>
+                <div className="library-workspace-surface">
+                  <ConversationLibrary
+                    conversations={conversations}
+                    activeConversationId={activeConversationId}
+                    storageMode={storageMode}
+                    storageWarning={storageWarning}
+                    saveIndicator={saveIndicator}
+                    onSelect={handleSelectConversation}
+                    onRename={renameConversation}
+                    onToggleBookmark={handleSidebarToggleBookmark}
+                    onDelete={(conversationId) => void deleteConversation(conversationId)}
+                    onExport={handleExportConversation}
+                    onExportBackup={handleExportBackup}
+                    onImportBackup={handleImportBackup}
+                    onUpdateMetadata={updateConversationMetadata}
+                    writerStatus={writerStatus}
+                    onRequestWriter={requestLibraryWriter}
+                    onOpenMessage={handleOpenMessage}
+                    onOpenVariant={handleOpenVariant}
+                    onContinueResearch={handleContinueResearch}
+                    onOpenEvidence={handleOpenSavedEvidence}
+                    onOpenCurrentSource={handleOpenCurrentEvidence}
+                    onClose={() => setActiveView("overview")}
+                  />
+                </div>
+              </section>
+                ) : activeView === "system" ? (
+              <SystemInfoPanel
+                onOpenDocuments={() => handleSelectWorkspaceView("documents")}
+                onOpenRetrieval={() => handleSelectWorkspaceView("retrieval")}
+                onOpenEvaluation={() => handleSelectWorkspaceView("evaluation")}
+              />
+                ) : activeView === "evaluation" ? (
+              <EvaluationPanel />
+                ) : activeView === "analytics" ? (
+              <AnalyticsPanel />
+                ) : activeView === "overview" ? (
+              <OverviewPanel
+                hasMessages={hasExchanges}
+                companyCount={healthData?.corpus?.searchable_company_count ?? null}
+                indexedChunkCount={healthData?.corpus?.indexed_chunk_count ?? null}
+                onReturnToConversation={handleReturnToConversation}
+                isBackendConnected={isBackendConnected}
+                isPipelineReady={isPipelineReady}
+                onRetryConnection={handleRetryConnection}
+                scopeLabel={scopeLabel}
+                recentConversations={recentConversations}
+                onSelectTemplate={handlePaletteTemplate}
+                onSelectConversation={handleSelectConversation}
+              />
+                ) : (
             /* Active Chat Stream */
-            <div className="flex flex-col w-full min-h-full py-4 md:py-5 pb-6 relative">
+            <div className="conversation-primary-shell">
+              <div ref={scrollContainerRef} className="conversation-message-scroll">
+                <div className="flex flex-col w-full min-h-full py-4 md:py-5 pb-6 relative">
               <Suspense
                 fallback={
                   <div className="flex items-center gap-2 max-w-4xl mx-auto w-full px-3 py-4 text-sm text-slate-500 dark:text-slate-400" role="status">
@@ -997,7 +2251,16 @@ export default function App() {
                   </div>
                 }
               >
-                {messages.map((msg, index) => (
+                {messages.length === 0 ? (
+                  <section className="research-empty-state max-w-2xl mx-auto w-full px-4 py-10 md:py-16" aria-labelledby="research-empty-title">
+                    <p className="research-empty-state__eyebrow">New research</p>
+                    <h1 id="research-empty-title">Start with a filing question</h1>
+                    <p>
+                      Choose a focused example or write your own question below. The answer will stay grounded in retrieved 10-K evidence.
+                    </p>
+                    <SampleQuestionChips onSelect={handleSelectSample} />
+                  </section>
+                ) : messages.map((msg, index) => (
                   <ChatMessage
                     key={msg.id}
                     message={msg}
@@ -1007,9 +2270,46 @@ export default function App() {
                     bookmarked={bookmarkedMessageIds.includes(msg.id)}
                     onToggleBookmark={
                       msg.sender === "assistant" && !msg.isStreaming && msg.text
-                        ? () => toggleAnswerBookmark(msg.id)
+                        ? () => { void answerActions.bookmark({ conversationId: activeConversationId, messageId: msg.id, variantId: null }); }
                         : undefined
                     }
+                    onSaveNote={
+                      msg.sender === "assistant" && !msg.isStreaming && msg.text
+                        ? (note) => handleSaveMessageNote(msg.id, note)
+                        : undefined
+                    }
+                    onFeedback={
+                      msg.sender === "assistant" && !msg.isStreaming && msg.text
+                        ? (feedback) => handleMessageFeedback(msg.id, feedback)
+                        : undefined
+                    }
+                    variants={activeRecord?.variants?.filter((variant) => variant.originMessageId === msg.id)}
+                    onSaveVariant={
+                      msg.sender === "assistant" && !msg.isStreaming && msg.text
+                        ? (target) => { void handleSaveAnswerVersion(target); }
+                        : undefined
+                    }
+                    saveVariantStatus={
+                      toLegacySaveStatus(answerActions.getState("save_version", { conversationId: activeConversationId, messageId: msg.id, variantId: displayedAnswerContext?.messageId === msg.id ? displayedAnswerContext.variantId : null }).status)
+                    }
+                    answerActionStates={{
+                      bookmark: answerActions.getState("bookmark", { conversationId: activeConversationId, messageId: msg.id, variantId: null }),
+                      feedback: answerActions.getState("feedback", { conversationId: activeConversationId, messageId: msg.id, variantId: displayedAnswerContext?.messageId === msg.id ? displayedAnswerContext.variantId : null }),
+                      note: answerActions.getState("note", { conversationId: activeConversationId, messageId: msg.id, variantId: null }),
+                      save_version: answerActions.getState("save_version", { conversationId: activeConversationId, messageId: msg.id, variantId: displayedAnswerContext?.messageId === msg.id ? displayedAnswerContext.variantId : null }),
+                    }}
+                    onRetrySaveVariant={
+                      msg.sender === "assistant" && !msg.isStreaming && msg.text
+                        ? (target) => { void handleSaveAnswerVersion(target); }
+                        : undefined
+                    }
+                    onViewSavedVersion={handleViewSavedVersion}
+                    onInspectSource={handleInspectSource}
+                    onDisplayedAnswerContext={handleDisplayedAnswerContext}
+                    pipelineStages={stageEventsByMessage[msg.id]}
+                    availableSections={sections}
+                    onUseRelatedResearch={isReadOnly ? undefined : handleUseRelatedResearch}
+                    initialVariantId={pendingOpenVariant?.conversationId === activeConversationId && pendingOpenVariant.messageId === msg.id ? pendingOpenVariant.variantId : undefined}
                     tabIndex={0}
                   />
                 ))}
@@ -1027,49 +2327,91 @@ export default function App() {
                   <ChevronDown className="w-5 h-5" />
                 </button>
               )}
+                </div>
+              </div>
+              {composer}
             </div>
-          )}
+                )}
+              </Suspense>
+            </div>
+            {activeView === "conversation" && evidenceTarget && (
+              <EvidenceWorkspaceRail
+                sources={evidenceTarget.sources}
+                selectedIndex={evidenceTarget.selectedIndex}
+                unavailable={evidenceTarget.unavailable}
+                messageId={evidenceTarget.selection.messageId}
+                conversationId={evidenceTarget.selection.conversationId}
+                railWidth={effectiveContextRailWidth}
+                onRailWidthChange={setContextRailWidth}
+                isOpen={isEvidenceOpen}
+                presentation={evidenceInline ? "inline" : "drawer"}
+                onClose={handleCloseEvidence}
+                readerSession={readerSession}
+                onSelectIndex={(citationIndex) => {
+                  const source = evidenceTarget.sources[citationIndex];
+                  if (!source) return;
+                  handleInspectSource(
+                    (() => {
+                      const { conversationId: _conversationId, ...selection } = createEvidenceSelection(
+                        activeConversationId,
+                        evidenceTarget.selection.messageId,
+                        citationIndex,
+                        source,
+                        evidenceTarget.selection.variantId,
+                      );
+                      return selection;
+                    })(),
+                  );
+                }}
+              />
+            )}
+            {activeView !== "conversation" && standaloneReaderSource && (
+              <EvidenceWorkspaceRail
+                sources={[standaloneReaderSource]}
+                selectedIndex={0}
+                messageId={undefined}
+                conversationId={undefined}
+                railWidth={effectiveContextRailWidth}
+                onRailWidthChange={setContextRailWidth}
+                isOpen={isEvidenceOpen}
+                presentation={evidenceInline ? "inline" : "drawer"}
+                onClose={handleCloseEvidence}
+                readerSession={readerSession}
+                onOpenCurrentSource={handleOpenCurrentSource}
+                onSelectIndex={() => undefined}
+              />
+            )}
+          </div>
         </main>
 
-        {/* The composer is a flex sibling, so it never overlays response evidence. */}
-        <div className="composer-shell flex-shrink-0 z-10">
-          <ChatInput
-            inputText={inputText}
-            setInputText={setInputText}
-            onSendMessage={handleSendMessage}
-            onStopGenerating={handleStopGenerating}
-            isLoading={isLoading}
-            isStreaming={isStreaming}
-            isBackendConnected={isBackendConnected}
-            isPipelineReady={isPipelineReady}
-            isReadOnly={isReadOnly && hasExchanges}
-            readOnlyMessage={
-              sessionContext === "missing"
-                ? "The backend session for this saved conversation has expired. Start a new conversation to ask follow-up questions."
-                : "The backend could not be reached. Check the connection again before asking follow-up questions."
-            }
-            showBanner={activeView === "conversation" && hasExchanges}
-            scopeLabel={scopeLabel || undefined}
-          />
-        </div>
+        {activeView !== "conversation" && composer}
       </div>
 
       <HelpDialog open={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+      <TemplateQuestionDialog
+        open={templateToCustomize !== null}
+        template={templateToCustomize}
+        tickers={tickers}
+        onClose={closeTemplateQuestion}
+        onApply={handleApplyTemplate}
+      />
+      <CommandPalette
+        open={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onNavigate={handlePaletteNavigate}
+        onTemplate={handlePaletteTemplate}
+        onHelp={() => setIsHelpOpen(true)}
+        onNewConversation={requestNewConversation}
+        contextualCommands={contextualCommands}
+      />
 
-      {showResetDialog && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center overlay-backdrop p-4"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setShowResetDialog(false);
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="reset-dialog-title"
-            className="w-full max-w-md rounded-2xl surface-raised border-[var(--border-subtle)] p-5 shadow-2xl"
-          >
+      <ModalDialog
+        open={showResetDialog}
+        onClose={() => setShowResetDialog(false)}
+        labelledBy="reset-dialog-title"
+        initialFocusRef={resetCancelRef}
+        className="w-full max-w-md rounded-2xl surface-raised border-[var(--border-subtle)] p-5 shadow-2xl"
+      >
             <div className="flex items-start gap-3">
               <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full state-warning-surface">
                 <AlertTriangle className="h-5 w-5" />
@@ -1113,9 +2455,7 @@ export default function App() {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+      </ModalDialog>
     </div>
   );
 }

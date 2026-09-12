@@ -5,10 +5,8 @@
 
 import React from "react";
 import {
-  CheckCircle2,
   ChevronDown,
   Database,
-  GitFork,
   HelpCircle,
   AlertTriangle,
   Loader2,
@@ -16,13 +14,13 @@ import {
   RefreshCw,
   Sparkles,
   ArrowRight,
-  ShieldAlert,
-  PieChart,
-  FileSpreadsheet,
-  TrendingUp,
 } from "lucide-react";
 import { Tooltip } from "./Tooltip";
-import { SAMPLE_QUESTIONS, SampleQuestion } from "./SampleQuestionChips";
+import { useLocale } from "../lib/i18n";
+import { RESEARCH_TEMPLATES, getResearchTemplateCopy, type ResearchTemplate } from "../lib/researchTemplates";
+import type { ConversationRecord } from "../lib/conversationStore";
+import { getSemanticIcon } from "../lib/semanticIcons";
+import type { SemanticIconKey } from "../lib/semanticIcons";
 
 interface OverviewPanelProps {
   hasMessages: boolean;
@@ -32,19 +30,29 @@ interface OverviewPanelProps {
   isBackendConnected: boolean | null;
   isPipelineReady: boolean | null;
   onRetryConnection: () => void;
-  onSelectQuestion?: (question: SampleQuestion) => void;
+  scopeLabel: string;
+  recentConversations: ConversationRecord[];
+  onSelectTemplate?: (template: ResearchTemplate) => void;
+  onSelectConversation?: (conversation: ConversationRecord) => void;
 }
 
-const features = [
+const features: Array<{
+  title: string;
+  description: string;
+  tooltip: string;
+  iconKey: SemanticIconKey;
+  accentFamily: "documents" | "retrieval" | "evidence";
+  badge: string;
+}> = [
   {
     title: "Granular Chunk Scan",
     description:
       "Scans individual 10-K blocks in business descriptions, risk matrices, and financial statements.",
     tooltip:
       "Scans individual 10-K blocks in business descriptions, risk matrices, and financial statements.",
-    Icon: Database,
+    iconKey: "reader",
+    accentFamily: "documents",
     badge: "500-900 Tokens",
-    colorClass: "bg-indigo-500/10 text-brand-indigo dark:bg-indigo-400/15 dark:text-indigo-300",
   },
   {
     title: "Multi-Hop Querying",
@@ -52,9 +60,9 @@ const features = [
       "Decomposes comparative requests into focused retrievals and presents a grounded execution summary.",
     tooltip:
       "Decomposes comparative requests into focused retrievals and presents the completed execution summary.",
-    Icon: GitFork,
+    iconKey: "execution",
+    accentFamily: "retrieval",
     badge: "Sub-Query Planner",
-    colorClass: "bg-teal-500/10 text-teal-700 dark:bg-teal-400/15 dark:text-teal-300",
   },
   {
     title: "Verifiable Sources",
@@ -62,38 +70,11 @@ const features = [
       "Every answer keeps the retrieved filing excerpts visible so you can inspect the source text behind each claim.",
     tooltip:
       "Retrieved excerpts remain visible with filing, section, and ranking metadata so you can inspect the evidence behind an answer.",
-    Icon: CheckCircle2,
+    iconKey: "sources",
+    accentFamily: "evidence",
     badge: "Canonical Citations",
-    colorClass: "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300",
   },
 ] as const;
-
-const PROMPT_CARDS = [
-  {
-    topic: "Comparative Risks",
-    target: "Apple & Microsoft 10-K disclosures",
-    question: SAMPLE_QUESTIONS[0],
-    Icon: ShieldAlert,
-  },
-  {
-    topic: "Revenue Segments",
-    target: "Alphabet (Google) business lines",
-    question: SAMPLE_QUESTIONS[1],
-    Icon: PieChart,
-  },
-  {
-    topic: "MD&A Analysis",
-    target: "Amazon performance & outlook",
-    question: SAMPLE_QUESTIONS[2],
-    Icon: FileSpreadsheet,
-  },
-  {
-    topic: "Statement Trends",
-    target: "Tesla financial reporting data",
-    question: SAMPLE_QUESTIONS[3],
-    Icon: TrendingUp,
-  },
-];
 
 export const OverviewPanel = React.memo<OverviewPanelProps>(
   ({
@@ -104,8 +85,14 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
     isBackendConnected,
     isPipelineReady,
     onRetryConnection,
-    onSelectQuestion,
-  }) => (
+    scopeLabel,
+    recentConversations,
+    onSelectTemplate,
+    onSelectConversation,
+  }) => {
+    const { locale } = useLocale();
+    const vi = locale === "vi";
+    return (
     <div className="overview-panel" id="onboarding-panel">
       {/* Header & Hero Section */}
       <div className="space-y-3.5 text-center">
@@ -117,27 +104,57 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
               className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider text-brand-indigo bg-brand-indigo/10 hover:bg-brand-indigo/20 dark:bg-brand-indigo/15 dark:hover:bg-brand-indigo/25 transition-all cursor-pointer shadow-4xs"
             >
               <MessageSquare className="w-3.5 h-3.5" />
-              Return to conversation
+              {vi ? "Quay lại cuộc trò chuyện" : "Return to conversation"}
             </button>
           ) : (
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-brand-indigo/30 bg-brand-indigo/5 dark:bg-brand-indigo/10 text-brand-indigo text-xs font-semibold shadow-4xs">
               <Sparkles className="w-3.5 h-3.5 animate-pulse" />
               <span>
-                SEC EDGAR Intelligence
-                {companyCount !== null ? ` · ${companyCount} searchable companies` : " · filing research"}
+                {vi ? "SEC EDGAR Intelligence · nghiên cứu filing" : "SEC EDGAR Intelligence · filing research"}
               </span>
             </div>
           )}
         </div>
 
         <h2 className="hero-title max-w-full text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight py-1 font-serif break-words">
-          Ask questions. Verify every answer.
+          {vi ? "Đặt câu hỏi. Kiểm chứng mọi câu trả lời." : "Ask questions. Verify every answer."}
         </h2>
-        <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 max-w-xl mx-auto leading-relaxed font-sans">
-          Research SEC 10-K filings
-          {companyCount !== null ? ` across ${companyCount} searchable companies` : " across the available corpus"}
-          {" with cited evidence, deterministic number preservation, and a clear retrieval trail."}
+        <p className="mx-auto max-w-xl text-sm leading-relaxed text-[var(--text-muted)] font-sans md:text-base">
+          {vi
+            ? "Nghiên cứu filing SEC 10-K với bằng chứng có trích dẫn và dấu vết truy xuất rõ ràng."
+            : "Research SEC 10-K filings with cited evidence and a clear retrieval trail."}
         </p>
+      </div>
+
+      <section className="overview-corpus-summary" aria-label={vi ? "Thông tin kho dữ liệu" : "Corpus summary"}>
+        <div className="overview-corpus-summary__heading">
+          <span className="overview-corpus-summary__title">
+            <Database className="h-4 w-4" aria-hidden="true" />
+            {vi ? "Kho dữ liệu hiện có" : "Available corpus"}
+          </span>
+          <span>{vi ? "Chỉ hiển thị metadata do dịch vụ báo cáo" : "Only service-reported metadata is shown"}</span>
+        </div>
+        {companyCount !== null || indexedChunkCount != null ? (
+          <div className="overview-corpus-summary__facts">
+            {companyCount !== null && (
+              <span><strong>{companyCount}</strong> {vi ? "công ty có thể tìm kiếm" : "searchable companies"}</span>
+            )}
+            {indexedChunkCount != null && (
+              <span><strong>{indexedChunkCount}</strong> {vi ? "đoạn đã lập chỉ mục" : "indexed chunks"}</span>
+            )}
+          </div>
+        ) : (
+          <p className="overview-corpus-summary__empty">
+            {isBackendConnected === false
+              ? vi ? "Metadata kho dữ liệu không khả dụng khi dịch vụ offline." : "Corpus metadata is unavailable while the service is offline."
+              : vi ? "Chưa có metadata kho dữ liệu từ dịch vụ nghiên cứu." : "No corpus metadata has been reported by the research service yet."}
+          </p>
+        )}
+      </section>
+
+      <div className="overview-scope" aria-label={vi ? `Phạm vi hiện tại: ${scopeLabel}` : `Current scope: ${scopeLabel}`}>
+        <span>{vi ? "Phạm vi hiện tại" : "Current scope"}</span>
+        <strong>{scopeLabel}</strong>
       </div>
 
       {/* Backend Connection Status Notice if offline/checking */}
@@ -160,10 +177,10 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
           </span>
           <span className="min-w-0 flex-1">
             {isBackendConnected === null || isPipelineReady === null
-              ? "Connecting to the research service…"
+              ? vi ? "Đang kết nối tới dịch vụ nghiên cứu…" : "Connecting to the research service…"
               : isBackendConnected === false
-                ? "The research service is offline. Connect the FastAPI backend to start asking questions."
-                : "The document index is still loading. Questions will be available shortly."}
+                ? vi ? "Dịch vụ nghiên cứu đang offline. Hãy kết nối backend FastAPI để bắt đầu hỏi." : "The research service is offline. Connect the FastAPI backend to start asking questions."
+                : vi ? "Dịch vụ nghiên cứu đã kết nối nhưng chỉ mục tài liệu chưa sẵn sàng." : "The research service is connected, but the document index is not ready yet."}
           </span>
           {isBackendConnected === false && (
             <button
@@ -172,130 +189,140 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
               className="backend-notice__retry"
             >
               <RefreshCw className="h-3.5 w-3.5" />
-              Retry
+              {vi ? "Thử lại" : "Retry"}
             </button>
           )}
         </div>
       ) : null}
 
-      {/* System Telemetry & Capability Stat Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="stat-card">
-          <div className="stat-card__value">{companyCount ?? "—"}</div>
-          <div className="stat-card__label">Searchable Companies</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-card__value">{indexedChunkCount ?? "—"}</div>
-          <div className="stat-card__label">Indexed Chunks</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-card__value">Hybrid RRF</div>
-          <div className="stat-card__label">BM25 + Dense + CE</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-card__value">Source trail</div>
-          <div className="stat-card__label">Cited evidence</div>
-        </div>
-      </div>
-
       {/* Interactive Quick-Start Prompts */}
       <div className="space-y-2.5">
-        <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300">
+        <div className="flex items-center justify-between text-xs font-semibold text-[var(--text-primary)]">
           <span className="flex items-center gap-1.5 font-sans">
             <Sparkles className="w-3.5 h-3.5 text-brand-indigo" />
-            Explore sample research queries
+            {vi ? "Khám phá câu hỏi mẫu" : "Explore sample research queries"}
           </span>
-          <span className="text-[11px] font-normal text-slate-400 dark:text-slate-500">
-            Click to load & search
+          <span className="text-[11px] font-normal text-[var(--text-subtle)]">
+            {vi ? "Nhấn để nạp và tìm kiếm" : "Click to load & search"}
           </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-          {PROMPT_CARDS.map(({ topic, target, question, Icon }, idx) => (
+          {RESEARCH_TEMPLATES.slice(0, 4).map((template) => {
+            const copy = getResearchTemplateCopy(template, locale);
+            return (
             <button
-              key={idx}
+              key={template.id}
               type="button"
-              onClick={() => onSelectQuestion?.(question)}
+              onClick={() => onSelectTemplate?.(template)}
               className="prompt-card group"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-6 h-6 rounded-md bg-brand-indigo/10 dark:bg-brand-indigo/20 text-brand-indigo flex items-center justify-center flex-shrink-0">
-                    <Icon className="w-3.5 h-3.5" />
+                  <div className="prompt-card__icon">
+                    {React.createElement(getSemanticIcon(template.iconKey), { className: "w-3.5 h-3.5", "aria-hidden": true })}
                   </div>
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-brand-indigo transition-colors">
-                    {topic}
+                  <span className="text-xs font-bold text-[var(--text-primary)] truncate group-hover:text-[var(--accent-text)] transition-colors">
+                    {copy.label}
                   </span>
                 </div>
-                <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-brand-indigo group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-[var(--text-subtle)] transition-[color,transform] duration-150 group-hover:translate-x-0.5 group-hover:text-[var(--accent-text)]" aria-hidden="true" />
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 leading-relaxed">
-                {target}
+              <p className="line-clamp-2 text-xs leading-relaxed text-[var(--text-muted)]">
+                {copy.description}
               </p>
             </button>
-          ))}
+            );
+          })}
         </div>
       </div>
 
+      {recentConversations.length > 0 && (
+        <section className="overview-recent" aria-labelledby="recent-conversations-title">
+          <div className="overview-section-heading">
+            <span className="flex items-center gap-1.5">
+              <MessageSquare className="h-3.5 w-3.5" />
+              <span id="recent-conversations-title">{vi ? "Cuộc trò chuyện gần đây" : "Recent conversations"}</span>
+            </span>
+            <span>{vi ? "Từ thư viện trên thiết bị" : "From your local library"}</span>
+          </div>
+          <div className="overview-recent__list">
+            {recentConversations.slice(0, 3).map((conversation) => (
+              <button
+                key={conversation.id}
+                type="button"
+                className="overview-recent__item"
+                onClick={() => onSelectConversation?.(conversation)}
+              >
+                <span className="overview-recent__title">{conversation.title}</span>
+                <span className="overview-recent__meta">
+                  {conversation.messages.length} {vi ? "tin nhắn" : "messages"} · {new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" }).format(conversation.updatedAt)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Feature Architecture Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5" id="features-cards">
-        {features.map(({ title, description, tooltip, Icon, badge, colorClass }) => (
-          <article className="feature-card" key={title}>
-            <div className="flex items-center justify-between mb-2">
-              <Tooltip content={tooltip}>
-                <div className={`feature-card__icon ${colorClass}`}>
-                  <Icon className="w-4 h-4" />
-                </div>
-              </Tooltip>
-              <span className="text-[10px] font-mono font-semibold uppercase px-2 py-0.5 rounded border border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400">
-                {badge}
-              </span>
-            </div>
-            <h3 className="feature-card__title">{title}</h3>
-            <p className="feature-card__description">{description}</p>
-          </article>
-        ))}
-      </div>
+      <details className="overview-capabilities">
+        <summary>{vi ? "Cách hệ thống truy xuất bằng chứng" : "How the evidence workflow works"}</summary>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5" id="features-cards">
+          {features.map(({ title, description, tooltip, iconKey, accentFamily, badge }) => (
+            <article className="feature-card" key={title}>
+              <div className="flex items-center justify-between mb-2">
+                <Tooltip content={tooltip}>
+                  <div className="feature-card__icon" data-feature={accentFamily}>
+                    {React.createElement(getSemanticIcon(iconKey), { className: "w-4 h-4", "aria-hidden": true })}
+                  </div>
+                </Tooltip>
+                <span className="rounded border border-[var(--border-subtle)] px-2 py-0.5 font-mono text-[10px] font-semibold uppercase text-[var(--text-muted)]">
+                  {badge}
+                </span>
+              </div>
+              <h3 className="feature-card__title">{title}</h3>
+              <p className="feature-card__description">{description}</p>
+            </article>
+          ))}
+        </div>
+      </details>
 
       {/* Workspace Guide Collapsible */}
       <details className="workspace-guide group">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-brand-indigo [&::-webkit-details-marker]:hidden">
           <span className="flex items-center gap-2">
             <HelpCircle className="w-4 h-4" />
-            How to read the workspace
+            {vi ? "Cách đọc workspace" : "How to read the workspace"}
           </span>
           <ChevronDown className="w-4 h-4 transition-transform group-open:rotate-180" />
         </summary>
-        <div className="ui-expand-enter grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-350">
+        <div className="ui-expand-enter grid grid-cols-1 gap-4 pt-4 text-sm leading-relaxed text-[var(--text-muted)] md:grid-cols-3">
           <p>
-            <strong className="block text-slate-800 dark:text-slate-100">
-              1. Choose scope
+            <strong className="block text-[var(--text-primary)]">
+              {vi ? "1. Chọn phạm vi" : "1. Choose scope"}
             </strong>
-            Select a company and 10-K section, or leave both on All for
-            discovery and comparisons.
+            {vi ? "Chọn công ty và mục 10-K, hoặc để Tất cả để khám phá và so sánh." : "Select a company and 10-K section, or leave both on All for discovery and comparisons."}
           </p>
           <p>
-            <strong className="block text-slate-800 dark:text-slate-100">
-              2. Ask naturally
+            <strong className="block text-[var(--text-primary)]">
+              {vi ? "2. Hỏi tự nhiên" : "2. Ask naturally"}
             </strong>
-            Comparisons can be decomposed into focused sub-queries before a
-            grounded summary is produced.
+            {vi ? "Câu hỏi so sánh có thể được tách thành các truy vấn tập trung trước khi tạo tóm tắt có căn cứ." : "Comparisons can be decomposed into focused sub-queries before a grounded summary is produced."}
           </p>
           <p>
-            <strong className="block text-slate-800 dark:text-slate-100">
-              3. Verify evidence
+            <strong className="block text-[var(--text-primary)]">
+              {vi ? "3. Kiểm chứng bằng chứng" : "3. Verify evidence"}
             </strong>
-            Open the evidence panel to read source excerpts. Rank scores order
-            results; they are not confidence percentages.
+            {vi ? "Mở bảng bằng chứng để đọc đoạn nguồn. Điểm rank chỉ sắp xếp kết quả, không phải phần trăm tin cậy." : "Open the evidence panel to read source excerpts. Rank scores order results; they are not confidence percentages."}
           </p>
         </div>
-        <p className="md:col-span-3 text-xs text-slate-500 dark:text-slate-400 border-t border-brand-indigo/10 pt-3">
-          Research demo only · Answers may be incomplete and are not financial
-          advice.
+        <p className="border-t border-[var(--border-subtle)] pt-3 text-xs text-[var(--text-muted)] md:col-span-3">
+          {vi ? "Chỉ dành cho demo nghiên cứu · Câu trả lời có thể chưa đầy đủ và không phải tư vấn tài chính." : "Research demo only · Answers may be incomplete and are not financial advice."}
         </p>
       </details>
     </div>
-  ),
+    );
+  },
 );
 
 OverviewPanel.displayName = "OverviewPanel";

@@ -1,10 +1,7 @@
 @import "tailwindcss";
 
-/* Entry stylesheet: it only orchestrates import order.
-   1. tokens.css declares theme variables and the Tailwind theme.
-   2. components.css styles workspace components on those tokens.
-   3. base.css keeps global surfaces, scrollbars, and the app canvas.
-   4. motion.css closes the cascade so reduced-motion guarantees win. */
+/* Keep the entrypoint intentionally small. Semantic tokens, component styles,
+   global browser rules, and motion policy each have one source of truth. */
 @import "./styles/tokens.css";
 @import "./styles/components.css";
 @import "./styles/base.css";

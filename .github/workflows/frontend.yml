@@ -5,10 +5,18 @@ on:
     paths:
       - ".github/workflows/frontend.yml"
       - "frontend/**"
+      - "src/**"
+      - "tests/integration/**"
+      - "requirements.txt"
+      - "Dockerfile"
   pull_request:
     paths:
       - ".github/workflows/frontend.yml"
       - "frontend/**"
+      - "src/**"
+      - "tests/integration/**"
+      - "requirements.txt"
+      - "Dockerfile"
 
 permissions:
   contents: read
@@ -51,7 +59,8 @@ jobs:
         run: bun e2e/token-contrast.mjs
 
       - name: Run browser tests
-        run: bunx playwright test
+        # The browser fixtures share durable Library state; keep CI deterministic.
+        run: bunx playwright test --workers=1
 
       - name: Upload browser test artifacts
         if: failure()

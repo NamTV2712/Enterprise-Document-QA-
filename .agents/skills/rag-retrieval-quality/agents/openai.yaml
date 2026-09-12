@@ -1,0 +1,4 @@
+interface:
+  display_name: "SEC Retrieval Quality"
+  short_description: "Diagnose SEC retrieval stages before tuning relevance"
+  default_prompt: "Use $rag-retrieval-quality to diagnose missing or irrelevant SEC evidence."

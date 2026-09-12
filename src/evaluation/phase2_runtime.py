@@ -26,6 +26,7 @@ from src.evaluation.generation_checkpoint import (
 )
 from src.evaluation.judge_checkpoint import JudgeParseErrorStub
 from src.generation.generator import SYSTEM_PROMPT, Generator
+from src.generation.provider_policy import configured_groq_keys, normalize_groq_key_policy
 from src.generation.answer_completion import (
     completion_metadata,
     correct_answer_once,
@@ -77,8 +78,13 @@ class UsageTracker:
         )
 
 
-def generation_pool_keys() -> list[str]:
+def generation_pool_keys(policy: str | None = None) -> list[str]:
     """Evaluation-generation rotation: dedicated pair, then primary."""
+    effective = normalize_groq_key_policy(
+        policy if policy is not None else getattr(settings, "groq_key_policy", "pool")
+    )
+    if effective == "key5_only":
+        return configured_groq_keys(settings, policy=effective)
     configured = [
         settings.groq_api_key_fall_back,
         settings.groq_api_key_fall_back2,
@@ -95,8 +101,13 @@ def generation_pool_keys() -> list[str]:
     return list(dict.fromkeys(key for key in configured if key))
 
 
-def judging_pool_keys() -> list[str]:
+def judging_pool_keys(policy: str | None = None) -> list[str]:
     """Serving/judging rotation: the primary key pair."""
+    effective = normalize_groq_key_policy(
+        policy if policy is not None else getattr(settings, "groq_key_policy", "pool")
+    )
+    if effective == "key5_only":
+        return configured_groq_keys(settings, policy=effective)
     return list(
         dict.fromkeys(
             key

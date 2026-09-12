@@ -4,6 +4,14 @@
   --font-serif: "Lora", Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
+  /* Evidence-review readability floors; use these semantic roles instead of
+     shrinking meaningful metadata to fit a dense desktop surface. */
+  --font-size-body: 1rem;
+  --font-size-meta: 0.875rem;
+  --font-size-diagnostic: 0.8125rem;
+  --font-size-action: 0.875rem;
+  --line-height-readable: 1.55;
+
   --color-ledger-white: #FFFFFF;
   --color-filing-ink: #172033;
   --color-filing-ink-dark: #08111E;

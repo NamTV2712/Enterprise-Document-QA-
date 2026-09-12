@@ -18,7 +18,7 @@ import {
 import { Source } from "../types";
 import { formatCompanyLabel, SECTION_METADATA } from "../lib/displayMetadata";
 import { normalizeLocaleSearch, useLocale } from "../lib/i18n";
-import { saveEvidence } from "../lib/evidenceCollections";
+import { saveEvidence, snapshotProvenanceFromSource } from "../lib/evidenceCollections";
 
 interface SourcesPanelProps {
   sources: Source[];
@@ -261,7 +261,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
 
   const handleSaveEvidence = (index: number, source: Source) => {
     try {
-      saveEvidence(source, { messageId });
+      saveEvidence(source, { messageId, provenance: snapshotProvenanceFromSource(source) });
       setSavedStateIndex(index);
       window.setTimeout(() => setSavedStateIndex((current) => (current === index ? null : current)), 2000);
     } catch {

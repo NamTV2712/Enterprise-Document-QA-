@@ -15,7 +15,7 @@ import type { DocumentChunk, DocumentChunkDetail, Source } from "../types";
 import { formatCompanyLabel, SECTION_METADATA } from "../lib/displayMetadata";
 import { getCachedChunkDetail, getCachedDocumentChunks } from "../lib/documentCache";
 import { describeRequestError } from "../lib/requestError";
-import { saveEvidence } from "../lib/evidenceCollections";
+import { saveEvidence, snapshotProvenanceFromSource } from "../lib/evidenceCollections";
 import { useLocale } from "../lib/i18n";
 import { getSourceKey } from "../lib/sourceIdentity";
 import { getSectionDisplay } from "./SourcesPanel";
@@ -465,7 +465,7 @@ export function DocumentViewer({
 
   const handleSave = () => {
     try {
-      saveEvidence(currentSource, { conversationId, messageId });
+      saveEvidence(currentSource, { conversationId, messageId, provenance: snapshotProvenanceFromSource(currentSource) });
       setSaved(true);
       setActionError(null);
       window.setTimeout(() => setSaved(false), 1800);

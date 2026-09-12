@@ -8,6 +8,7 @@ import { NumberRangeField } from "./NumberRangeField";
 import { SelectField } from "./ui/SelectField";
 import { getWorkspaceNavItem } from "../lib/workspace";
 import { getSemanticIcon } from "../lib/semanticIcons";
+import { formatCompanyLabel } from "../lib/displayMetadata";
 
 interface RetrievalLabPanelProps {
   tickers: string[];
@@ -127,7 +128,7 @@ export function RetrievalLabPanel({
     [vi],
   );
   const tickerOptions = useMemo(
-    () => [{ value: "", label: vi ? "Tất cả" : "All" }, ...tickers.map((item) => ({ value: item, label: item }))],
+    () => [{ value: "", label: vi ? "Tất cả" : "All" }, ...tickers.map((item) => ({ value: item, label: formatCompanyLabel(item) }))],
     [tickers, vi],
   );
   const sectionOptions = useMemo(
@@ -358,7 +359,7 @@ export function RetrievalLabPanel({
           <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-primary)]" data-testid="submitted-retrieval-configuration">
             <span className="font-semibold">{vi ? "Cấu hình đã gửi:" : "Submitted configuration:"}</span>{" "}
             <code className="font-mono">{trace.query}</code>{" · "}
-            <span>{trace.filters.ticker ?? (vi ? "Tất cả công ty" : "All companies")} · {trace.filters.section ?? (vi ? "Tất cả mục" : "All sections")} · top K {trace.top_k} · pool {trace.candidate_pool} · {trace.preset}</span>
+            <span>{trace.filters.ticker ? formatCompanyLabel(trace.filters.ticker) : (vi ? "Tất cả công ty" : "All companies")} · {trace.filters.section ?? (vi ? "Tất cả mục" : "All sections")} · top K {trace.top_k} · pool {trace.candidate_pool} · {trace.preset}</span>
           </div>
           {labMode === "analyst" && <div className="retrieval-analyst-summary" data-testid="retrieval-analyst-summary">
             <div><span>{vi ? "Kết quả đã chọn" : "Selected results"}</span><strong>{trace.selected_count ?? trace.selected_chunk_ids.length}</strong></div>
@@ -387,7 +388,7 @@ export function RetrievalLabPanel({
                   {displayCandidates.map((candidate) => (
                     <tr key={candidate.chunk_id} className={candidate.selected ? "bg-cyan-500/10" : ""}>
                       <td className="px-3 py-3 font-bold text-[var(--text-primary)]">{candidate.final_rank ?? "—"}</td>
-                      <td className="px-3 py-3"><div className="font-semibold text-[var(--text-primary)]">{candidate.chunk_id}</div><div className="text-[var(--text-muted)]">{candidate.citation}</div><div className="mt-1 flex flex-wrap gap-2">{onOpenSource && <button type="button" className="text-left text-[11px] font-semibold text-cyan-700 underline dark:text-cyan-300" onClick={() => onOpenSource({ citation: candidate.citation, text_preview: candidate.text_preview, chunk_id: candidate.chunk_id, document_id: candidate.document_id, ticker: candidate.ticker, section: candidate.section, filing_date: candidate.filing_date })}>{vi ? "Mở indexed" : "Open indexed"}</button>}{onOpenSource && candidate.document_id && <button type="button" className="text-left text-[11px] font-semibold text-cyan-700 underline dark:text-cyan-300" onClick={() => onOpenSource({ citation: candidate.citation, text_preview: "", document_id: candidate.document_id, ticker: candidate.ticker, section: candidate.section, filing_date: candidate.filing_date })}>{vi ? "Mở workspace" : "Open document"}</button>}{onSaveEvidence && <button type="button" className="text-left text-[11px] font-semibold text-cyan-700 underline dark:text-cyan-300" onClick={() => onSaveEvidence({ citation: candidate.citation, text_preview: candidate.text_preview, chunk_id: candidate.chunk_id, document_id: candidate.document_id, ticker: candidate.ticker, section: candidate.section, filing_date: candidate.filing_date })}>{vi ? "Lưu evidence" : "Save evidence"}</button>}</div></td>
+                      <td className="px-3 py-3"><div className="font-semibold text-[var(--text-primary)]">{labMode === "advanced" ? candidate.chunk_id : (candidate.ticker ? formatCompanyLabel(candidate.ticker) : (vi ? "Công ty chưa xác minh" : "Company not verified"))}</div><div className="text-[var(--text-muted)]">{candidate.citation}{labMode === "advanced" ? ` · ${candidate.chunk_id}` : `${candidate.section ? ` · ${candidate.section}` : ""}${candidate.filing_date ? ` · ${candidate.filing_date}` : ""}`}</div><div className="mt-1 flex flex-wrap gap-2">{onOpenSource && <button type="button" className="text-left text-[11px] font-semibold text-cyan-700 underline dark:text-cyan-300" onClick={() => onOpenSource({ citation: candidate.citation, text_preview: candidate.text_preview, chunk_id: candidate.chunk_id, document_id: candidate.document_id, ticker: candidate.ticker, section: candidate.section, filing_date: candidate.filing_date })}>{vi ? "Mở indexed" : "Open indexed"}</button>}{onOpenSource && candidate.document_id && <button type="button" className="text-left text-[11px] font-semibold text-cyan-700 underline dark:text-cyan-300" onClick={() => onOpenSource({ citation: candidate.citation, text_preview: "", document_id: candidate.document_id, ticker: candidate.ticker, section: candidate.section, filing_date: candidate.filing_date })}>{vi ? "Mở workspace" : "Open document"}</button>}{onSaveEvidence && <button type="button" className="text-left text-[11px] font-semibold text-cyan-700 underline dark:text-cyan-300" onClick={() => onSaveEvidence({ citation: candidate.citation, text_preview: candidate.text_preview, chunk_id: candidate.chunk_id, document_id: candidate.document_id, ticker: candidate.ticker, section: candidate.section, filing_date: candidate.filing_date })}>{vi ? "Lưu evidence" : "Save evidence"}</button>}</div></td>
                       {labMode === "advanced" && <><td className="px-3 py-3 font-mono">{score(candidate.bm25_score)} <span className="text-[var(--text-muted)]">#{candidate.bm25_rank ?? "—"}</span></td>
                       <td className="px-3 py-3 font-mono">{score(candidate.dense_score)} <span className="text-[var(--text-muted)]">#{candidate.dense_rank ?? "—"}</span></td>
                       <td className="px-3 py-3 font-mono">{score(candidate.rrf_score)}</td>

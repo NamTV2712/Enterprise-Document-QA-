@@ -25,7 +25,10 @@ import { HelpDialog } from "./components/HelpDialog";
 import { ModalDialog } from "./components/ui/ModalDialog";
 import { CommandPalette, PaletteView } from "./components/CommandPalette";
 import { EvidenceWorkspaceRail } from "./components/EvidenceWorkspaceRail";
+import { DocumentWorkspace } from "./components/DocumentWorkspace";
 import {
+  CatalogWorkspaceTarget,
+  DocumentWorkspaceTarget,
   HealthResponse,
   RequestSnapshot,
   ThemePreference,
@@ -34,16 +37,19 @@ import {
   EvidenceSelection,
   Message,
   MessageFeedback,
-  SaveAnswerVersionStatus,
+  AnswerTarget,
+  SearchWorkspaceTarget,
   Source,
   StageEvent,
 } from "./types";
 import {
   checkHealth,
   getSupportedTickers,
+  getChunkDetail,
   queryDecomposed,
   streamQuery,
   streamDecomposedQuery,
+  ApiError,
 } from "./lib/api";
 import { formatCompanyLabel, SECTION_METADATA } from "./lib/displayMetadata";
 import { ConversationRecord } from "./lib/conversationStore";
@@ -53,6 +59,7 @@ import {
 } from "./lib/conversationExport";
 import type { ConversationBackupBundle } from "./lib/conversationExport";
 import { useConversationLibrary, SessionContextStatus } from "./hooks/useConversationLibrary";
+import { useAnswerActions, toLegacySaveStatus } from "./hooks/useAnswerActions";
 import { useResearchDraft } from "./hooks/useResearchDraft";
 import type { ResearchScope } from "./hooks/useResearchDraft";
 import { useNavigationLayout } from "./hooks/useNavigationLayout";
@@ -62,8 +69,9 @@ import { useResearchSession } from "./hooks/useResearchSession";
 import { useLocale, type Locale } from "./lib/i18n";
 import { recordAnalyticsEvent } from "./lib/analyticsStore";
 import { getResearchTemplateCopy, isSendableResearchQuestion, RESEARCH_TEMPLATES, type ResearchTemplate, type ResearchTemplateApplyPayload } from "./lib/researchTemplates";
-import { importEvidenceCollections, mergeEvidenceCollections, preflightEvidenceCollectionsImport, saveEvidence } from "./lib/evidenceCollections";
+import { importEvidenceCollections, mergeEvidenceCollections, preflightEvidenceCollectionsImport, saveEvidence, snapshotProvenanceFromSource } from "./lib/evidenceCollections";
 import type { EvidenceItem } from "./lib/evidenceCollections";
+import type { CurrentSourceCheckResult } from "./components/EvidenceCollectionsPanel";
 import type { ContextualCommandDefinition } from "./lib/commandRegistry";
 import { isWorkspaceView } from "./lib/workspace";
 import { getWorkspaceNavItem, type WorkspaceView } from "./lib/workspace";
@@ -76,7 +84,9 @@ const STREAM_FLUSH_INTERVAL_MS = 80;
 const HEALTH_REFRESH_INTERVAL_MS = 15_000;
 const CONTEXT_RAIL_MIN_WIDTH = 360;
 const CONTEXT_RAIL_MAX_WIDTH = 560;
-const CONTEXT_INLINE_MIN_WORKSPACE_WIDTH = 888;
+const CONTEXT_INLINE_MIN_WORKSPACE_WIDTH = 1_120;
+const CONTEXT_INLINE_MIN_PRIMARY_WIDTH = 760;
+const CONTEXT_INLINE_MIN_HEIGHT = 640;
 const CONTEXT_RAIL_STORAGE_KEY = "sec_qa_context_rail_width_v1";
 const NAVIGATION_DESKTOP_MIN_WIDTH = 1024;
 const COMPARATIVE_KEYWORDS = [
@@ -365,21 +375,19 @@ export default function App() {
   const templateOpeningSnapshotRef = useRef<TemplateOpeningSnapshot | null>(null);
   const [contextualCommandNotice, setContextualCommandNotice] = useState<string | null>(null);
   const [displayedAnswerContext, setDisplayedAnswerContext] = useState<DisplayedAnswerContext | null>(null);
-  const [saveAnswerVersionState, setSaveAnswerVersionState] = useState<{
-    key: string | null;
-    status: SaveAnswerVersionStatus;
-  }>({ key: null, status: "idle" });
-  const saveAnswerVersionAttemptRef = useRef(0);
   const [activeView, setActiveView] = useState<WorkspaceView>(initialWorkspaceView);
   const [documentsViewMounted, setDocumentsViewMounted] = useState(initialWorkspaceView() === "documents");
   const [pendingFocusMessageId, setPendingFocusMessageId] = useState<string | null>(null);
+  const [pendingOpenVariant, setPendingOpenVariant] = useState<{ conversationId: string; messageId: string; variantId: string } | null>(null);
   const [shouldFocusLibrarySearch, setShouldFocusLibrarySearch] = useState(false);
   const [activeSidebarPanel, setActiveSidebarPanel] = useState<"research" | "library">("research");
   const [stageEventsByMessage, setStageEventsByMessage] = useState<Record<string, StageEvent[]>>({});
   const [contextRailWidth, setContextRailWidth] = useState(readContextRailWidth);
   const [workspaceWidth, setWorkspaceWidth] = useState(0);
+  const [workspaceHeight, setWorkspaceHeight] = useState(0);
   const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
   const [standaloneReaderSource, setStandaloneReaderSource] = useState<Source | null>(null);
+  const [documentWorkspaceTarget, setDocumentWorkspaceTarget] = useState<DocumentWorkspaceTarget | null>(null);
   const [isScopeEditorOpen, setIsScopeEditorOpen] = useState(false);
   const [isDesktopNavigation, setIsDesktopNavigation] = useState(() =>
     typeof window === "undefined" || typeof window.matchMedia !== "function"
@@ -451,6 +459,12 @@ export default function App() {
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
   }, [activeView]);
 
+  useEffect(() => {
+    if (documentWorkspaceTarget && documentWorkspaceTarget.returnView !== activeView) {
+      setDocumentWorkspaceTarget(null);
+    }
+  }, [activeView, documentWorkspaceTarget]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const workspaceMainRef = useRef<HTMLElement>(null);
@@ -463,7 +477,10 @@ export default function App() {
   useEffect(() => {
     const element = workspaceMainRef.current;
     if (!element) return;
-    const syncWorkspaceWidth = () => setWorkspaceWidth(element.clientWidth);
+    const syncWorkspaceWidth = () => {
+      setWorkspaceWidth(element.clientWidth);
+      setWorkspaceHeight(element.clientHeight);
+    };
     syncWorkspaceWidth();
     if (typeof ResizeObserver !== "undefined") {
       const observer = new ResizeObserver(syncWorkspaceWidth);
@@ -513,9 +530,17 @@ export default function App() {
     requestLibraryWriter,
     updateConversationMetadata,
     saveMessageNote,
+    saveMessageFeedback,
     saveAnswerVersion,
   } = library;
   const activeConversationId = library.activeConversationId;
+  const answerActions = useAnswerActions({
+    activeConversationId,
+    toggleBookmark: toggleAnswerBookmark,
+    saveNote: saveMessageNote,
+    saveFeedback: saveMessageFeedback,
+    saveVersion: async (target: AnswerTarget) => saveAnswerVersion(target),
+  });
   const inputTextRef = useRef(inputText);
   inputTextRef.current = inputText;
   const displayedAnswerContextRef = useRef<DisplayedAnswerContext | null>(null);
@@ -621,15 +646,35 @@ export default function App() {
     clearEvidenceAnchor();
     setIsEvidenceOpen(false);
     setStandaloneReaderSource(null);
+    setDocumentWorkspaceTarget(null);
     readerSession.clear();
   }, [cancelEvidenceFocusRestore, readerSession]);
 
   const handleOpenStandaloneSource = useCallback((source: Source) => {
     cancelEvidenceFocusRestore();
     clearEvidenceAnchor();
+    setDocumentWorkspaceTarget(null);
     setStandaloneReaderSource(source);
     setIsEvidenceOpen(true);
   }, [cancelEvidenceFocusRestore]);
+
+  const handleOpenDocumentWorkspace = useCallback((target: DocumentWorkspaceTarget) => {
+    cancelEvidenceFocusRestore();
+    clearEvidenceAnchor();
+    setIsEvidenceOpen(false);
+    setStandaloneReaderSource(null);
+    setDocumentWorkspaceTarget(target);
+    readerSession.clear();
+  }, [cancelEvidenceFocusRestore, readerSession]);
+
+  const handleCloseDocumentWorkspace = useCallback(() => {
+    const target = documentWorkspaceTarget;
+    setDocumentWorkspaceTarget(null);
+    readerSession.clear();
+    window.requestAnimationFrame(() => {
+      if (target?.returnFocusId) document.getElementById(target.returnFocusId)?.focus();
+    });
+  }, [documentWorkspaceTarget, readerSession]);
   const handleOpenCurrentSource = useCallback((source: Source) => {
     const chunkId = source.stored_snapshot?.chunk_id ?? source.chunk_id;
     const { stored_snapshot: _storedSnapshot, ...currentSource } = source;
@@ -641,12 +686,60 @@ export default function App() {
       text_preview: item.excerpt,
       text: item.excerpt,
       chunk_id: item.chunkId ?? null,
+      document_id: item.documentId ?? null,
       ticker: item.ticker ?? null,
       section: item.section ?? null,
       filing_date: item.filingDate ?? null,
-      stored_snapshot: { chunk_id: item.chunkId ?? null },
+      report_date: item.reportDate ?? null,
+      source_url: item.sourceUrl ?? null,
+      sec_index_url: item.secIndexUrl ?? null,
+      ...(item.chunkTextHash ? { chunk_text_hash: item.chunkTextHash } : {}),
+      stored_snapshot: {
+        chunk_id: item.chunkId ?? null,
+        ...(item.documentRevision ? { document_revision: item.documentRevision } : {}),
+        ...(item.sourceSetRevision ? { source_set_revision: item.sourceSetRevision } : {}),
+        ...(item.representation ? { representation: item.representation } : {}),
+        ...(item.coverageStatus ? { coverage_status: item.coverageStatus } : {}),
+        ...(item.locationStatus ? { location_status: item.locationStatus } : {}),
+        ...(item.snapshotState ? { snapshot_state: item.snapshotState } : {}),
+      },
     });
   }, [handleOpenStandaloneSource]);
+
+  const handleOpenCurrentEvidence = useCallback(async (item: EvidenceItem): Promise<CurrentSourceCheckResult> => {
+    if (!item.chunkId) {
+      return { status: "unknown", message: locale === "vi" ? "Snapshot này không có chunk ID exact nên không thể mở corpus hiện tại." : "This snapshot has no exact chunk ID, so the current corpus cannot be opened." };
+    }
+    try {
+      const detail = await getChunkDetail(item.chunkId);
+      if (detail.chunk_id !== item.chunkId || (item.documentId && detail.document_id !== item.documentId)) {
+        return { status: "stale", message: locale === "vi" ? "Định danh nguồn hiện tại không khớp; chỉ giữ bản chụp lịch sử." : "The current source identity did not match; only the historical snapshot remains available." };
+      }
+      if (item.chunkTextHash && item.chunkTextHash !== detail.chunk_text_hash) {
+        return { status: "stale", message: locale === "vi" ? "Hash văn bản đã thay đổi; chỉ giữ bản chụp lịch sử." : "The text hash changed; only the historical snapshot remains available." };
+      }
+      handleOpenStandaloneSource({
+        citation: item.citation,
+        text_preview: detail.text_preview,
+        text: detail.text,
+        chunk_id: detail.chunk_id,
+        document_id: detail.document_id,
+        ticker: detail.ticker,
+        section: detail.section,
+        filing_date: detail.filing_date,
+        report_date: detail.report_date,
+        source_url: detail.source_url,
+        sec_index_url: detail.sec_index_url,
+        chunk_text_hash: detail.chunk_text_hash,
+      });
+      return { status: "current" };
+    } catch (error) {
+      const status = error instanceof ApiError ? error.status : null;
+      if (status === 404) return { status: "missing", message: locale === "vi" ? "Chunk exact không còn trong corpus; bản chụp lịch sử vẫn đọc được." : "The exact chunk is missing from the corpus; the historical snapshot remains readable." };
+      if (status === 409) return { status: "unavailable", message: locale === "vi" ? "Chunk ID không xác định duy nhất; không mở nguồn gần kề." : "The chunk ID is not uniquely resolvable; no nearby source was substituted." };
+      return { status: "unavailable", message: locale === "vi" ? "Không thể kiểm tra corpus hiện tại; bản chụp lịch sử vẫn được giữ." : "The current corpus could not be checked; the historical snapshot is preserved." };
+    }
+  }, [handleOpenStandaloneSource, locale]);
   useEffect(() => {
     if (isEvidenceOpen || !evidenceFocusRestorePendingRef.current) return;
     evidenceFocusRestorePendingRef.current = false;
@@ -1383,6 +1476,60 @@ export default function App() {
     [activeConversationId, conversations, selectConversation],
   );
 
+  // Reopen an immutable answer variant by durable conversation/message/variant
+  // IDs. The renderer receives the pending ID for one render and never falls
+  // back to the latest answer by position.
+  const handleOpenVariant = useCallback(
+    async (conversationId: string, messageId: string, variantId: string) => {
+      const conversation = conversations.find((item) => item.id === conversationId);
+      const message = conversation?.messages.find((item) => item.id === messageId && item.sender === "assistant");
+      const variant = conversation?.variants?.find((item) => item.id === variantId && item.originMessageId === messageId);
+      if (!conversation || !message || !variant || variant.status === "error") {
+        setContextualCommandNotice(locale === "vi" ? "Phiên bản đã lưu không còn khả dụng; bản lưu không bị thay thế." : "That saved version is unavailable; the stored snapshot was not replaced.");
+        return;
+      }
+      setPendingOpenVariant({ conversationId, messageId, variantId });
+      if (conversation.id !== activeConversationId) await selectConversation(conversation);
+      setPendingFocusMessageId(messageId);
+      setActiveView("conversation");
+    },
+    [activeConversationId, conversations, locale, selectConversation],
+  );
+
+  useEffect(() => {
+    if (!pendingOpenVariant || activeView !== "conversation" || activeConversationId !== pendingOpenVariant.conversationId) return;
+    const message = messages.find((item) => item.id === pendingOpenVariant.messageId && item.sender === "assistant");
+    const variant = activeRecord?.variants?.find((item) => item.id === pendingOpenVariant.variantId && item.originMessageId === pendingOpenVariant.messageId);
+    if (!message || !variant || variant.status === "error") {
+      setContextualCommandNotice(locale === "vi" ? "Không thể mở phiên bản exact; bản lưu lịch sử vẫn được giữ nguyên." : "The exact saved version could not be opened; its historical snapshot remains preserved.");
+      setPendingOpenVariant(null);
+      return;
+    }
+    setDisplayedAnswerContext({ conversationId: activeConversationId, messageId: message.id, variantId: variant.id });
+    const frame = window.requestAnimationFrame(() => setPendingOpenVariant(null));
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeConversationId, activeRecord?.variants, activeView, locale, messages, pendingOpenVariant]);
+
+  const handleContinueResearch = useCallback(
+    async (conversation: ConversationRecord) => {
+      if (conversation.id !== activeConversationId) await selectConversation(conversation);
+      const latestUser = [...conversation.messages].reverse().find((message) => message.sender === "user");
+      const latestContext = [...conversation.messages].reverse().find((message) => message.requestSnapshot)?.requestSnapshot;
+      if (latestContext) {
+        patchScope({
+          ticker: latestContext.ticker,
+          section: latestContext.section,
+          topK: latestContext.topK,
+          enableComparative: latestContext.enableComparative,
+        });
+      }
+      setInputText(conversation.draft.trim() || latestUser?.text || "");
+      setActiveView("conversation");
+      window.requestAnimationFrame(() => document.getElementById("chat-textarea")?.focus());
+    },
+    [activeConversationId, patchScope, selectConversation, setInputText],
+  );
+
   const handleExportConversation = useCallback((conversation: ConversationRecord) => {
     downloadConversationMarkdown(conversation);
   }, []);
@@ -1429,35 +1576,33 @@ export default function App() {
   );
 
   const handleSaveMessageNote = useCallback((messageId: string, note: string) => {
-    void saveMessageNote(messageId, note);
-  }, [saveMessageNote]);
+    const target: AnswerTarget = { conversationId: activeConversationId, messageId, variantId: null };
+    void answerActions.note(target, note);
+  }, [activeConversationId, answerActions]);
 
   const handleMessageFeedback = useCallback((messageId: string, feedback: MessageFeedback | undefined) => {
-    updateMessages((prev) => prev.map((message) =>
-      message.id === messageId ? { ...message, feedback } : message,
-    ));
+    const target: AnswerTarget = {
+      conversationId: activeConversationId,
+      messageId,
+      variantId: feedback?.variantId ?? null,
+    };
+    void answerActions.feedback(target, feedback);
     recordAnalyticsEvent({
       kind: "feedback",
       status: feedback
         ? `${feedback.rating}${feedback.category ? `:${feedback.category}` : ""}`
         : "cleared",
     });
-  }, [updateMessages]);
+  }, [activeConversationId, answerActions]);
 
   const handleSaveAnswerVersion = useCallback(async (target: { messageId: string; variantId: string | null }) => {
-    const identity: DisplayedAnswerContext = {
+    const identity: AnswerTarget = {
       conversationId: activeConversationId,
       messageId: target.messageId,
       variantId: target.variantId,
     };
-    const key = `${identity.conversationId}:${identity.messageId}:${identity.variantId ?? "original"}`;
-    const attempt = saveAnswerVersionAttemptRef.current + 1;
-    saveAnswerVersionAttemptRef.current = attempt;
-    setSaveAnswerVersionState({ key, status: "saving" });
-    const result = await saveAnswerVersion(identity);
-    if (saveAnswerVersionAttemptRef.current !== attempt) return;
-    setSaveAnswerVersionState({ key, status: result.status });
-  }, [activeConversationId, saveAnswerVersion]);
+    await answerActions.saveVersion(identity);
+  }, [activeConversationId, answerActions]);
 
   const handleViewSavedVersion = useCallback(() => {
     setActiveView("library");
@@ -1593,6 +1738,7 @@ export default function App() {
     setIsSidebarOpen(false);
     if (view !== "conversation") setIsEvidenceOpen(false);
     setStandaloneReaderSource(null);
+    setDocumentWorkspaceTarget(null);
     if (view === "library") setActiveSidebarPanel("library");
     if (view === "overview" || view === "conversation" || view === "search" || view === "documents" || view === "retrieval" || view === "architecture") {
       setActiveSidebarPanel("research");
@@ -1630,7 +1776,7 @@ export default function App() {
 
   const handleSaveRetrievedEvidence = useCallback((source: Source) => {
     try {
-      saveEvidence(source);
+      saveEvidence(source, { provenance: snapshotProvenanceFromSource(source) });
       setContextualCommandNotice(locale === "vi" ? "Đã lưu evidence vào Thư viện." : "Evidence saved to Library.");
     } catch (error) {
       setContextualCommandNotice(error instanceof Error ? error.message : (locale === "vi" ? "Không thể lưu evidence." : "Could not save evidence."));
@@ -1795,6 +1941,7 @@ export default function App() {
             saveEvidence(target.source, {
               conversationId: target.selection.conversationId,
               messageId: target.selection.messageId,
+              provenance: snapshotProvenanceFromSource(target.source),
             });
             setContextualCommandNotice(locale === "vi" ? "Đã lưu source đang chọn." : "Selected source saved.");
           } catch (error) {
@@ -1819,12 +1966,15 @@ export default function App() {
   const showContextBanner =
     activeView === "conversation" && hasExchanges &&
     (sessionContext === "checking" || isReadOnly);
-  const evidenceInline = workspaceWidth >= CONTEXT_INLINE_MIN_WORKSPACE_WIDTH;
   const effectiveContextRailWidth = Math.min(
     CONTEXT_RAIL_MAX_WIDTH,
     Math.max(CONTEXT_RAIL_MIN_WIDTH, workspaceWidth > 0 ? workspaceWidth - 496 : contextRailWidth),
     contextRailWidth,
   );
+  const readablePrimaryWidth = workspaceWidth - effectiveContextRailWidth;
+  const evidenceInline = workspaceWidth >= CONTEXT_INLINE_MIN_WORKSPACE_WIDTH &&
+    readablePrimaryWidth >= CONTEXT_INLINE_MIN_PRIMARY_WIDTH &&
+    workspaceHeight >= CONTEXT_INLINE_MIN_HEIGHT;
   const showComposer = !["retrieval", "documents", "library", "search", "architecture", "evaluation", "analytics", "system"].includes(activeView);
   const composer = showComposer ? (
     <div className="composer-shell flex-shrink-0 z-10">
@@ -1959,18 +2109,61 @@ export default function App() {
             <div className="workspace-primary-column">
               <Suspense fallback={<WorkspacePanelFallback />}>
                 {documentsViewMounted || activeView === "documents" ? (
-                  <div hidden={activeView !== "documents"} aria-hidden={activeView !== "documents"}>
-                    <DocumentExplorerPanel tickers={tickers} sections={sections} onOpenSource={handleOpenStandaloneSource} />
+                  <div hidden={activeView !== "documents" || documentWorkspaceTarget?.kind === "catalog"} aria-hidden={activeView !== "documents" || documentWorkspaceTarget?.kind === "catalog"}>
+                    <DocumentExplorerPanel tickers={tickers} sections={sections} onOpenDocument={handleOpenDocumentWorkspace} onOpenSource={handleOpenStandaloneSource} />
                   </div>
                 ) : null}
+                {activeView === "documents" && documentWorkspaceTarget?.kind === "catalog" && (
+                  <DocumentWorkspace
+                    key={`catalog:${documentWorkspaceTarget.documentId}:${documentWorkspaceTarget.selectedSource?.chunk_id ?? "document"}`}
+                    documentId={documentWorkspaceTarget.documentId}
+                    title={documentWorkspaceTarget.title}
+                    indexedSource={documentWorkspaceTarget.selectedSource}
+                    indexedExcerpt={documentWorkspaceTarget.selectedSource ? <div className="document-workspace__excerpt-content"><p className="context-viewer-citation">{documentWorkspaceTarget.selectedSource.citation}</p><p>{documentWorkspaceTarget.selectedSource.text_preview}</p></div> : undefined}
+                    metadata={<dl>{[
+                      ["Document ID", documentWorkspaceTarget.documentId],
+                      documentWorkspaceTarget.ticker ? [locale === "vi" ? "Công ty" : "Company", formatCompanyLabel(documentWorkspaceTarget.ticker)] : null,
+                      documentWorkspaceTarget.filingDate ? [locale === "vi" ? "Ngày nộp" : "Filed", documentWorkspaceTarget.filingDate] : null,
+                      documentWorkspaceTarget.reportDate ? [locale === "vi" ? "Ngày báo cáo" : "Report date", documentWorkspaceTarget.reportDate] : null,
+                      documentWorkspaceTarget.accessionNumber ? ["Accession", documentWorkspaceTarget.accessionNumber] : null,
+                    ].filter(Boolean).map(([label, value]) => <div key={`${label}-${value}`}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>}
+                    onBack={handleCloseDocumentWorkspace}
+                    readerSession={readerSession}
+                    origin="catalog"
+                    initialTab={documentWorkspaceTarget.initialTab}
+                  />
+                )}
                 {activeView === "search" ? (
-              <SearchWorkspace
-                selectedTicker={selectedTicker}
-                selectedSection={selectedSection}
-                isBackendConnected={isBackendConnected}
-                onUseQuestion={handleUseRetrievalQuestion}
-                onOpenSource={handleOpenStandaloneSource}
-              />
+              <>
+                <div hidden={documentWorkspaceTarget?.kind === "search"} aria-hidden={documentWorkspaceTarget?.kind === "search"}>
+                  <SearchWorkspace
+                    selectedTicker={selectedTicker}
+                    selectedSection={selectedSection}
+                    isBackendConnected={isBackendConnected}
+                    onUseQuestion={handleUseRetrievalQuestion}
+                    onOpenDocument={handleOpenDocumentWorkspace}
+                    onOpenSource={handleOpenStandaloneSource}
+                  />
+                </div>
+                {documentWorkspaceTarget?.kind === "search" && (
+                  <DocumentWorkspace
+                    key={`search:${documentWorkspaceTarget.documentId}:${documentWorkspaceTarget.selectedSource?.chunk_id ?? "document"}`}
+                    documentId={documentWorkspaceTarget.documentId}
+                    indexedSource={documentWorkspaceTarget.selectedSource}
+                    indexedExcerpt={documentWorkspaceTarget.selectedSource ? <div className="document-workspace__excerpt-content"><p className="context-viewer-citation">{documentWorkspaceTarget.selectedSource.citation}</p><p>{documentWorkspaceTarget.selectedSource.text_preview}</p></div> : undefined}
+                    metadata={<dl>{[
+                      ["Document ID", documentWorkspaceTarget.documentId],
+                      documentWorkspaceTarget.selectedSource?.ticker ? [locale === "vi" ? "Công ty" : "Company", formatCompanyLabel(documentWorkspaceTarget.selectedSource.ticker)] : null,
+                      documentWorkspaceTarget.selectedSource?.section ? [locale === "vi" ? "Mục" : "Section", documentWorkspaceTarget.selectedSource.section] : null,
+                      documentWorkspaceTarget.selectedSource?.filing_date ? [locale === "vi" ? "Ngày nộp" : "Filed", documentWorkspaceTarget.selectedSource.filing_date] : null,
+                    ].filter(Boolean).map(([label, value]) => <div key={`${label}-${value}`}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>}
+                    onBack={handleCloseDocumentWorkspace}
+                    readerSession={readerSession}
+                    origin="search"
+                    initialTab={documentWorkspaceTarget.initialTab}
+                  />
+                )}
+              </>
                 ) : activeView === "architecture" ? (
               <ArchitecturePanel />
                 ) : activeView === "retrieval" ? (
@@ -2013,7 +2206,10 @@ export default function App() {
                     writerStatus={writerStatus}
                     onRequestWriter={requestLibraryWriter}
                     onOpenMessage={handleOpenMessage}
+                    onOpenVariant={handleOpenVariant}
+                    onContinueResearch={handleContinueResearch}
                     onOpenEvidence={handleOpenSavedEvidence}
+                    onOpenCurrentSource={handleOpenCurrentEvidence}
                     onClose={() => setActiveView("overview")}
                   />
                 </div>
@@ -2074,7 +2270,7 @@ export default function App() {
                     bookmarked={bookmarkedMessageIds.includes(msg.id)}
                     onToggleBookmark={
                       msg.sender === "assistant" && !msg.isStreaming && msg.text
-                        ? () => toggleAnswerBookmark(msg.id)
+                        ? () => { void answerActions.bookmark({ conversationId: activeConversationId, messageId: msg.id, variantId: null }); }
                         : undefined
                     }
                     onSaveNote={
@@ -2094,10 +2290,14 @@ export default function App() {
                         : undefined
                     }
                     saveVariantStatus={
-                      saveAnswerVersionState.key === `${activeConversationId}:${msg.id}:${displayedAnswerContext?.messageId === msg.id && displayedAnswerContext.variantId ? displayedAnswerContext.variantId : "original"}`
-                        ? saveAnswerVersionState.status
-                        : "idle"
+                      toLegacySaveStatus(answerActions.getState("save_version", { conversationId: activeConversationId, messageId: msg.id, variantId: displayedAnswerContext?.messageId === msg.id ? displayedAnswerContext.variantId : null }).status)
                     }
+                    answerActionStates={{
+                      bookmark: answerActions.getState("bookmark", { conversationId: activeConversationId, messageId: msg.id, variantId: null }),
+                      feedback: answerActions.getState("feedback", { conversationId: activeConversationId, messageId: msg.id, variantId: displayedAnswerContext?.messageId === msg.id ? displayedAnswerContext.variantId : null }),
+                      note: answerActions.getState("note", { conversationId: activeConversationId, messageId: msg.id, variantId: null }),
+                      save_version: answerActions.getState("save_version", { conversationId: activeConversationId, messageId: msg.id, variantId: displayedAnswerContext?.messageId === msg.id ? displayedAnswerContext.variantId : null }),
+                    }}
                     onRetrySaveVariant={
                       msg.sender === "assistant" && !msg.isStreaming && msg.text
                         ? (target) => { void handleSaveAnswerVersion(target); }
@@ -2109,6 +2309,7 @@ export default function App() {
                     pipelineStages={stageEventsByMessage[msg.id]}
                     availableSections={sections}
                     onUseRelatedResearch={isReadOnly ? undefined : handleUseRelatedResearch}
+                    initialVariantId={pendingOpenVariant?.conversationId === activeConversationId && pendingOpenVariant.messageId === msg.id ? pendingOpenVariant.variantId : undefined}
                     tabIndex={0}
                   />
                 ))}

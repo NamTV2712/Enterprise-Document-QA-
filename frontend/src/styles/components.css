@@ -2664,6 +2664,198 @@ body,
   gap: 0.8rem;
 }
 
+.library-section {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.7rem;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 1rem;
+}
+
+.library-section:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.library-section__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.library-section__heading h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.96rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.library-section__heading p:last-child {
+  max-width: 56rem;
+  margin: 0.2rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.library-section__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.2rem;
+  color: var(--primary-hover);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.library-section__count {
+  flex: 0 0 auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text-subtle);
+  padding: 0.25rem 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.library-item-company,
+.library-item-scope {
+  display: block;
+  overflow: hidden;
+  width: 100%;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-item-company {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.library-item-scope {
+  color: var(--primary-hover);
+  font-size: 0.66rem;
+}
+
+.library-continuation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.library-primary-action,
+.library-secondary-action {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.6rem;
+  padding: 0.4rem 0.65rem;
+  font-size: var(--font-size-action);
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.library-primary-action {
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--border-subtle));
+  background: var(--primary-soft);
+  color: var(--primary-hover);
+}
+
+.library-primary-action:hover,
+.library-primary-action:focus-visible {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 16%, var(--surface));
+}
+
+.library-secondary-action {
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+}
+
+.library-secondary-action:hover,
+.library-secondary-action:focus-visible {
+  border-color: var(--primary);
+  background: var(--surface-muted);
+  color: var(--text-primary);
+}
+
+.library-version-item__identity {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.library-version-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  color: var(--text-subtle);
+  font-size: var(--font-size-meta);
+  line-height: var(--line-height-readable);
+}
+
+.library-version-item__meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.library-local-disclosure {
+  margin: 0;
+  color: var(--text-subtle);
+  font-size: 0.67rem;
+  line-height: 1.4;
+}
+
+.library-subsection {
+  display: grid;
+  gap: 0.45rem;
+  border-top: 1px dashed var(--border-subtle);
+  padding-top: 0.7rem;
+}
+
+.library-subsection h4 {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.73rem;
+  font-weight: 800;
+}
+
+.library-empty p {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+}
+
+.library-empty p strong {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+}
+
+.library-empty p span {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.library-empty--compact {
+  padding-block: 1.2rem;
+}
+
 .library-heading-row {
   display: flex;
   align-items: flex-start;
@@ -2809,6 +3001,40 @@ body,
   border: 1px solid var(--border-subtle);
   border-radius: 0.7rem;
   background: var(--surface);
+}
+
+/* Recent Research is a bounded continuity view, not a second saved-record
+   index. Keep its card styling separate so contract tests and assistive
+   queries can treat the complete saved list as the canonical item set. */
+.library-recent-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.7rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.7rem;
+  background: var(--surface-muted);
+}
+
+.library-recent-card.is-active {
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--border-subtle));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.library-recent-title {
+  display: block;
+  overflow: hidden;
+  width: 100%;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 750;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-recent-title::before {
+  content: attr(data-title);
 }
 
 .library-item.is-active {
@@ -4119,6 +4345,55 @@ summary {
   color: var(--accent-text);
 }
 
+.library-collection-create {
+  display: flex;
+  min-width: 0;
+  gap: 0.45rem;
+}
+
+.library-collection-create input {
+  min-width: 0;
+  flex: 1 1 auto;
+  min-height: 2.25rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.6rem;
+  background: var(--surface);
+  color: var(--text-primary);
+  padding: 0.4rem 0.6rem;
+  font-size: var(--font-size-action);
+}
+
+.library-collection-create input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.library-collection-create button {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid var(--accent-border);
+  border-radius: 0.6rem;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  padding: 0.4rem 0.65rem;
+  font-size: var(--font-size-action);
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.library-collection-create button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.library-collection-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
 .library-evidence-items {
   display: grid;
   gap: 0.4rem;
@@ -4227,6 +4502,89 @@ summary {
 .library-evidence-item__meta {
   color: var(--text-subtle);
   font-size: 0.625rem;
+}
+
+.library-evidence-item__details-grid {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.45rem 0 0;
+  color: var(--text-subtle);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.library-evidence-item__details-row {
+  display: grid;
+  grid-template-columns: minmax(6rem, auto) minmax(0, 1fr);
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.library-evidence-item__details-row dt {
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-weight: 700;
+}
+
+.library-evidence-item__details-row dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.library-evidence-item__provenance {
+  margin-top: 0.35rem;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 0.35rem;
+}
+
+.library-evidence-item__provenance summary {
+  color: var(--accent-text);
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.library-evidence-item__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.35rem;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 0.35rem;
+}
+
+.library-evidence-action {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid var(--accent-border);
+  border-radius: 0.5rem;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  padding: 0.3rem 0.5rem;
+  font-size: var(--font-size-action);
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.library-evidence-action:hover,
+.library-evidence-action:focus-visible {
+  border-color: var(--accent-text);
+}
+
+.library-evidence-action:disabled {
+  cursor: progress;
+  opacity: 0.65;
+}
+
+.library-evidence-action__hint {
+  color: var(--text-subtle);
+  font-size: 0.64rem;
+  line-height: 1.35;
 }
 
 .library-backup-preview {
@@ -5243,4 +5601,33 @@ summary {
   color: var(--text-muted);
   font-size: 0.7rem;
   line-height: 1.35;
+}
+
+/* V4-P04.2 readability floors for primary evidence and diagnostics. */
+.message-answer-meta,
+.search-result__meta,
+.workspace-result-meta,
+.library-evidence-item__meta {
+  font-size: var(--font-size-meta);
+  line-height: var(--line-height-readable);
+}
+
+.message-action-row button,
+.message-secondary-actions button,
+.search-result__open,
+.retrieval-lab button,
+.library-evidence-items button {
+  font-size: var(--font-size-action);
+}
+
+.retrieval-lab table,
+.retrieval-lab table button,
+.retrieval-lab table code {
+  font-size: var(--font-size-diagnostic);
+  line-height: var(--line-height-readable);
+}
+
+.retrieval-lab table td,
+.retrieval-lab table th {
+  padding-block: 0.7rem;
 }

@@ -54,7 +54,11 @@ def test_inspect_preserves_stage_scores_and_final_ranks(monkeypatch) -> None:
     )
 
     assert trace["models"]["embedding"] == "test-embedding"
-    assert trace["stages"][-1]["skipped"] is False
+    # Stages are addressed by name rather than by position so additive stage
+    # metadata (API-005) cannot silently satisfy a positional assertion.
+    reranker_stage = next(stage for stage in trace["stages"] if stage["name"] == "reranker")
+    assert reranker_stage["skipped"] is False
+    assert reranker_stage["status"] == "executed"
     assert trace["selected_chunk_ids"] == ["c2"]
     c1 = next(candidate for candidate in trace["candidates"] if candidate["chunk_id"] == "c1")
     c2 = next(candidate for candidate in trace["candidates"] if candidate["chunk_id"] == "c2")
@@ -74,7 +78,9 @@ def test_inspect_non_reranked_preset_does_not_call_cross_encoder(monkeypatch) ->
     trace = retriever.inspect("What was Apple's revenue?", preset="bm25")
 
     assert trace["selected_chunk_ids"] == ["c1", "c2"]
-    assert trace["stages"][-1]["skipped"] is True
+    reranker_stage = next(stage for stage in trace["stages"] if stage["name"] == "reranker")
+    assert reranker_stage["skipped"] is True
+    assert reranker_stage["status"] == "skipped"
 
 
 def test_inspect_serializes_selected_candidate_outside_first_producer_pool(monkeypatch) -> None:

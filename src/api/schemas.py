@@ -113,6 +113,14 @@ class RetrievalInspectRequest(BaseModel):
         "financial_statements",
         "financial_table",
     ] | None = None
+    # API-005 document/date filters. The document id is an opaque token, never
+    # a filesystem path; the date and year follow the catalog's own scope.
+    document_id: str | None = Field(
+        default=None,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+    )
+    filing_date: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    year: int | None = Field(default=None, ge=1900, le=2200)
     top_k: int = Field(default=5, ge=1, le=10)
     candidate_pool: int = Field(default=10, ge=10, le=50)
     preset: Literal["bm25", "dense", "hybrid", "hybrid_rerank"] = "hybrid_rerank"

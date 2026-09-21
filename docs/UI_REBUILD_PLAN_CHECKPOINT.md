@@ -1910,3 +1910,127 @@ None.
 ### Exact Next Action
 
 API-005 — Inspection metadata (dependencies API-002 and the settled filter ownership from API-003/API-004 are satisfied; it is the next entry in the master-plan table). Do not start API-005 without explicit user authorization.
+
+## API-005-A Quota-Safe Checkpoint (recovery, exact contract, ownership audit)
+
+### Active Task
+
+API-005 — Inspection metadata. Status: ACTIVE (A complete; implementation not started).
+
+### Verified Current State
+
+- API-004 COMPLETE with commits `a56c39a` (implementation) and `4a2fbad` (docs); API-003 commits `3ba64d7`/`a0f7a80`. Backend baseline 947 passed / 0 failed / 188 warnings; frontend untouched at 397 tests.
+- The master-plan table row after API-004 is API-005 (`| API-005 | Inspection metadata | API-002 | Retrieval trace | Legacy/production unchanged | After filter ownership settled |`), so API-005 is the correct Exact Next Action; the "filter ownership settled" prerequisite is satisfied by API-003/API-004.
+- No partial API-005 work exists: the only API-005-relevant dirty files are the ones this run will touch.
+
+### Exact API-005 Contract (read from the master plan)
+
+- `POST /retrieval/inspect` — **existing endpoint**, extended: "Existing request **plus document/date**"; response is a **Versioned Trace**; service "Inspection/**no new persistence**"; access class **P** (public); contract test "**Legacy/production compatibility**".
+- Retrieval page plan: "Backend/API: **additive document/date filters and versioned trace**"; risks: "inspection confused with production structured promotion"; tests: "legacy compatibility, unchanged production, raw scores"; done: "named stage semantics **including not-executed stages**".
+- Gap-matrix Retrieval rows that API-005 owns: **Counts (P0)** "actual counts"; **Structured promotion (P0)** → "not in inspection" must become "**Observer metadata only**" with a "**Not-executed label**"; **Stage scores (P1)** → "**Semantics metadata**"; **Document filters (P1)** → "**Eligible document IDs**"; **Selected/dropped (P1)** → "**Known reasons only**"; **Evidence preview (P1)** already covered by the existing `text_preview`.
+- The plan also records the established correction: "Inspection already exposes most stage scores but differs from production structured promotion."
+
+### Existing Ownership Mapped (audit result)
+
+- Route: `POST /retrieval/inspect` in `src/api/app.py` (rate-limited 10/minute, public, injection-pattern check, Unicode sanitize, query normalization, ticker detection). It already post-processes the trace to add `document_id` per candidate and wraps it with `query_interpretation`. It stays at the application boundary — the goal explicitly allows not forcing extraction when retrieval behaviour is at risk.
+- Domain: `HybridRetriever.inspect()` in `src/retrieval/hybrid_retriever.py` already measures real stage timings with `perf_counter`, exposes `preset`, `query`, `filters{ticker,section}`, `top_k`, `candidate_pool`, `models{embedding,reranker,rrf_k}`, `stages[{name, elapsed_ms, skipped?}]`, `candidates[{chunk_id, ticker, section, filing_date, citation, text_preview, bm25_score/rank, dense_score/rank, lexical_rank, fusion_rank, rrf_score, cross_encoder_score, final_rank, selected}]`, `selected_chunk_ids`, `candidate_count`, `selected_count`, `elapsed_ms`. It is documented as separate from production retrieval and does not alter `retrieve_with_embedding`.
+- Request schema: `RetrievalInspectRequest` (question, ticker, section, top_k 1–10, candidate_pool 10–50, preset ∈ {bm25, dense, hybrid, hybrid_rerank}).
+- Tests: `tests/test_hybrid_retriever_inspect.py` (3 tests, model-free retriever double), `tests/test_api.py` route test, `tests/test_api_router_contracts.py` frozen order.
+
+### Planned Additions (additive only; no existing key changes)
+
+1. Request: `document_id`, `filing_date`, `year` (path-safe pattern and bounded values) — the plan's "document/date" filters, matching API-003/API-004 scope semantics.
+2. Retriever trace: `trace_version` (`retrieval-trace-v1`), `score_semantics` (per score family: family, scale, definition, plus an explicit not-interchangeable note), stage `status` (`executed`/`skipped`/`not_executed`) alongside the legacy `skipped` flag, and `production_parity` marking structured promotion as **not executed** with its reason.
+3. Per-candidate `dropped_reason` for non-selected candidates, limited to reasons that are provably known from the trace itself (`ranked_below_top_k`, `outside_candidate_pool`, `not_in_selected_preset_stage`); unknown reasons stay null rather than invented.
+4. Route: an additive `scope` block with the effective filter values, the eligible document count, and a bounded eligible-document-id list (truncation flagged) computed from the canonical catalog and document-id helpers.
+5. `chunk_filter` predicate passed into `inspect()` from the route so the stages run over the restricted pool, rather than post-filtering a trace whose ranks describe a wider scope.
+
+### Files Planned
+
+- New: `tests/test_retrieval_inspect_metadata.py`.
+- Modified: `src/retrieval/hybrid_retriever.py` (additive trace fields + optional restriction predicate), `src/api/app.py` (request params, scope block, predicate), `src/api/schemas.py` (request fields), plus task docs.
+
+### Tests Run with Exact Results
+
+- None yet for API-005 (recovery/audit only).
+
+### Known/Pre-existing Issues
+
+- Six frozen frontend integration failures; timing-sensitive Firefox class; public routes unauthenticated by design. The pre-commit security hook reports `scanner_enobufs`; only manual credential-pattern checks are claimed.
+
+### Exact Next Action
+
+Implement the additive trace metadata in `HybridRetriever.inspect()` plus the route request/scope additions, then write the focused metadata and semantic-equivalence tests.
+
+## API-005-B/C/D/E Quota-Safe Checkpoint (trace metadata, route, equivalence, safety)
+
+### Completed Work
+
+- `HybridRetriever.inspect()` (additive only; existing keys and values untouched):
+  - `trace_version` = `retrieval-trace-v1` on every trace, including the empty-query early return.
+  - `score_semantics`: one entry per score family that the preset actually produced, each with `family`, `scale`, and `definition`, plus a note stating the families are **not** comparable with one another and that none is a confidence/accuracy/probability.
+  - `production_parity`: structured financial-row promotion and lexical-ladder merging into the final evidence are reported as `not_executed` with the reason, so a trace can never be read as production output (the gap matrix's P0 "not-executed label").
+  - Stage `status` for every stage (`executed` / `skipped` / `not_executed`) alongside the legacy `skipped` flag, plus a `reason` and `elapsed_ms: null` for a stage that did not run — a duration is never implied for a stage that never ran.
+  - A named `structured_promotion` stage carrying the not-executed label.
+  - Per-candidate `dropped_reason`, restricted to reasons the trace can prove: `ranked_below_top_k`, `outside_candidate_pool`, `not_in_selected_preset_stage`; a selected candidate reports `null`.
+  - An optional `chunk_filter` predicate so the document/date restriction is applied to the eligible pool **before** the stages run, including the dense stage's store results (otherwise the trace would have reported dense candidates outside the requested scope).
+- Route `POST /retrieval/inspect` (kept at the application boundary, per the goal): accepts `document_id`, `filing_date`, and `year`; builds the restriction from the canonical `_document_id` and `catalog.filing_year` rules; adds `filter_values` (the effective filters, including the inferred ticker) and a bounded `scope` block (`documents`, `eligible_document_ids` capped at 200 with `truncated`, or a truthful unavailable reason when the catalog is not readable).
+- `RetrievalInspectRequest` gained the three additive fields with path-safe and range validation.
+- Frontend: one minimal additive type change (`stages[].elapsed_ms` became `number | null`, optional `status`/`reason`), because the backend now truthfully reports a null duration for a stage that did not run. `tsc` clean; no UI behaviour change (the Retrieval panel already renders a non-numeric duration as "Not reported").
+
+### Tests Run with Exact Results
+
+- `.venv\Scripts\python.exe -m pytest -q tests\test_retrieval_inspect_metadata.py` — PASS: 22 passed, 0 failed.
+- `tests/test_hybrid_retriever_inspect.py` — PASS: 3 passed (two assertions updated from a positional `stages[-1]` to a by-name lookup, because a not-executed stage is appended; the assertions themselves keep the same expectations).
+
+### Real Defects Found By The New Tests
+
+1. The dense stage consulted the vector store directly, so a document/date restriction silently missed dense candidates. Fixed by filtering the store results through the same predicate.
+2. A question naming a company infers the ticker (existing production behaviour) and therefore composes with explicit document/date filters; the tests now assert that composition instead of assuming filters replace it.
+
+### Remaining Work
+
+- F: full hermetic backend suite, audits, documentation, commits.
+
+### Exact Next Action
+
+Run the focused regression set (inspect, api, router contract, catalog, discovery), then the full backend suite after a checkpoint.
+
+## API-005-F Pre-Gate Checkpoint (focused regression green; full suite next)
+
+- Focused regression set: `tests/test_retrieval_inspect_metadata.py tests/test_hybrid_retriever_inspect.py tests/test_api.py tests/test_api_router_contracts.py tests/test_catalog_facets.py tests/test_discovery_search.py` — PASS: 140 passed, 0 failed.
+- Frontend typecheck after the additive trace-type change — PASS, 0 errors.
+- About to run: `.venv\Scripts\python.exe -m pytest -q` (full hermetic backend suite). Baseline 947 / 0 / 188. If this session ends during that command the result is UNKNOWN and must be re-run; the focused results above stand.
+
+## API-005-F Final Checkpoint (full gate, audits, API-005 COMPLETE)
+
+### Task Status
+
+API-005 COMPLETE.
+
+### Full Gate Results
+
+- Full hermetic backend suite: `.venv\Scripts\python.exe -m pytest -q` — PASS: **969 passed, 0 failed, 188 warnings** in 106.22s. Baseline 947 / 0 / 188; the increase is the 22 focused inspection-metadata tests, and the warning count is unchanged.
+- Focused regression set (inspect metadata, retriever inspect, api, router contracts, catalog, discovery) — 140 passed.
+- Python compile/import: `compileall -q src configs tests scripts` — PASS.
+- Frontend: `bun run lint` (tsc) clean and `bun run test` 70 files / 397 tests passed after the minimal additive trace-type change.
+- `git diff --check` — clean; artifact audit — no trace/query dump, DB file, or debug output created by API-005.
+- Dependency audit: none added or changed.
+
+### Commits
+
+- Recorded below after creation; the working tree's API-005-owned changes are `src/retrieval/hybrid_retriever.py`, `src/api/app.py`, `src/api/schemas.py`, `tests/test_retrieval_inspect_metadata.py` (new), `tests/test_hybrid_retriever_inspect.py` (two positional assertions replaced by by-name lookups), `frontend/src/types.ts` (additive), and the task documentation.
+
+### Known/Pre-existing Issues
+
+- Six frozen frontend integration failures and the timing-sensitive Firefox inspector class; unrelated to API-005.
+- Public routes remain unauthenticated by design; `/retrieval/inspect` is read-only, provider-free, and workspace-isolated.
+- Tooling: the pre-commit hook reports an incomplete security scan (`scanner_enobufs`); only manual credential-pattern checks on staged content are claimed.
+
+### New Regressions
+
+None.
+
+### Exact Next Action
+
+UI-004 — Source/document composition (dependencies UI-003 and the reader/inspection surfaces are satisfied; it is the next table row after API-005). Do not start UI-004 without explicit user authorization.

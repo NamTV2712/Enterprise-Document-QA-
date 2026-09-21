@@ -46,6 +46,7 @@ from src.api.catalog import (
     SUPPORTED_SECTIONS as catalog_sections,
     DEFAULT_SORT,
     SORT_FIELDS,
+    filing_year,
     filter_documents,
     sort_documents,
 )
@@ -293,6 +294,79 @@ def _catalog_rows_or_unavailable() -> list[dict[str, Any]]:
     if _state.get("pipeline") is None:
         raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
     return _document_catalog()
+
+
+# Bounds for the inspection scope block: enough for the served corpus, with an
+# explicit truncation flag so the list is never mistaken for the full set.
+INSPECT_ELIGIBLE_DOCUMENT_LIMIT = 200
+
+
+def _inspect_chunk_filter(
+    *,
+    document_id: str | None,
+    filing_date: str | None,
+    year: int | None,
+):
+    """Build the document/date restriction production identity defines.
+
+    The canonical document id and filing-year rules are reused, so an
+    inspection filter can never disagree with the catalog or with discovery.
+    Returns None when no document/date filter was requested, which keeps the
+    legacy behaviour byte-identical.
+    """
+    if document_id is None and filing_date is None and year is None:
+        return None
+
+    def predicate(chunk: dict[str, Any]) -> bool:
+        if document_id is not None and _document_id(chunk) != document_id:
+            return False
+        if filing_date is not None and chunk.get("filing_date") != filing_date:
+            return False
+        if year is not None and filing_year(chunk) != year:
+            return False
+        return True
+
+    return predicate
+
+
+def _inspect_scope(
+    *,
+    ticker: str | None,
+    section: str | None,
+    document_id: str | None,
+    filing_date: str | None,
+    year: int | None,
+) -> dict[str, Any]:
+    """Describe the effective inspection scope from the real catalog.
+
+    The eligible set uses the same catalog filter the document routes use, so
+    it reports the documents that genuinely match the applied scope.
+    """
+    try:
+        rows = _catalog_rows_or_unavailable()
+    except HTTPException:
+        return {
+            "documents": None,
+            "eligible_document_ids": [],
+            "truncated": False,
+            "reason": "The catalog is unavailable.",
+        }
+    eligible = filter_documents(
+        rows,
+        ticker=ticker,
+        section=section,
+        filing_date=filing_date,
+        year=year,
+    )
+    if document_id is not None:
+        eligible = [row for row in eligible if row["document_id"] == document_id]
+    ids = sorted(str(row["document_id"]) for row in eligible)
+    return {
+        "documents": len(ids),
+        "eligible_document_ids": ids[:INSPECT_ELIGIBLE_DOCUMENT_LIMIT],
+        "truncated": len(ids) > INSPECT_ELIGIBLE_DOCUMENT_LIMIT,
+        "reason": None,
+    }
 
 
 def _discovery_service() -> DiscoveryService:
@@ -1783,6 +1857,11 @@ async def retrieval_inspect(request: Request, body: RetrievalInspectRequest) -> 
             section=body.section,
             candidate_pool=body.candidate_pool,
             preset=body.preset,
+            chunk_filter=_inspect_chunk_filter(
+                document_id=body.document_id,
+                filing_date=body.filing_date,
+                year=body.year,
+            ),
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
@@ -1795,6 +1874,20 @@ async def retrieval_inspect(request: Request, body: RetrievalInspectRequest) -> 
         candidate["document_id"] = records[0][0] if len(records) == 1 else None
     trace["candidate_count"] = len(trace.get("candidates", []))
     trace["selected_count"] = len(trace.get("selected_chunk_ids", []))
+    trace["filter_values"] = {
+        "ticker": ticker,
+        "section": body.section,
+        "document_id": body.document_id,
+        "filing_date": body.filing_date,
+        "year": body.year,
+    }
+    trace["scope"] = _inspect_scope(
+        ticker=ticker,
+        section=body.section,
+        document_id=body.document_id,
+        filing_date=body.filing_date,
+        year=body.year,
+    )
     return {
         "query_interpretation": _query_interpretation(original_question, normalized),
         "trace": trace,

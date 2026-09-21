@@ -14,6 +14,7 @@ import logging
 import re
 import threading
 import time
+from collections.abc import Callable
 
 from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder
@@ -32,6 +33,74 @@ CROSS_ENCODER_MODEL_REVISION = "233902d25c440f23af6f7d6e94d2946bac0bee0a"
 CROSS_ENCODER_BATCH_SIZE = 4
 RRF_K = 60  # The RRF constant, 60, is a commonly observed empirical value
 CE_RELATIVE_CUTOFF = 0.50
+
+# Version of the inspection trace shape. Consumers can rely on the fields this
+# version documents; additive fields keep the same version.
+TRACE_VERSION = "retrieval-trace-v1"
+
+# What each score family means and on what scale it lives. The families are not
+# interchangeable, so the trace states this once instead of letting a reader
+# compare a BM25 score with a reranker logit.
+_SCORE_SEMANTICS: dict[str, dict[str, str]] = {
+    "bm25_score": {
+        "family": "lexical",
+        "scale": "unbounded_positive",
+        "definition": "BM25 term-frequency score over the filtered index; higher means stronger keyword overlap.",
+    },
+    "dense_score": {
+        "family": "dense_similarity",
+        "scale": "vector_similarity_as_returned_by_the_store",
+        "definition": "Similarity of the query embedding to the chunk embedding, reported with the store's own scale.",
+    },
+    "rrf_score": {
+        "family": "fusion",
+        "scale": "sum_of_reciprocal_ranks",
+        "definition": "Reciprocal rank fusion of the lexical, dense, and query-shaper rankings; not comparable across queries.",
+    },
+    "cross_encoder_score": {
+        "family": "reranker",
+        "scale": "cross_encoder_logit",
+        "definition": "Cross-encoder relevance logit for the query/chunk pair; only comparable within one candidate pool.",
+    },
+}
+_SCORE_SEMANTICS_NOTE = (
+    "Score families are distinct and must not be compared with one another. "
+    "None of them is a confidence, accuracy, or probability."
+)
+
+
+def _score_semantics(preset: str) -> dict:
+    """Return the score-family semantics that apply to one preset."""
+    family_by_preset = {
+        "bm25": ("bm25_score",),
+        "dense": ("dense_score",),
+        "hybrid": ("bm25_score", "dense_score", "rrf_score"),
+        "hybrid_rerank": ("bm25_score", "dense_score", "rrf_score", "cross_encoder_score"),
+    }
+    keys = family_by_preset.get(preset, ("bm25_score", "dense_score", "rrf_score", "cross_encoder_score"))
+    return {
+        "applies_to_preset": preset,
+        "note": _SCORE_SEMANTICS_NOTE,
+        "families": {key: dict(_SCORE_SEMANTICS[key]) for key in keys},
+    }
+
+
+def _production_parity() -> dict:
+    """State which production stages this trace does and does not reproduce.
+
+    Inspection reports the ranked stage candidates; production additionally
+    promotes high-confidence structured financial rows and merges the
+    query-shaper lexical ladder into the final evidence. Saying so explicitly
+    keeps a trace from being read as production output.
+    """
+    return {
+        "structured_promotion": "not_executed",
+        "lexical_ladder_merge_into_final": "not_executed",
+        "reason": (
+            "Inspection exposes the ranking stages only; production /query applies "
+            "structured financial-row promotion and lexical-ladder merging on top."
+        ),
+    }
 
 
 def _tokenize(text: str) -> list[str]:
@@ -240,6 +309,7 @@ class HybridRetriever:
         section: str | None = None,
         candidate_pool: int = 10,
         preset: str = "hybrid_rerank",
+        chunk_filter: Callable[[dict], bool] | None = None,
     ) -> dict:
         """Return a provider-free trace of the retrieval stages.
 
@@ -247,12 +317,26 @@ class HybridRetriever:
         raw stage scores with their original scale and never labels them as a
         confidence value. The production path remains byte-compatible because
         this method does not alter ``retrieve_with_embedding``.
+
+        ``chunk_filter`` optionally narrows the eligible pool (the document and
+        date restrictions the catalog defines) *before* the stages run, so the
+        reported ranks describe the scope the reader actually asked about
+        instead of a wider pool that was later trimmed.
         """
         allowed_presets = {"bm25", "dense", "hybrid", "hybrid_rerank"}
         if preset not in allowed_presets:
             raise ValueError(f"unsupported retrieval preset: {preset}")
         if not query.strip():
-            return {"preset": preset, "query": query, "candidates": [], "selected_chunk_ids": []}
+            return {
+                "trace_version": TRACE_VERSION,
+                "preset": preset,
+                "query": query,
+                "candidates": [],
+                "selected_chunk_ids": [],
+                "stages": [],
+                "score_semantics": _score_semantics(preset),
+                "production_parity": _production_parity(),
+            }
         top_k = max(1, min(top_k, 10))
         candidate_pool = max(top_k, min(candidate_pool, 50))
         trace_started = time.perf_counter()
@@ -267,6 +351,8 @@ class HybridRetriever:
             filtered_chunks = self._chunks_by_section.get(section, [])
         else:
             filtered_chunks = self._all_chunks
+        if chunk_filter is not None:
+            filtered_chunks = [chunk for chunk in filtered_chunks if chunk_filter(chunk)]
 
         stage_started = time.perf_counter()
         bm25_scores = self.bm25.get_scores(_tokenize(query))
@@ -285,6 +371,17 @@ class HybridRetriever:
             ticker=ticker,
             section=section,
         )
+        if chunk_filter is not None:
+            # The store lookup is filtered by ticker/section only, so an
+            # inspection document/date restriction has to be applied to its
+            # results too; otherwise the dense stage would report candidates
+            # outside the scope the reader asked about.
+            semantic_results = [
+                result
+                for result in semantic_results
+                if result.get("chunk_id") in self._chunks_by_id
+                and chunk_filter(self._chunks_by_id[result["chunk_id"]])
+            ]
         dense_scores = {
             result["chunk_id"]: float(result.get("score", 0.0))
             for result in semantic_results
@@ -352,6 +449,31 @@ class HybridRetriever:
         dense_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(dense_ids)}
         fusion_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(fusion_order)}
         final_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(final_ids)}
+        all_ids = list(dict.fromkeys((*bm25_ids, *dense_ids, *lexical_ids, *hybrid_ids)))
+        bm25_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(bm25_ids)}
+        dense_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(dense_ids)}
+        fusion_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(fusion_order)}
+        final_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(final_ids)}
+        reranked_pool = {chunk["chunk_id"] for chunk in hybrid_chunks}
+
+        def dropped_reason(chunk_id: str) -> str | None:
+            """Name why a candidate was not selected, or None when unknown.
+
+            Only reasons this trace can prove are reported; anything else stays
+            null so a reader is never given an invented explanation.
+            """
+            if chunk_id in final_rank:
+                return None
+            if preset == "hybrid_rerank":
+                return "ranked_below_top_k" if chunk_id in reranked_pool else "outside_candidate_pool"
+            if preset == "bm25":
+                produced = chunk_id in bm25_rank
+            elif preset == "dense":
+                produced = chunk_id in dense_rank
+            else:
+                produced = chunk_id in fusion_rank
+            return "ranked_below_top_k" if produced else "not_in_selected_preset_stage"
+
         candidates = []
         for chunk_id in all_ids:
             chunk = self._chunks_by_id[chunk_id]
@@ -376,10 +498,13 @@ class HybridRetriever:
                     if chunk_id in cross_encoder_scores else None,
                     "final_rank": final_rank.get(chunk_id),
                     "selected": chunk_id in final_rank,
+                    "dropped_reason": dropped_reason(chunk_id),
                 }
             )
 
+        reranker_executed = preset == "hybrid_rerank"
         return {
+            "trace_version": TRACE_VERSION,
             "preset": preset,
             "query": query,
             "filters": {"ticker": ticker, "section": section},
@@ -387,15 +512,29 @@ class HybridRetriever:
             "candidate_pool": candidate_pool,
             "models": {
                 "embedding": getattr(self.embedder, "model_name", None),
-                "reranker": self.cross_encoder_model if preset == "hybrid_rerank" else None,
+                "reranker": self.cross_encoder_model if reranker_executed else None,
                 "rrf_k": RRF_K,
             },
+            "score_semantics": _score_semantics(preset),
+            "production_parity": _production_parity(),
             "stages": [
-                {"name": "embedding", "elapsed_ms": round(embedding_ms, 3)},
-                {"name": "bm25", "elapsed_ms": round(bm25_ms, 3)},
-                {"name": "dense", "elapsed_ms": round(dense_ms, 3)},
-                {"name": "lexical_ladder", "elapsed_ms": round(lexical_ms, 3)},
-                {"name": "reranker", "elapsed_ms": round(rerank_ms, 3), "skipped": preset != "hybrid_rerank"},
+                {"name": "embedding", "elapsed_ms": round(embedding_ms, 3), "status": "executed"},
+                {"name": "bm25", "elapsed_ms": round(bm25_ms, 3), "status": "executed"},
+                {"name": "dense", "elapsed_ms": round(dense_ms, 3), "status": "executed"},
+                {"name": "lexical_ladder", "elapsed_ms": round(lexical_ms, 3), "status": "executed"},
+                {
+                    "name": "reranker",
+                    "elapsed_ms": round(rerank_ms, 3),
+                    "skipped": not reranker_executed,
+                    "status": "executed" if reranker_executed else "skipped",
+                    "reason": None if reranker_executed else "The selected preset ranks without the cross-encoder.",
+                },
+                {
+                    "name": "structured_promotion",
+                    "elapsed_ms": None,
+                    "status": "not_executed",
+                    "reason": "Inspection does not apply production structured financial-row promotion.",
+                },
             ],
             "candidates": candidates,
             "selected_chunk_ids": final_ids,

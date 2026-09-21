@@ -1,5 +1,60 @@
 # Project State
 
+## API-005 inspection metadata (2026-09-21)
+
+API-005 is complete. `POST /retrieval/inspect` (existing endpoint, public,
+rate-limited 10/minute, provider-free) now returns a **versioned trace** with
+the additive document/date filters the master plan specifies, and it labels the
+stages it does not reproduce instead of letting a reader mistake a trace for
+production output.
+
+Trace contract (additive; every pre-existing key keeps its name and meaning):
+
+- `trace_version` = `retrieval-trace-v1` on every trace.
+- Request gained `document_id` (opaque token, path-safe pattern), `filing_date`
+  (`YYYY-MM-DD`), and `year`; the restriction is applied to the eligible pool
+  **before** the stages run — including the store-backed dense stage — so the
+  reported ranks describe the scope the reader asked about.
+- `score_semantics` describes each score family the preset actually produced
+  (lexical BM25, dense similarity, RRF fusion, cross-encoder logit) with its own
+  scale and definition, plus an explicit note that the families are not
+  comparable and that none is a confidence, accuracy, or probability.
+- `production_parity` states that structured financial-row promotion and
+  lexical-ladder merging into the final evidence are `not_executed` in
+  inspection, with the reason: they exist only on the production `/query` path.
+- Every stage carries `status` (`executed` / `skipped` / `not_executed`)
+  alongside the legacy `skipped` flag. A stage that never ran reports
+  `elapsed_ms: null` and a reason, so a duration is never implied; a named
+  `structured_promotion` stage carries the not-executed label.
+- Every candidate carries `dropped_reason` for non-selected rows, limited to
+  reasons the trace can prove (`ranked_below_top_k`, `outside_candidate_pool`,
+  `not_in_selected_preset_stage`); selected rows report `null`.
+- `filter_values` reports the effective filters (including a ticker inferred
+  from the question, which composes with the explicit ones) and `scope` reports
+  the eligible document count with a bounded id list (200, `truncated` flagged)
+  or a truthful unavailable reason.
+
+Semantic preservation: inspection remains observational. Focused tests assert
+that running `inspect()` does not mutate the retriever's chunk lists, BM25
+object, per-ticker indexes, or index map, and that a production
+`retrieve_with_embedding` call returns byte-identical ids, order, and scores
+before and after an inspection. Reported stage scores are asserted to equal the
+underlying doubles' own values.
+
+Defects found by the new tests: the dense stage consulted the vector store
+directly and therefore ignored a document/date restriction (now filtered
+through the same predicate), and a question naming a company infers its ticker
+and composes with explicit filters (asserted rather than assumed away).
+
+Validation: 22 new focused tests; focused regression set 140 passed; full
+hermetic backend suite **969 passed / 0 failed / 188 warnings** (baseline 947,
+warnings unchanged); `compileall` clean; `git diff --check` clean; frontend
+unchanged at 70 files / 397 tests with `tsc` clean after one minimal additive
+type update (`stages[].elapsed_ms` is now `number | null`). No runtime artifact
+was produced, and no dependency was added.
+
+Exact next task from the master graph: UI-004.
+
 ## API-004 discovery search snapshots (2026-09-21)
 
 API-004 is complete. Discovery search is now a provider-free, deterministic

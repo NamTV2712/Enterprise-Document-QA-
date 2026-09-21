@@ -49,7 +49,6 @@ from src.api.catalog import (
     filter_documents,
     sort_documents,
 )
-from src.api.routers.catalog import create_catalog_router
 from src.api.original_location import locate_chunk, whitespace_literal_matches
 from src.api.original_viewer import OriginalViewerError, original_viewer, sec_index_url_for_document
 from src.api.sec_urls import sanitize_sec_browser_url
@@ -73,6 +72,8 @@ from src.api.structured_document import (
 from src.api.structured_location import StructuredLocationService
 from src.api.routers.cache import create_cache_router
 from src.api.routers.catalog import create_catalog_router
+from src.api.discovery import DiscoveryService
+from src.api.routers.search import create_search_router
 from src.api.routers.corpus import create_corpus_router
 from src.api.routers.evaluations import create_evaluation_router
 from src.api.routers.health import create_health_router
@@ -292,6 +293,30 @@ def _catalog_rows_or_unavailable() -> list[dict[str, Any]]:
     if _state.get("pipeline") is None:
         raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
     return _document_catalog()
+
+
+def _discovery_service() -> DiscoveryService:
+    """Return the shared provider-free discovery service.
+
+    It borrows the loaded corpus and the retriever's already-built BM25 index,
+    so a discovery search never embeds a query, runs a cross-encoder, calls a
+    provider, or reads SEC. The bounded snapshot store lives for the process.
+    """
+    service = _state.get("discovery")
+    if isinstance(service, DiscoveryService):
+        return service
+    pipeline = _get_pipeline()
+    retriever = getattr(pipeline, "retriever", None)
+    service = DiscoveryService(
+        chunks=_loaded_retrieval_chunks,
+        catalog_rows=_catalog_rows_or_unavailable,
+        tokenize=getattr(retriever, "tokenize_query"),
+        score=getattr(retriever, "bm25_scores"),
+        present=getattr(retriever, "bm25_terms_present", None),
+        document_id_of=_document_id,
+    )
+    _state["discovery"] = service
+    return service
 
 
 def _find_document_row(document_id: str) -> dict[str, Any] | None:
@@ -1719,6 +1744,13 @@ async def original_search(
 
 
 app.include_router(
+    create_search_router(
+        _discovery_service,
+        limiter=limiter,
+        rate_limit=settings.search_rate_limit,
+    )
+)
+app.include_router(
     create_system_router(
         _get_pipeline,
         lambda: _state,
@@ -1726,7 +1758,6 @@ app.include_router(
     )
 )
 app.include_router(create_evaluation_router())
-
 
 @app.post("/retrieval/inspect")
 @limiter.limit("10/minute")

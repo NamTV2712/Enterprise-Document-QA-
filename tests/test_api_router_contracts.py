@@ -48,6 +48,10 @@ EXPECTED_ROUTE_ORDER = [
     ("GET", "/chunks/{chunk_id}/original-location"),
     ("GET", "/chunks/{chunk_id}/reader-location"),
     ("GET", "/documents/{document_id}/original/search"),
+    # API-004 discovery routes: the snapshot read is the only dynamic /search
+    # path and is registered after the static create route.
+    ("POST", "/search"),
+    ("GET", "/search/{search_id}"),
     ("GET", "/system/info"),
     ("GET", "/evaluation/runs"),
     ("GET", "/evaluation/runs/{run_id}"),
@@ -121,6 +125,16 @@ def test_api003_catalog_routes_have_coherent_transport_owners() -> None:
     # constructs a model, provider, store, or reader of its own.
     assert "/documents" in routes
     assert routes["/documents"].endpoint.__module__ == "src.api.app"
+
+
+def test_api004_discovery_routes_have_coherent_transport_owners() -> None:
+    routes = {route.path: route for route in _application_routes()}
+
+    assert routes["/search"].endpoint.__module__ == "src.api.routers.search"
+    assert routes["/search/{search_id}"].endpoint.__module__ == "src.api.routers.search"
+    # The router is built over an application-owned service callback, so the
+    # module never constructs a retriever, model, or store itself.
+    assert app_module._discovery_service.__module__ == "src.api.app"
 
 
 def test_moved_openapi_operations_match_the_pre_extraction_contract() -> None:

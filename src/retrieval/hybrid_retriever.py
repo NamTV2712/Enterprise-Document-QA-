@@ -143,6 +143,39 @@ class HybridRetriever:
         with self._model_lock:
             return self.embedder.embed_query(query)
 
+    def tokenize_query(self, text: str) -> list[str]:
+        """Return the tokens this retriever's BM25 index was built with.
+
+        Exposed so keyword-only consumers (discovery search) score in the exact
+        same token space without duplicating the tokenizer. It performs no
+        model work and never touches retrieval state.
+        """
+        return _tokenize(text)
+
+    def bm25_scores(self, tokens: list[str]) -> list[float]:
+        """Return the prebuilt BM25 score of every indexed chunk for tokens.
+
+        Read-only: no embedding, no cross-encoder, no provider, no store. The
+        order matches the chunk list this retriever was built with.
+        """
+        return [float(score) for score in self.bm25.get_scores(tokens)]
+
+    def bm25_terms_present(self, tokens: list[str]) -> list[bool]:
+        """Return whether each indexed chunk actually contains any token.
+
+        A BM25 score alone cannot answer this: a term present in a large share
+        of the corpus gets a non-positive inverse document frequency, so its
+        score collapses to zero even though the term occurs. Keyword discovery
+        uses this presence map for matching and the BM25 score for ordering.
+        """
+        wanted = set(tokens)
+        if not wanted:
+            return [False] * len(self.bm25.doc_freqs)
+        return [
+            any(term in document_terms for term in wanted)
+            for document_terms in self.bm25.doc_freqs
+        ]
+
     def retrieve(
         self,
         query: str,

@@ -215,3 +215,120 @@ class DocumentStatsResponse(BaseModel):
     report_dates: CatalogReportDates
     sections: CatalogSections
     filing_type: CatalogFilingType
+
+
+# --- API-004 discovery search ----------------------------------------------
+
+
+class SearchRequest(BaseModel):
+    """One provider-free keyword discovery request."""
+
+    query: str = Field(
+        min_length=2,
+        max_length=200,
+        examples=["Apple revenue 2024"],
+    )
+    mode: Literal["keyword"] = "keyword"
+    group_by: Literal["document", "chunk"] = "document"
+    ticker: str | None = Field(default=None, pattern=r"^[A-Z]{1,5}(-[A-Z])?$")
+    section: str | None = Field(default=None, max_length=64)
+    year: int | None = Field(default=None, ge=1900, le=2200)
+    filing_date: str | None = Field(default=None, max_length=32)
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=20, ge=1, le=50)
+
+
+class DiscoverySnippet(BaseModel):
+    """A bounded real-text excerpt with match ranges for safe highlighting."""
+
+    text: str
+    ranges: list[tuple[int, int]]
+    truncated: bool
+
+
+class DiscoveryHit(BaseModel):
+    """One ranked chunk hit with its canonical identity preserved."""
+
+    chunk_id: str
+    document_id: str
+    ticker: str | None = None
+    section: str | None = None
+    filing_date: str | None = None
+    report_date: str | None = None
+    chunk_index: int | None = None
+    score: float
+    snippet: DiscoverySnippet
+
+
+class DiscoveryGroup(BaseModel):
+    """One grouped result (a filing) with its best-matching hits."""
+
+    document_id: str
+    ticker: str | None = None
+    filing_date: str | None = None
+    report_date: str | None = None
+    sections: list[str]
+    best_score: float
+    hit_count: int = Field(ge=0)
+    hits: list[DiscoveryHit]
+
+
+class DiscoveryQuery(BaseModel):
+    """The submitted query and the deterministic form actually searched."""
+
+    text: str
+    normalized: str
+    mode: Literal["keyword"]
+
+
+class DiscoveryGrouping(BaseModel):
+    """Grouping applied to the snapshot."""
+
+    group_by: Literal["document", "chunk"]
+    group_count: int = Field(ge=0)
+    hit_count: int = Field(ge=0)
+
+
+class DiscoveryEngine(BaseModel):
+    """The ranking engine identity and its explicit definition."""
+
+    key: str
+    version: str
+    definition: str
+
+
+class DiscoveryScopeMetadata(BaseModel):
+    """Scope and truthful count metadata for a snapshot.
+
+    ``count_scope`` states that the reported total is bounded by the candidate
+    ceiling, so a client can never present it as a whole-corpus total.
+    """
+
+    ticker: str | None = None
+    section: str | None = None
+    year: int | None = None
+    filing_date: str | None = None
+    documents: int = Field(ge=0)
+    count_scope: Literal["bounded_candidates", "no_matches"]
+    candidate_ceiling: int = Field(ge=1)
+    limited_by_ceiling: bool
+    matched_documents: int = Field(ge=0)
+    matched_chunks: int = Field(ge=0)
+
+
+class DiscoverySnapshotResponse(BaseModel):
+    """A discovery snapshot page: a stable ranked result set plus its scope."""
+
+    search_id: str
+    query: DiscoveryQuery
+    grouping: DiscoveryGrouping
+    engine: DiscoveryEngine
+    scope: DiscoveryScopeMetadata
+    items: list[DiscoveryGroup] | list[DiscoveryHit]
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1)
+    facets: list[CatalogFacet]
+    created_at: str
+    expires_at: str
+    ttl_seconds: int = Field(ge=0)

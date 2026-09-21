@@ -1,5 +1,75 @@
 # Project State
 
+## API-004 discovery search snapshots (2026-09-21)
+
+API-004 is complete. Discovery search is now a provider-free, deterministic
+keyword capability over the already-loaded serving corpus, separate from RAG
+answering and from the diagnostic Retrieval Lab.
+
+Endpoints and contract (exactly as the master plan defines them):
+
+- `POST /search` — body: `query`, `mode`, `group_by`, `ticker`, `section`,
+  `year`, `filing_date`, `page`, `page_size`. It runs one discovery pass and
+  returns the snapshot's first page.
+- `GET /search/{search_id}` — pages a stored snapshot without re-running the
+  search, so the result set cannot change under a reader.
+- Both are the plan's public read class (`P`): no authentication, no workspace
+  reach, no corpus mutation.
+
+Snapshot semantics: an opaque `search-<16 hex>` id (validated by pattern, so it
+can never be a filesystem path) identifies an immutable ranked result set with
+its scope, facets, engine identity, `created_at`, `expires_at`, and a 900-second
+TTL. The store is in-process and bounded to 50 entries, evicting the
+earliest-expiring snapshot; a read never extends a TTL. An unknown id returns
+404 and an expired id returns 410, so a client can tell "no such snapshot" from
+"search again".
+
+Matching and ranking: a chunk matches when its indexed text actually contains a
+query term, and the retriever's own BM25 score orders the matches. That split
+matters — a term present in a large share of the corpus has a non-positive
+inverse document frequency, so its score collapses to zero even though the term
+occurs; ranking by score alone would have reported those words as missing. The
+score is labelled as a ranking signal with an explicit definition, never as
+confidence or accuracy.
+
+Honesty of counts: every response states `count_scope`
+(`bounded_candidates` or `no_matches`), the `candidate_ceiling` (200) and
+`limited_by_ceiling`, so a bounded total can never be presented as a whole
+corpus total. The facet payload is API-003's own aggregation for the same
+scope, and focused tests assert that `POST /search` and `GET /documents/facets`
+report the same scoped document count.
+
+Bounds: query 2–200 characters after whitespace normalization (only
+whitespace and case are normalized; no stemming, synonym expansion, or
+provider rewriting), page size 1–50, candidate ceiling 200, 50 resident
+snapshots, TTL 900 s, and a new `SEARCH_RATE_LIMIT` (default `30/minute`)
+applied through the existing slowapi limiter.
+
+Provider-free and read-only: discovery reads the retriever's prebuilt BM25
+index, so a search never embeds a query, runs a cross-encoder, calls a
+provider, touches Qdrant, or reads SEC. The focused tests assert the embedder,
+cross-encoder, model lock, and generator are never invoked. The retriever
+gained three additive read-only helpers (`tokenize_query`, `bm25_scores`,
+`bm25_terms_present`) so discovery cannot drift from the index tokenization;
+no retrieval, ranking, or reranking behaviour changed.
+
+Real-corpus replay (10,053 chunks / 50 documents): `Microsoft Cloud revenue`
+returns the MSFT mdna chunk; `AWS revenue growth` returns
+`AMZN_000101872426000004_mdna_0012` — the chunk carrying `AWS 107,556` and
+`128,725` — as its top hit; `Apple risk factors` scoped to `AAPL` returns one
+document with 62 matching chunks; `quantum computing` returns real BAC/GS
+excerpts; the Vietnamese query `Doanh thu` returns `no_matches`, which is
+truthful because the filings are English.
+
+Validation: 26 focused tests plus one route-ownership contract test; the
+adjacent regression set passed 143 tests; full hermetic backend suite **947
+passed / 0 failed / 188 warnings** (baseline 920, warnings unchanged);
+`compileall` clean; `git diff --check` clean; no runtime artifact produced.
+Commit `a56c39a` adds the discovery service, the search router, the typed
+request/response models, the retriever helpers, the setting, and the tests.
+
+Exact next task from the master graph: API-005.
+
 ## API-003 catalog facets and statistics (2026-09-21)
 
 API-003 is complete. The catalog that `/documents`, `/documents/facets`, and

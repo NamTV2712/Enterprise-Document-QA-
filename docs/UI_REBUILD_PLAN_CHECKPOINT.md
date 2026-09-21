@@ -1743,3 +1743,170 @@ None.
 ### Exact Next Action
 
 API-004 — Discovery snapshots (dependencies API-002 and API-003 are satisfied; it is the next entry in the master-plan priority ordering). Do not start API-004 without explicit user authorization.
+
+## API-003 Final Commit Receipt
+
+- `3ba64d7` — `feat(api): add catalog facet aggregation and statistics service` — `src/api/catalog.py`, `src/api/routers/catalog.py`, `tests/test_catalog_facets.py` (3 files, 780 insertions).
+- `a0f7a80` — `feat(api): expose catalog facets and statistics endpoints` — `src/api/app.py`, `src/api/schemas.py`, `tests/test_api_router_contracts.py`, `PROJECT_STATE.md`, `docs/UI_REBUILD_PLAN_CHECKPOINT.md` (5 files, 3599 insertions). The commit body states plainly that the shared boundary files also landed the earlier validated rebuild content they already carried (API-002 extraction, DATA-002 wiring, reader/PDF routes), because those files could not be split without corrupting a 962-line diff.
+- Verified after committing: both commits touch only the files above; no `frontend/`, `src/workspace/`, `scripts/`, or `data/` path is included in either. Focused tests re-run green after the commits (24 passed).
+- Note on tooling: the pre-commit hook reported an incomplete security scan (`scanner_enobufs`). Staged content was scanned manually for credential patterns and secrets (clean); no broader security claim is made here.
+- Remaining dirty tree is the preserved earlier rebuild work (frontend UI-003 additions, API-001 access/reader/PDF modules, workspace persistence, docs plans, tool state directories such as `.mimosa/` and `.audit-runtime/`), plus the two API-003-documented shared-file decisions above.
+
+### API-003 Status
+
+COMPLETE. Exact next action: API-004 — Discovery snapshots (dependencies API-002 and API-003 satisfied). Do not start without explicit user authorization.
+
+## API-004-A Quota-Safe Checkpoint (recovery, exact contract, plan)
+
+### Active Task
+
+API-004 — Discovery snapshots. Status: ACTIVE (A complete; implementation not started).
+
+### Verified Current State
+
+- API-003 COMPLETE with commits `3ba64d7` and `a0f7a80`; backend baseline 920 passed / 0 failed / 188 warnings; frontend 397 tests untouched by API-003.
+- Checkpoint header still names API-003 as next because the API-004 goal arrived afterwards; the master graph confirms API-004 follows API-003 (`| API-004 | Discovery snapshots | API-002, API-003 | Search/retrieval filters | Prefilter/bounded/stable | UI-004 |`), so API-004 is the correct Exact Next Action.
+
+### Exact API-004 Contract (read from the master plan, not invented)
+
+| Method | Path | Request | Response | Service | Access | Contract test |
+| --- | --- | --- | --- | --- | --- | --- |
+| POST | `/search` | Query/mode/filters/grouping/page size | DiscoverySnapshot first page | Discovery/bounded memory | P | Prefilter |
+| GET | `/search/{search_id}` | Page/page size | Snapshot page/scope/expiry | Discovery/bounded memory | P | Expired/stale |
+
+Supporting contract text from the plan:
+
+- "Page<T>: items, total, page, page_size. Discovery also states count_scope, snapshot identity and expiry; **bounded totals never imply corpus totals**."
+- "DocumentSummary, facets and statistics derive from the same catalog. **DiscoverySnapshot owns stable ranked/grouped pages**."
+- Search page plan: "Backend/API: bounded snapshots, prefilters, scoped facets, expiry"; risk register: "Search overstates counts → Snapshot/bounds/count scope"; tests: "prefilters, expiry, empty pages and research/open/save handoffs".
+- Gap matrix: Search grouping needs "Group metadata"; highlights need "Safe rendering" reusing existing safe-highlight behaviour; counts need "Snapshot/count scope"; the plan's earlier decision "Separate discovery Search from diagnostic Retrieval" and "provider-free discovery" as a public posture.
+
+### Real Metadata/Text Source (mapped, no invention)
+
+- Discovery runs over the already-loaded serving corpus in memory: `_state["pipeline"].retriever._all_chunks` (chunk text + document/ticker/section/filing metadata) and the retriever's prebuilt `rank_bm25.BM25Okapi` index plus its `_tokenize` function. Both already exist at startup, so discovery makes **no model call**: no embedder, reranker, generator, provider, Qdrant write, or SEC access.
+- Scope filtering reuses API-003: `filter_documents` selects the allowed document ids for ticker/section/year/filing_date, and discovery only scores chunks inside that document set, so discovery scope and catalog counts cannot drift.
+
+### Design Decisions (recorded before coding)
+
+- Ranking: BM25 lexical score over indexed chunk text (`engine.key = "bm25_lexical"`), labelled as a ranking signal with an explicit definition — never confidence or accuracy. Ties break on `chunk_id` then `document_id` so the order is deterministic.
+- Modes: one supported value `keyword`. The plan's "natural language" mode would need query embedding, which is outside API-004's provider-free boundary, so an unsupported mode fails with the project's 422 validation style rather than silently doing something else.
+- Grouping: `group_by` = `document` (default; one ranked card per filing with its best matching chunks) or `chunk` (flat hits). Group metadata comes from real chunk/document fields.
+- Snippets: bounded plain text excerpt from the real chunk text with character ranges for the frontend to highlight safely; no HTML, no fabricated prose.
+- Bounds: query 2–200 characters after trimming; page size 1–50 (default 20); candidate ceiling 200 ranked results per snapshot; snapshot TTL 900 s with at most 50 resident snapshots and deterministic eviction of the earliest expiring entry; snapshot ids are opaque `search-<16 hex>` tokens validated by pattern (never a filesystem path).
+- Counts: `count_scope = "bounded_candidates"` plus the explicit ceiling, so a bounded total can never be read as a corpus total; zero matches return an empty page with truthful scope metadata rather than an error or placeholder rows.
+- Rate limiting: the POST scan is limited through the existing slowapi conventions with a new `SEARCH_RATE_LIMIT` setting (default `30/minute`), matching the other bounded public routes; the cheap snapshot GET is not limited.
+- Snapshot state is in-process only (single-worker topology), with an injectable clock so TTL tests never sleep.
+
+### Files Planned
+
+- New: `src/api/discovery.py` (service, scoring, snippets, snapshot store), `src/api/routers/search.py`, `tests/test_discovery_search.py`.
+- Modified: `src/api/app.py` (register the search router), `src/api/schemas.py` (discovery request/response models), `configs/settings.py` + `.env.example` (search rate limit), `tests/test_api_router_contracts.py` (route order/ownership), plus task docs.
+
+### Tests Run with Exact Results
+
+- None yet for API-004 (recovery only). API-003's focused suite was re-verified green at the end of the previous task.
+
+### Known/Pre-existing Issues
+
+- Six frozen frontend integration failures; timing-sensitive Firefox class; public routes unauthenticated by design.
+
+### Exact Next Action
+
+Implement `src/api/discovery.py` (query normalization, BM25 scoring over the filtered corpus, bounded grouping/snippets, snapshot store with TTL and eviction) and its focused unit tests.
+
+## API-004-B/C/D Quota-Safe Checkpoint (domain, snapshots, routes, tests)
+
+### Completed Work
+
+- `src/api/discovery.py`: deterministic query normalization (whitespace + casefold, 2–200 chars), Unicode-aware literal highlight terms, bounded snippet with safe character ranges, BM25-based ranking over the filtered corpus, document/chunk grouping, and a bounded snapshot store (TTL 900 s, at most 50 entries, evicts the earliest expiring entry, injectable clock, never extends a TTL on read).
+- Matching rule (a real defect found by the focused tests): BM25 alone cannot decide "match", because a term present in a large share of the corpus has a non-positive inverse document frequency and scores zero. Discovery now matches on **actual term presence** and ranks with the BM25 score, so a common word still returns its chunks and a zero score is never reported as "absent". The retriever exposes this read-only via `bm25_terms_present`, alongside `bm25_scores`, and `tokenize_query` so scoring stays in the index tokenizer's space without duplicating it.
+- `src/api/routers/search.py`: `POST /search` (typed body, `SEARCH_RATE_LIMIT` default 30/minute, 422 for unsupported mode/grouping/validation from either Pydantic or the service) and `GET /search/{search_id}` (paged snapshot; unknown id → 404, expired id → 410). Registered after the document/reader routes and before `/system/info`.
+- Typed schemas in `src/api/schemas.py` for the request and the snapshot page (items/total/page/page_size plus `count_scope`, snapshot identity, `expires_at`, engine identity with an explicit definition).
+- `configs/settings.py` + `.env.example`: `SEARCH_RATE_LIMIT=30/minute`.
+- Route-order and ownership contract updated for the two new routes.
+
+### Implementation Note (recorded because it cost a debugging cycle)
+
+`src/api/routers/search.py` must not use `from __future__ import annotations`: the slowapi limiter wraps the endpoint, and the wrapper's module globals cannot resolve a postponed string annotation, so FastAPI silently degraded the typed `body` into a required query parameter. The module documents this constraint inline; the existing cache router avoids it for the same reason.
+
+### Tests Run with Exact Results
+
+- `.venv\Scripts\python.exe -m pytest -q tests\test_discovery_search.py` — PASS: 26 passed, 0 failed.
+- `.venv\Scripts\python.exe -m pytest -q tests\test_api_router_contracts.py tests\test_discovery_search.py tests\test_catalog_facets.py tests\test_api.py tests\test_workspace_access.py` — PASS: 143 passed, 0 failed.
+
+### Remaining Work
+
+- E: explicit security/provider-free/API-003 consistency receipt (already asserted inside the focused module) and the first commit.
+- F: full hermetic backend suite, real-corpus replay, audits, documentation, final commit.
+
+### Exact Next Action
+
+Commit the API-004 implementation and tests, then run the real-corpus discovery replay before the full backend gate.
+
+## API-004-E Quota-Safe Checkpoint (security, provider-free, consistency, real corpus, first commit)
+
+### Commit
+
+- `a56c39a` — `feat(api): add provider-free discovery search snapshots` — 9 files, 1786 insertions: `src/api/discovery.py`, `src/api/routers/search.py`, `tests/test_discovery_search.py`, plus the API-004 hunks in `src/api/app.py`, `src/api/schemas.py`, `tests/test_api_router_contracts.py`, `src/retrieval/hybrid_retriever.py`, `configs/settings.py`, `.env.example`. Staged content was scanned for credential patterns (clean).
+- Ownership note: the first three files were committed by API-003, so their diffs here are entirely API-004. `configs/settings.py`, `.env.example`, and `src/retrieval/hybrid_retriever.py` still carried earlier validated rebuild content; a selective-hunk staging helper was written and blocked by the security hook (correctly, for using argv-derived subprocess paths), so the commit body discloses that those files' earlier content landed with it. The alternative — leaving `settings.py` uncommitted — would have made the commit fail at import time on a missing setting.
+- A scanner hook again reported an incomplete pre-commit scan (`scanner_enobufs`); no broader security claim is made beyond the manual checks.
+
+### Security / Provider-Free / Consistency Evidence
+
+- Provider-free: the focused module asserts the retriever's embedder, cross-encoder, model lock, and the pipeline's generator are never touched by a search, and the service only reads `bm25_scores`/`bm25_terms_present` over the prebuilt index.
+- Public read class with no workspace reach: discovery responses are asserted to contain no conversation/session/workspace/token/credential/sqlite wording, and snapshot ids are opaque `search-<16 hex>` tokens validated by pattern (a path-like id is rejected as unknown).
+- API-003 consistency: for four scopes, `POST /search` reports the same `scope.documents` as `GET /documents/facets`, and the facet payload is API-003's own aggregation rather than a copy.
+- Bounds: query 2–200 chars, page 1–50, candidate ceiling 200, per-snapshot TTL 900 s, at most 50 resident snapshots with earliest-expiring eviction, `SEARCH_RATE_LIMIT=30/minute` enforced through the shared limiter (tested to 429 with the project's `client_rate_limited` body).
+
+### Real-Corpus Replay (no model, no provider, no network)
+
+Discovery was replayed over the on-disk corpus (10,053 chunks / 50 documents, BM25 built in 1.6 s):
+
+- `Microsoft Cloud revenue` → 15 matched documents, top MSFT `mdna` chunk.
+- `AWS revenue growth` → top hit is `AMZN_000101872426000004_mdna_0012`, the chunk carrying `AWS 107,556 128,725`, i.e. the same evidence the evaluation pipeline depends on.
+- `Apple risk factors` with `ticker=AAPL` → 1 scoped document, 62 matching chunks, all AAPL.
+- `quantum computing` → BAC/GS mdna and risk-factor chunks.
+- `Doanh thu` (Vietnamese) → 0 matches, truthfully: the filings are English, so a Vietnamese term has no lexical match and the response reports `no_matches` rather than inventing rows.
+- Queries whose match set exceeds 200 report `limited_by_ceiling: true` with `count_scope: bounded_candidates`, so a bounded total can never be presented as a corpus total.
+
+### Tests Run with Exact Results
+
+- `tests/test_discovery_search.py` — 26 passed.
+- `tests/test_api_router_contracts.py tests/test_discovery_search.py tests/test_catalog_facets.py tests/test_api.py tests/test_workspace_access.py` — 143 passed.
+
+### Exact Next Action
+
+Run the full hermetic backend suite (checkpoint recorded before starting; the result is UNKNOWN if this session ends during it), then the audits and documentation.
+
+## API-004-F Final Checkpoint (full gate, audits, API-004 COMPLETE)
+
+### Task Status
+
+API-004 COMPLETE.
+
+### Full Gate Results
+
+- Full hermetic backend suite: `.venv\Scripts\python.exe -m pytest -q` — PASS: **947 passed, 0 failed, 188 warnings** in 100.30s. Baseline 920 / 0 / 188; the increase is 26 focused discovery tests plus one route-ownership contract test, and the warning count is unchanged.
+- Python compile/import: `.venv\Scripts\python.exe -m compileall -q src configs tests scripts` — PASS.
+- `git diff --check` — clean (pre-existing CRLF notices only).
+- Artifact audit: no snapshot dump, cache dump, SQLite/WAL/SHM, temporary JSON, or debug output was created by API-004 (tests use injected in-memory services; the store never touches disk).
+- Dependency audit: none added or changed. `src/api/discovery.py` uses the standard library plus the project's existing `rank_bm25` index through the retriever; no new package for TTL, hashing, pagination, or text matching.
+
+### Commits
+
+- `a56c39a` — `feat(api): add provider-free discovery search snapshots` — 9 files, 1786 insertions (discovery service, search router, typed schemas, retriever read-only helpers, `SEARCH_RATE_LIMIT`, focused tests, route-order contract). The body discloses that `configs/settings.py`, `.env.example`, and `src/retrieval/hybrid_retriever.py` also landed the earlier validated rebuild content they already carried.
+- Final documentation commit recorded below with its hash.
+
+### Known/Pre-existing Issues
+
+- Six frozen frontend integration expectation failures and the timing-sensitive Firefox inspector class; unchanged and unrelated to API-004.
+- Public routes remain unauthenticated by design (documented limitation); discovery is read-only, provider-free, and workspace-isolated.
+- Tooling note: the pre-commit hook repeatedly reported an incomplete security scan (`scanner_enobufs`); staged content was checked manually for credential patterns. No broader security claim is made.
+
+### New Regressions
+
+None.
+
+### Exact Next Action
+
+API-005 — Inspection metadata (dependencies API-002 and the settled filter ownership from API-003/API-004 are satisfied; it is the next entry in the master-plan table). Do not start API-005 without explicit user authorization.

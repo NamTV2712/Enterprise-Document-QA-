@@ -19,11 +19,12 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Callable, Literal, TypeVar
 
+from pathlib import Path
+
 import anyio.to_thread
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -41,9 +42,26 @@ from src.retrieval.vector_store import VectorStore
 from src.api.telemetry import RequestTelemetry
 from src.api.proxy import get_rate_limit_key
 from src.api.content_presentation import build_chunk_presentation
-from src.api.original_normalizer import NORMALIZER_VERSION
-from src.api.original_location import locate_chunk
+from src.api.catalog import (
+    SUPPORTED_SECTIONS as catalog_sections,
+    DEFAULT_SORT,
+    SORT_FIELDS,
+    filter_documents,
+    sort_documents,
+)
+from src.api.routers.catalog import create_catalog_router
+from src.api.original_location import locate_chunk, whitespace_literal_matches
 from src.api.original_viewer import OriginalViewerError, original_viewer, sec_index_url_for_document
+from src.api.sec_urls import sanitize_sec_browser_url
+from src.api.pdf_generator import PdfGenerationBusy, PdfGenerationError, generate_derived_pdf
+from src.api.pdf_representation import (
+    PdfArtifactIdentity,
+    PdfEvidenceLocation,
+    PdfMappingManifest,
+    PdfRepresentationManifest,
+    PdfStore,
+    source_content_hash,
+)
 from src.api.document_reader_models import EvidenceLocation, ReaderManifest
 from src.api.document_sources import build_reader_manifest
 from src.api.structured_document import (
@@ -53,10 +71,28 @@ from src.api.structured_document import (
     StructuredSearchResponse,
 )
 from src.api.structured_location import StructuredLocationService
-from src.evaluation.public_report import get_public_report, list_public_reports
+from src.api.routers.cache import create_cache_router
+from src.api.routers.catalog import create_catalog_router
+from src.api.routers.corpus import create_corpus_router
+from src.api.routers.evaluations import create_evaluation_router
+from src.api.routers.health import create_health_router
+from src.api.routers.sessions import create_session_router
+from src.api.routers.system import create_system_router
+from src.api.routers.workspace_transfer import create_workspace_transfer_router
+from src.api.schemas import (
+    DecomposedQueryResponse,
+    QueryInterpretation,
+    QueryRequest,
+    QueryResponse,
+    RetrievalInspectRequest,
+    SourceChunk,
+    SubQueryInfo,
+)
+from src.workspace.database import WorkspaceDatabase
+from src.workspace.transfer import WorkspaceTransferService
 
 import json as json_lib
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 
 # Setup structured logging (use json_mode=True in production)
 setup_logging(level="INFO", json_mode=False)
@@ -64,13 +100,9 @@ logger = logging.getLogger(__name__)
 
 # Global dictionary for pipeline storage — populated at startup, used in endpoints.
 _state: dict[str, Any] = {}
-SUPPORTED_SECTIONS = [
-    "business",
-    "risk_factors",
-    "mdna",
-    "financial_statements",
-    "financial_table",
-]
+# The canonical section order lives with the catalog aggregation; this name
+# remains importable from the application boundary for compatibility.
+SUPPORTED_SECTIONS = catalog_sections
 INTERNAL_ERROR_DETAIL = (
     "An internal error occurred while processing your question. Please try again."
 )
@@ -86,6 +118,13 @@ limiter = Limiter(key_func=get_rate_limit_key)
 telemetry = RequestTelemetry()
 structured_reader = StructuredDocumentService(original_viewer)
 structured_locations = StructuredLocationService(original_viewer, structured_reader)
+
+
+def _workspace_transfer_service() -> WorkspaceTransferService:
+    """Open the explicitly configured local workspace after API-001 authorization."""
+    database = WorkspaceDatabase.from_settings(settings)
+    database.initialize()
+    return WorkspaceTransferService(database)
 
 
 def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
@@ -174,7 +213,7 @@ def _document_rows(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "accession_number": chunk.get("accession_number"),
                 "sections": set(),
                 "chunk_count": 0,
-                "source_url": chunk.get("source_url") or chunk.get("filing_url"),
+                "source_url": sanitize_sec_browser_url(chunk.get("source_url") or chunk.get("filing_url")),
             },
         )
         if chunk.get("section"):
@@ -248,12 +287,140 @@ def _document_catalog() -> list[dict[str, Any]]:
     return rows
 
 
+def _catalog_rows_or_unavailable() -> list[dict[str, Any]]:
+    """Return catalog rows, or refuse instead of reporting an empty corpus."""
+    if _state.get("pipeline") is None:
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    return _document_catalog()
+
+
 def _find_document_row(document_id: str) -> dict[str, Any] | None:
     return next((item for item in _document_catalog() if item["document_id"] == document_id), None)
 
 
 def _raise_original_viewer_error(error: OriginalViewerError) -> None:
     raise HTTPException(status_code=error.status_code, detail={"code": error.code, "message": error.message}) from error
+
+
+def _pdf_store() -> PdfStore:
+    return PdfStore(Path(settings.pdf_artifacts_dir))
+
+
+def _pdf_primary_source(row: dict[str, Any]) -> tuple[Any, str] | None:
+    """Resolve the primary available filing source for PDF rendering."""
+    try:
+        snapshot = original_viewer.snapshot(row)
+    except OriginalViewerError:
+        return None
+    for source in snapshot.sources:
+        if source.role == "primary_filing" and source.status == "available" and source.document_revision and source.normalized_text:
+            return source, snapshot.source_set_revision
+    for source in snapshot.sources:
+        if source.status == "available" and source.document_revision and source.normalized_text:
+            return source, snapshot.source_set_revision
+    return None
+
+
+def _pdf_identity(document_id: str, source: Any, source_set_revision: str) -> PdfArtifactIdentity:
+    content_hash = source_content_hash(str(source.normalized_text or ""))
+    if not content_hash or not source.document_revision:
+        raise OriginalViewerError("source_unavailable", "The verified source has no stable render identity.", 409)
+    return PdfArtifactIdentity(
+        representation_type="DERIVED_PDF",
+        document_id=document_id,
+        source_document_id=source.source_document_id,
+        source_set_revision=source_set_revision,
+        document_revision=source.document_revision or "",
+        source_content_hash=content_hash,
+    )
+
+
+def _pdf_stable_key(document_id: str, source_document_id: str, source_set_revision: str, document_revision: str) -> str:
+    import hashlib
+
+    profile = _pdf_identity_probe_profile()
+    payload = "|".join([document_id, source_document_id, source_set_revision, document_revision, profile[0], profile[1]])
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
+
+
+def _pdf_identity_probe_profile() -> tuple[str, str]:
+    from src.api.pdf_representation import RENDERER_TEMPLATE_VERSION, RENDERER_VERSION
+
+    return RENDERER_VERSION, RENDERER_TEMPLATE_VERSION
+
+
+def _pdf_family_key(document_id: str, source_document_id: str) -> str:
+    """Marker key shared by every revision of one document/source binding."""
+    import hashlib
+
+    renderer_version, template_version = _pdf_identity_probe_profile()
+    payload = "|".join([document_id, source_document_id, renderer_version, template_version])
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
+
+
+def _pdf_reader_availability(row: dict[str, Any], document_id: str) -> dict[str, Any]:
+    """Cheap PDF availability for the reader manifest via the latest marker."""
+    if not settings.pdf_generation_enabled:
+        return {"status": "unsupported", "reason_code": "pdf_representation_unavailable", "reason": "PDF generation is disabled in this deployment."}
+    resolved = _pdf_primary_source(row)
+    if resolved is None:
+        return {"status": "unavailable", "reason_code": "source_unavailable", "reason": "No admitted local source is available for this document."}
+    source, source_set_revision = resolved
+    family_key = _pdf_family_key(document_id, source.source_document_id)
+    store = _pdf_store()
+    generation_state = store.read_generation_state(family_key)
+    if generation_state and generation_state.get("status") == "generating":
+        return {"status": "generating", "reason_code": "pdf_generating", "reason": "PDF generation is in progress for this document."}
+    if generation_state and generation_state.get("status") == "failed":
+        return {"status": "failed", "reason_code": "pdf_generation_failed", "reason": str(generation_state.get("reason") or "The previous generation attempt failed.")}
+    latest = store.read_latest(family_key)
+    if latest is None:
+        failure = store.load_failure(family_key)
+        if failure:
+            return {"status": "failed", "reason_code": "pdf_generation_failed", "reason": str(failure.get("reason") or "The previous generation attempt failed.")}
+        return {"status": "supported", "reason_code": "pdf_supported", "reason": "A derived PDF can be generated from the verified local source."}
+    current_source_hash = source_content_hash(str(source.normalized_text or ""))
+    if (
+        latest.get("source_set_revision") != source_set_revision
+        or latest.get("document_revision") != (source.document_revision or "")
+        or latest.get("source_content_hash") != current_source_hash
+    ):
+        return {"status": "stale", "reason_code": "pdf_stale", "reason": "The stored PDF was generated from a different source revision."}
+    artifact_key = latest.get("artifact_key")
+    stored = store.load_manifest(str(artifact_key)) if artifact_key else None
+    if stored is None or not store.artifact_path(str(artifact_key)).is_file():
+        return {"status": "failed", "reason_code": "pdf_generation_failed", "reason": "The current PDF manifest or artifact bytes are missing."}
+    return {
+        "status": "available",
+        "reason_code": "pdf_available",
+        "reason": "A derived PDF artifact is available for the current source revision.",
+        "representation_id": stored.representation_id,
+        "representation_type": stored.representation_type,
+        "page_semantics": stored.page_semantics,
+        "artifact_key": stored.artifact_key,
+        "artifact_hash": stored.artifact_hash,
+        "source_content_hash": stored.source_content_hash,
+        "page_count": stored.page_count,
+        "mapping_status": stored.mapping_status,
+    }
+
+
+def _pdf_base_manifest(
+    document_id: str,
+    source_document_id: str,
+    source_set_revision: str,
+    document_revision: str,
+    content_hash: str | None = None,
+) -> PdfRepresentationManifest:
+    return PdfRepresentationManifest(
+        representation_id=f"derived_pdf:pending:{document_id}",
+        artifact_status="unavailable",
+        document_id=document_id,
+        source_document_id=source_document_id or None,
+        source_set_revision=source_set_revision or None,
+        document_revision=document_revision or None,
+        source_content_hash=content_hash,
+    )
 
 
 def _document_chunks_index() -> dict[str, list[dict[str, Any]]]:
@@ -372,7 +539,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins_list,
     allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["Content-Type", "ngrok-skip-browser-warning"],
+    allow_headers=["Authorization", "Content-Type", "ngrok-skip-browser-warning"],
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -407,122 +574,6 @@ async def record_request_telemetry(request: Request, call_next: Callable) -> Any
         elapsed * 1000,
     )
     return response
-
-
-# --- Pydantic models for request/response ---
-
-class QueryRequest(BaseModel):
-    question: str = Field(
-        min_length=5, max_length=500,
-        examples=["What was Apple's total revenue in 2024?"]
-    )
-    ticker: str | None = Field(
-        default=None, pattern=r"^[A-Z]{1,5}(-[A-Z])?$",
-        examples=["AAPL"]
-    )
-    section: Literal[
-        "business",
-        "risk_factors",
-        "mdna",
-        "financial_statements",
-        "financial_table",
-    ] | None = Field(
-        default=None,
-        examples=["financial_table"]
-    )
-    top_k: int = Field(default=5, ge=1, le=10)
-    session_id: str | None = Field(
-        default=None,
-        min_length=1,
-        max_length=100,
-        description=(
-            "Session ID for multi-turn conversation. If omitted, the request "
-            "runs in stateless mode."
-        ),
-        examples=["test-session-001"],
-    )
-    answer_language: Literal["en", "vi"] = Field(
-        default="en",
-        description="Language for the generated answer; filing evidence remains verbatim.",
-    )
-
-
-class SourceChunk(BaseModel):
-    citation: str
-    score: float
-    text_preview: str  # First 200 characters for collapsed evidence previews.
-    text: str | None = None
-    chunk_id: str | None = None
-    document_id: str | None = None
-    ticker: str | None = None
-    filing_type: str | None = None
-    section: str | None = None
-    filing_date: str | None = None
-    report_date: str | None = None
-    chunk_index: int | None = None
-    source_url: str | None = None
-    rank: int | None = None
-    score_kind: Literal["retrieval", "cross_encoder", "rrf", "unknown"] | None = None
-    reranker_score: float | None = None
-
-
-class QueryInterpretation(BaseModel):
-    """Safe, user-visible explanation of the retrieval query transformation."""
-
-    original_question: str
-    retrieval_question: str
-    translation_method: str
-    detected_ticker: str | None = None
-    requested_periods: list[str] = Field(default_factory=list)
-    is_comparative: bool = False
-
-
-class QueryResponse(BaseModel):
-    answer: str
-    model_used: str
-    sources: list[SourceChunk]
-    num_chunks_retrieved: int
-    answer_language: Literal["en", "vi"] = "en"
-    query_interpretation: QueryInterpretation | None = None
-    visual_answer: dict | None = None
-
-
-class SubQueryInfo(BaseModel):
-    query: str
-    ticker: str | None
-    section: str | None
-    num_chunks: int
-
-
-class DecomposedQueryResponse(BaseModel):
-    answer: str
-    model_used: str
-    was_decomposed: bool
-    sub_queries: list[SubQueryInfo]
-    sources: list[SourceChunk]
-    num_total_chunks: int
-    answer_language: Literal["en", "vi"] = "en"
-    query_interpretation: QueryInterpretation | None = None
-
-
-class CacheTestRequest(BaseModel):
-    query_a: str = Field(min_length=5)
-    query_b: str = Field(min_length=5)
-
-
-class RetrievalInspectRequest(BaseModel):
-    question: str = Field(min_length=5, max_length=500)
-    ticker: str | None = Field(default=None, pattern=r"^[A-Z]{1,5}(-[A-Z])?$")
-    section: Literal[
-        "business",
-        "risk_factors",
-        "mdna",
-        "financial_statements",
-        "financial_table",
-    ] | None = None
-    top_k: int = Field(default=5, ge=1, le=10)
-    candidate_pool: int = Field(default=10, ge=10, le=50)
-    preset: Literal["bm25", "dense", "hybrid", "hybrid_rerank"] = "hybrid_rerank"
 
 
 # --- Endpoints ---
@@ -565,7 +616,7 @@ def _source_chunk_payload(chunk: Any, rank: int | None = None) -> SourceChunk:
         filing_date=chunk.filing_date,
         report_date=getattr(chunk, "report_date", None),
         chunk_index=getattr(chunk, "chunk_index", None),
-        source_url=getattr(chunk, "source_url", None),
+        source_url=sanitize_sec_browser_url(getattr(chunk, "source_url", None)),
         rank=rank,
         score_kind=getattr(chunk, "score_kind", None),
         reranker_score=getattr(chunk, "reranker_score", None),
@@ -584,25 +635,8 @@ def _query_interpretation(original_question: str, normalized: Any) -> QueryInter
     )
 
 
-@app.get("/health/live")
-async def health_live() -> dict:
-    """Report whether the API process can serve HTTP requests."""
-    return {"status": "ok"}
-
-
-@app.get("/health/ready")
-async def health_ready() -> dict:
-    """Report whether the RAG pipeline is ready to accept query traffic."""
-    payload = _health_payload()
-    if not payload["pipeline_ready"]:
-        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
-    return payload
-
-
-@app.get("/health")
-async def health() -> dict:
-    """Return the legacy health payload used by the current frontend."""
-    return _health_payload()
+app.include_router(create_health_router(_health_payload))
+app.include_router(create_workspace_transfer_router(_workspace_transfer_service))
 
 
 @app.post("/query", response_model=QueryResponse)
@@ -910,14 +944,9 @@ async def query_decomposed_stream(request: Request, request_body: QueryRequest):
     )
 
 
-@app.get("/supported-tickers")
-async def supported_tickers() -> dict:
-    """List of supported tickers — helps the UI/user know what they can ask about."""
-    tickers = await run_in_threadpool(_load_supported_tickers)
-    return {
-        "tickers": tickers,
-        "sections": SUPPORTED_SECTIONS,
-    }
+app.include_router(
+    create_corpus_router(lambda: _load_supported_tickers(), SUPPORTED_SECTIONS)
+)
 
 
 @app.get("/documents")
@@ -925,36 +954,45 @@ async def documents(
     ticker: str | None = Query(default=None, pattern=r"^[A-Z]{1,5}(-[A-Z])?$"),
     section: str | None = Query(default=None),
     filing_date: str | None = Query(default=None),
+    year: int | None = Query(default=None, ge=1900, le=2200),
     search: str | None = Query(default=None, max_length=100),
+    sort: str = Query(default=DEFAULT_SORT),
+    direction: str = Query(default="asc", pattern=r"^(asc|desc)$"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=100),
 ) -> dict:
     """Return a paginated catalog derived from loaded retrieval metadata."""
     if _state.get("pipeline") is None:
         raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
-    rows = _document_catalog()
-    search_folded = search.casefold().strip() if search else ""
-    filtered = [
-        row
-        for row in rows
-        if (ticker is None or row["ticker"] == ticker)
-        and (filing_date is None or row["filing_date"] == filing_date)
-        and (section is None or section in row["sections"])
-        and (
-            not search_folded
-            or search_folded in " ".join(
-                str(row.get(field) or "")
-                for field in ("document_id", "ticker", "filing_date", "accession_number")
-            ).casefold()
+    if sort not in SORT_FIELDS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unsupported sort field. Supported fields: {', '.join(SORT_FIELDS)}",
         )
-    ]
+    rows = _document_catalog()
+    filtered = filter_documents(
+        rows,
+        ticker=ticker,
+        section=section,
+        year=year,
+        filing_date=filing_date,
+        search=search,
+    )
+    ordered = sort_documents(filtered, sort=sort, direction=direction)
     start = (page - 1) * page_size
     return {
-        "items": filtered[start : start + page_size],
-        "total": len(filtered),
+        "items": ordered[start : start + page_size],
+        "total": len(ordered),
         "page": page,
         "page_size": page_size,
+        "sort": sort,
+        "direction": direction,
     }
+
+
+# Static catalog routes must be registered before the dynamic document routes
+# so /documents/facets and /documents/stats can never resolve as a document_id.
+app.include_router(create_catalog_router(_catalog_rows_or_unavailable))
 
 
 @app.get("/documents/{document_id}")
@@ -1002,7 +1040,7 @@ async def document_chunks(
                 "chunk_index": chunk.get("chunk_index"),
                 "text_preview": str(chunk.get("text") or "")[:500],
                 "text_length": len(str(chunk.get("text") or "")),
-                "source_url": chunk.get("source_url") or chunk.get("filing_url"),
+                "source_url": sanitize_sec_browser_url(chunk.get("source_url") or chunk.get("filing_url")),
             }
         )
     return {"items": items, "total": len(matching), "page": page, "page_size": page_size}
@@ -1034,7 +1072,7 @@ async def chunk_detail(chunk_id: str) -> dict:
         "chunk_text_hash": hashlib.sha256(text.encode("utf-8")).hexdigest(),
         "text_preview": text[:500],
         "text_length": len(text),
-        "source_url": chunk.get("source_url") or chunk.get("filing_url"),
+        "source_url": sanitize_sec_browser_url(chunk.get("source_url") or chunk.get("filing_url")),
         "sec_index_url": sec_index_url_for_document(document_row) if document_row else None,
         "presentation": build_chunk_presentation(text, chunk.get("section")),
     }
@@ -1068,7 +1106,12 @@ async def reader_manifest(document_id: str) -> dict[str, Any]:
         return await run_in_threadpool(
             original_viewer.run,
             f"reader:{document_id}",
-            lambda: build_reader_manifest(row, viewer=original_viewer, structured_reader=structured_reader),
+            lambda: build_reader_manifest(
+                row,
+                viewer=original_viewer,
+                structured_reader=structured_reader,
+                pdf_availability=_pdf_reader_availability(row, document_id),
+            ),
         )
     except OriginalViewerError as error:
         _raise_original_viewer_error(error)
@@ -1165,6 +1208,362 @@ async def reader_section_export(
         return Response(content=payload, media_type=media_type, headers={"Content-Disposition": f"attachment; filename=structured-section.{extension}"})
     except OriginalViewerError as error:
         _raise_original_viewer_error(error)
+
+
+@app.get("/documents/{document_id}/pdf")
+async def pdf_representation_status(document_id: str) -> dict[str, Any]:
+    """Report the truthful derived-PDF status for one document."""
+    if _state.get("pipeline") is None:
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    row = _find_document_row(document_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if not settings.pdf_generation_enabled:
+        manifest = _pdf_base_manifest(document_id, "", "", "")
+        manifest.artifact_status = "unsupported"
+        manifest.reason = "PDF generation is disabled in this deployment."
+        return manifest.model_dump(mode="json")
+    resolved = _pdf_primary_source(row)
+    if resolved is None:
+        manifest = _pdf_base_manifest(document_id, "", "", "")
+        manifest.artifact_status = "unavailable"
+        manifest.reason = "No admitted local source is available for this document."
+        return manifest.model_dump(mode="json")
+    source, source_set_revision = resolved
+    current_source_hash = source_content_hash(str(source.normalized_text or ""))
+    family_key = _pdf_family_key(document_id, source.source_document_id)
+    store = _pdf_store()
+    generation_state = store.read_generation_state(family_key)
+    if generation_state and generation_state.get("status") in {"generating", "failed", "stale"}:
+        manifest = _pdf_base_manifest(document_id, source.source_document_id, source_set_revision, source.document_revision or "", current_source_hash)
+        manifest.artifact_status = generation_state["status"]
+        default_reason = (
+            "PDF generation is in progress."
+            if generation_state.get("status") == "generating"
+            else "The previous PDF generation attempt did not produce a current artifact."
+        )
+        manifest.reason = str(generation_state.get("reason") or default_reason)
+        return manifest.model_dump(mode="json")
+    latest = store.read_latest(family_key)
+    if latest is None:
+        failure = store.load_failure(family_key)
+        manifest = _pdf_base_manifest(document_id, source.source_document_id, source_set_revision, source.document_revision or "", current_source_hash)
+        if failure:
+            manifest.artifact_status = "failed"
+            manifest.reason = str(failure.get("reason") or "The previous generation attempt failed.")
+        else:
+            manifest.artifact_status = "supported"
+            manifest.reason = "A derived PDF can be generated from the verified local source."
+        return manifest.model_dump(mode="json")
+    manifest = _pdf_base_manifest(document_id, str(latest.get("source_document_id")), str(latest.get("source_set_revision")), str(latest.get("document_revision")), current_source_hash)
+    if (
+        latest.get("source_set_revision") != source_set_revision
+        or latest.get("document_revision") != (source.document_revision or "")
+        or latest.get("source_content_hash") != current_source_hash
+    ):
+        manifest.artifact_status = "stale"
+        manifest.reason = "The stored PDF was generated from a different source revision. Generate again to refresh it."
+        return manifest.model_dump(mode="json")
+    artifact_key = str(latest.get("artifact_key") or "")
+    stored = store.load_manifest(artifact_key) if artifact_key else None
+    artifact_path = store.artifact_path(artifact_key) if artifact_key else None
+    if stored is None or artifact_path is None or not artifact_path.is_file():
+        manifest.artifact_status = "failed"
+        manifest.reason = "The current PDF manifest or artifact bytes are missing."
+        return manifest.model_dump(mode="json")
+    actual_hash = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+    if stored.artifact_hash != actual_hash or stored.source_content_hash != current_source_hash:
+        manifest.artifact_status = "failed"
+        manifest.reason = "The current PDF artifact bytes do not match their manifest hash."
+        return manifest.model_dump(mode="json")
+    manifest.artifact_status = "available"
+    manifest.source_content_hash = latest.get("source_content_hash")
+    manifest.artifact_key = artifact_key
+    manifest.artifact_hash = actual_hash
+    manifest.representation_id = stored.representation_id
+    manifest.representation_type = stored.representation_type
+    manifest.page_semantics = stored.page_semantics
+    manifest.artifact_size_bytes = stored.artifact_size_bytes
+    manifest.page_count = stored.page_count
+    manifest.renderer = stored.renderer
+    manifest.generated_at = stored.generated_at
+    manifest.mapping_manifest_id = stored.mapping_manifest_id
+    manifest.mapping_status = stored.mapping_status
+    manifest.mapping_entry_count = stored.mapping_entry_count
+    manifest.reason = stored.reason
+    return manifest.model_dump(mode="json")
+
+
+@app.post("/documents/{document_id}/pdf")
+@limiter.limit("20/minute")
+async def pdf_generate(request: Request, document_id: str) -> dict[str, Any]:
+    """Generate (or regenerate) the derived PDF for one verified document."""
+    if _state.get("pipeline") is None:
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    row = _find_document_row(document_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if not settings.pdf_generation_enabled:
+        raise HTTPException(status_code=409, detail={"code": "pdf_unsupported", "message": "PDF generation is disabled in this deployment."})
+    resolved = _pdf_primary_source(row)
+    if resolved is None:
+        raise HTTPException(status_code=409, detail={"code": "source_unavailable", "message": "No admitted local source is available for this document."})
+    source, source_set_revision = resolved
+    family_key = _pdf_family_key(document_id, source.source_document_id)
+    store = _pdf_store()
+    current_availability = _pdf_reader_availability(row, document_id)
+    if current_availability.get("status") == "available":
+        current_key = current_availability.get("artifact_key")
+        current_manifest = store.load_manifest(str(current_key)) if current_key else None
+        if current_manifest is not None and store.artifact_path(str(current_key)).is_file():
+            return current_manifest.model_dump(mode="json")
+    if current_availability.get("status") == "generating":
+        raise HTTPException(status_code=409, detail={"code": "pdf_generation_busy", "message": "PDF generation is already in progress for this document."})
+    store.write_generation_state(family_key, "generating")
+    try:
+        manifest, mapping, pdf_bytes = await run_in_threadpool(
+            generate_derived_pdf,
+            row,
+            document_id=document_id,
+            source=source,
+            source_set_revision=source_set_revision,
+            timeout_seconds=settings.pdf_generation_timeout_seconds,
+            store=store,
+        )
+    except PdfGenerationBusy as error:
+        raise HTTPException(status_code=409, detail={"code": "pdf_generation_busy", "message": error.message}) from error
+    except PdfGenerationError as error:
+        store.record_failure(family_key, error.message)
+        store.write_generation_state(family_key, "failed", reason=error.message)
+        raise HTTPException(status_code=error.http_status, detail={"code": error.code, "message": error.message}) from error
+    fresh_resolved = _pdf_primary_source(row)
+    if (
+        fresh_resolved is None
+        or fresh_resolved[1] != source_set_revision
+        or fresh_resolved[0].source_document_id != source.source_document_id
+        or fresh_resolved[0].document_revision != source.document_revision
+        or source_content_hash(str(fresh_resolved[0].normalized_text or "")) != source_content_hash(str(source.normalized_text or ""))
+    ):
+        reason = "The verified source changed while the PDF was being generated; no artifact was published."
+        store.write_generation_state(family_key, "stale", reason=reason)
+        raise HTTPException(status_code=409, detail={"code": "source_changed", "message": reason})
+    try:
+        store.promote(manifest.artifact_key or "", pdf_bytes, manifest, mapping)
+    except ValueError as error:
+        store.record_failure(family_key, str(error))
+        store.write_generation_state(family_key, "failed", reason=str(error))
+        raise HTTPException(status_code=500, detail={"code": "artifact_invalid", "message": "The generated PDF failed artifact binding validation."}) from error
+    store.write_latest(
+        family_key,
+        {
+            "document_id": document_id,
+            "source_document_id": source.source_document_id,
+            "source_set_revision": source_set_revision,
+            "document_revision": source.document_revision or "",
+            "source_content_hash": manifest.source_content_hash,
+            "artifact_key": manifest.artifact_key,
+            "artifact_hash": manifest.artifact_hash,
+            "artifact_status": "available",
+            "representation_id": manifest.representation_id,
+        },
+    )
+    store.clear_failure(family_key)
+    store.clear_generation_state(family_key)
+    return manifest.model_dump(mode="json")
+
+
+@app.get("/documents/{document_id}/pdf/content")
+async def pdf_content(document_id: str) -> Response:
+    """Serve PDF bytes only when the artifact matches the current identity."""
+    if _state.get("pipeline") is None:
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    row = _find_document_row(document_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if not settings.pdf_generation_enabled:
+        raise HTTPException(status_code=409, detail={"code": "pdf_unsupported", "message": "PDF generation is disabled in this deployment."})
+    resolved = _pdf_primary_source(row)
+    if resolved is None:
+        raise HTTPException(status_code=404, detail={"code": "source_unavailable", "message": "No admitted local source is available for this document."})
+    source, source_set_revision = resolved
+    try:
+        identity = _pdf_identity(document_id, source, source_set_revision)
+    except OriginalViewerError as error:
+        _raise_original_viewer_error(error)
+    store = _pdf_store()
+    family_key = _pdf_family_key(document_id, source.source_document_id)
+    latest = store.read_latest(family_key)
+    if latest is None:
+        raise HTTPException(status_code=404, detail={"code": "pdf_not_generated", "message": "No derived PDF exists for this document yet."})
+    if (
+        latest.get("source_set_revision") != source_set_revision
+        or latest.get("document_revision") != (source.document_revision or "")
+        or latest.get("source_content_hash") != identity.source_content_hash
+    ):
+        raise HTTPException(status_code=409, detail={"code": "pdf_stale", "message": "The stored PDF was generated from a different source revision."})
+    stored = store.load_manifest(identity.artifact_key())
+    if stored is None or stored.source_content_hash != identity.source_content_hash:
+        raise HTTPException(status_code=409, detail={"code": "pdf_stale", "message": "The stored PDF does not match the current source identity."})
+    artifact_path = store.artifact_path(identity.artifact_key())
+    if not artifact_path.is_file():
+        raise HTTPException(status_code=404, detail={"code": "pdf_artifact_missing", "message": "The PDF artifact bytes are missing."})
+    actual_hash = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+    if stored.artifact_hash != actual_hash:
+        raise HTTPException(status_code=409, detail={"code": "pdf_stale", "message": "The PDF artifact bytes do not match their manifest hash."})
+    manifest = stored
+    filename = f"{(row.get('ticker') or 'SEC')}_10-K_generated.pdf".replace('"', "")
+    return FileResponse(
+        artifact_path,
+        media_type="application/pdf",
+        headers={
+            "ETag": f'"{manifest.artifact_hash}"',
+            "X-Artifact-Key": identity.artifact_key(),
+            "Content-Disposition": f'inline; filename="{filename}"',
+        },
+    )
+
+
+def _pdf_mapping_artifact(
+    document_id: str,
+    row: dict[str, Any],
+) -> tuple[PdfArtifactIdentity, PdfRepresentationManifest, PdfMappingManifest]:
+    """Resolve and validate the current PDF plus its hash-bound mapping."""
+    resolved = _pdf_primary_source(row)
+    if resolved is None:
+        raise HTTPException(status_code=404, detail={"code": "source_unavailable", "message": "No admitted local source is available for this document."})
+    source, source_set_revision = resolved
+    try:
+        identity = _pdf_identity(document_id, source, source_set_revision)
+    except OriginalViewerError as error:
+        _raise_original_viewer_error(error)
+    store = _pdf_store()
+    family_key = _pdf_family_key(document_id, source.source_document_id)
+    latest = store.read_latest(family_key)
+    if latest is None:
+        raise HTTPException(status_code=404, detail={"code": "pdf_not_generated", "message": "No derived PDF exists for this document yet."})
+    if (
+        latest.get("artifact_key") != identity.artifact_key()
+        or latest.get("source_document_id") != identity.source_document_id
+        or latest.get("source_set_revision") != identity.source_set_revision
+        or latest.get("document_revision") != identity.document_revision
+        or latest.get("source_content_hash") != identity.source_content_hash
+    ):
+        raise HTTPException(status_code=409, detail={"code": "pdf_stale", "message": "The stored PDF was generated from a different source revision."})
+    manifest = store.load_manifest(identity.artifact_key())
+    mapping = store.load_mapping(identity.artifact_key())
+    artifact_path = store.artifact_path(identity.artifact_key())
+    if manifest is None or mapping is None or not artifact_path.is_file():
+        raise HTTPException(status_code=409, detail={"code": "pdf_mapping_missing", "message": "The current PDF artifact or its mapping sidecar is missing."})
+    actual_hash = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+    if (
+        manifest.artifact_key != identity.artifact_key()
+        or manifest.artifact_hash != actual_hash
+        or manifest.source_document_id != identity.source_document_id
+        or manifest.source_set_revision != identity.source_set_revision
+        or manifest.document_revision != identity.document_revision
+        or manifest.source_content_hash != identity.source_content_hash
+        or mapping.artifact_key != identity.artifact_key()
+        or mapping.artifact_hash != actual_hash
+        or mapping.representation_id != manifest.representation_id
+        or mapping.document_id != document_id
+        or mapping.source_document_id != identity.source_document_id
+        or mapping.source_content_hash != identity.source_content_hash
+        or mapping.source_set_revision != identity.source_set_revision
+        or mapping.document_revision != identity.document_revision
+    ):
+        raise HTTPException(status_code=409, detail={"code": "pdf_mapping_stale", "message": "The PDF mapping does not match the current artifact identity."})
+    return identity, manifest, mapping
+
+
+@app.get("/documents/{document_id}/pdf/mapping", response_model=PdfMappingManifest)
+async def pdf_mapping(document_id: str) -> PdfMappingManifest:
+    """Return only the mapping sidecar bound to the current PDF artifact."""
+    if _state.get("pipeline") is None:
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    row = _find_document_row(document_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if not settings.pdf_generation_enabled:
+        raise HTTPException(status_code=409, detail={"code": "pdf_unsupported", "message": "PDF generation is disabled in this deployment."})
+    _identity, _manifest, mapping = _pdf_mapping_artifact(document_id, row)
+    return mapping
+
+
+@app.get("/documents/{document_id}/pdf/mapping/location", response_model=PdfEvidenceLocation)
+async def pdf_mapping_location(
+    document_id: str,
+    chunk_id: str = Query(..., min_length=1, max_length=256),
+    chunk_text_hash: str = Query(..., min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$"),
+    source_document_id: str = Query(..., min_length=1, max_length=128),
+    source_set_revision: str = Query(..., min_length=1, max_length=128),
+    document_revision: str = Query(..., min_length=1, max_length=128),
+) -> PdfEvidenceLocation:
+    """Resolve a citation to PDF rectangles only when block boundaries prove it."""
+    if _state.get("pipeline") is None:
+        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    row = _find_document_row(document_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if not settings.pdf_generation_enabled:
+        raise HTTPException(status_code=409, detail={"code": "pdf_unsupported", "message": "PDF generation is disabled in this deployment."})
+    identity, manifest, mapping = _pdf_mapping_artifact(document_id, row)
+    base = {
+        "document_id": document_id,
+        "source_document_id": identity.source_document_id,
+        "source_set_revision": identity.source_set_revision,
+        "document_revision": identity.document_revision,
+        "source_content_hash": identity.source_content_hash,
+        "representation_id": manifest.representation_id,
+        "artifact_key": identity.artifact_key(),
+        "artifact_hash": mapping.artifact_hash,
+        "mapping_manifest_id": mapping.mapping_manifest_id,
+        "chunk_id": chunk_id,
+        "chunk_text_hash": chunk_text_hash,
+    }
+    if source_document_id != identity.source_document_id or source_set_revision != identity.source_set_revision or document_revision != identity.document_revision:
+        return PdfEvidenceLocation(status="stale", reason="The selected source revision does not match the current PDF artifact.", **base)
+    records = [record for record in _chunk_records_index().get(chunk_id, []) if record[0] == document_id]
+    if not records:
+        raise HTTPException(status_code=404, detail={"code": "chunk_not_found", "message": "Chunk not found for this document."})
+    if len(records) > 1:
+        return PdfEvidenceLocation(status="ambiguous", reason="The selected chunk identity is ambiguous for this document.", match_count=2, match_count_capped=True, **base)
+    chunk_text = str(records[0][1].get("text") or "")
+    if hashlib.sha256(chunk_text.encode("utf-8")).hexdigest() != chunk_text_hash:
+        return PdfEvidenceLocation(status="stale", reason="The indexed chunk changed.", **base)
+    resolved = _pdf_primary_source(row)
+    if resolved is None:
+        raise HTTPException(status_code=404, detail={"code": "source_unavailable", "message": "No admitted local source is available for this document."})
+    source, _source_set_revision = resolved
+    normalized_text = str(getattr(source, "normalized_text", None) or "")
+    matches = whitespace_literal_matches(normalized_text, chunk_text)
+    if not matches:
+        return PdfEvidenceLocation(status="unavailable", reason="The full indexed chunk was not found in the rendered source text.", **base)
+    if len(matches) > 1:
+        return PdfEvidenceLocation(status="ambiguous", reason="The indexed chunk matches more than one source interval.", match_count=2, match_count_capped=True, **base)
+    match_start, match_end = matches[0]
+    entries = sorted(
+        [entry for entry in mapping.entries if entry.char_end > match_start and entry.char_start < match_end],
+        key=lambda entry: entry.block_index,
+    )
+    if not entries or any(entry.status != "exact" or not entry.rects for entry in entries):
+        return PdfEvidenceLocation(status="unavailable", reason="The selected range has no complete PDF rectangle mapping.", **base)
+    if entries[0].char_start != match_start or entries[-1].char_end != match_end:
+        return PdfEvidenceLocation(status="unavailable", reason="The selected range does not align to stable rendered source blocks.", **base)
+    cursor = entries[0].char_end
+    for entry in entries[1:]:
+        if normalized_text[cursor:entry.char_start].strip():
+            return PdfEvidenceLocation(status="unavailable", reason="The selected range crosses an unmapped source boundary.", **base)
+        cursor = entry.char_end
+    if normalized_text[cursor:match_end].strip():
+        return PdfEvidenceLocation(status="unavailable", reason="The selected range crosses an unmapped source boundary.", **base)
+    return PdfEvidenceLocation(
+        status="exact",
+        match_count=1,
+        entry_ids=[entry.block_id for entry in entries],
+        rects=[rect for entry in entries for rect in entry.rects],
+        reason=None,
+        **base,
+    )
 
 
 @app.get("/documents/{document_id}/original/content")
@@ -1319,88 +1718,14 @@ async def original_search(
         _raise_original_viewer_error(error)
 
 
-@app.get("/system/info")
-async def system_info() -> dict:
-    """Expose allowlisted build, model and corpus metadata for the workspace."""
-    pipeline: RAGPipeline | None = _state.get("pipeline")
-    if pipeline is None:
-        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
-    retriever = pipeline.retriever
-    return {
-        "api_version": app.version,
-        "corpus": dict(_state.get("corpus") or {}),
-        "retrieval": {
-            "embedding_model": getattr(getattr(retriever, "embedder", None), "model_name", None),
-            "reranker_model": getattr(retriever, "cross_encoder_model", None),
-            "presets": ["bm25", "dense", "hybrid", "hybrid_rerank"],
-            "default": "hybrid_rerank",
-        },
-        "capabilities": {
-            "stage_events": True,
-            "comparative_stream": True,
-            "document_indexed_viewer": True,
-            "original_document_viewer": {
-                "enabled": True,
-                "representation": "normalized_text",
-                "normalizer_version": NORMALIZER_VERSION,
-            },
-        },
-        "build": {
-            key: os.environ[key]
-            for key in ("GIT_REVISION", "BUILD_VERSION")
-            if os.environ.get(key)
-        },
-    }
-
-
-@app.get("/evaluation/runs")
-async def evaluation_runs(
-    status: Literal["official", "candidate", "historical", "incomplete"] | None = None,
-    language: Literal["en", "vi"] | None = None,
-    intent: str | None = Query(default=None, max_length=80),
-    ticker: str | None = Query(default=None, pattern=r"^[A-Z]{1,5}(-[A-Z])?$"),
-    gate: str | None = Query(default=None, max_length=80),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
-) -> dict:
-    """List validated, explicitly published evaluation summaries only."""
-    reports = list_public_reports(root=settings.data_public_evaluations_dir)
-    filtered: list[dict[str, Any]] = []
-    for summary in reports:
-        if status is not None and summary["status"] != status:
-            continue
-        if language is None and intent is None and ticker is None and gate is None:
-            filtered.append(summary)
-            continue
-        detail = get_public_report(summary["run_id"], root=settings.data_public_evaluations_dir)
-        if detail is None:
-            continue
-        cases = detail["cases"]
-        if language is not None and not any(case["language"] == language for case in cases):
-            continue
-        if intent is not None and not any(case.get("intent") == intent for case in cases):
-            continue
-        if ticker is not None and not any(case.get("ticker") == ticker for case in cases):
-            continue
-        if gate is not None and not any(case.get("gates", {}).get(gate) is True for case in cases):
-            continue
-        filtered.append(summary)
-    start = (page - 1) * page_size
-    return {
-        "items": filtered[start : start + page_size],
-        "total": len(filtered),
-        "page": page,
-        "page_size": page_size,
-    }
-
-
-@app.get("/evaluation/runs/{run_id}")
-async def evaluation_run(run_id: str) -> dict:
-    """Return one validated public report; arbitrary filesystem paths are impossible."""
-    report = get_public_report(run_id, root=settings.data_public_evaluations_dir)
-    if report is None:
-        raise HTTPException(status_code=404, detail="Evaluation run not found")
-    return report
+app.include_router(
+    create_system_router(
+        _get_pipeline,
+        lambda: _state,
+        lambda: app.version,
+    )
+)
+app.include_router(create_evaluation_router())
 
 
 @app.post("/retrieval/inspect")
@@ -1445,8 +1770,6 @@ async def retrieval_inspect(request: Request, body: RetrievalInspectRequest) -> 
     }
 
 
-SESSION_ID_MAX_LENGTH = 100
-SESSION_ID_PATTERN = re.compile(rf"[A-Za-z0-9_-]{{1,{SESSION_ID_MAX_LENGTH}}}")
 INJECTION_PATTERNS = [
     "ignore all previous instructions",
     "ignore previous instructions",
@@ -1484,115 +1807,16 @@ def _sanitize_question(text: str) -> str:
     return unicodedata.normalize("NFC", cleaned).strip()
 
 
-def _validate_session_id(session_id: str) -> None:
-    """Validate session ID charset and length to prevent routing/log abuse."""
-    if not SESSION_ID_PATTERN.fullmatch(session_id):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Session ID may only contain letters, digits, hyphens, "
-                f"and underscores (max {SESSION_ID_MAX_LENGTH} characters)"
-            ),
-        )
-
-
-@app.delete("/session/{session_id}")
-async def clear_session(session_id: str) -> dict:
-    """Clear one conversation session."""
-    _validate_session_id(session_id)
-    pipeline: RAGPipeline = _state.get("pipeline")
-    if pipeline is None:
-        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
-    pipeline.memory.clear_session(session_id)
-    return {"cleared": session_id}
-
-
-@app.get("/session/{session_id}/history")
-async def get_session_history(session_id: str) -> dict:
-    """Return conversation history for debugging and UI rendering.
-
-    The optional ``context`` block reports backend session state without
-    creating or refreshing the session: ``available`` with the TTL budget
-    that remains, or ``missing`` when the session expired or never existed.
-    """
-    _validate_session_id(session_id)
-    pipeline: RAGPipeline = _state.get("pipeline")
-    if pipeline is None:
-        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
-
-    snapshot = pipeline.memory.get_history_snapshot(session_id)
-    return {
-        "session_id": session_id,
-        "turns": [
-            {
-                "user": turn.user_message,
-                "assistant": turn.assistant_message,
-                "rewritten_query": turn.rewritten_query,
-            }
-            for turn in snapshot.turns
-        ],
-        "context": {
-            "status": snapshot.status,
-            "retained_turns": snapshot.retained_turns,
-            "ttl_remaining_seconds": snapshot.ttl_remaining_seconds,
-        },
-    }
-
-
-@app.get("/cache/stats")
-async def cache_stats() -> dict:
-    """Return semantic cache metrics."""
-    pipeline: RAGPipeline = _state.get("pipeline")
-    if pipeline is None:
-        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
-    return pipeline.cache.get_stats()
-
-
-@app.get("/metrics")
-async def metrics() -> dict:
-    """Expose aggregate request, error, and latency counters when enabled."""
-    if not settings.enable_metrics_endpoint:
-        raise HTTPException(status_code=403, detail="Metrics endpoint is disabled")
-    return telemetry.snapshot()
-
-
-@app.post("/cache/clear")
-async def cache_clear() -> dict:
-    """Clear semantic cache entries and reset cache metrics."""
-    if not settings.enable_cache_clear:
-        raise HTTPException(
-            status_code=403,
-            detail="Cache clearing is disabled on this deployment",
-        )
-    pipeline: RAGPipeline = _state.get("pipeline")
-    if pipeline is None:
-        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
-    count = pipeline.cache.clear()
-    return {"cleared_entries": count}
-
-
-@app.post("/cache/test")
-@limiter.limit(settings.cache_test_rate_limit)
-async def cache_test_similarity(request: Request, body: CacheTestRequest) -> dict:
-    """Compare two query embeddings to tune the semantic cache threshold."""
-    pipeline: RAGPipeline = _state.get("pipeline")
-    if pipeline is None:
-        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
-
-    emb_a, emb_b = await run_in_threadpool(
+app.include_router(create_session_router(_get_pipeline))
+app.include_router(
+    create_cache_router(
+        limiter,
+        _get_pipeline,
+        lambda: telemetry,
         _embed_query_pair,
-        pipeline,
-        body.query_a,
-        body.query_b,
     )
-    similarity = pipeline.cache.test_similarity(emb_a, emb_b)
-    return {
-        "query_a": body.query_a,
-        "query_b": body.query_b,
-        "similarity": round(similarity, 6),
-        "threshold": pipeline.cache.threshold,
-        "would_cache_hit": similarity >= pipeline.cache.threshold,
-    }
+)
+
 
 @app.post("/query/stream")
 @limiter.shared_limit(settings.llm_rate_limit_burst, scope="llm-query-burst")

@@ -1,5 +1,407 @@
 # Project State
 
+## API-003 catalog facets and statistics (2026-09-21)
+
+API-003 is complete. The catalog that `/documents`, `/documents/facets`, and
+`/documents/stats` serve now derives from one aggregation module
+(`src/api/catalog.py`) over the startup document catalog, which is built from
+embedded chunk metadata. Everything is public, provider-free, read-only, and
+deterministic: no model, provider, store, reader, or network path is touched,
+and nothing in the corpus, index, evaluation artifacts, or workspace is
+mutated.
+
+Endpoints and contract:
+
+- `GET /documents/facets` — recorded facet values with truthful counts for the
+  applied scope. Count basis is explicit
+  (`all_filters_except_own_dimension`): a company facet reports what selecting
+  a company would leave while the other filters stay applied, and so on. A
+  section facet counts per membership, so it does not sum to the document total
+  when a filing carries several sections.
+- `GET /documents/stats` — totals (documents, companies, chunks), the recorded
+  filing-year range, section coverage in canonical order, and per-dimension
+  availability. `filing_type` reports `unknown` with a reason rather than a
+  fabricated constant: no stored artifact records a per-filing form type, and
+  the corpus-level 10-K contract lives in the ingestion script, not in the
+  metadata. An empty catalog reports every dimension as `unknown` instead of
+  implying a real zero.
+- `GET /documents` gained `year`, `sort`, and `direction` additively, and now
+  shares the same filter and sort helpers as the facet routes. An unsupported
+  sort field returns `422` listing the supported fields.
+
+Route order follows the master plan's rule that static document routes precede
+dynamic ones: `/documents`, `/documents/facets`, `/documents/stats`,
+`/documents/{document_id}`. The frozen route-order contract test records the
+two new entries, and a new ownership test proves they belong to
+`src.api.routers.catalog`, whose factory receives an application-owned callback
+and constructs nothing.
+
+Verified against the real on-disk corpus (no provider, no model
+initialization): 50 documents, 50 companies, 10,053 chunks; sections business
+50, risk_factors 50, mdna 46, financial_statements 46, financial_table 50 —
+matching the documented extraction quality of 46 complete filings plus 4
+degraded but searchable; filing years 2026 (42) and 2025 (8); facet counts
+consistent with the filtered totals.
+
+Validation: 18 new focused tests plus one route-ownership contract test; the
+adjacent regression set (router contract, workspace access/transfer, API)
+passed 168 tests; full hermetic backend suite **920 passed / 0 failed / 188
+warnings** (baseline 901, warnings unchanged); `compileall` clean; `git diff
+--check` clean; no runtime artifact left behind. Commit `3ba64d7` adds the
+aggregation module, the catalog router, and the focused tests; the wiring in
+the shared boundary files (`app.py`, `schemas.py`, the route-order contract
+test) is committed with the task documentation because those files already
+carried validated earlier rebuild content.
+
+Exact next task from the master graph: API-004.
+
+## UI-003 Chat/Research conversation pages (2026-09-21)
+
+UI-003 is complete. Chat and Research are now distinct, mode-aware
+conversation compositions instead of one hardcoded "Research" page.
+
+Mode provenance: `ConversationMode` ("chat" | "research") is captured into the
+request snapshot at send time and stamped onto the conversation record; a
+saved conversation keeps the mode it was started in, and the stored mode wins
+over a mismatched URL family. An unknown stored mode is treated as unreadable
+data rather than silently coerced, and the merge fingerprint includes the mode
+so a browser/IndexedDB merge cannot drop it. Chat and Research share the same
+grounded-answer thread, citations, variants, feedback, notes, and streaming
+lifecycle; they differ only in presentation: Chat is direct with compact
+follow-up chips, Research adds reference-style follow-up tiles and insight
+tiles built only from real answer fields (sources used, total chunks, top
+retrieval score — labelled as a retrieval score, never confidence — and
+response time). Tiles with no backing value are omitted.
+
+New components live under `frontend/src/components/conversation/`
+(`ConversationPageHeader`, `ResearchInsightsRow`, `FollowUpTiles`,
+`ConversationPageShell`); `App.tsx` keeps the thread, request lifecycle,
+evidence identity, scroll behavior, and composer ownership, and passes them
+into the shell. Conversation selection, evidence deep links, bookmarked-answer
+opens, saved-variant opens, and continue-research all reopen in the stored
+conversation's family, and a new chat starts on `/chat` while a new research
+session keeps `/research`.
+
+Composer truthfulness: two dead controls that existed only to mirror the
+reference screenshot were removed — the `Web` search button (this product has
+no web retrieval) and the `Attach document` paperclip (no handler). `Hybrid
+Search` is now a static badge describing the real BM25 + dense + RRF +
+cross-encoder stack instead of a dead dropdown. The reference's model
+selector, account, storage meter, upgrade CTA, and confidence scores remain
+intentionally absent.
+
+Validation: `tsc --noEmit` clean; frontend 70 files / 397 tests (379 baseline +
+18 new: 11 component, 3 store, 4 App); production build passed; full Chromium
+125 passed / 2 intentional skips / 0 failed; full Firefox 125 passed / 2
+intentional skips / 0 failed (a first-run failure of the frozen TEST-001
+timing-sensitive Firefox inspector test passed focused three times and in the
+full rerun); nine-reference receipt 15/15. New hermetic browser spec
+`frontend/e2e/ui-003-conversation-modes.spec.ts` also asserts no body/root
+horizontal overflow at 1440x900, 1280x856, 1024x768, and 390x844, and the
+receipts are captured under the git-ignored `frontend/test-results/ui-003/`.
+The rendered light-theme capture caught and fixed a real defect: the mode title
+was inheriting `text-white` on a token-aliased light surface and was invisible.
+
+Stitch MCP was used as authorized (a bounded probe generation); its output
+completed server-side but was not retrievable in an importable form, so the
+implementation was built from the authoritative local screenshots and existing
+UI-001 primitives, and no Stitch code or fake content was imported.
+
+No backend file, dependency, corpus, index, evaluation artifact, or `data/`
+file was changed. Exact next task from the master graph: API-003.
+
+## DATA-002 workspace import/export completion (2026-09-20)
+
+DATA-002 is complete. The canonicalization work recovered from the interrupted
+2026-09-19 23:16 session is now checkpointed, completed, and fully gated.
+
+Cross-runtime canonical representation: Python `_js_number_text` serializes
+numbers with ECMAScript semantics, `_canonical_json` orders object keys by
+Unicode code point, and unpaired surrogates fail closed; the TypeScript side
+uses `compareUnicodeCodePoints` for key and record ordering (replacing
+`localeCompare`), `canonicalWorkspaceJson`, and the same fail-closed surrogate
+and safe-integer guards. Python additionally rejects floats at or above 2^53
+(every such double is integral and unsafe) so both runtimes accept exactly the
+same numbers. The shared deterministic fixture
+`tests/fixtures/workspace_transfer_roundtrip.json` (three envelopes: minimal;
+Vietnamese/Unicode metadata with integral floats, 1e-7 exponents, and
+astral-versus-U+E000 keys; revision/tombstone/evidence identity) is read by
+both pytest and Vitest; each runtime reproduces the stored digests, so any
+future canonicalization drift fails one side.
+
+Focused C coverage adds 25 backend tests (`tests/test_workspace_transfer_canonical.py`:
+deterministic legacy-ID mapping across independent databases, foreign-record
+conflict without overwrite, no-regression of a newer authoritative record,
+non-portable export accounting, revision-deterministic tombstones, ECMAScript
+number units, surrogate fail-closed; plus HTTP idempotent-receipt and
+surrogate-400 cases) and 12 frontend tests (fixture digests, code-point
+ordering, ECMAScript number contract, surrogate rejection, and six
+authority-gate cases: constructor availability, write-time availability,
+browser-failure non-disconnect semantics, unsaved accumulation with deep-copy
+export, concurrent single-writer dispatch, and explicit re-switch after
+disconnect).
+
+Final gates: full backend suite 901 passed / 0 failed / 188 warnings (876
+baseline + 25); frontend 69 files / 379 tests (367 + 12), `tsc` clean, and the
+production build passed. Browser gates match the frozen UI-002 baseline:
+Chromium 118 passed / 2 intentional skips and Firefox 118 passed / 2 skipped —
+the first combined run had two Firefox-only timing failures that pass focused
+and in the full Firefox rerun (the documented TEST-001 timing-sensitive class;
+DATA-002 changed no page-render code). The nine-reference receipt passed 15/15.
+`git diff --check` is clean, DATA-002 added no dependencies, and the artifact
+audit found no stray SQLite/WAL/SHM or debug files.
+
+Transactional semantics (unchanged from DATA-002-B, now receipt-covered): one
+SQLite transaction with a digest-bound idempotent receipt, plan-based actions
+(create / replace_older / duplicate / conflict / blocked_by_tombstone /
+tombstone_create / tombstone_replace / tombstone_duplicate / tombstone_conflict),
+full rollback on any failure, deterministic legacy-ID mapping, tombstones that
+prevent resurrection, and newer live records that win over older tombstones.
+
+Exact next task from the master graph: UI-003 (Chat/Research conversation
+pages/hooks) — the first dependency-ready task in the master-plan priority
+ordering. API-003 and DATA-003 are also dependency-ready.
+
+## API-002 compatible FastAPI router extraction (2026-09-16)
+
+API-002 is complete. FastAPI creation, lifespan/bootstrap, the single shared
+pipeline/state owner, middleware, exception handling, and registration order
+remain in `src/api/app.py`. Existing health/configuration, supported-ticker,
+system-information, published-evaluation, session, cache, and metrics routes
+now live in six small router modules. Their factories receive callbacks to the
+application-owned objects and never initialize Qdrant, embedders, rerankers,
+generators, RAG pipelines, readers, PDF stores, or evaluation services.
+
+All 38 application routes retain the exact pre-extraction path, method, order,
+endpoint name, and declared status code. The 14 moved paths produce the exact
+same saved OpenAPI operations, including descriptions and validation schemas.
+Existing Pydantic models moved to `src/api/schemas.py` and remain re-exported
+from `src.api.app` for test/harness compatibility. Query and SSE routes,
+retrieval inspection, and all document, chunk, original/structured reader, PDF,
+and location routes intentionally remain in `app.py` to preserve their tightly
+coupled cancellation, rate-limit, evidence, provenance, and artifact behavior.
+`app.py` decreased from 2,249 to 1,933 lines without changing those domains.
+
+Validation remained hermetic: 5 focused API-002 tests, 46 API-001 access/proxy
+tests, 32 DATA-001 persistence tests, and all 64 existing API tests passed. The
+full backend suite increased from the DATA-001 baseline of 853 to 858 passing
+tests solely through the five new structural contract cases; failures remain 0
+and warnings remain 188. No provider or external network request completed, no
+frontend or dependency changed, and no corpus/index, evaluation artifact,
+`data/`, or workspace runtime database was modified. Exact next task from the
+saved graph: `DATA-002`.
+
+## UI-002 router, application shell, and legacy URL compatibility (2026-09-16)
+
+UI-002 is complete. The frontend now uses an explicit React Router contract for
+Chat, Research, Documents, Search, Collections, Retrieval, Models, Pipeline,
+Reranker, Evaluation, Analytics, Datasets, Settings, and Logs, including the
+planned conversation, document, collection, pipeline-run, and evaluation-run
+detail URLs. The existing application owner remains mounted across navigation,
+so request cancellation, conversation persistence, evidence identity, reader
+state, and other domain controllers retain their established ownership.
+
+Legacy root `?view=` links translate once to canonical routes while preserving
+unknown query parameters and the exact evidence hash. Unknown legacy views and
+unknown paths fail closed into truthful unavailable states. The grouped shell
+uses Workspace, Build, Evaluate, and Manage sections with semantic links and
+`aria-current`; deferred Datasets and Logs destinations are labeled without
+inventing capabilities. Desktop navigation is 216px at 1600+, 184px at
+1440-1599, 160px at 1280-1439, and 158px at 1025-1279; 1024px and below uses
+the existing focus-restoring drawer. The header now identifies the truthful
+local workspace/session and contains no fake account, subscription, API-key,
+sharing, or model-switch controls.
+
+`react-router-dom` 7.18.4 is the only UI-002 dependency addition. Vercel now
+rewrites direct application routes to `index.html` while retaining immutable
+asset caching. Final validation passed TypeScript, 65 Vitest files / 355 tests,
+the 2,029-module production build, all 118 active Chromium cases and all 118
+active Firefox cases with two intentional provider/reader skips in each, and
+the focused 15-case Chromium reference receipt covering all nine authoritative
+screens. The frozen TEST-001 integration failures remain pre-existing. No
+backend, persistence, retrieval, evaluation, corpus/index, or page-domain
+migration was performed. Exact next task from the master graph: `API-002`.
+
+## UI-001 design tokens and shared primitives (2026-09-16)
+
+UI-001 is complete. The frontend now has semantic light/dark typography,
+spacing, radius, control, focus, state, and layering tokens plus an additive
+shared UI boundary for panels, headers, metrics, search/filter controls,
+selects, tabs, badges, icon controls, empty/loading states, scores, pagination,
+charts, modal/drawer overlays, tables, detail rails, split panes, and evidence
+cards. The dark roles align with the nine-reference plan while retaining the
+existing reader/workbench compatibility aliases. Inter remains an Inter-first
+local/system stack because no licensed font asset is present and UI-001 did not
+add a package or network dependency; filing and diagnostic roles use the
+planned serif and monospace stacks.
+
+The primitives are controlled and domain-neutral. They own presentation,
+focus, and local overflow only; request epochs, routing, browser persistence,
+evidence identity, readers, notifications, and API state remain with their
+existing owners. Select and overlay behavior reuse the proven SelectField and
+ModalDialog implementations. Responsive rules stack panes and filters, retain
+44px mobile targets, expose visible focus and non-color selection cues, and
+honor reduced motion and forced colors.
+
+Validation passed `tsc --noEmit`, `64` Vitest files / `329` tests, and the Vite
+production build (`2,017` modules). Full Playwright runs passed `115` tests with
+`2` intentional skips in both Chromium and Firefox. The final focused Chromium
+reference receipt passed `15/15`, covering all nine reference screens plus the
+compact light shell. No route, page composition, API, persistence, package,
+lockfile, dependency, reader, or corpus/index behavior changed. UI-002 router,
+shell, and legacy-adapter work has not started.
+
+## DATA-001 SQLite persistence foundation (2026-09-16)
+
+DATA-001 is complete. The local workspace now has a built-in `sqlite3`
+foundation at the configured `.local/workbench/workspace.sqlite3` default, with
+run artifacts reserved under `.local/workbench/runs`. Both paths are isolated
+from canonical `data/`, evaluation, PDF, embedding, and Qdrant storage; `.local/`
+is git-ignored. Public mode neither constructs nor opens the database.
+
+Three deterministic migrations establish schema receipts, generic versioned
+records and tombstones, import receipts, allowlisted settings, conversations,
+collections/items/notes/activity, jobs/steps/events, and content-free telemetry.
+Connections enforce foreign keys, WAL where supported, a bounded busy timeout,
+short transactions, integrity checks, and per-database process serialization.
+Migration checks reject gaps, future versions, checksum/name drift, malformed
+metadata, missing schema objects, unversioned tables, and corrupt database files.
+
+The repository contract provides opaque IDs, canonical JSON, explicit revision
+conflicts, atomic tombstones, and credential field/value guards. It is not wired
+to API routes or browser persistence, so DATA-002 import, DATA-003 collection
+workflows, and DATA-004 orchestration have not started. Validation was hermetic:
+the focused DATA-001 suite passed `32/32`, the combined persistence/API-001 gate
+passed `142/142`, and the full backend suite passed `853` tests with the same
+`188` warnings as the API-001 baseline (`821` tests before DATA-001).
+
+## API-001 local workspace access boundary (2026-09-16)
+
+API-001 is complete. Public deployment remains the default and preserves the
+existing public API behavior. Private workspace reads and writes require
+explicit local mode, a dedicated server-side bearer token, a direct loopback
+socket peer, and exact local Host/Origin allowlists. Forwarding headers do not
+participate in this authorization decision. Execution/jobs require the same
+local grant plus a separate disabled-by-default capability flag.
+
+The protected `/system/configuration-status` response exposes only allowlisted
+mode/capability flags. Secret settings use redacted representations, settings
+validation errors hide input values, and the browser receives neither the
+workspace token nor provider credentials. CORS retains its exact origin and
+method policy while allowing the `Authorization` request header needed by an
+authorized local browser.
+
+Validation was hermetic: the focused workspace/API/trusted-proxy gate passed
+`110` tests, and the full backend suite passed `821` tests with the same `188`
+warnings as the frozen TEST-001 baseline (`793` tests before the 28 API-001
+cases were added). No live provider or external network was used. No DATA-001
+persistence, UI-001 work, API-002 router extraction, dependency change, or
+corpus/index mutation was performed.
+
+## High-fidelity UI reconstruction completion (2026-09-15)
+
+The high-fidelity SEC research-workspace reconstruction is complete on
+`codex/bilingual-research-workspace`. The final receipt suite maps R0-R8 from
+`docs/ui-references` to their canonical routes and captures the rendered
+production build at the target viewports. Its final Chromium output is retained
+under `frontend/test-results/reconstruction-final-final`; it includes populated
+Research, Documents, Search, Collections, and Retrieval handoffs plus sparse,
+truthful Models, Pipeline, Evaluation, and compact light-shell states.
+
+The final pass corrected only verified ownership-level defects. Search preserves
+the distinction between a document handoff and a source-only excerpt; the
+workbench tolerates a cleared route target; New Research keeps the active-work
+confirmation path; the conversation Library no longer loses a bookmark made
+between visible answer completion and deferred durable exchange persistence;
+and Collection row title/metadata now lay out as separate text rows. The
+structured reader derives PDF availability from the manifest once rather than
+showing a hard-coded duplicate/untruthful limitation, and semantic
+`--surface-1`/`--surface-2` aliases now resolve correctly.
+
+Fixture evidence is also provenance-safe: the R0/R1 net-sales answer has its
+own matching Financial Statements source/reader block; the derived-PDF fixture
+is bound to its manifest/content hash; and an evidence block without complete
+PDF rectangle correspondence returns `unavailable` with no overlay. The PDF
+viewer remains usable but never labels an unverified rectangle as verified;
+the generic browser fixture likewise makes only source-supported claims.
+Regression coverage covers each of these fixes, including the bookmark timing
+race and the unmapped-PDF case.
+
+Final frontend verification: `bun run lint`, `bun run test` (`63 files / 324
+tests`), and `bun run build` passed. The explicit final receipt passed `15/15`
+in Chromium. Full one-worker/no-retry Playwright gates passed `115` tests with
+`2` intentional skips in Chromium and the same `115` passed / `2` skipped in
+Firefox. No corpus, embeddings, reranking, Qdrant, chunking, prompts, models,
+ingestion, Docker, deployment, or benchmark state changed. Reference density
+is retained only where authoritative data supports it: the narrower R0 uses its
+responsive context dock, and Models/Pipeline/Evaluation deliberately keep
+their sparse/no-report states rather than inventing records or metrics.
+
+## Truthful SEC research workbench reconciliation (2026-09-14)
+
+The accepted route reconciliation is implemented sequentially on
+`codex/bilingual-research-workspace`. The shell now owns canonical navigation,
+truthful connection/scope/model/account/storage state, responsive drawer/dock
+transitions, bilingual labels, and accessibility closure. Research, Documents,
+Search, Library, Retrieval Lab, Models, Pipeline, and Evaluation retain the
+reference composition where their semantics are supported while omitting
+fabricated identity, quota, model, timing, pipeline, candidate-count, result,
+benchmark, and confidence claims. Models is a read-only `/system/info` view;
+Pipeline is a read-only catalog/health/system serving snapshot; Evaluation has
+no recorded-demo fallback.
+
+The current PDF state is frozen: `pdfjs-dist` 6.3.289 is a frontend dependency;
+`PdfDocumentViewer` is a real PDF.js canvas/text-layer viewer; the backend owns
+the PDF artifact, manifest, content, mapping, and mapping-location routes;
+`DERIVED_PDF` is implemented and manifest/hash gated; `OFFICIAL_PDF` exists in
+schemas/helpers but the current corpus has no admitted official PDF bytes; and
+mapping highlights require exact source/chunk/hash/revision/artifact identity.
+PDF.js is dynamically loaded only after an eligible manifest is available, and
+Structured/Normalized remain the fallback. The current SEC browser allowlist is
+exact HTTPS `www.sec.gov` with `/Archives/edgar/data/` path binding; no suffix
+matching or broad host trust is used.
+
+The frontend covers request races for rapid source switching, rapid Search
+queries, pending route changes, representation switches, collapse/expand during
+reader load, cancellation followed by a new request, stale health responses,
+and storage migration/write failure. The reconciliation browser receipt maps
+each file in `docs/ui-references` to a route and captures before/after native
+viewport screenshots with overflow and truthfulness assertions.
+
+## PDF provenance-bound representation closure (2026-09-14)
+
+PDF-00 through PDF-06 are complete as a separate document-representation
+extension to the V5 workbench. The backend now owns typed `OFFICIAL_PDF` versus
+`DERIVED_PDF` manifests, source/revision/content/artifact identity, bounded
+ReportLab generation, atomic hash-bound storage, mapping sidecars, and exact
+document-bound mapping routes. The frontend uses PDF.js in the shared
+DocumentPane, preserves the selected representation across responsive remounts,
+shows truthful generated-page/official-page semantics and provenance metadata,
+and paints evidence only after exact identity/mapping validation.
+
+The current corpus inventory is still 50 `.html` plus 1 `.htm` source and no
+admitted official PDF bytes. Therefore the live PDF path is explicitly
+`DERIVED_PDF`; generated page numbers are not official SEC pagination. The
+controlled renderer is ReportLab because the backend has no browser runtime;
+this is recorded as a deliberate limitation, not an official-PDF claim.
+
+Final verification: backend `pytest -q` passed `791` tests; frontend Vitest
+passed `60 files / 295 tests`; `tsc --noEmit` and the production build passed;
+the PDF.js fixture passed `1/1` in Chromium and `1/1` in Firefox with inspected
+1440×900, 1920×1080, and 720×900 captures. Local PDF generation measured 72
+pages / 170,516 bytes / 1,515 mapped blocks in 279.9 ms for the AAPL fixture;
+browser first-page/search timings were 207/63 ms Chromium and 344/54 ms
+Firefox. The broader legacy app E2E attempt still encounters its pre-existing
+seeded-demo/template expectations and was not changed as part of PDF work.
+
+## V5.1 Workstation Composition & Visual Fidelity Pass (2026-09-13)
+
+The high-fidelity reconstruction pass matching the target 4-column workbench reference (`media_1789306659378.jpg`) has completed on `codex/bilingual-research-workspace`.
+
+- **4-Column Desktop Layout**: Sidebar with 4 categorized sections (Workspace, Build, Evaluation, Manage), bottom storage meter, and Upgrade Plan promo card; Chat with User & Assistant cards, [1]-[5] citations, action row, Pipeline Execution timeline (5 stages, 3.4s total), and bottom input composer; Retrieved Sources [5] with Insights widget (4 metrics) and Related Questions (4 clickable queries); Document Viewer with Form 10-K white document paper canvas, soft-yellow highlighted cited evidence box, context tabs, and Annotations note widget.
+- **API & Session Continuity**: Resolved offline API cause by starting the backend uvicorn service (50 companies, 10,053 chunks indexed). Resolved false expired session alert by keeping client demo session context fresh.
+- **Verification**: `tsc --noEmit` passed with 0 errors; full vitest suite passed 60/60 files, 292/292 tests; production build passed in 2.49s; full 1440x900 desktop visual capture confirmed at `screenshots/live_workbench_final.png`.
+
 ## Current SEC Research Workspace UX closure — P0–P14 (2026-09-08)
 
 The P0–P14 UX, utility, performance, architecture, and KEY5 smoke plan is
@@ -4296,3 +4698,459 @@ is not replaced by CSS viewport checks. The final preview matrix passed `152`
 tests with `4` intentional skips across Chromium and Firefox after restoring
 the complete history list and removing duplicate Recent Research action
 targets; no further step is required for V4-P07.1.
+
+## V5-00 execution checkpoint — 2026-09-13
+
+V5-00 is complete. This checkpoint establishes the repository-local V5
+workbench contract and a measured current-state baseline before implementation
+begins. The attached V5 objective/master plan remains the execution authority;
+the user-supplied product-reference image is visual guidance only and does not
+authorize unsupported PDF or backend behavior.
+
+The current UI remains the existing App shell with a primary research
+conversation and a single right-side `EvidenceWorkspaceRail`/`ContextPanel`.
+At 1440×900 and 1920×1080, the baseline capture measured a 216px navigation,
+primary column x=232 with widths 816 and 1296, and a 360px evidence rail at
+x=1064 and x=1544. Two source cards are visible, with the reader stacked below
+them inside the same rail; there is not yet a separate persistent Document
+pane. Page scroll width equals the viewport width at both targets in Chromium
+and Firefox. The detailed contract and visual evidence are in
+`docs/frontend/V5_WORKBENCH_CONTRACT.md` and the test-only
+`frontend/e2e/v5-00-baseline.spec.ts`.
+
+Validation receipts:
+
+- Frontend Vitest: `48 files / 245 tests` passed.
+- TypeScript lint and production Vite build passed; the build transformed
+  `1,993` modules.
+- Backend compileall passed; backend pytest passed `770` tests with `182`
+  existing warnings.
+- Retained Chromium/Firefox layout, regression, and structured-reader gate:
+  `66/66` passed serially.
+- Provider-free local browser gate: `6/6` passed.
+- V5-00 baseline capture: `4/4` passed across Chromium and Firefox.
+- Token contrast audit: all reported light/dark pairs passed their WCAG
+  thresholds.
+- The full serial browser run recorded `155 passed`, one existing Firefox
+  timing/modal failure in the workspace-layout A–G setup, and four intentional
+  skips. The default parallel run recorded `136 passed`, 16 timing/shared-state
+  failures, and four skips. The focused 66-test gate is the deterministic
+  checkpoint gate.
+- Real HTTP/SSE integration recorded `12 passed` and two failures in both
+  engines because the harness response did not expose the expected `Open
+  source 1` citation button. This pre-existing harness/test mismatch was not
+  changed in V5-00.
+
+No production UI runtime, backend API/DTO, async request owner, persistence
+schema, retrieval/generation behavior, model/prompt, corpus, index, Qdrant,
+reader representation, or PDF path changed. Existing state owners,
+cancellation/stale-response handling, exact evidence identity, and P07
+Library continuity remain authoritative. The pre-existing untracked
+`.audit-runtime/` and `harness_stacks.txt` were preserved; ignored `data/`
+was untouched. Playwright/Vite/harness processes were task-owned and
+self-cleaned, and no project listener remained on ports `3000`, `4173`,
+`4175`, `5173`, `8000`, `8765`, or `8766`.
+
+Known limitations remain the unimplemented four-pane target, the two real
+integration citation-button failures, unverified provider/network/long-stream/
+memory timings, and the historical external native browser-chrome zoom gate
+at 100/125/150/200%. The V5-00 rollback point is limited to its documentation
+and test-only baseline file. Exact next task: `V5-01`, typed workbench
+primitives and resizer/preference contracts only.
+
+## V5-01 execution checkpoint — 2026-09-13
+
+V5-01 is complete. The isolated typed foundation for the future workbench is
+now present, with no visible shell migration. `lib/workbench.ts` defines the
+five planned layout modes, Structured/Normalized representation type, pane
+and lower-context types, actual-geometry mode derivation, V1 pane limits and
+defaults, and the layout-only `sec_qa_workbench_panes_v1` preference envelope.
+The mode helper uses measured container width/height, navigation width, pane
+widths, and separators; it does not choose mode from `window.innerWidth`
+alone.
+
+The preference hook performs safe, non-destructive migration from the existing
+`sec_qa_context_rail_width_v1` key, clamps Sources to `280–360`, keeps
+Document in `400–560`, handles valid cross-tab updates, ignores malformed or
+future schemas, resets safely, and retains in-memory usability when storage
+fails. It persists no source content, selection, reader content, find query,
+or fullscreen state.
+
+`evidenceDeepLink.ts` preserves legacy `#evidence=<message>-<citation>` links
+and adds encoded conversation/variant/source-key identity for V5 links.
+`readerLocationView.ts` retains raw Structured and Normalized location
+responses and exposes exact/ambiguous/not-found/unavailable/stale/error
+semantics. `useWorkbenchController.ts` owns presentation/coordination only
+and generation-guards transient evidence binding outcomes; existing
+`useResearchSession`, `useEvidenceSelection`, `useReaderSession`, Library,
+and persistence owners remain authoritative. No new network request or
+backend/API contract exists.
+
+V5-01 focused foundation tests pass `18/18`; the full frontend suite passes
+`53 files / 263 tests`; TypeScript lint passes; the production build passes
+with `1,993` transformed modules; and the V5-00 Chromium/Firefox visual
+baseline capture passes `4/4` with unchanged geometry. No retrieval,
+generation, model, prompt, corpus, index, Qdrant, reader representation, or
+PDF behavior changed. The existing V5-00 browser/integration limitations,
+native zoom manual gate, and preserved untracked user files remain unchanged.
+
+Rollback is isolated to the five new modules and five focused test files; no
+data migration is required. Exact next task: `V5-02`, workbench shell, top
+bar, navigation, and scoped CSS foundation.
+
+## V5-02 execution checkpoint — 2026-09-13
+
+V5-02 is complete. The App shell now composes through
+`ApplicationWorkspace`, which mounts the V5 presentation controller and
+layout-only preferences while preserving App lifecycle, route, health/status,
+conversation, evidence, reader, Library, and dialog ownership. The
+route-local `main` is wrapped by `ResearchWorkbench`; `WorkbenchLayout`
+measures the rendered shell and navigation and writes a geometry-derived
+layout mode plus pane-width CSS variables for later pane composition.
+
+The global header is now 56px in the new shell. The final shell browser gate
+verified a 216px expanded navigation at 1440×900 and 1920×1080, with measured
+mode `context-dock` at 1440×900 and `four-pane` at 1920×1080. Compact
+navigation, EN/VI labels, dark theme, keyboard focus, route compatibility,
+landmarks, and no page horizontal overflow passed. The old
+`EvidenceWorkspaceRail` remains the intentional V5-02 rollback/presentation
+surface; the final first-class Sources and Document panes are next tasks.
+
+Validation receipts:
+
+- New shell unit/component coverage passed; the focused App/i18n/workspace
+  run passed `5 files / 27 tests`.
+- Full frontend Vitest passed `55 files / 265 tests`.
+- TypeScript lint passed; production Vite build passed with `2,000` modules
+  transformed.
+- V5-02 Chromium/Firefox shell gate passed `4/4`.
+- Retained Chromium/Firefox compatibility gate (workspace layout,
+  regression, structured reader, and V5-02 shell) passed `70/70` serially.
+- Final production-preview captures at 1440×900 and 1920×1080 were
+  visually inspected after the 56px-bar change. The shell, nav, research
+  canvas, and composer remained visible and inside the viewport. No claim is
+  made that the final Sources + Document four-pane content exists yet.
+- `git diff --check` passed with only normal line-ending normalization
+  warnings.
+
+No backend/API/DTO, query/SSE, retrieval, generation, model, prompt, corpus,
+index, Qdrant, reader representation, provenance, persistence schema, or PDF
+behavior changed. `.audit-runtime/` and `harness_stacks.txt` remain
+untouched, and ignored `data/` remains untouched. Task-owned preview/browser
+processes self-cleaned; no project listener remained on ports
+`3000`, `4173`, `4175`, `5173`, `8000`, `8765`, or `8766`.
+
+Known limitations are the still-legacy vertical evidence rail and all
+unstarted Sources/Document replacement, exact synchronization, responsive
+pane-resizer, and route-handoff tasks. Rollback is limited to the V5-02 shell
+components/style import/App composition/header-height/data-landmark changes;
+no data or backend rollback is required. Exact next task: `V5-03`,
+first-class Sources pane, with the legacy rail retained until the required
+reference sweep and coverage pass.
+
+## V5-03 execution checkpoint — 2026-09-13
+
+V5-03 is complete. Production answer-source rendering now uses the shared
+`SourcesPane` and `SourceCard`. The pane provides literal source search,
+citation-order list rendering, answer-origin All/Cited/Saved filtering, section
+navigation, explicit collapse, stable deep-link focus, and keyboard list
+navigation. Cards expose filing identity, section, readable excerpt, explicit
+saved/stale/unavailable/citation-linked state, Save Evidence, Open document,
+and advanced ranking details without confidence language.
+
+`ApplicationWorkspace` now provides workbench context to the pane.
+`ChatMessage` uses the shared disclosure fallback when no inspector callback
+exists, and `ContextPanel` uses the same pane before the existing
+`DocumentViewer`. The dead duplicate source-list functions were removed
+from `ContextPanel`; `SourcesPanel.tsx` remains only as a
+compatibility module for its direct tests/embedders and has no production import.
+The exact selected-source identity still belongs to `App`/
+`useEvidenceSelection`; reader detail/nearby fetch, cancellation, and
+generation guards remain unchanged.
+
+Validation receipts:
+
+- Full frontend Vitest passed `56 files / 271 tests`.
+- TypeScript lint passed; production Vite build passed with `2,003` modules
+  transformed.
+- New V5-03 browser coverage passed `2/2` across Chromium and Firefox,
+  and the V5-00/V5-02/V5-03 serial slice passed `10/10`.
+- Full serial browser coverage discovered `166` tests: `160 passed,
+  `4 skipped, and `2` Firefox-only timing failures in existing V4
+  reader readiness checks. An isolated rerun of those two specs passed `3/3`;
+  no production reader change was made.
+- `git diff --check` passed with only normal line-ending warnings.
+- The rebuilt Chromium preview was inspected at 1440×900; the source stack,
+  filter/search controls, saved action, selection styling, reader handoff, and
+  no-horizontal-overflow condition were visible.
+
+No backend/API/DTO, query/SSE, retrieval, generation, model, prompt, corpus,
+index, Qdrant, reader representation, provenance schema, or PDF behavior
+changed. Save Evidence continues to use the existing persistence writer and
+snapshot helper; no new storage schema was introduced. `.audit-runtime/`,
+`harness_stacks.txt`, and ignored `data/` remain untouched.
+Task-owned browser/preview processes self-cleaned.
+
+Known limitations: the source pane still composes inside the existing vertical
+`EvidenceWorkspaceRail`; independent Document pane geometry and route-specific
+catalog/search integrations remain V5-04/V5-05 work. The retained
+`SourcesPanel.tsx` module is not a production render path. Rollback is
+limited to the V5-03 pane/card/context/style/test integration; no backend, data,
+persistence, or PDF rollback is required. Exact next task: `V5-04`,
+first-class Document pane with the existing reader/provenance lifecycle retained.
+
+## V5-04 execution checkpoint — 2026-09-13
+
+V5-04 is complete. Production answer, catalog, and search document surfaces
+now enter through `DocumentPane`, which adapts the existing
+`DocumentWorkspace` and reader components into a shared workbench
+document surface. The pane provides one filing identity header, a genuine
+Structured/Normalized text switcher, an embedded reader canvas, Evidence and
+Metadata context tabs, conditional Notes only when supplied by an existing
+relationship, coordinated find text, and bounded expand/restore controls.
+Indexed excerpts remain evidence context rather than a representation.
+
+The existing Structured and Normalized readers remain authoritative for
+manifest/content/search/location requests, reader generations, cancellation,
+coverage, table truth, exact/ambiguous/not-found states, source identity, and
+SEC links. App route targets, reader sessions, source provenance, evidence
+selection, and Save Evidence persistence were not moved. The compatibility
+workspace mode and legacy tabs remain available to direct consumers.
+
+Validation receipts:
+
+- Full frontend Vitest passed `58 files / 277 tests`.
+- TypeScript lint passed; production Vite build passed with
+  `2,005` transformed modules.
+- V5-04 Chromium/Firefox browser acceptance passed `2/2`.
+- The retained V5-00/V5-02/V5-03/V5-04 serial slice passed
+  `12/12`; existing document-workspace and structured-reader
+  compatibility coverage passed `6/6` across both browsers.
+- `git diff --check` passed with only normal line-ending warnings.
+- The rebuilt 1440×900 Chromium preview was visually inspected in
+  `frontend/e2e/screenshots/v5-04-document-1440x900.png`. A
+  container-aware wrapping correction keeps the shared header controls usable
+  inside the narrow evidence inspector.
+
+No backend/API/DTO, query/SSE, retrieval, generation, model, prompt, corpus,
+index, Qdrant, provenance schema, persistence schema, or PDF behavior
+changed. The e2e fixture adds only hermetic responses for the existing
+normalized-reader contract. `.audit-runtime/`,
+`harness_stacks.txt`, and ignored `data/` remain untouched;
+task-owned preview/browser processes self-cleaned.
+
+Known limitations: the answer inspector still presents Sources and the shared
+Document pane in the existing vertical `EvidenceWorkspaceRail`.
+Independent Sources/Document geometry, resizers, collapse policy, and exact
+cross-pane synchronization remain V5-05/V5-06 work. The compatibility
+`DocumentWorkspace` module remains intentionally present.
+
+Rollback is limited to the V5-04 DocumentPane/context-tab integration, reader
+controlled-prop seam, styles/tests/fixture routes, and App/ContextPanel entry
+point substitutions. No backend, data, reader transport, provenance, or
+persistence rollback is required. Exact next task: `V5-05`,
+responsive Sources + Document geometry and explicit synchronization.
+
+## V5-05 execution checkpoint — 2026-09-13
+
+V5-05 is complete. The selected source now opens the shared Document pane with
+an exact, revision-bound evidence target. `App` resolves canonical and legacy
+deep links by exact conversation/message/variant/citation/source identity;
+missing or mismatched targets remain unavailable or closed instead of
+falling forward. Structured and Normalized readers resolve live missing-hash
+sources through the existing cache, validate the returned chunk/hash/document
+identity, and emit generation-guarded resolving/resolved/stale/unavailable/
+error events to the presentation controller.
+
+Reader location truth is explicit: exact marks require the matching chunk ID,
+hash, document/source-set revisions, verified source document, and a valid
+representation range. Ambiguous, stale, not-found, unavailable, and transport
+errors keep the selected source visible with a concise reason and render no
+yellow mark. Hashless historical snapshots are unavailable and are not
+silently refetched as current content. Exact structured block focus and the
+existing normalized nested identity contract remain intact.
+
+Validation receipts:
+
+- Full frontend Vitest passed `60 files / 288 tests`.
+- TypeScript lint passed; production Vite build passed with `2,007` modules
+  transformed.
+- V5-00/V5-02/V5-03/V5-04/V5-05 serial Chromium/Firefox acceptance passed
+  `16/16` with one worker and zero retries.
+- Existing Documents/Search exact-chunk compatibility passed `2/2` across
+  Chromium and Firefox.
+- Focused tests cover exact, ambiguous, stale hash, not-found/409,
+  unavailable historical snapshots, normalized nested identity, old/new
+  deep-link parsing, direct route targets, and rapid source switching. The
+  final structured-reader focused run passed `6/6`.
+- `git diff --check` passed with only normal LF/CRLF normalization warnings;
+  the final listener check was empty on ports `3000`, `4173`, `4175`, `5173`,
+  `8000`, `8765`, and `8766`.
+- The rebuilt 1440×900 Chromium render in
+  `frontend/e2e/screenshots/v5-05-sync-1440x900.png` was visually inspected.
+  Answer, sources, selected evidence, document identity, representation
+  controls, and reader context remained legible and inside the viewport.
+
+No backend/API/DTO, query/SSE, retrieval, generation, model, prompt, corpus,
+index, Qdrant, reader transport, provenance schema, persistence schema, or PDF
+behavior changed. Existing cache, reader request IDs, abort controllers,
+source provenance, and evidence persistence owners remain authoritative.
+`.audit-runtime/`, `harness_stacks.txt`, and ignored `data/` were preserved;
+task-owned browser/preview processes self-cleaned.
+
+Known limitations: the answer inspector still presents the Sources and shared
+Document surfaces inside the existing vertical `EvidenceWorkspaceRail`.
+Independent Sources/Document geometry, resizers, collapse policy, and the
+pane-level visual acceptance remain V5-06 work. The compatibility
+`DocumentWorkspace` module remains intentionally present.
+
+Rollback is limited to the V5-05 location validation/event seam, cached source
+resolver, exact deep-link target resolution, and focused tests/fixtures. No
+backend, data, reader transport, provenance, persistence, or PDF rollback is
+required. Exact next task: `V5-06` — responsive Sources + Document geometry,
+resizers, collapse policy, and visual acceptance.
+
+## V5-06 execution checkpoint — 2026-09-13
+
+V5-06 is complete. The V5 shell now renders the measured Research + Sources +
+Document workstation instead of placing the contextual surfaces in a legacy
+vertical rail. At 1440×900 the first-run compact navigation is 56px and the
+four-pane tracks measure Research 624px, Sources 304px, two 8px splitters, and
+Document 440px. At 1920×1080 expanded navigation is 216px and Research is
+944px with the same contextual defaults. At 1366×768 and 1280×800 the
+context-dock shows one explicitly switchable Sources/Document surface; 1024px
+uses a contextual modal and narrower widths use the existing drawer or
+single-surface lifecycle.
+
+`PaneResizer` keeps pointer motion in rAF-updated CSS variables and commits
+width state/storage only on pointer-up; cancel, keyboard Arrow/Home/End,
+Enter/Space, double-click Reset, and Wider/Narrower controls are covered.
+Sources and Document collapse retain their prior bounded widths and expose
+accessible restore actions. The embedded reader keeps a 300px minimum, while
+the lower Evidence/Metadata/Notes context is collapsible and bounded to
+`min(17rem, 32%)`, collapsing first on short tracks.
+
+Validation receipts:
+
+- Full frontend Vitest passed `60 files / 289 tests`.
+- TypeScript lint passed; production Vite build passed with `2,008` modules.
+- V5-02 shell Chromium passed `2/2`; V5-05 synchronization Chromium passed
+  `2/2` after the four-pane reader mount.
+- V5-06 responsive matrix passed `3/3` in Chromium and `3/3` in Firefox,
+  including four-pane geometry, dock tabs, modal transitions, resizer commit
+  timing, keyboard bounds, collapse/restore, and page-overflow checks.
+- Chromium renders at 1440×900 and 1920×1080 were inspected from the rebuilt
+  preview; both show Research, Sources, and Document concurrently and legibly.
+
+No backend/API/DTO, query/SSE, retrieval, generation, model, prompt, corpus,
+index, Qdrant, reader transport, provenance, persistence schema, acquisition,
+or PDF behavior changed. The hermetic e2e fixture only adds an unavailable
+reader response for a non-AAPL identity so eager wide-layout mounting remains
+network-isolated. `.audit-runtime/`, `harness_stacks.txt`, and ignored `data/`
+remain untouched; task-owned preview/browser processes self-cleaned.
+
+Known limitations: Documents, Search, Retrieval Lab, and Library still need
+their explicit V5-07 handoff/focus integration; V5-06 only moves the existing
+evidence target into the shared shell. Rollback is limited to the sibling
+composition, resizer, responsive CSS, navigation default, document context
+collapse, and V5-06 fixtures/tests/docs. Exact next task: `V5-07`.
+
+## V5-07 execution checkpoint — 2026-09-13
+
+V5-07 is complete. Documents, Search, Retrieval Lab, and Library now use the
+shared workbench document handoff while preserving their existing route-local
+state and domain owners. The Documents catalog remains mounted during a
+catalog-to-document handoff. Search result cards now present company and
+filing identity, keep indexed-excerpt inspection distinct from the explicit
+Document workspace action, expose the existing Save Evidence path, and restore
+the exact result opener. Retrieval Lab retains Analyst/Advanced diagnostics
+and score semantics while emitting a typed `RetrievalWorkspaceTarget`; its
+save/open actions restore the exact candidate opener. Library reuses the
+completed P07 saved variant/evidence behavior and restores the exact saved
+evidence invoker without changing snapshot truth.
+
+`RouteDocumentContext` places route targets in the shared contextual slot for
+four-pane/context-dock modes and uses the existing modal focus lifecycle for
+narrower modes. `App` remains authoritative for route identity and close/Back
+transitions; `ApplicationWorkspace` and the presentation controller mirror
+target/focus state only. Stable route and Library IDs provide exact focus
+restoration, and no duplicate reader tree is mounted.
+
+Validation receipts:
+
+- Full frontend Vitest passed `60 files / 291 tests`.
+- TypeScript lint passed; production Vite build passed with `2,009` modules.
+- V5-07 Chromium handoffs passed `4/4`; Firefox handoffs passed `4/4`.
+- Existing affected browser checks passed: Documents/Search exact-chunk
+  regression `1/1` and V5-04 document acceptance `1/1` in Chromium.
+- Focused route unit coverage passed `4 files / 35 tests`.
+
+No backend/API/DTO, query/SSE, retrieval, generation, model, prompt, corpus,
+index, Qdrant, reader transport, provenance, persistence schema, acquisition,
+or PDF behavior changed. The e2e fixture only adds existing reader identity
+fields. `.audit-runtime/`, `harness_stacks.txt`, and ignored `data/` were
+preserved; task-owned browser/preview processes self-cleaned.
+
+Rollback is limited to `RouteDocumentContext`, typed route targets, handoff
+callbacks, stable focus IDs, scoped CSS, and V5-07 tests/fixture updates. No
+data migration or backend/domain rollback is required. Exact next task:
+`V5-08` — visual, accessibility, browser, performance, and regression closure.
+
+## V5-08 execution checkpoint — 2026-09-13
+
+V5-08 is complete. This is the current SEC research workspace baseline and
+supersedes the earlier rail-era presentation descriptions. V5-00 through
+V5-07 were completed in order, and the final closure verified the shared
+Research + Sources + Document workbench across the required wide, short-wide,
+tablet, phone, theme, locale, keyboard, and reduced-motion states.
+
+The final wide geometry is exact: at 1440×900 compact navigation is 56px,
+Research is 624px, Sources is 304px, the two splitters are 8px each, and
+Document is 440px; at 1920×1080 expanded navigation is 216px and Research is
+944px with the same contextual tracks. 1366×768 and 1280×800 use the
+accessible context dock; 1024×768 and 1366×520 use the contextual surface;
+768px/390px use the drawer or single-surface lifecycle. The reader’s internal
+outline/canvas grid is non-shrinking, so the exact amber/yellow structured
+evidence mark and the PDF-unavailable limitation remain separated at 1440×900.
+
+Final validation receipts:
+
+- Backend `.venv\Scripts\python.exe -m pytest -q`: `770 passed`, `182 warnings`.
+- Frontend Vitest: `60 files / 292 tests` passed; TypeScript lint and the
+  production build passed with `2,009` transformed modules.
+- V5-00/V5-02/V5-03/V5-04/V5-05/V5-06/V5-07 acceptance: `15/15` Chromium
+  and `15/15` Firefox. V5-06 responsive slice: `3/3` in both engines,
+  including the new 1366×520 short-height check.
+- Full app suite: `38/38` Chromium and `38/38` Firefox. Full regression:
+  `31/31` Chromium and `31/31` Firefox. Synthetic workspace performance:
+  `2/2` executed per engine with two provider-dependent checks skipped.
+- Latest synthetic Chromium p95s: warm composer `14.00ms`, warm view
+  `42.90ms`, Markdown layout `175.70ms`, source switching p50/p95
+  `166.10/204.30ms`. Firefox: `27.00ms`, `89.00ms`, `314.00ms`, and
+  `143.00/164.00ms`. Production regression p95s for Library search/composer
+  were Chromium `62.67/43.50ms` and Firefox `68.21/40.00ms`, below the
+  200/100ms budgets.
+- Accessibility evidence passed: overview Axe serious/critical scan, contrast
+  scan, splitters/tabs/dialog focus and restoration, EN/VI, and reduced-motion
+  browser journeys. Native browser chrome zoom remains a manual gate.
+- Final project listener check was empty for ports `3000`, `4173`, `4175`,
+  `5173`, `8000`, `8765`, and `8766`. `git diff --check` remains limited to
+  normal LF/CRLF normalization warnings.
+
+No backend/API/DTO, query/SSE, retrieval, generation, model, prompt, index,
+corpus, Qdrant, acquisition, provenance, persistence, or PDF behavior changed.
+The frontend-only closure fixed the warning-token reference used by exact
+reader marks, kept the reader grid from collapsing under short wide heights,
+and updated the synthetic reader probe to traverse the real Sources → Document
+surface while accepting its documented unavailable state. `.audit-runtime/`,
+`harness_stacks.txt`, ignored `data/`, and all unrelated dirty work were
+preserved. No file was removed; no commit, deploy, benchmark promotion, or
+corpus/index regeneration was performed.
+
+Known limitations: PDF remains deferred because no provenance-bound PDF
+representation/location contract or tracked PDF corpus is in scope; native
+browser zoom remains manual. Historical entries may mention the old rail, but
+the current design and frontend contracts identify the shared workbench as
+authoritative. Rollback is limited to V5-08 frontend CSS/test-probe/fixture and
+documentation changes. Exact post-V5 next task: `PDF-01`, only after a real
+PDF contract is separately approved.

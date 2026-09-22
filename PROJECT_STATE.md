@@ -5709,3 +5709,46 @@ progress.
 
 **Exact next action: `REPAIR-005 — Restore clean-checkout/runtime dependency
 closure`.** Do not start API-006 until that separate health task is complete.
+
+## REPAIR-005 clean-checkout closure — 2026-09-22
+
+REPAIR-005 is complete. The failure was repository membership, not a new
+product defect: committed backend and frontend composition depended on
+completed source, tests, contracts, and authority assets that still existed
+only in the historical dirty tree. A detached checkout at `1585444` reproduced
+`ModuleNotFoundError: No module named 'src.api.sec_urls'`; the same checkout's
+TypeScript graph reported missing route, conversation, workbench, reader,
+source, console, and stylesheet modules plus their tracked companion type/prop
+mismatches.
+
+The closure was committed in five bounded groups:
+
+- `1931f87` — backend runtime source closure;
+- `0114cb6` — backend contract/fixture closure;
+- `05df347` — frontend runtime source closure;
+- `59dfaa9` — frontend unit/component/browser contract closure;
+- `17dafe2` — rebuild plans, V5 contract, current docs, and nine reference PNGs.
+
+A detached worktree at `17dafe2` imported all restored backend modules from its
+own directory and composed `63` routes. Focused backend contracts passed
+`341/341`; the full hermetic backend suite passed `1001`, skipped `34`, and
+reported `148` warnings with no failures. The short skip report attributes every
+skip to an unavailable git-ignored evaluation artifact or local filing/corpus.
+Clean-checkout frontend validation
+passed TypeScript, production build (`2060` modules), and Vitest (`75` files /
+`507` tests). No browser suite was rerun because the repair commits the runtime
+and contracts already exercised in the active tree without changing their
+behavior. No network/provider flow was invoked.
+
+The original 59 tracked modifications and 77 untracked status entries were
+classified before staging. Required completed source/tests/docs were committed;
+generated/runtime/tool artifacts and ad-hoc diagnostics remain untracked and
+preserved. No reset, clean, restore, stash, deletion, mass staging, data
+regeneration, architecture redesign, or roadmap feature implementation was
+performed.
+
+The clean-checkout blocker is closed. The separate memory-only local
+connection/token owner remains an intentional staged limitation; API-001 was
+not weakened and no token was persisted or embedded. UI-008 remains the latest
+completed product task, API-006 has not started, and the next product task may
+now return to `API-006 — Model/dataset registries` under a separate scope.

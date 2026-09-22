@@ -4168,3 +4168,174 @@ feature is in progress. **Exact next action: `REPAIR-005 — Restore
 clean-checkout/runtime dependency closure`.** After that separate task is
 completed, roadmap work may resume with API-006. Do not begin either task as
 part of this closure.
+
+## REPAIR-005 — Clean-checkout/runtime dependency closure
+
+### REPAIR-005-A — Recovery and investigation start
+
+Status: ACTIVE. Starting HEAD is `1585444` on
+`codex/bilingual-research-workspace`. The active tree matches the recorded
+handoff: 59 tracked modifications, 77 untracked entries, 136 status paths, and
+0 staged files. All are being treated as potentially intentional until
+classified.
+
+Known failure: the committed application is not source-complete in a clean
+checkout. Tracked backend composition imports untracked modules including the
+PDF representation/generator, SEC URL helper, and router package; the tracked
+frontend entry graph also resolves through multiple untracked source files in
+the active tree. This stage records the failure as unproven until reproduced
+from a detached worktree at `1585444`.
+
+Investigation method: reproduce `import src.api.app` in a temporary detached
+worktree; statically trace Python and TypeScript imports from tracked runtime and
+committed tests; inspect non-import assets/manifests and history; classify each
+required untracked candidate as source, test/contract, authority, future work,
+artifact, diagnostic, or mixed ownership; then stage only evidence-backed
+closure batches. The final proof will use a second clean detached worktree at
+the resulting committed HEAD. No file is staged at REPAIR-005-A, and API-006 is
+explicitly out of scope.
+
+### REPAIR-005-B — Dependency graph and candidate classification
+
+Status: COMPLETE. A detached worktree at `1585444` reproduced the backend
+failure from source-only state:
+`ModuleNotFoundError: No module named 'src.api.sec_urls'` while importing
+`src.api.app`. Running from the active checkout had initially contaminated the
+namespace-package search path; rerunning with the detached worktree as the
+process directory produced the authoritative failure. The same checkout's
+TypeScript graph reported missing route, conversation, workbench, reader,
+source-presentation, SEC URL, console, and stylesheet modules plus companion
+type/prop mismatches where committed call sites relied on completed-but-dirty
+tracked edits.
+
+Classification:
+
+- **A — required source closure:** `src/api/sec_urls.py`,
+  `src/api/pdf_generator.py`, `src/api/pdf_representation.py`, and the untracked
+  router package files for cache, corpus, evaluations, health, sessions,
+  system, and workspace transfer (plus `routers/__init__.py`). These are direct
+  imports of committed `src/api/app.py`, principally introduced by `a0f7a80`;
+  ReportLab and the additive PDF reader manifest/model fields are their required
+  tracked companions. Frontend source closure comprises `src/app/routes.ts`,
+  the current Models/Pipeline route components, PDF viewer, conversation shell
+  components, UI foundation exports, workbench/reader hooks, SEC/source/deep-link
+  helpers, DATA-002 browser workspace helpers, legacy-seed guard, and the
+  workbench/console/primitives/PDF styles. Documented tracked companion edits in
+  `frontend/src`, the package/lock manifests, SPA rewrite, and `.local/` ignore
+  rule belong to already-completed UI-001–UI-008, V5, PDF, and DATA work and are
+  needed for the committed call sites/types to agree.
+- **B — required test/contract closure:** the backend PDF, SEC URL, API-001,
+  DATA-001, DATA-002 and transfer canonicalization suites and shared JSON
+  fixture; the corresponding tracked API/harness adjustments; frontend route,
+  foundation, conversation, workbench, reader, deep-link, SEC URL, legacy-seed,
+  workspace backup/repository, collection-favorite, and API tests; and completed
+  browser contracts for UI routing, UI-003, V5-00/02/04/05/07, PDF viewer, and
+  the nine-reference receipt. Existing tracked browser/test edits that target
+  these completed contracts are part of the same test closure.
+- **C — documentation/reference authority:**
+  `docs/UI_REBUILD_MASTER_PLAN.md`, `docs/UI_REFERENCE_GAP_MATRIX.md`,
+  `docs/frontend/V5_WORKBENCH_CONTRACT.md`, and the nine specifically named
+  reference PNGs under `docs/ui-references/`. Tracked README, architecture,
+  frontend design, and implementation journal edits describe the same completed
+  source and remain documentation candidates rather than runtime inputs.
+- **D — unfinished future work:** no candidate source file implements API-006,
+  UI-009, DATA-004, or later work. `ModelsConsole.tsx` and
+  `PipelineConsole.tsx` are classified A because committed routes import their
+  existing read-only/current-state placeholders; they contain no registry,
+  switching, durable-job, or pipeline mutation implementation.
+- **E — generated/tool/runtime artifact:** `.audit-runtime/`, `.mimosa/`, both
+  frontend equivalents, `screenshots/`, `harness_stacks.txt`, generated build
+  and browser outputs, databases/WAL/SHM, caches, logs, traces, videos,
+  `node_modules`, and virtual environments remain excluded.
+- **F — obsolete/ad-hoc diagnostic:** `frontend/e2e/capture-ui-round.mjs`,
+  `probe-box.mjs`, `probe-contrast.mjs`, `.zcodeignore`, and the stale
+  `PROJECT_CONTEXT.md` handoff are not required by the current build or test
+  graph. `frontend/e2e/v5-1-visual-capture.spec.ts` is also excluded: it is a
+  one-off capture script with a developer-specific absolute output path, not a
+  portable test contract.
+- **G — ambiguous mixed ownership:** resolved. The tracked dirty frontend
+  source/tests named by completed checkpoint receipts are eligible companion
+  closure; unrelated artifact/diagnostic paths above are not. No source file
+  requires splitting future API-006 behavior from current behavior.
+
+Planned coherent batches: backend runtime; backend tests/contracts; frontend
+runtime and completed companion source; frontend tests/contracts; authoritative
+planning/reference assets; final checkpoint/project-state closure. No files
+were staged while building this inventory.
+
+### REPAIR-005-C — Backend source closure
+
+Status: COMPLETE. Commit `1931f87` (`fix(repo): restore backend runtime source
+closure`) adds the eleven missing backend modules and the tracked ReportLab/PDF
+reader contract companions. A staging check caught and removed one extra blank
+line at EOF before the commit was amended; `git show --check` is clean.
+
+Focused source validation passed `51/51` across router inventory, PDF pipeline,
+SEC URL safety, document sources, original viewer, structured document, and
+structured location tests. A clean detached worktree at
+`D:\Project\Enterprise_Document_QA-repair005-backend`, commit `1931f87`, then
+imported `src.api.app`, every current router module, the PDF generator/store,
+and SEC URL helper exclusively from that worktree; the application composed 63
+routes. The active checkout was not used as a Python source path for this proof.
+
+### REPAIR-005-D — Test and frontend closure
+
+Status: COMPLETE. Commit `0114cb6` (`test(repo): restore backend contract
+closure`) adds the PDF, SEC URL, local-access, workspace persistence/transfer,
+and canonical transfer tests plus their shared fixture and harness companions.
+Its focused backend contract gate passed `251/251`; `git show --check` is clean.
+
+Commit `05df347` (`fix(repo): restore frontend runtime source closure`) restores
+the completed application routing, conversation/workbench, reader/PDF,
+workspace, source/deep-link, console, style, dependency, and deployment
+companions required by the committed frontend graph. TypeScript and the
+production build passed before commit with `2060` modules transformed; the only
+build diagnostic was the existing chunk-size advisory. Commit `59dfaa9`
+(`test(repo): restore frontend contract closure`) adds the matching unit,
+component, and maintained browser contracts. The active-tree Vitest gate passed
+`75` files / `507` tests before that test commit. The ad-hoc capture/probe files
+and developer-path visual-capture spec remain excluded.
+
+### REPAIR-005-E — Documentation and reference authority
+
+Status: COMPLETE. Commit `17dafe2` (`docs(repo): restore rebuild authorities
+and references`) adds the master dependency plan, reference-gap matrix, V5
+workbench contract, and the nine named PNG reference authorities, and commits
+their existing README, architecture, design, and implementation-journal
+companions. Every reference file has the PNG signature. A developer-specific
+source path in the V5 contract was replaced with the repository-relative copy;
+staged secret/path and whitespace checks found no actionable finding.
+
+### REPAIR-005-F — Clean-checkout proof and closure
+
+Status: COMPLETE. A new detached worktree at commit `17dafe2` was used for all
+proof commands. `src.api.app`, every restored router, the PDF generator/store,
+and SEC URL helper imported from the detached worktree itself, and FastAPI
+composed `63` routes. The focused backend cross-layer gate passed `341/341`.
+The complete hermetic backend suite passed `1001`, skipped `34`, and reported
+`148` warnings with no failures. `pytest -rs` confirmed that every skip was for
+an unavailable git-ignored evaluation artifact or local filing/corpus.
+TypeScript (`bun run lint`) passed, the production build passed with `2060`
+modules transformed, and clean-checkout
+Vitest passed `75` files / `507` tests. The build emitted only the existing
+chunk-size advisory.
+
+No browser matrix was rerun because REPAIR-005 changes repository membership,
+not the already-active runtime behavior that previously passed the focused
+production-like UI-008 browser gate. No provider, SEC, Hugging Face, Groq, or
+Qdrant network call was made. API-006 and later registry/job behavior were not
+implemented.
+
+Repository hygiene: five coherent source/test/authority commits close the
+runtime graph without mass staging. Generated output, runtime databases,
+scanner state, screenshots, debug probes, stale handoff material, and the
+developer-specific capture test remain untracked and preserved. The final
+documentation commit records the proof and project-state transition; no
+historical receipt was rewritten.
+
+Roadmap status: REPAIR-005 is complete. The clean-checkout blocker no longer
+precedes product work. The browser still lacks the planned memory-only local
+connection/token owner; API-001 remains unchanged, and Collections continues to
+show its truthful unavailable/unauthorized state until that staged integration
+is implemented. Subject to normal task scoping, the next product task remains
+`API-006 — Model/dataset registries`.

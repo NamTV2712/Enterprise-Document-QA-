@@ -194,7 +194,7 @@ def test_cors_preflight_allows_configured_frontend(client) -> None:
             "Origin": "http://localhost:3000",
             "Access-Control-Request-Method": "POST",
             "Access-Control-Request-Headers": (
-                "content-type,ngrok-skip-browser-warning"
+                "authorization,content-type,ngrok-skip-browser-warning"
             ),
         },
     )
@@ -205,6 +205,7 @@ def test_cors_preflight_allows_configured_frontend(client) -> None:
     assert "ngrok-skip-browser-warning" in response.headers[
         "access-control-allow-headers"
     ].lower()
+    assert "authorization" in response.headers["access-control-allow-headers"].lower()
 
 
 @pytest.mark.parametrize(
@@ -212,7 +213,7 @@ def test_cors_preflight_allows_configured_frontend(client) -> None:
     [
         ("https://untrusted.example", "POST", "content-type"),
         ("http://localhost:3000", "PUT", "content-type"),
-        ("http://localhost:3000", "POST", "authorization"),
+        ("http://localhost:3000", "POST", "x-unapproved-workspace-header"),
     ],
 )
 def test_cors_preflight_rejects_unapproved_access(
@@ -376,7 +377,7 @@ def test_stream_sources_preserve_additive_source_metadata(client, mock_pipeline)
                 "ticker": "AAPL",
                 "section": "risk_factors",
                 "filing_date": "2025-10-31",
-                "source_url": "https://www.sec.gov/Archives/example",
+                "source_url": "https://www.sec.gov/Archives/edgar/data/example/filing.htm",
                 "rank": 1,
                 "score_kind": "retrieval",
             }],
@@ -387,7 +388,7 @@ def test_stream_sources_preserve_additive_source_metadata(client, mock_pipeline)
 
     assert response.status_code == 200
     assert '"document_id": "AAPL:0001"' in response.text
-    assert '"source_url": "https://www.sec.gov/Archives/example"' in response.text
+    assert '"source_url": "https://www.sec.gov/Archives/edgar/data/example/filing.htm"' in response.text
     assert '"score_kind": "retrieval"' in response.text
 
 
@@ -554,7 +555,7 @@ def test_reader_manifest_route_returns_typed_local_contract(client, monkeypatch)
         ],
     }
     monkeypatch.setattr(app_module, "_find_document_row", lambda _document_id: row)
-    monkeypatch.setattr(app_module, "build_reader_manifest", lambda _row, viewer, structured_reader=None: manifest)
+    monkeypatch.setattr(app_module, "build_reader_manifest", lambda _row, viewer, structured_reader=None, pdf_availability=None: manifest)
 
     response = client.get("/documents/AAPL:0000320193-25-000079/reader")
 

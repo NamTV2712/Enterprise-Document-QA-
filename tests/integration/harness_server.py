@@ -36,6 +36,8 @@ import os
 import socket
 import sys
 import tempfile
+import time
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
@@ -169,6 +171,82 @@ class FakeRetriever:
 
             time.sleep(1.2)
         return [_chunk(ticker)]
+
+    def inspect(
+        self,
+        query: str,
+        top_k: int = 5,
+        ticker: str | None = None,
+        section: str | None = None,
+        candidate_pool: int = 10,
+        preset: str = "hybrid_rerank",
+    ) -> dict[str, Any]:
+        """Return a deterministic provider-free trace with the production shape."""
+        if preset not in {"bm25", "dense", "hybrid", "hybrid_rerank"}:
+            raise ValueError(f"unsupported retrieval preset: {preset}")
+        started = time.perf_counter()
+        top_k = max(1, min(top_k, 10))
+        candidate_pool = max(top_k, min(candidate_pool, 50))
+        tokens = set(re.findall(r"[a-z0-9]+", query.lower()))
+        filtered = [
+            chunk for chunk in self._all_chunks
+            if (ticker is None or chunk["ticker"] == ticker)
+            and (section is None or chunk["section"] == section)
+        ]
+        scored = sorted(
+            filtered,
+            key=lambda chunk: (
+                len(tokens.intersection(re.findall(r"[a-z0-9]+", chunk["text"].lower()))),
+                -int(chunk["chunk_index"]),
+                chunk["chunk_id"],
+            ),
+            reverse=True,
+        )[:candidate_pool]
+        if preset == "dense":
+            ordered = list(reversed(scored))
+        else:
+            ordered = scored
+        selected = ordered[:top_k]
+        selected_ids = [chunk["chunk_id"] for chunk in selected]
+        candidates = []
+        for rank, chunk in enumerate(ordered):
+            overlap = len(tokens.intersection(re.findall(r"[a-z0-9]+", chunk["text"].lower())))
+            candidates.append({
+                "chunk_id": chunk["chunk_id"],
+                "ticker": chunk["ticker"],
+                "section": chunk["section"],
+                "filing_date": chunk["filing_date"],
+                "citation": RetrievedChunk.from_raw(chunk, score=0.0).citation,
+                "text_preview": chunk["text"][:240],
+                "bm25_score": float(overlap),
+                "bm25_rank": rank + 1,
+                "dense_score": round(1.0 / (rank + 1), 6),
+                "dense_rank": rank + 1,
+                "lexical_rank": rank + 1,
+                "rrf_score": round(1.0 / (60 + rank + 1), 8),
+                "cross_encoder_score": None,
+                "fusion_rank": rank + 1,
+                "final_rank": rank + 1 if chunk["chunk_id"] in selected_ids else None,
+                "selected": chunk["chunk_id"] in selected_ids,
+            })
+        elapsed_ms = round((time.perf_counter() - started) * 1000, 3)
+        return {
+            "preset": preset,
+            "query": query,
+            "filters": {"ticker": ticker, "section": section},
+            "top_k": top_k,
+            "candidate_pool": candidate_pool,
+            "models": {"embedding": None, "reranker": None, "rrf_k": 60},
+            "stages": [
+                {"name": "fixture_filter", "elapsed_ms": elapsed_ms},
+                {"name": "ranking", "elapsed_ms": elapsed_ms, "skipped": preset == "dense"},
+            ],
+            "candidates": candidates,
+            "selected_chunk_ids": selected_ids,
+            "candidate_count": len(candidates),
+            "selected_count": len(selected_ids),
+            "elapsed_ms": elapsed_ms,
+        }
 
 
 class FakeGenerator:

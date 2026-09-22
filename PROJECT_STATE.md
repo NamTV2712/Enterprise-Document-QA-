@@ -5,7 +5,9 @@
 UI-009 is complete. `/models` and `/datasets` are now available product routes
 over the completed API-006 registry contract. The implementation commit is
 `b35e1b5` (`feat(ui): build truthful model and dataset registries`). The backend
-and its 67-route contract are unchanged.
+and its 67-route contract are unchanged. Public/frontend contracts and the
+validation record are commit `34b5b72` (`docs(ui): close UI-009 registry
+workspace`).
 
 Models reads `GET /models` with the API's optional role filter and selects by
 the stable backend ID. Generator, embedding, and reranker entries keep

@@ -4639,6 +4639,8 @@ passes `6/6` across Chromium and Firefox.
 Status: COMPLETE. Runtime and test implementation is commit `b35e1b5`
 (`feat(ui): build truthful model and dataset registries`). The backend, package
 graph, corpus/index data, route count, and API-006 contract are unchanged.
+Public/frontend contracts, the project journal, and validation record are
+commit `34b5b72` (`docs(ui): close UI-009 registry workspace`).
 Production contains no reference fixture data, fake health/benchmark/cost
 metric, secret, key, environment dump, private path, provider call, or dataset
 mutation. Playwright screenshots/traces/videos, `dist`, test results, and audit

@@ -3482,3 +3482,104 @@ artifact/dependency audit, documentation, commits, then select the next task.
 
 Read the full-suite result, classify any failure, then finish the audits, docs
 and commits.
+
+## DATA-003-G Checkpoint (commit, clean-checkout proof, audits, next task)
+
+DATA-003 — Typed collections. Status: **COMPLETE**. Commit
+`d0ffd91 feat(data): add typed collections over the versioned workspace store`
+— 17 files, +5362/-2: the typed domain (`src/workspace/collections.py`), its
+protected HTTP surface (`src/api/routers/collections.py`, request models in
+`src/api/schemas.py`, route registration in `src/api/app.py`), the four test
+modules, the route-inventory contract update, and the two documents.
+
+The same commit also carries the still-untracked predecessor modules this
+surface imports at module scope (`src/workspace/database.py`,
+`migrations.py`, `repository.py`, `transfer.py`, `__init__.py`, and
+`src/api/access.py`). Nothing else was swept in: the rest of the rebuilt API
+surface (`src/api/sec_urls.py`, `pdf_*`, the sibling routers) remains untracked,
+so a clean checkout of this commit still cannot import `src.api.app`. That is a
+property of this branch's accumulated uncommitted rebuild, not of DATA-003, and
+it is recorded in the commit body as well.
+
+### Gates Run
+
+- Full hermetic backend suite: 1018 passed, 0 failed, 188 warnings (baseline
+  before DATA-003: 969 passed / 0 failed / 188 warnings — +49 tests, warnings
+  unchanged).
+- Focused DATA-003 tests: 49 pass (18 domain, 13 repository, 6 transfer, 12 API)
+  plus the route-inventory contract.
+- Focused DATA-001/DATA-002 regressions: 105 pass.
+- `compileall` and direct import checks pass; `git diff --check` reports no
+  whitespace errors (CRLF conversion notices only); no runtime artifacts
+  (`*.sqlite3`, `*.db`, `*.wal`, `*.shm`, debug or scratch files) were added, and
+  the scanned/generated directories (`frontend/dist-*`,
+  `frontend/playwright-report/`) stay gitignored.
+
+### Clean-Checkout Proof
+
+A detached worktree at `d0ffd91` (`git worktree add --detach … d0ffd91`) was
+used to check what the commit supports on its own:
+
+- 37 domain/repository/transfer tests pass there, and
+  `src.workspace.collections`, `src.workspace.transfer`,
+  `src.api.access` and `src.api.routers.collections` all import, so the DATA-003
+  surface is self-contained apart from the untracked siblings noted above.
+- The API-level modules (`test_collections_api.py`,
+  `test_api_router_contracts.py`) cannot be collected in that worktree because
+  `src.api.app` imports the untracked sibling modules. They pass in the working
+  tree, where the full suite was run.
+- The temporary worktree was removed afterwards; `git worktree list` shows only
+  the main checkout.
+
+### Post-Commit Security Audit
+
+Mimosa deep scan (job `scan-job-muc4xujj-423103b106bb0b0b`, scan
+`scan-2026-09-22T03-49-58.894Z-12e92579cdfd`, seal
+`sha256:73d868fda65910240a597cd3a09b2421ac85bdb967d79d25cd812a8e225dc0fe`,
+static-only, verdict effect none): 307 findings repo-wide (65 high, 242
+medium), 97 packages scanned with 7 matched packages / 29 advisories / 4
+unknown. Findings by location:
+
+- 303 of 307 are inside generated bundles that are scanned as source
+  (`frontend/dist-local/assets/*`, `frontend/dist-integration/assets/*`,
+  `frontend/playwright-report/trace/*`) — minified vendor JS, not our code.
+- 3 medium cross-file taint hypotheses on `frontend/src/App.tsx:2562/2565/2568`
+  point at a URL-to-`child_process` path inside a minified code-mirror bundle;
+  not DATA-003-owned, not reachable from the collections surface.
+- 1 high SQL-injection finding at `src/workspace/database.py:138` — the
+  `PRAGMA busy_timeout` statement. Reviewed: the interpolated value is
+  `busy_timeout_ms`, an `int` that the class validates to 100..30000 and that
+  settings clamp with `Field(default=5000, ge=100, le=30_000)`; it comes from
+  operator configuration, never from a request, and SQLite accepts no bind
+  parameter for PRAGMA, so no injection path exists. No code change made, and
+  the file is DATA-001's, not DATA-003's.
+
+**No DATA-003-owned file carries a finding.**
+
+### Disclosure
+
+`src/api/app.py` and `src/workspace/repository.py` were already dirty from
+predecessor tasks before DATA-003 touched them; the diff carries that
+inseparable earlier work (`app.py` gained the DATA-001/DATA-002 wiring lines
+alongside the collections router registration, and `repository.py` is the
+DATA-001 file that needed the one allowlisted entity type). `PROJECT_STATE.md`
+and this checkpoint file are shared journals whose staged hunks are exclusively
+the DATA-003 sections.
+
+### Next Task Selection (from the master plan)
+
+`docs/UI_REBUILD_MASTER_PLAN.md` §21 orders the graph and lists the task table.
+With DATA-003 complete, its dependents are evaluated in table order:
+`DATA-003` (496) → `UI-008 Collections` (497) → `API-006 Model/dataset
+registries` (498). `UI-008` declares dependencies `UI-002, DATA-003, UI-004` —
+all three are complete (UI-002 shell/router, DATA-003 typed collections, UI-004
+source/document composition), so `UI-008` is the first dependency-ready task in
+the saved priority order. `API-006` depends only on `API-002` and is ready too,
+but it follows `UI-008` in the ordering and is not the next entry.
+
+### Exact Next Action
+
+**UI-008 — Collections** (dependencies `UI-002`, `DATA-003`, `UI-004`; area:
+Collections feature; gate: save/export/reopen/stale). Do not implement it, and
+do not begin `API-006`, `UI-009`, `DATA-004`, `DATA-005`, or any later task
+without explicit authorization.

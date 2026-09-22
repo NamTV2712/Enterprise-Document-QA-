@@ -63,6 +63,19 @@ inventory contract, which grew to include the new protected routes. Full hermeti
 backend suite: 1018 passed, 0 failed, 188 warnings — the warning count is
 unchanged from the baseline.
 
+Committed as `d0ffd91` (17 files). That commit also carries the still-untracked
+predecessor modules the surface imports at module scope
+(`src/workspace/{database,migrations,repository,transfer}.py`,
+`src/workspace/__init__.py`, `src/api/access.py`); the rest of the rebuilt API
+surface stays untracked, so a clean checkout of the commit cannot yet import
+`src.api.app`. A detached worktree at that commit runs the 37
+domain/repository/transfer tests and resolves the collections import closure,
+while the API-level tests need the working tree. The post-commit Mimosa deep
+scan attributes no finding to any DATA-003 file; its one high SQL-injection
+finding is `src/workspace/database.py`'s `PRAGMA busy_timeout`, which
+interpolates an `int` clamped to 100..30000 from operator configuration and is
+not reachable from a request.
+
 ## UI-007 Retrieval and Reranker (2026-09-22)
 
 UI-007 is complete. The Retrieval page is rebuilt against

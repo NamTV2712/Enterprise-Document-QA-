@@ -2802,3 +2802,326 @@ dependency-ready. Do not begin either without a new instruction.
   Search receipts, including `search-1586x992-<engine>.png` for the
   reference-native comparison and `search-{no-match,expired}-<engine>.png` for
   the distinct states.
+
+## UI-007-A Quota-Safe Checkpoint (recovery, contract, references, API-005 mapped)
+
+### Active Task
+
+UI-007 — Retrieval/Reranker. Status: ACTIVE (A complete; implementation
+starting).
+
+### Recovery Verified
+
+- HEAD `edb7068` (UI-006 record) on `codex/bilingual-research-workspace`; dirty
+  tree 143 paths. UI-001…UI-006, API-001…API-005, DATA-001/DATA-002, TEST-001
+  complete. No partial UI-007 work exists.
+- Master-plan row: `| UI-007 | Retrieval/Reranker | UI-002, API-005 | Engineering
+  features | Same pool/raw scores | UI-006 |` — both dependencies complete, so
+  UI-007 is the correct Exact Next Action.
+
+### Master-Plan UI-007 Scope (read, not inferred)
+
+- Retrieval: visual "engineering controls, four metrics, ranked table, excerpt
+  preview"; frontend "stage columns, selected/dropped filters, diagnostic
+  labels"; backend/API "additive document/date filters and versioned trace";
+  persistence "explicit saves only; queries are not telemetry"; risks
+  "inspection confused with production structured promotion"; tests "legacy
+  compatibility, unchanged production, raw scores"; done "named stage semantics
+  including not-executed stages".
+- Reranker: visual "fusion/cross-encoder comparison from one trace"; reuse
+  "inspection trace and model identity"; frontend "rank movement, raw scores,
+  metadata/query context, accessible plot/table"; risks "scores treated as
+  probabilities or unequal pools compared"; tests "negative scores, ties,
+  skipped stage, same-pool identity"; done "actual scores from the same
+  candidates".
+- Gap-matrix rows owned here: query/preset/parameters (P1), document filters
+  (P1), counts (P0), stage scores (P1), structured promotion / not-executed
+  label (P0), selected/dropped (P1), evidence preview (P1), export/save/open
+  (P1).
+
+### Retrieval Reference Measured
+
+`docs/ui-references/retrieval-ui-reference-dark-v1.png` — 1586x992. Same shell
+as the other references: 204px navigation, 56px top bar, ~972px main column,
+~390px right rail.
+
+- Page header: icon tile + "Retrieval" + subtitle, with three page actions
+  ("Query Examples", "Saved Searches", overflow) that have no capability here.
+- "Retrieval Query" card (~160px tall): a bold label, a full-width query field
+  (~44px) holding the submitted question, one filter row of three ~44px selects
+  (Company, Document/Section, Search Preset), an "Advanced Filters" button, and
+  a primary "Run Retrieval →" button.
+- Metric row: four cards (~235x90) each with an icon, a large value, a bold
+  label and a 12px hint: "128 Candidates Retrieved / From 12 document sections",
+  "20 Selected Results / Top relevant chunks", "1.8s Retrieval Latency / 0.6s
+  search + 1.2s rerank", "Reranker Active / bge-reranker-v1.5 / Re-ranked 128
+  candidates".
+- "Retrieved Results" card: header with title/subtitle and right-side controls
+  ("Show only top results" toggle, "Relevance" select, "20 per page" select); a
+  table with #, Score, Content Preview, Source, Page and Actions columns; ~64px
+  rows where the first row is selected (tinted, bordered); a score pill on each
+  row; a footer with "Showing 1–5 of 128 results" and a numbered pager.
+- Rail "Evidence Preview": document identity line (company, filing, form/FY),
+  a section eyebrow, a section heading, the highlighted excerpt, a
+  "Relevance to query" bar with a value, "Related topics" chips, and an actions
+  row (Open in Document, Save as Evidence, overflow).
+
+### Reranker Reference
+
+**There is no reranker reference screenshot.** `docs/ui-references/` holds nine
+images and none is a reranker; the gap matrix states it explicitly ("Reranker,
+Analytics, Datasets and Settings are additionally specified in the master plan,
+without inventing extra reference screenshots"). The Reranker page is therefore
+built from the master-plan bullets above and reuses the Retrieval page's own
+visual language, with the same-pool guarantee as its acceptance criterion.
+
+Truthful deltas recorded before coding: no page actions; no "Advanced Filters"
+button (the real request bounds stay inline as labelled controls); no page
+column (the corpus records no page numbers); no "Relevance" percentage bar and
+no qualitative relevance wording; no "Related topics" chips; the latency card's
+breakdown is derived from the trace's own stage durations rather than invented;
+the reranker identity shown is the trace's reported model, and when the reranker
+stage did not run the card states that instead of naming a model.
+
+### API-005 Contract (verified in source)
+
+`POST /retrieval/inspect`, rate limit `10/minute`.
+
+- Request: `question` (5..500), `ticker`, `section` (five canonical values),
+  `document_id` (opaque token), `filing_date` (YYYY-MM-DD), `year`, `top_k`
+  (1..10, default 5), `candidate_pool` (10..50, default 10), `preset`
+  (`bm25` | `dense` | `hybrid` | `hybrid_rerank`, default `hybrid_rerank`).
+- Response: `query_interpretation` plus `trace`, where the trace carries
+  `trace_version` (`retrieval-trace-v1`), `preset`, `query`, `filters`,
+  `top_k`, `candidate_pool`, `models{embedding, reranker, rrf_k}`,
+  `score_semantics{applies_to_preset, note, families}`, `production_parity`,
+  `stages[]`, `candidates[]`, `selected_chunk_ids`, `candidate_count`,
+  `selected_count`, `elapsed_ms`, and route-added `filter_values` and `scope`.
+- Stages: `embedding`, `bm25`, `dense`, `lexical_ladder` (`executed` with a
+  duration), `reranker` (`executed` or `skipped`, with `skipped` and `reason`),
+  and `structured_promotion` (`not_executed` with `elapsed_ms: null` and a
+  reason).
+- Candidates: `chunk_id`, route-injected `document_id`, `ticker`, `section`,
+  `filing_date`, `citation`, `text_preview`, `bm25_score`/`bm25_rank`,
+  `dense_score`/`dense_rank`, `lexical_rank`, `fusion_rank`, `rrf_score`,
+  `cross_encoder_score`, `final_rank`, `selected`, `dropped_reason`.
+- Score families are explicitly distinct and non-comparable: `bm25_score`
+  (lexical, unbounded positive), `dense_score` (store's own similarity scale),
+  `rrf_score` (fusion, sum of reciprocal ranks, not comparable across queries),
+  `cross_encoder_score` (reranker logit, only comparable within one pool). The
+  API states none of them is a confidence, accuracy, or probability.
+- `dropped_reason` is one of `ranked_below_top_k`, `outside_candidate_pool`,
+  `not_in_selected_preset_stage`, or null — null means the trace cannot prove a
+  reason, so the UI must not invent one.
+- `scope`: `{documents, eligible_document_ids (bounded), truncated, reason}` —
+  the truncated flag must be surfaced rather than presenting a bounded list as
+  complete.
+- `production_parity`: `structured_promotion` and
+  `lexical_ladder_merge_into_final` both `not_executed`, with the reason that
+  inspection exposes ranking stages only.
+
+### Existing Implementation Mapped
+
+- `frontend/src/components/RetrievalLabPanel.tsx` (605 lines) owns `/retrieval`
+  today: query textarea, ticker/section/preset, top-k and candidate-pool range
+  fields, a compare-preset feature (two POSTs), analyst/advanced mode tabs, four
+  stat cards, a table with optional stage columns, an evidence rail with stage
+  chips, and JSON/CSV export. It predates API-005's newer fields: no
+  `trace_version`, `score_semantics`, `production_parity`, `scope`,
+  `filter_values`, `dropped_reason`, and no `not_executed` stage handling.
+- `/reranker` currently resolves to `workspaceView: "retrieval"` (route
+  `availability: "partial"`), so it renders the same retrieval page today.
+- `frontend/src/lib/api.ts` owns `inspectRetrieval` (question, ticker, section,
+  top_k, candidate_pool, preset) — it does not yet send `document_id`,
+  `filing_date`, or `year`.
+- `frontend/src/types.ts` has `RetrievalCandidate`/`RetrievalTrace`/
+  `RetrievalInspectResponse` with stages (including `status`) but not the newer
+  trace fields.
+- Preserved contracts: `RetrievalWorkspaceTarget` (`kind: "retrieval"`), focus
+  ids `retrieval-document-workspace-<chunk>`, `[data-workbench-route-origin='retrieval']`,
+  the submit accessible name "Run retrieval", the "Provider-free" chip, and the
+  `retrieval-analyst-summary` test id asserted by V5-07.
+- `frontend/e2e/fixtures.ts` mocks `/retrieval/inspect` with a minimal trace
+  (one AAPL candidate, one stage, no semantics/parity/scope) that UI-007
+  replaces with the full API-005 shape while keeping that candidate identity.
+
+### OpenCode Invocation Verified
+
+- CLI present: `opencode` 1.18.32. Non-interactive form verified by running it:
+  `opencode run "<message>" -m opencode/muse-spark-1.3-contributor-free
+  --variant xhigh --dir "D:/Project/Enterprise_Document_QA"`.
+- `opencode models` lists `opencode/muse-spark-1.3-contributor-free`, and both
+  a plain run and a `--variant xhigh` run returned the requested sentinel text,
+  so Muse Spark 1.3 with XHigh reasoning is available as requested.
+- Delegation rule for this task: sequential, bounded, presentational work only
+  (components/CSS/fixtures/tests), never semantics, and OpenCode never commits.
+
+### Stitch Strategy
+
+One generation attempt for the Retrieval composition, recorded whatever the
+result; the reference screenshot wins over any Stitch output, and no Stitch
+demo data may reach the app. If it times out (as in UI-006), the work continues
+without it.
+
+### Planned Files
+
+- New: `frontend/src/lib/traceModel.ts` (+ tests),
+  `frontend/src/components/retrieval/*` (Retrieval page parts),
+  `frontend/src/components/reranker/*` (Reranker page),
+  `frontend/src/styles/retrieval.css`, `frontend/e2e/ui-007-retrieval.spec.ts`.
+- Modified: `frontend/src/types.ts`, `frontend/src/lib/api.ts`,
+  `frontend/src/App.tsx` (+ `src/app/routes.ts` for the reranker view),
+  `frontend/src/index.css`, `frontend/e2e/fixtures.ts`, the existing retrieval
+  tests and specs that address the old page, checkpoint/PROJECT_STATE/
+  FRONTEND_CONTRACT.
+- Backend: none planned.
+
+### Exact Next Action
+
+UI-007-B: extend the typed trace model and client to the full API-005 contract,
+add the pure trace helpers and their focused tests, then rebuild the Retrieval
+page.
+
+## UI-007-B/C/D/E/F/G/H Checkpoint (trace model, both pages, delegation, gates)
+
+### Active Task
+
+UI-007 — Retrieval/Reranker. Status: B–H complete; I (controlled full gates,
+audits, docs, commits) running.
+
+### Typed Trace Model And Client (B)
+
+- `frontend/src/types.ts`: `RetrievalTrace` gained `trace_version`,
+  `score_semantics`, `production_parity`, `scope`, `filter_values`; the stage
+  status is the named `RetrievalStageStatus`; candidates gained
+  `dropped_reason`; the request body is the typed `RetrievalInspectRequest`.
+- `frontend/src/lib/api.ts`: `inspectRetrieval` now takes that request type, so
+  the additive API-005 `document_id`/`filing_date`/`year` filters are sendable.
+- `frontend/src/lib/traceModel.ts` (new, pure): per-preset primary score key,
+  family labels, score formatting that keeps the family's own scale, duration
+  formatting that never turns a null into `0 ms`, stage status reading,
+  latency breakdown from executed stages only, reranker identity only when the
+  stage ran, dropped-reason labels, candidate status, rank movement from the
+  trace's own ranks, same-pool detection, available score families, view-order
+  options limited to reported families, deterministic ordering with ties, page
+  geometry, and scope phrasing that keeps a bounded list bounded.
+- `frontend/src/lib/traceModel.test.ts` (new): 19 tests covering every rule
+  above, including negative logits, ties, missing scores, and a bounded scope.
+
+### Retrieval Page (C)
+
+`frontend/src/components/retrieval/*` replaces the old `RetrievalLabPanel`
+(deleted with its test): `RetrievalPanel`, `RetrievalQueryCard`, `StageSummary`,
+`TraceDisclosures`, `EvidencePreviewRail`, and the delegated `CandidateTable`.
+`frontend/src/styles/retrieval.css` is page-owned and reuses the console
+primitives.
+
+Composition against `retrieval-ui-reference-dark-v1.png` (1586x992): page header
+with the provider-free chip; the "Retrieval Query" card with its label, query
+field, filter row, real pool bounds, "Use in Research" and the primary
+"Run Retrieval →"; the submitted-configuration strip with the existing JSON/CSV
+export; four metric cards (candidates retrieved with the derived section count,
+selected results, inspection latency with the real per-stage breakdown, reranker
+state with the trace's model or the stage's own reason); the ranked results card
+whose score column is headed with the family in use; the stage list; and the
+truth disclosures. The rail previews the top-ranked candidate until a row is
+picked, and shows that candidate's own per-family scores, rank lineage, status,
+and its dropped reason when the trace supplied one.
+
+Removed as unsupported or superseded: the analyst/advanced mode tabs (they hid
+information rather than adding capability), the compare-preset feature (two
+POSTs for a feature the Reranker page now owns properly from one trace), and the
+reference's "Advanced Filters" button (the real bounds stay inline and labelled).
+
+### Reranker Page (D)
+
+`frontend/src/components/reranker/RerankerPanel.tsx` (new) is mounted at
+`/reranker`, which until now rendered the retrieval page with the navigation
+availability set to "partial". The route availability is now "available" and
+the reference-receipt spec asserts that.
+
+Composition follows the master-plan bullets (there is no reranker screenshot):
+one trace answers both questions, so the fusion order (`rrf_score`,
+`fusion_rank`) and the cross-encoder order (`cross_encoder_score`, `final_rank`)
+come from the same pool in one response and the page never reranks a second
+time. It shows the reranker stage status, its duration or the explicit
+"Not reported", the model only when the stage ran, how many of the pool's
+candidates carry a reranker score, the comparison table (final rank, candidate,
+fusion rank with a movement track, reranker score, movement, status, actions),
+and the query context. Negative logits stay negative, a missing score says "No
+score", and a preset that never reranks reports the stage as skipped with the
+API's reason instead of drawing an absent score.
+
+### Query Lifecycle, Races, Identity (E)
+
+- Typing only edits a draft; one submit is exactly one `POST /retrieval/inspect`
+  (unit and browser tests count the requests).
+- An unchanged configuration cannot be submitted twice while a run is open,
+  while an edited configuration can be committed immediately: the previous
+  request is aborted and its late response is ignored by the request-id guard.
+  A browser test holds the first request open, submits a second, then releases
+  the first and asserts the newer trace survives.
+- Selecting a candidate, changing the view order, changing the page size,
+  paging, opening the disclosures, and opening a document issue no further
+  request.
+- Identity stays canonical: rows are keyed and selected by `chunk_id`, the
+  reader handoff carries `chunk_id`/`document_id` with
+  `returnFocusId: retrieval-document-workspace-<chunk>`, and "Back to Retrieval"
+  restores focus to the opener (V5-07 now drives the rebuilt page).
+- No workspace, conversation, or provider write: the page performs one POST and
+  the explicit save action only.
+
+### Delegation (OpenCode / Muse Spark 1.3 XHigh)
+
+One bounded task was delegated: the presentational `CandidateTable` component,
+the page-owned stylesheet skeleton, and its focused tests, with the exact props
+contract, the reused console classes, and explicit "do not" rules supplied in
+the task. Invocation:
+`opencode run "<task>" -m opencode/muse-spark-1.3-contributor-free --variant xhigh --dir <repo>`.
+OpenCode reported lint clean and 8 passing tests and did not commit.
+
+Primary review found and fixed one semantic defect before accepting it: the
+score pill's emphasis used the row's position *on the page* rather than its
+position in the displayed order, so page two's first row looked like the top
+result. It now uses the absolute displayed position. The remaining helpers (page
+geometry, status labels, score formatting, ordering) were already delegated to
+`traceModel` and reused rather than re-implemented. After the fix the delegated
+suite passes unchanged, and the panel-level suites were written by the primary
+agent.
+
+### Tests Actually Run
+
+- `bunx vitest run` — 74 files / 460 tests pass (baseline 74 / 460 after the
+  old panel's tests were replaced by the new suites).
+- Focused: `traceModel` 19, `CandidateTable` 8, `RetrievalPanel` 15,
+  `RerankerPanel` 7 — 49 tests, all passing.
+- `bun run lint` (tsc) — clean after every edit; `bun run build` — pass.
+- `bunx playwright test e2e/ui-007-retrieval.spec.ts --workers=4` — 14/14 pass
+  (seven tests on Chromium and Firefox), including a twelve-receipt viewport
+  loop.
+- At the default 14 workers the same spec failed every Chromium test by timing
+  out; at 4 workers all pass, which is the documented load-sensitive class and
+  the reason the policy fixes a controlled worker count.
+- `bunx playwright test e2e/v5-07-handoffs.spec.ts` — 4/4 pass after scoping the
+  save action to the row the flow opens.
+- `e2e/regression.spec.ts` retrieval test — updated to the new, better
+  behaviour (a completed trace is kept and labelled as differing from the
+  draft) and passing.
+
+### Receipts
+
+`frontend/test-results/ui-007/` (git-ignored): retrieval and reranker receipts
+at 1586x992, 1440x900, 1280x856, 1024x768, 390x844 and 1440x700 on both
+engines, plus the populated retrieval view, the reranker comparison, and the
+skipped-stage state.
+
+### Remaining Work
+
+UI-007-I: controlled full Chromium/Firefox gate, nine-reference receipt,
+artifact/diff/dependency audit, documentation, commits, then select the next
+task and stop.
+
+### Exact Next Action
+
+Read the controlled gate results, classify any failure (isolate before calling
+it a regression), then finish the audits, docs and commits.

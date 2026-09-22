@@ -111,8 +111,11 @@ const ChatMessage = lazy(() =>
 
 // Secondary workspaces are route-level panels. Keep the initial chat shell
 // small and load diagnostics only when the user opens that workspace.
-const RetrievalLabPanel = lazy(() =>
-  import("./components/RetrievalLabPanel").then(({ RetrievalLabPanel }) => ({ default: RetrievalLabPanel })),
+const RetrievalPanel = lazy(() =>
+  import("./components/retrieval/RetrievalPanel").then(({ RetrievalPanel }) => ({ default: RetrievalPanel })),
+);
+const RerankerPanel = lazy(() =>
+  import("./components/reranker/RerankerPanel").then(({ RerankerPanel }) => ({ default: RerankerPanel })),
 );
 const DocumentExplorerPanel = lazy(() =>
   import("./components/DocumentExplorerPanel").then(({ DocumentExplorerPanel }) => ({ default: DocumentExplorerPanel })),
@@ -2439,17 +2442,27 @@ function AppWorkspace() {
                 ) : activeView === "architecture" ? (
               <ArchitecturePanel />
                 ) : activeView === "retrieval" ? (
-              <RetrievalLabPanel
-                tickers={tickers}
-                sections={sections}
-                selectedTicker={selectedTicker}
-                selectedSection={selectedSection}
-                isBackendConnected={isBackendConnected}
-                onUseQuestion={handleUseRetrievalQuestion}
-                onOpenDocument={handleOpenDocumentWorkspace}
-                onOpenSource={handleOpenStandaloneSource}
-                onSaveEvidence={handleSaveRetrievedEvidence}
-              />
+              resolvedRoute.id === "reranker" ? (
+                <RerankerPanel
+                  tickers={tickers}
+                  sections={sections}
+                  isBackendConnected={isBackendConnected}
+                  onUseQuestion={handleUseRetrievalQuestion}
+                  onOpenDocument={handleOpenDocumentWorkspace}
+                  onOpenSource={handleOpenStandaloneSource}
+                  onSaveEvidence={handleSaveRetrievedEvidence}
+                />
+              ) : (
+                <RetrievalPanel
+                  tickers={tickers}
+                  sections={sections}
+                  isBackendConnected={isBackendConnected}
+                  onUseQuestion={handleUseRetrievalQuestion}
+                  onOpenDocument={handleOpenDocumentWorkspace}
+                  onOpenSource={handleOpenStandaloneSource}
+                  onSaveEvidence={handleSaveRetrievedEvidence}
+                />
+              )
                 ) : activeView === "documents" ? (
               null
                 ) : activeView === "library" ? (

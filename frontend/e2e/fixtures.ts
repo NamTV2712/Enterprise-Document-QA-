@@ -310,6 +310,262 @@ function searchFixtureSnapshot(
   };
 }
 
+/**
+ * The real API-005 trace shapes the Retrieval and Reranker pages consume.
+ *
+ * Ranks, score families, stage statuses, the bounded scope, and the dropped
+ * reasons mirror `src/retrieval/hybrid_retriever.py`; a preset that does not
+ * rerank reports the reranker stage as skipped with the API's own reason, and
+ * the inspection-only stage reports `not_executed` with a null duration.
+ */
+const RETRIEVAL_SCORE_SEMANTICS: Record<string, { family: string; scale: string; definition: string }> = {
+  bm25_score: {
+    family: "lexical",
+    scale: "unbounded_positive",
+    definition: "BM25 term-frequency score over the filtered index; higher means stronger keyword overlap.",
+  },
+  dense_score: {
+    family: "dense_similarity",
+    scale: "vector_similarity_as_returned_by_the_store",
+    definition: "Similarity of the query embedding to the chunk embedding, reported with the store's own scale.",
+  },
+  rrf_score: {
+    family: "fusion",
+    scale: "sum_of_reciprocal_ranks",
+    definition: "Reciprocal rank fusion of the lexical, dense, and query-shaper rankings; not comparable across queries.",
+  },
+  cross_encoder_score: {
+    family: "reranker",
+    scale: "cross_encoder_logit",
+    definition: "Cross-encoder relevance logit for the query/chunk pair; only comparable within one candidate pool.",
+  },
+};
+
+const RETRIEVAL_SCORE_NOTE =
+  "Score families are distinct and must not be compared with one another. None of them is a confidence, accuracy, or probability.";
+
+function retrievalFixtureFamilies(preset: string) {
+  const keys: Record<string, string[]> = {
+    bm25: ["bm25_score"],
+    dense: ["dense_score"],
+    hybrid: ["bm25_score", "dense_score", "rrf_score"],
+    hybrid_rerank: ["bm25_score", "dense_score", "rrf_score", "cross_encoder_score"],
+  };
+  const chosen = keys[preset] ?? keys.hybrid_rerank;
+  return Object.fromEntries(chosen.map((key) => [key, RETRIEVAL_SCORE_SEMANTICS[key]]));
+}
+
+/** Six fixture candidates in the same shape the inspection endpoint returns. */
+export function retrievalFixtureCandidates(preset: string) {
+  const reranked = preset === "hybrid_rerank";
+  const rows = [
+    {
+      chunk_id: "AAPL_fixture_revenue_0",
+      document_id: FIXTURE_DOCUMENT_ID,
+      citation: "AAPL 10-K, Financial Statements",
+      text_preview: "Total revenue was reported in fiscal 2024.",
+      ticker: "AAPL",
+      section: "financial_statements",
+      filing_date: "2025-10-31",
+      bm25_score: 12.5,
+      bm25_rank: 1,
+      dense_score: 0.71,
+      dense_rank: 2,
+      lexical_rank: 1,
+      rrf_score: 0.0326,
+      fusion_rank: 1,
+      cross_encoder_score: reranked ? 8.25 : null,
+      final_rank: 1,
+      selected: true,
+      dropped_reason: null,
+    },
+    {
+      chunk_id: "MSFT_000095017025100235_mdna_0005",
+      document_id: "MSFT:0000950170-25-100235",
+      citation: "MSFT 10-K, MD&A",
+      text_preview: "Microsoft Cloud gross margin percentage grew as cloud revenue increased.",
+      ticker: "MSFT",
+      section: "mdna",
+      filing_date: "2025-07-30",
+      bm25_score: 10.25,
+      bm25_rank: 2,
+      dense_score: 0.68,
+      dense_rank: 1,
+      lexical_rank: 2,
+      rrf_score: 0.0311,
+      fusion_rank: 3,
+      cross_encoder_score: reranked ? 1.75 : null,
+      final_rank: 2,
+      selected: true,
+      dropped_reason: null,
+    },
+    {
+      chunk_id: "ORCL_000119312526277521_mdna_0076",
+      document_id: "ORCL:0001193125-26-277521",
+      citation: "ORCL 10-K, MD&A",
+      text_preview: "Our cloud and software business represented 87% of our total revenues.",
+      ticker: "ORCL",
+      section: "mdna",
+      filing_date: "2026-06-22",
+      bm25_score: 9.5,
+      bm25_rank: 4,
+      dense_score: 0.64,
+      dense_rank: 3,
+      lexical_rank: 4,
+      rrf_score: 0.0295,
+      fusion_rank: 2,
+      cross_encoder_score: reranked ? -3.5 : null,
+      final_rank: 3,
+      selected: true,
+      dropped_reason: null,
+    },
+    {
+      chunk_id: "INTC_000005086326000011_risk_factors_0024",
+      document_id: "INTC:0000050863-26-000011",
+      citation: "INTC 10-K, Risk Factors",
+      text_preview: "We depend upon a complex global supply chain.",
+      ticker: "INTC",
+      section: "risk_factors",
+      filing_date: "2026-01-23",
+      bm25_score: 8.75,
+      bm25_rank: 3,
+      dense_score: 0.6,
+      dense_rank: 5,
+      lexical_rank: 3,
+      rrf_score: 0.0288,
+      fusion_rank: 4,
+      cross_encoder_score: reranked ? -8.5 : null,
+      final_rank: 4,
+      selected: true,
+      dropped_reason: null,
+    },
+    {
+      chunk_id: "HD_000162828026019436_risk_factors_0030",
+      document_id: "HD:0001628280-26-019436",
+      citation: "HD 10-K, Risk Factors",
+      text_preview: "Disruptions in our supply chain could adversely impact our business.",
+      ticker: "HD",
+      section: "risk_factors",
+      filing_date: "2026-03-18",
+      bm25_score: 7.4,
+      bm25_rank: 6,
+      dense_score: 0.55,
+      dense_rank: 4,
+      lexical_rank: 6,
+      rrf_score: 0.0261,
+      fusion_rank: 6,
+      cross_encoder_score: reranked ? -12.25 : null,
+      final_rank: null,
+      selected: false,
+      dropped_reason: "ranked_below_top_k",
+    },
+    {
+      chunk_id: "AAPL_fixture_risk_1",
+      document_id: FIXTURE_DOCUMENT_ID,
+      citation: "AAPL 10-K, Risk Factors",
+      text_preview: "The company faces competition risks in consumer markets.",
+      ticker: "AAPL",
+      section: "risk_factors",
+      filing_date: "2025-10-31",
+      bm25_score: 6.1,
+      bm25_rank: 5,
+      dense_score: null,
+      dense_rank: null,
+      lexical_rank: 5,
+      rrf_score: 0.0247,
+      fusion_rank: 5,
+      cross_encoder_score: null,
+      final_rank: null,
+      selected: false,
+      dropped_reason: null,
+    },
+  ];
+  // A preset that never runs the cross-encoder cannot report a reranker
+  // decision, so its unselected rows carry the preset-stage reason instead.
+  return preset === "bm25" || preset === "dense"
+    ? rows.map((row) => ({ ...row, dropped_reason: row.selected ? null : "not_in_selected_preset_stage" }))
+    : rows;
+}
+
+export function retrievalFixtureResponse(body: Record<string, unknown>) {
+  const question = String(body.question ?? "fixture question");
+  const preset = typeof body.preset === "string" ? body.preset : "hybrid_rerank";
+  const reranked = preset === "hybrid_rerank";
+  const topK = typeof body.top_k === "number" ? body.top_k : 5;
+  const candidatePool = typeof body.candidate_pool === "number" ? body.candidate_pool : 10;
+  const ticker = typeof body.ticker === "string" && body.ticker ? body.ticker : null;
+  const section = typeof body.section === "string" && body.section ? body.section : null;
+  const documentId = typeof body.document_id === "string" && body.document_id ? body.document_id : null;
+  const year = typeof body.year === "number" ? body.year : null;
+  const candidates = retrievalFixtureCandidates(preset);
+
+  return {
+    query_interpretation: {
+      original_question: question,
+      retrieval_question: question,
+      translation_method: "identity",
+      detected_ticker: ticker,
+      requested_periods: [],
+      is_comparative: false,
+    },
+    trace: {
+      trace_version: "retrieval-trace-v1",
+      preset,
+      query: question,
+      filters: { ticker, section },
+      top_k: topK,
+      candidate_pool: candidatePool,
+      models: {
+        embedding: "fixture-embedding",
+        reranker: reranked ? "cross-encoder/ms-marco-MiniLM-L-6-v2" : null,
+        rrf_k: 60,
+      },
+      score_semantics: {
+        applies_to_preset: preset,
+        note: RETRIEVAL_SCORE_NOTE,
+        families: retrievalFixtureFamilies(preset),
+      },
+      production_parity: {
+        structured_promotion: "not_executed",
+        lexical_ladder_merge_into_final: "not_executed",
+        reason:
+          "Inspection exposes the ranking stages only; production /query applies structured financial-row promotion and lexical-ladder merging on top.",
+      },
+      stages: [
+        { name: "embedding", elapsed_ms: 12.5, status: "executed" },
+        { name: "bm25", elapsed_ms: 3.25, status: "executed" },
+        { name: "dense", elapsed_ms: 8.75, status: "executed" },
+        { name: "lexical_ladder", elapsed_ms: 1.5, status: "executed" },
+        {
+          name: "reranker",
+          elapsed_ms: reranked ? 48.75 : null,
+          skipped: !reranked,
+          status: reranked ? "executed" : "skipped",
+          reason: reranked ? null : "The selected preset ranks without the cross-encoder.",
+        },
+        {
+          name: "structured_promotion",
+          elapsed_ms: null,
+          status: "not_executed",
+          reason: "Inspection does not apply production structured financial-row promotion.",
+        },
+      ],
+      candidates,
+      selected_chunk_ids: candidates.filter((candidate) => candidate.selected).map((candidate) => candidate.chunk_id),
+      candidate_count: candidates.length,
+      selected_count: candidates.filter((candidate) => candidate.selected).length,
+      elapsed_ms: reranked ? 74.75 : 26,
+      filter_values: { ticker, section, document_id: documentId, filing_date: null, year },
+      scope: {
+        documents: 50,
+        eligible_document_ids: ticker ? [FIXTURE_DOCUMENT_ID] : ["AAPL:fixture", "MSFT:0000950170-25-100235", "ORCL:0001193125-26-277521"],
+        truncated: false,
+        reason: null,
+      },
+    },
+  };
+}
+
 const CORS_HEADERS = {
   "access-control-allow-origin": "*",
   "access-control-allow-headers": "Content-Type",
@@ -1193,43 +1449,11 @@ export async function installApiFixtures(
     }
 
     if (path === "/retrieval/inspect" && method === "POST") {
+      const body = (request.postDataJSON() ?? {}) as Record<string, unknown>;
       await route.fulfill({
         status: 200,
         headers: { ...CORS_HEADERS, "content-type": "application/json" },
-        body: JSON.stringify({
-          query_interpretation: {
-            original_question: "What was Apple's total revenue in 2024?",
-            retrieval_question: "What was Apple's total revenue in 2024?",
-            language: "en",
-            detected_ticker: "AAPL",
-          },
-          trace: {
-            preset: "hybrid_rerank",
-            query: "What was Apple's total revenue in 2024?",
-            filters: { ticker: null, section: null },
-            top_k: 5,
-            candidate_pool: 10,
-            models: { embedding: "fixture-embedding", reranker: "fixture-reranker", rrf_k: 60 },
-            stages: [{ name: "retrieval", elapsed_ms: 1.2 }],
-            candidates: [{
-              chunk_id: "AAPL_fixture_revenue_0",
-              citation: "AAPL 10-K, Financial Statements",
-              text_preview: "Total revenue was reported in fiscal 2024.",
-              document_id: "AAPL:fixture",
-              ticker: "AAPL",
-              section: "financial_statements",
-              filing_date: "2025-10-31",
-              final_rank: 1,
-              selected: true,
-              bm25_score: 1,
-              dense_score: 0.9,
-              rrf_score: 0.8,
-              cross_encoder_score: 0.7,
-            }],
-            selected_chunk_ids: ["AAPL_fixture_revenue_0"],
-            elapsed_ms: 1.2,
-          },
-        }),
+        body: JSON.stringify(retrievalFixtureResponse(body)),
       });
       return;
     }

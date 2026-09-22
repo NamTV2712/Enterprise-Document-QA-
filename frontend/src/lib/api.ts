@@ -12,6 +12,7 @@ import {
   ClearSessionResponse,
   SessionHistoryResponse,
   RetrievalInspectResponse,
+  RetrievalInspectRequest,
   RetrievalPreset,
   DocumentListResponse,
   DocumentSortField,
@@ -155,14 +156,7 @@ export async function getSupportedTickers(
 }
 
 export async function inspectRetrieval(
-  payload: {
-    question: string;
-    ticker: string | null;
-    section: string | null;
-    top_k: number;
-    candidate_pool: number;
-    preset: RetrievalPreset;
-  },
+  payload: RetrievalInspectRequest,
   signal?: AbortSignal,
 ): Promise<RetrievalInspectResponse> {
   const baseUrl = getApiBaseUrl();

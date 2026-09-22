@@ -168,3 +168,26 @@ Filter and mode controls exist only for axes the API supports. The form type has
 no dimension in this corpus, so no form-type filter or facet is offered; there
 is no sort selector because the ranking engine owns the order; and recent
 searches are the browser-local list the app already owns, labelled as such.
+
+## Retrieval inspection acceptance
+
+Retrieval (and the Reranker view over the same trace) renders only what API-005
+reported. The score families — BM25, dense similarity, RRF, and the
+cross-encoder logit — keep their own scales, carry the API's own definitions,
+and are never presented as a confidence, accuracy, probability, or percentage. A
+missing score or duration is named as not reported, never rendered as zero, and
+a negative logit stays negative. Stage status is preserved exactly: a skipped or
+`not_executed` stage says so with the API's reason and is never made to look
+run, and the production-only stages stay labelled as not executed so an
+inspection trace is not read as production output. `dropped_reason` is shown
+only when the API supplied one, and a bounded eligible-document list is never
+described as complete.
+
+One submitted configuration is one `POST /retrieval/inspect`; selecting a
+candidate, changing the view order or page size, paging, opening disclosures,
+and opening a document run nothing further. An unchanged configuration cannot be
+submitted twice while a run is open, while an edited one may be committed
+immediately, in which case the earlier request is aborted and its late response
+is ignored. The Reranker view compares the fusion and cross-encoder orders of
+one same-pool trace and never reranks a second time.
+

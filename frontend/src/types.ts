@@ -124,6 +124,61 @@ export interface AnswerActionState {
 
 export type RetrievalPreset = "bm25" | "dense" | "hybrid" | "hybrid_rerank";
 
+/** API-005 stage availability; `not_executed` must never look like a run. */
+export type RetrievalStageStatus = "executed" | "skipped" | "not_executed";
+
+/** One score family: its scale and what it actually measures. */
+export interface RetrievalScoreFamily {
+  family: string;
+  scale: string;
+  definition: string;
+}
+
+export type RetrievalScoreKey = "bm25_score" | "dense_score" | "rrf_score" | "cross_encoder_score";
+
+/**
+ * The score families that apply to one trace, plus the API's own warning that
+ * the families are distinct and that none is a confidence or probability.
+ */
+export interface RetrievalScoreSemantics {
+  applies_to_preset: RetrievalPreset;
+  note: string;
+  families: Partial<Record<RetrievalScoreKey, RetrievalScoreFamily>>;
+}
+
+/**
+ * Which production stages inspection does not reproduce, so a trace is never
+ * read as production output.
+ */
+export interface RetrievalProductionParity {
+  structured_promotion: RetrievalStageStatus;
+  lexical_ladder_merge_into_final: RetrievalStageStatus;
+  reason: string;
+}
+
+/** The effective inspection scope, with its bounded eligible-document list. */
+export interface RetrievalScope {
+  documents: number | null;
+  eligible_document_ids: string[];
+  truncated: boolean;
+  reason: string | null;
+}
+
+/** The filters the endpoint actually applied to this trace. */
+export interface RetrievalFilterValues {
+  ticker: string | null;
+  section: string | null;
+  document_id: string | null;
+  filing_date: string | null;
+  year: number | null;
+}
+
+/** Why a candidate was not selected; null means the trace cannot prove one. */
+export type RetrievalDroppedReason =
+  | "ranked_below_top_k"
+  | "outside_candidate_pool"
+  | "not_in_selected_preset_stage";
+
 export interface RetrievalCandidate {
   chunk_id: string;
   ticker?: string | null;
@@ -142,9 +197,23 @@ export interface RetrievalCandidate {
   final_rank?: number | null;
   document_id?: string | null;
   selected: boolean;
+  /** Only reported when this trace can prove why; never invented. */
+  dropped_reason?: RetrievalDroppedReason | null;
+}
+
+export interface RetrievalTraceStage {
+  name: string;
+  /** Null for a stage that did not run, so a duration is never implied. */
+  elapsed_ms: number | null;
+  skipped?: boolean;
+  /** API-005 stage availability: executed, skipped, or not_executed. */
+  status?: RetrievalStageStatus;
+  reason?: string | null;
 }
 
 export interface RetrievalTrace {
+  /** The trace shape version this consumer relies on. */
+  trace_version?: string;
   preset: RetrievalPreset;
   query: string;
   filters: { ticker: string | null; section: string | null };
@@ -155,20 +224,33 @@ export interface RetrievalTrace {
     reranker?: string | null;
     rrf_k?: number;
   };
-  stages: Array<{
-    name: string;
-    /** Null for a stage that did not run, so a duration is never implied. */
-    elapsed_ms: number | null;
-    skipped?: boolean;
-    /** API-005 stage availability: executed, skipped, or not_executed. */
-    status?: "executed" | "skipped" | "not_executed";
-    reason?: string | null;
-  }>;
+  stages: RetrievalTraceStage[];
   candidates: RetrievalCandidate[];
   selected_chunk_ids: string[];
   candidate_count?: number;
   selected_count?: number;
-  elapsed_ms: number;
+  elapsed_ms: number | null;
+  /** The score families that apply to this trace, with the API's own note. */
+  score_semantics?: RetrievalScoreSemantics;
+  /** Which production stages inspection does not reproduce. */
+  production_parity?: RetrievalProductionParity;
+  /** The effective scope, including a bounded eligible-document list. */
+  scope?: RetrievalScope;
+  /** The filters the endpoint applied to this trace. */
+  filter_values?: RetrievalFilterValues;
+}
+
+/** The request body API-005 accepts for one inspection. */
+export interface RetrievalInspectRequest {
+  question: string;
+  ticker?: string | null;
+  section?: string | null;
+  document_id?: string | null;
+  filing_date?: string | null;
+  year?: number | null;
+  top_k?: number;
+  candidate_pool?: number;
+  preset?: RetrievalPreset;
 }
 
 export interface RetrievalInspectResponse {

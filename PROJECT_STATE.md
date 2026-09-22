@@ -1,5 +1,74 @@
 # Project State
 
+## UI-007 Retrieval and Reranker (2026-09-22)
+
+UI-007 is complete. The Retrieval page is rebuilt against
+`docs/ui-references/retrieval-ui-reference-dark-v1.png` (1586x992) and the
+Reranker page now exists as its own route; both consume the real API-005
+inspection trace through a typed model. **There is no reranker reference
+screenshot** — the reference matrix has none and says so — so that page follows
+the master-plan bullets and reuses the Retrieval page's own visual language,
+with one trace answering both questions.
+
+Trace semantics: the client types the whole response (`trace_version`,
+`score_semantics`, `production_parity`, `scope`, `filter_values`, stage
+statuses, per-candidate ranks and `dropped_reason`) and a new pure
+`src/lib/traceModel.ts` holds every rule, so pages never reinterpret data. Score
+families stay distinct: BM25, dense similarity, RRF, and the cross-encoder logit
+are shown with their own scale and the API's own definitions, a missing score
+says "Not reported" (never 0), a negative logit stays negative, a stage that did
+not run is labelled, `structured_promotion` reports `not_executed` with its
+reason, and a dropped reason is only ever the one the trace supplied. A bounded
+eligible-document list is described as bounded.
+
+Retrieval: query card with the real request axes (company, year, document,
+section, preset, and the true top-k/candidate-pool bounds), the existing JSON
+and CSV export of the completed trace, four metric cards built from the trace's
+own counts and stage durations, a ranked table whose score column names the
+family it shows (with a view-order control limited to the families the trace
+reported and an explicit status column for selected/dropped), the stage list
+with truthful statuses, the score-semantics and production-parity disclosures,
+and an evidence preview rail that previews the top-ranked candidate until a row
+is picked. Removed as unsupported or superseded: the analyst/advanced mode tabs,
+the compare-preset double-POST feature, and the reference's dead "Advanced
+Filters" button and page actions.
+
+Reranker: one submitted comparison runs exactly one inspection, and the fusion
+order (`rrf_score`, `fusion_rank`) and cross-encoder order
+(`cross_encoder_score`, `final_rank`) come from that single same-pool response,
+so the page never reranks a second time. It reports the reranker stage status,
+its duration (or "Not reported"), the model only when the stage ran, how many
+candidates carry a reranker score, and a comparison table with fusion rank,
+reranker score, and named rank movement; a preset that never reranks shows the
+stage as skipped with the API's reason instead of drawing an absent score. The
+route's navigation availability moved from "partial" to "available".
+
+Query lifecycle: typing only edits a draft; one submit is one POST; selecting a
+candidate, reordering, paging, opening disclosures, and opening a document run
+nothing. An unchanged configuration cannot be submitted twice while a run is
+open, while an edited one can be committed immediately — the earlier request is
+aborted and its late response is ignored, proven by a browser test that releases
+a held request after a newer submission. Identity stays canonical
+(`chunk_id`/`document_id`, `retrieval-document-workspace-<chunk>` focus ids,
+"Back to Retrieval" focus return), and nothing writes workspace, conversation, or
+provider state.
+
+Delegation: one bounded presentational task (the candidate table, the page-owned
+stylesheet skeleton, and its tests) was delegated to OpenCode with Muse Spark 1.3
+at XHigh reasoning, with the exact props contract and "do not" rules. Primary
+review found and fixed a real semantic defect in it — the score pill's emphasis
+used the row's position on the page instead of its position in the displayed
+order, so page two's first row looked like the top result.
+
+Validation: `traceModel` 19 tests, `CandidateTable` 8, `RetrievalPanel` 15,
+`RerankerPanel` 7; the full suite is 74 files / 460 tests; tsc and build pass;
+`frontend/e2e/ui-007-retrieval.spec.ts` passes 14/14 on Chromium and Firefox at
+a controlled four workers (it times out under the default 14 workers, the
+documented load-sensitive class); retrieval and reranker receipts cover six
+viewports on both engines; the nine-reference receipt is 30/30 with r5-retrieval
+driving the rebuilt page; V5-07, the retrieval regression test, and the route
+availability assertion were re-pointed at the new pages.
+
 ## UI-006 discovery Search (2026-09-22)
 
 UI-006 is complete. The Search page is the reference composition

@@ -8,5 +8,6 @@
 @import "./styles/console.css";
 @import "./styles/primitives.css";
 @import "./styles/search.css";
+@import "./styles/retrieval.css";
 @import "./styles/base.css";
 @import "./styles/motion.css";

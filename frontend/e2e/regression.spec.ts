@@ -136,7 +136,7 @@ test("projects measured pipeline stages from the response stream", async ({ page
   await expect(executionStatus.getByText("2 sources", { exact: true })).toBeVisible();
 });
 
-test("Retrieval Lab invalidates edited loading config and exports the completed trace", async ({ page }) => {
+test("Retrieval keeps a completed trace while the draft changes and exports it", async ({ page }) => {
   let releaseInspection!: () => void;
   const inspectionHeld = new Promise<void>((resolve) => { releaseInspection = resolve; });
   await setup(page);
@@ -149,16 +149,20 @@ test("Retrieval Lab invalidates edited loading config and exports the completed 
   await expect(page.getByRole("heading", { name: "Retrieval", exact: true })).toBeVisible();
   const runButton = page.getByRole("button", { name: "Run retrieval", exact: true });
   await runButton.click();
-  await expect(page.getByRole("button", { name: "Running…", exact: true })).toBeDisabled();
-  await page.getByRole("textbox", { name: "Retrieval question" }).fill("A changed question must invalidate the pending trace");
-  await expect(page.getByText("The configuration changed. Run retrieval again to refresh the trace and exports.")).toBeVisible();
+  // An unchanged configuration cannot be submitted twice while one run is open.
+  await expect(runButton).toBeDisabled();
+  await page.getByLabel("Retrieval Query").fill("A changed question keeps its own pending trace");
+  // An edited configuration can be committed instead, and the page says the
+  // draft no longer matches whatever the trace returns.
+  await expect(runButton).toBeEnabled();
+  await expect(page.getByText(/This configuration differs from the trace on screen/)).toBeVisible();
   releaseInspection();
-  await page.waitForTimeout(100);
-  await expect(page.getByTestId("submitted-retrieval-configuration")).toHaveCount(0);
+  // The trace that arrives keeps its own submitted configuration, unrelabelled
+  // by the newer draft.
+  await expect(page.getByTestId("submitted-retrieval-configuration")).toBeVisible();
+  await expect(page.getByTestId("submitted-retrieval-configuration")).toContainText("What was Apple's total revenue in 2024?");
   await page.unroute(`${API_ORIGIN}/retrieval/inspect`);
 
-  await runButton.click();
-  await expect(page.getByTestId("submitted-retrieval-configuration")).toBeVisible();
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "JSON", exact: true }).click();
   const download = await downloadPromise;

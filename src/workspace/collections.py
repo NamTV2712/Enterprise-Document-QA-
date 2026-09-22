@@ -529,27 +529,65 @@ class SQLiteCollectionRepository:
     def __init__(self, database: WorkspaceDatabase, *, clock: Callable[[], str] = utc_timestamp) -> None:
         self.database = database
         self._clock = clock
+        self._store_instance = SQLiteVersionedRecordRepository(database, clock=clock)
 
     # -- helpers
 
     def _records(self, *, clock: Callable[[], str] | None = None) -> SQLiteVersionedRecordRepository:
         return SQLiteVersionedRecordRepository(self.database, clock=clock or self._clock)
 
-    def _create(self, entity_type: str, entity_id: str, payload: Mapping[str, Any], *, timestamp_ms: int) -> Any:
+    @property
+    def _store(self) -> SQLiteVersionedRecordRepository:
+        """One record repository per collection repository, for the write path."""
+        return self._store_instance
+
+    # Every write helper below operates on a caller-owned connection and never
+    # commits: a logical collection mutation is exactly one transaction, so its
+    # preconditions and its writes can never be separated by another writer.
+
+    def _create_in(
+        self,
+        connection: Any,
+        entity_type: str,
+        entity_id: str,
+        payload: Mapping[str, Any],
+        *,
+        timestamp_ms: int,
+    ) -> Any:
         # The payload states the instant, and the record is written at exactly
         # that instant, so the exported spine and the stored timestamps agree.
-        clock = lambda: _iso_from_ms(timestamp_ms)  # noqa: E731
         try:
-            return self._records(clock=clock).create(entity_type, entity_id, payload)
+            return self._store.create_in(
+                connection,
+                entity_type,
+                entity_id,
+                payload,
+                timestamp=_iso_from_ms(timestamp_ms),
+            )
         except RecordConflictError as error:
             raise CollectionConflictError(str(error)) from error
         except RecordDeletedError as error:
             raise CollectionDeletedError(str(error)) from error
 
-    def _replace(self, entity_type: str, entity_id: str, payload: Mapping[str, Any], *, expected_revision: int, timestamp_ms: int) -> Any:
-        clock = lambda: _iso_from_ms(timestamp_ms)  # noqa: E731
+    def _replace_in(
+        self,
+        connection: Any,
+        entity_type: str,
+        entity_id: str,
+        payload: Mapping[str, Any],
+        *,
+        expected_revision: int,
+        timestamp_ms: int,
+    ) -> Any:
         try:
-            return self._records(clock=clock).replace(entity_type, entity_id, payload, expected_revision=expected_revision)
+            return self._store.replace_in(
+                connection,
+                entity_type,
+                entity_id,
+                payload,
+                expected_revision=expected_revision,
+                timestamp=_iso_from_ms(timestamp_ms),
+            )
         except RecordConflictError as error:
             raise CollectionConflictError(str(error)) from error
         except RecordDeletedError as error:
@@ -557,9 +595,23 @@ class SQLiteCollectionRepository:
         except RecordNotFoundError as error:
             raise CollectionNotFoundError(str(error)) from error
 
-    def _delete(self, entity_type: str, entity_id: str, *, expected_revision: int) -> Any:
+    def _delete_in(
+        self,
+        connection: Any,
+        entity_type: str,
+        entity_id: str,
+        *,
+        expected_revision: int,
+        timestamp_ms: int,
+    ) -> Any:
         try:
-            return self._records().delete(entity_type, entity_id, expected_revision=expected_revision)
+            return self._store.delete_in(
+                connection,
+                entity_type,
+                entity_id,
+                expected_revision=expected_revision,
+                timestamp=_iso_from_ms(timestamp_ms),
+            )
         except RecordConflictError as error:
             raise CollectionConflictError(str(error)) from error
         except RecordNotFoundError as error:
@@ -569,15 +621,15 @@ class SQLiteCollectionRepository:
             # is already gone, and saying so is the honest answer.
             raise CollectionDeletedError(str(error)) from error
 
-    def _scan(self, entity_type: str) -> list[tuple[str, int, Mapping[str, Any], str, str]]:
-        with self.database.transaction() as connection:
-            rows = list(
-                connection.execute(
-                    "SELECT entity_id, revision, payload_json, created_at, updated_at "
-                    "FROM workspace_records WHERE entity_type = ? ORDER BY entity_id",
-                    (entity_type,),
-                )
+    @staticmethod
+    def _scan_in(connection: Any, entity_type: str) -> list[tuple[str, int, Mapping[str, Any], str, str]]:
+        rows = list(
+            connection.execute(
+                "SELECT entity_id, revision, payload_json, created_at, updated_at "
+                "FROM workspace_records WHERE entity_type = ? ORDER BY entity_id",
+                (entity_type,),
             )
+        )
         scanned: list[tuple[str, int, Mapping[str, Any], str, str]] = []
         for row in rows:
             try:
@@ -597,14 +649,129 @@ class SQLiteCollectionRepository:
             )
         return scanned
 
+    def _scan(self, entity_type: str) -> list[tuple[str, int, Mapping[str, Any], str, str]]:
+        with self.database.transaction() as connection:
+            return self._scan_in(connection, entity_type)
+
+    @staticmethod
+    def _one_in(connection: Any, entity_type: str, entity_id: str, *, label: str) -> tuple[int, Mapping[str, Any], str, str]:
+        row = connection.execute(
+            "SELECT entity_id, revision, payload_json, created_at, updated_at "
+            "FROM workspace_records WHERE entity_type = ? AND entity_id = ?",
+            (entity_type, entity_id),
+        ).fetchone()
+        if row is not None:
+            payload = json.loads(str(row["payload_json"]))
+            if not isinstance(payload, Mapping):
+                raise CollectionNotFoundError(f"{label} payload is malformed")
+            return int(row["revision"]), payload, str(row["created_at"]), str(row["updated_at"])
+        tombstone = connection.execute(
+            "SELECT 1 FROM tombstones WHERE entity_type = ? AND entity_id = ?",
+            (entity_type, entity_id),
+        ).fetchone()
+        if tombstone is not None:
+            raise CollectionDeletedError(f"{label} has been deleted")
+        raise CollectionNotFoundError(f"{label} does not exist")
+
     def _one(self, entity_type: str, entity_id: str, *, label: str) -> tuple[int, Mapping[str, Any], str, str]:
-        record = self._records().get(entity_type, entity_id)
-        if record is None:
-            tombstone = self._records().get_tombstone(entity_type, entity_id)
-            if tombstone is not None:
-                raise CollectionDeletedError(f"{label} has been deleted")
-            raise CollectionNotFoundError(f"{label} does not exist")
-        return record.revision, record.payload, record.created_at, record.updated_at
+        with self.database.transaction() as connection:
+            return self._one_in(connection, entity_type, entity_id, label=label)
+
+    @classmethod
+    def _children_in(cls, connection: Any, entity_type: str, collection_id: str) -> list[tuple[str, int, Mapping[str, Any]]]:
+        children: list[tuple[str, int, Mapping[str, Any]]] = []
+        for entity_id, revision, payload, _created, _updated in cls._scan_in(connection, entity_type):
+            try:
+                data = unwrap_payload(payload, label="child record")
+            except CollectionError:
+                continue
+            if data.get("collectionId") == collection_id:
+                children.append((entity_id, revision, payload))
+        return children
+
+    @classmethod
+    def _member_count_in(cls, connection: Any, collection_id: str) -> int:
+        """Live members of one collection, read inside the caller's transaction."""
+        count = 0
+        for entity_type in (ITEM_ENTITY_TYPE, NOTE_ENTITY_TYPE):
+            for _entity_id, _revision, payload, _created, _updated in cls._scan_in(connection, entity_type):
+                try:
+                    data = unwrap_payload(payload, label="member record")
+                except CollectionError:
+                    continue
+                if data.get("collectionId") == collection_id:
+                    count += 1
+        return count
+
+    @staticmethod
+    def _live_count_in(connection: Any, entity_type: str) -> int:
+        row = connection.execute(
+            "SELECT COUNT(*) AS total FROM workspace_records WHERE entity_type = ?",
+            (entity_type,),
+        ).fetchone()
+        return int(row["total"]) if row is not None else 0
+
+    def _record_activity_in(
+        self,
+        connection: Any,
+        *,
+        collection_id: str | None,
+        event_type: str,
+        entity_type: str,
+        entity_id: str,
+        occurred_at: str,
+    ) -> CollectionActivity:
+        activity_id = generate_id("act")
+        timestamp_ms = _ms_from_iso(occurred_at)
+        self._prune_activity_in(connection, collection_id, timestamp_ms=timestamp_ms)
+        self._create_in(
+            connection,
+            ACTIVITY_ENTITY_TYPE,
+            activity_id,
+            activity_payload(
+                activity_id=activity_id,
+                collection_id=collection_id,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                event_type=event_type,
+                occurred_at=occurred_at,
+            ),
+            timestamp_ms=timestamp_ms,
+        )
+        return CollectionActivity(
+            activity_id=activity_id,
+            collection_id=collection_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            event_type=event_type,
+            occurred_at=occurred_at,
+        )
+
+    def _prune_activity_in(self, connection: Any, collection_id: str | None, *, timestamp_ms: int) -> None:
+        if collection_id is None:
+            return
+        rows = []
+        for row in self._scan_in(connection, ACTIVITY_ENTITY_TYPE):
+            try:
+                data = activity_data(row[2])
+            except CollectionError:
+                continue
+            if data.get("collectionId") == collection_id:
+                rows.append(row)
+        if len(rows) < MAX_ACTIVITY_PER_COLLECTION:
+            return
+        rows.sort(key=lambda row: (row[4], row[0]))
+        for entity_id, revision, _payload, _created, _updated in rows[: len(rows) - MAX_ACTIVITY_PER_COLLECTION + 1]:
+            try:
+                self._delete_in(
+                    connection,
+                    ACTIVITY_ENTITY_TYPE,
+                    entity_id,
+                    expected_revision=revision,
+                    timestamp_ms=timestamp_ms,
+                )
+            except CollectionError:
+                continue
 
     # -- collection readers
 
@@ -705,11 +872,6 @@ class SQLiteCollectionRepository:
     ) -> Collection:
         fields = validate_collection_fields(name=name, description=description, tags=tags, favorite=favorite, private=private)
         identifier = validate_identifier(collection_id, label="collection_id") if collection_id else generate_id("col")
-        existing, total = self.list_collections(page=1, page_size=MAX_COLLECTIONS)
-        if any(item.collection_id == identifier for item in existing):
-            raise CollectionConflictError("collection already exists")
-        if total >= MAX_COLLECTIONS:
-            raise CollectionLimitError(f"a workspace holds at most {MAX_COLLECTIONS} collections")
         timestamp_ms = _now_ms()
         payload = collection_payload(
             collection_id=identifier,
@@ -717,9 +879,32 @@ class SQLiteCollectionRepository:
             created_at_ms=timestamp_ms,
             updated_at_ms=timestamp_ms,
         )
-        record = self._create(COLLECTION_ENTITY_TYPE, collection_entity_id(identifier), payload, timestamp_ms=timestamp_ms)
-        self.record_activity(collection_id=identifier, event_type="collection_created", entity_type=COLLECTION_ENTITY_TYPE, entity_id=identifier)
+        # The duplicate check, the capacity count, the insert and the recorded
+        # activity are one transaction, so two concurrent creators cannot both
+        # pass the count and exceed the workspace bound.
+        with self.database.transaction(write=True) as connection:
+            if self._has_record_in(connection, COLLECTION_ENTITY_TYPE, collection_entity_id(identifier)):
+                raise CollectionConflictError("collection already exists")
+            if self._live_count_in(connection, COLLECTION_ENTITY_TYPE) >= MAX_COLLECTIONS:
+                raise CollectionLimitError(f"a workspace holds at most {MAX_COLLECTIONS} collections")
+            record = self._create_in(connection, COLLECTION_ENTITY_TYPE, collection_entity_id(identifier), payload, timestamp_ms=timestamp_ms)
+            self._record_activity_in(
+                connection,
+                collection_id=identifier,
+                event_type="collection_created",
+                entity_type=COLLECTION_ENTITY_TYPE,
+                entity_id=identifier,
+                occurred_at=self._clock(),
+            )
         return self._collection_of(identifier, record.revision, record.payload, record.created_at, record.updated_at, 0)
+
+    @staticmethod
+    def _has_record_in(connection: Any, entity_type: str, entity_id: str) -> bool:
+        row = connection.execute(
+            "SELECT 1 FROM workspace_records WHERE entity_type = ? AND entity_id = ?",
+            (entity_type, entity_id),
+        ).fetchone()
+        return row is not None
 
     def update_collection(
         self,
@@ -734,36 +919,103 @@ class SQLiteCollectionRepository:
     ) -> Collection:
         validate_identifier(collection_id, label="collection_id")
         _validate_revision(expected_revision)
-        current = self.get_collection(collection_id)
-        fields = validate_collection_fields(
-            name=current.name if name is None else name,
-            description=current.description if description is None else description,
-            tags=list(current.tags) if tags is None else tags,
-            favorite=current.favorite if favorite is None else favorite,
-            private=current.private if private is None else private,
-        )
+        storage_id = collection_entity_id(collection_id)
         timestamp_ms = _now_ms()
-        payload = collection_payload(
-            collection_id=collection_id,
-            fields=fields,
-            created_at_ms=_ms_from_iso(current.created_at),
-            updated_at_ms=timestamp_ms,
-        )
-        record = self._replace(COLLECTION_ENTITY_TYPE, collection_entity_id(collection_id), payload, expected_revision=expected_revision, timestamp_ms=timestamp_ms)
-        self.record_activity(collection_id=collection_id, event_type="collection_updated", entity_type=COLLECTION_ENTITY_TYPE, entity_id=collection_id)
+        # One transaction: the read the fields are derived from, the revision
+        # precondition, the write and the recorded activity.
+        with self.database.transaction(write=True) as connection:
+            revision, payload, created_at, record_updated_at = self._one_in(
+                connection, COLLECTION_ENTITY_TYPE, storage_id, label="collection"
+            )
+            if revision != expected_revision:
+                raise CollectionConflictError("workspace record revision conflict")
+            current = self._collection_of(
+                collection_id,
+                revision,
+                payload,
+                created_at,
+                record_updated_at,
+                self._member_count_in(connection, collection_id),
+            )
+            fields = validate_collection_fields(
+                name=current.name if name is None else name,
+                description=current.description if description is None else description,
+                tags=list(current.tags) if tags is None else tags,
+                favorite=current.favorite if favorite is None else favorite,
+                private=current.private if private is None else private,
+            )
+            updated_payload = collection_payload(
+                collection_id=collection_id,
+                fields=fields,
+                created_at_ms=_ms_from_iso(current.created_at),
+                updated_at_ms=timestamp_ms,
+            )
+            record = self._replace_in(
+                connection,
+                COLLECTION_ENTITY_TYPE,
+                storage_id,
+                updated_payload,
+                expected_revision=expected_revision,
+                timestamp_ms=timestamp_ms,
+            )
+            self._record_activity_in(
+                connection,
+                collection_id=collection_id,
+                event_type="collection_updated",
+                entity_type=COLLECTION_ENTITY_TYPE,
+                entity_id=collection_id,
+                occurred_at=self._clock(),
+            )
         return self._collection_of(collection_id, record.revision, record.payload, record.created_at, record.updated_at, current.item_count)
 
     def delete_collection(self, collection_id: str, *, expected_revision: int) -> Receipt:
         validate_identifier(collection_id, label="collection_id")
         _validate_revision(expected_revision)
-        # Deleting a collection tombstones its items and notes too, so an item
-        # can never outlive the container it was listed in.
-        for item_id, revision, _payload in self._children(ITEM_ENTITY_TYPE, collection_id):
-            self._delete(ITEM_ENTITY_TYPE, item_id, expected_revision=revision)
-        for note_id, revision, _payload in self._children(NOTE_ENTITY_TYPE, collection_id):
-            self._delete(NOTE_ENTITY_TYPE, note_id, expected_revision=revision)
-        tombstone = self._delete(COLLECTION_ENTITY_TYPE, collection_entity_id(collection_id), expected_revision=expected_revision)
-        self.record_activity(collection_id=collection_id, event_type="collection_deleted", entity_type=COLLECTION_ENTITY_TYPE, entity_id=collection_id)
+        storage_id = collection_entity_id(collection_id)
+        timestamp_ms = _now_ms()
+        # The parent is validated FIRST, inside the same transaction that then
+        # tombstones it and every member it holds: a stale revision cannot
+        # remove children, and a failure anywhere rolls the whole operation
+        # back instead of leaving a half-deleted collection.
+        with self.database.transaction(write=True) as connection:
+            revision, _payload, _created, _updated = self._one_in(
+                connection, COLLECTION_ENTITY_TYPE, storage_id, label="collection"
+            )
+            if revision != expected_revision:
+                raise CollectionConflictError("workspace record revision conflict")
+            # Deleting a collection tombstones its items and notes too, so an
+            # item can never outlive the container it was listed in.
+            for item_id, item_revision, _item_payload in self._children_in(connection, ITEM_ENTITY_TYPE, collection_id):
+                self._delete_in(
+                    connection,
+                    ITEM_ENTITY_TYPE,
+                    item_id,
+                    expected_revision=item_revision,
+                    timestamp_ms=timestamp_ms,
+                )
+            for note_id, note_revision, _note_payload in self._children_in(connection, NOTE_ENTITY_TYPE, collection_id):
+                self._delete_in(
+                    connection,
+                    NOTE_ENTITY_TYPE,
+                    note_id,
+                    expected_revision=note_revision,
+                    timestamp_ms=timestamp_ms,
+                )
+            tombstone = self._delete_in(
+                connection,
+                COLLECTION_ENTITY_TYPE,
+                storage_id,
+                expected_revision=expected_revision,
+                timestamp_ms=timestamp_ms,
+            )
+            self._record_activity_in(
+                connection,
+                collection_id=collection_id,
+                event_type="collection_deleted",
+                entity_type=COLLECTION_ENTITY_TYPE,
+                entity_id=collection_id,
+                occurred_at=self._clock(),
+            )
         return Receipt(
             operation="delete_collection",
             entity_type=COLLECTION_ENTITY_TYPE,
@@ -773,15 +1025,8 @@ class SQLiteCollectionRepository:
         )
 
     def _children(self, entity_type: str, collection_id: str) -> list[tuple[str, int, Mapping[str, Any]]]:
-        children: list[tuple[str, int, Mapping[str, Any]]] = []
-        for entity_id, revision, payload, _created, _updated in self._scan(entity_type):
-            try:
-                data = unwrap_payload(payload, label="child record")
-            except CollectionError:
-                continue
-            if data.get("collectionId") == collection_id:
-                children.append((entity_id, revision, payload))
-        return children
+        with self.database.transaction() as connection:
+            return self._children_in(connection, entity_type, collection_id)
 
     # -- items
 
@@ -856,7 +1101,7 @@ class SQLiteCollectionRepository:
         snapshot: Any = None,
         item_id: str | None = None,
     ) -> CollectionItem:
-        collection = self.get_collection(collection_id)
+        validate_identifier(collection_id, label="collection_id")
         if item_kind not in COLLECTION_ITEM_KINDS:
             raise CollectionError(f"unsupported collection item kind; expected one of {', '.join(COLLECTION_ITEM_KINDS)}")
         if not isinstance(item_kind, str):
@@ -871,8 +1116,6 @@ class SQLiteCollectionRepository:
         else:
             citation_text = _require_text(citation, label="citation", maximum=MAX_CITATION_LENGTH, allow_empty=True)
             excerpt_text = _require_text(excerpt, label="excerpt", maximum=MAX_EXCERPT_LENGTH)
-        if collection.item_count >= MAX_ITEMS_PER_COLLECTION:
-            raise CollectionLimitError(f"a collection holds at most {MAX_ITEMS_PER_COLLECTION} items")
         identifier = validate_identifier(item_id, label="item_id") if item_id else generate_id("itm")
         if item_kind == "note":
             note = self.add_note(collection_id, text=excerpt_text, evidence_ref=validated_reference or None, note_id=identifier)
@@ -889,28 +1132,52 @@ class SQLiteCollectionRepository:
             snapshot=validated_snapshot,
             saved_at_ms=timestamp_ms,
         )
-        record = self._create(ITEM_ENTITY_TYPE, item_entity_id(identifier), payload, timestamp_ms=timestamp_ms)
-        self.record_activity(collection_id=collection_id, event_type="item_added", entity_type=ITEM_ENTITY_TYPE, entity_id=identifier)
+        # The parent's liveness and the capacity count are read inside the same
+        # transaction as the insert, so a member can never become live under a
+        # tombstoned parent and a capacity race cannot exceed the bound.
+        with self.database.transaction(write=True) as connection:
+            self._one_in(connection, COLLECTION_ENTITY_TYPE, collection_entity_id(collection_id), label="collection")
+            if self._member_count_in(connection, collection_id) >= MAX_ITEMS_PER_COLLECTION:
+                raise CollectionLimitError(f"a collection holds at most {MAX_ITEMS_PER_COLLECTION} items")
+            record = self._create_in(connection, ITEM_ENTITY_TYPE, item_entity_id(identifier), payload, timestamp_ms=timestamp_ms)
+            self._record_activity_in(
+                connection,
+                collection_id=collection_id,
+                event_type="item_added",
+                entity_type=ITEM_ENTITY_TYPE,
+                entity_id=identifier,
+                occurred_at=self._clock(),
+            )
         return self._item_of(identifier, record.revision, record.payload, record.created_at, record.updated_at)
 
     def delete_item(self, collection_id: str, item_id: str, *, expected_revision: int) -> Receipt:
         validate_identifier(collection_id, label="collection_id")
         validate_identifier(item_id, label="item_id")
         _validate_revision(expected_revision)
-        item = self.get_item(item_id)
-        # Parent ownership: an item is only removable through the collection
-        # that actually holds it.
-        if item.collection_id != collection_id:
-            raise CollectionNotFoundError("item does not belong to this collection")
-        entity_type = NOTE_ENTITY_TYPE if item.item_kind == "note" else ITEM_ENTITY_TYPE
-        storage_id = item_id if item.item_kind == "note" else item_entity_id(item_id)
-        tombstone = self._delete(entity_type, storage_id, expected_revision=expected_revision)
-        self.record_activity(
-            collection_id=collection_id,
-            event_type="note_removed" if item.item_kind == "note" else "item_removed",
-            entity_type=entity_type,
-            entity_id=item_id,
-        )
+        timestamp_ms = _now_ms()
+        with self.database.transaction(write=True) as connection:
+            item = self._item_in(connection, item_id)
+            # Parent ownership: an item is only removable through the collection
+            # that actually holds it.
+            if item.collection_id != collection_id:
+                raise CollectionNotFoundError("item does not belong to this collection")
+            entity_type = NOTE_ENTITY_TYPE if item.item_kind == "note" else ITEM_ENTITY_TYPE
+            storage_id = item_id if item.item_kind == "note" else item_entity_id(item_id)
+            tombstone = self._delete_in(
+                connection,
+                entity_type,
+                storage_id,
+                expected_revision=expected_revision,
+                timestamp_ms=timestamp_ms,
+            )
+            self._record_activity_in(
+                connection,
+                collection_id=collection_id,
+                event_type="note_removed" if item.item_kind == "note" else "item_removed",
+                entity_type=entity_type,
+                entity_id=item_id,
+                occurred_at=self._clock(),
+            )
         return Receipt(
             operation="delete_item",
             entity_type=entity_type,
@@ -918,6 +1185,29 @@ class SQLiteCollectionRepository:
             revision=tombstone.revision,
             deleted_at=tombstone.deleted_at,
         )
+
+    def _item_in(self, connection: Any, item_id: str) -> CollectionItem:
+        """One member read inside a caller-owned transaction."""
+        for entity_type in (ITEM_ENTITY_TYPE, NOTE_ENTITY_TYPE):
+            for entity_id, revision, payload, created_at, updated_at in self._scan_in(connection, entity_type):
+                try:
+                    item = self._item_of(entity_id, revision, payload, created_at, updated_at)
+                except CollectionError:
+                    continue
+                if item.item_id == item_id:
+                    return item
+        tombstone = connection.execute(
+            "SELECT 1 FROM tombstones WHERE entity_type = ? AND entity_id IN (?, ?)",
+            (ITEM_ENTITY_TYPE, item_entity_id(item_id), item_id),
+        ).fetchone()
+        if tombstone is not None:
+            raise CollectionDeletedError("item has been deleted")
+        if connection.execute(
+            "SELECT 1 FROM tombstones WHERE entity_type = ? AND entity_id = ?",
+            (NOTE_ENTITY_TYPE, item_id),
+        ).fetchone() is not None:
+            raise CollectionDeletedError("item has been deleted")
+        raise CollectionNotFoundError("item does not exist")
 
     # -- notes
 
@@ -956,17 +1246,10 @@ class SQLiteCollectionRepository:
         evidence_ref: Any = None,
         note_id: str | None = None,
     ) -> CollectionNote:
-        collection = self.get_collection(collection_id)
+        validate_identifier(collection_id, label="collection_id")
         note_text = _require_text(text, label="note text", maximum=MAX_NOTE_LENGTH)
         validated_ref = None if evidence_ref is None else validate_evidence_reference(evidence_ref)
-        existing, total = self.list_notes(collection_id, page=1, page_size=MAX_NOTES_PER_COLLECTION)
-        if total >= MAX_NOTES_PER_COLLECTION:
-            raise CollectionLimitError(f"a collection holds at most {MAX_NOTES_PER_COLLECTION} notes")
         identifier = validate_identifier(note_id, label="note_id") if note_id else generate_id("note")
-        if any(note.note_id == identifier for note in existing):
-            raise CollectionConflictError("note already exists")
-        if collection.item_count >= MAX_ITEMS_PER_COLLECTION:
-            raise CollectionLimitError(f"a collection holds at most {MAX_ITEMS_PER_COLLECTION} items")
         timestamp_ms = _now_ms()
         payload = note_payload(
             note_id=identifier,
@@ -976,8 +1259,25 @@ class SQLiteCollectionRepository:
             created_at_ms=timestamp_ms,
             updated_at_ms=timestamp_ms,
         )
-        record = self._create(NOTE_ENTITY_TYPE, identifier, payload, timestamp_ms=timestamp_ms)
-        self.record_activity(collection_id=collection_id, event_type="note_added", entity_type=NOTE_ENTITY_TYPE, entity_id=identifier)
+        # Parent liveness, the note bound, the duplicate check and the insert
+        # share one transaction.
+        with self.database.transaction(write=True) as connection:
+            self._one_in(connection, COLLECTION_ENTITY_TYPE, collection_entity_id(collection_id), label="collection")
+            if self._note_count_in(connection, collection_id) >= MAX_NOTES_PER_COLLECTION:
+                raise CollectionLimitError(f"a collection holds at most {MAX_NOTES_PER_COLLECTION} notes")
+            if self._member_count_in(connection, collection_id) >= MAX_ITEMS_PER_COLLECTION:
+                raise CollectionLimitError(f"a collection holds at most {MAX_ITEMS_PER_COLLECTION} items")
+            if self._has_record_in(connection, NOTE_ENTITY_TYPE, identifier):
+                raise CollectionConflictError("note already exists")
+            record = self._create_in(connection, NOTE_ENTITY_TYPE, identifier, payload, timestamp_ms=timestamp_ms)
+            self._record_activity_in(
+                connection,
+                collection_id=collection_id,
+                event_type="note_added",
+                entity_type=NOTE_ENTITY_TYPE,
+                entity_id=identifier,
+                occurred_at=self._clock(),
+            )
         return CollectionNote(
             note_id=identifier,
             collection_id=collection_id,
@@ -988,26 +1288,55 @@ class SQLiteCollectionRepository:
             updated_at=record.updated_at,
         )
 
+    @classmethod
+    def _note_count_in(cls, connection: Any, collection_id: str) -> int:
+        count = 0
+        for _entity_id, _revision, payload, _created, _updated in cls._scan_in(connection, NOTE_ENTITY_TYPE):
+            try:
+                data = unwrap_payload(payload, label="note record")
+            except CollectionError:
+                continue
+            if data.get("collectionId") == collection_id:
+                count += 1
+        return count
+
     def update_note(self, collection_id: str, note_id: str, *, expected_revision: int, text: Any) -> CollectionNote:
         validate_identifier(collection_id, label="collection_id")
         validate_identifier(note_id, label="note_id")
         _validate_revision(expected_revision)
-        _revision, payload, created_at, _updated = self._one(NOTE_ENTITY_TYPE, note_id, label="note")
-        data = unwrap_payload(payload, label="note record")
-        if data.get("collectionId") != collection_id:
-            raise CollectionNotFoundError("note does not belong to this collection")
         note_text = _require_text(text, label="note text", maximum=MAX_NOTE_LENGTH)
         timestamp_ms = _now_ms()
-        updated = note_payload(
-            note_id=note_id,
-            collection_id=collection_id,
-            text=note_text,
-            evidence_ref=dict(data["evidenceRef"]) if isinstance(data.get("evidenceRef"), Mapping) else None,
-            created_at_ms=_ms_from_iso(created_at),
-            updated_at_ms=timestamp_ms,
-        )
-        record = self._replace(NOTE_ENTITY_TYPE, note_id, updated, expected_revision=expected_revision, timestamp_ms=timestamp_ms)
-        self.record_activity(collection_id=collection_id, event_type="note_updated", entity_type=NOTE_ENTITY_TYPE, entity_id=note_id)
+        with self.database.transaction(write=True) as connection:
+            _revision, payload, created_at, _updated = self._one_in(
+                connection, NOTE_ENTITY_TYPE, note_id, label="note"
+            )
+            data = unwrap_payload(payload, label="note record")
+            if data.get("collectionId") != collection_id:
+                raise CollectionNotFoundError("note does not belong to this collection")
+            updated = note_payload(
+                note_id=note_id,
+                collection_id=collection_id,
+                text=note_text,
+                evidence_ref=dict(data["evidenceRef"]) if isinstance(data.get("evidenceRef"), Mapping) else None,
+                created_at_ms=_ms_from_iso(created_at),
+                updated_at_ms=timestamp_ms,
+            )
+            record = self._replace_in(
+                connection,
+                NOTE_ENTITY_TYPE,
+                note_id,
+                updated,
+                expected_revision=expected_revision,
+                timestamp_ms=timestamp_ms,
+            )
+            self._record_activity_in(
+                connection,
+                collection_id=collection_id,
+                event_type="note_updated",
+                entity_type=NOTE_ENTITY_TYPE,
+                entity_id=note_id,
+                occurred_at=self._clock(),
+            )
         return CollectionNote(
             note_id=note_id,
             collection_id=collection_id,
@@ -1034,47 +1363,15 @@ class SQLiteCollectionRepository:
             raise CollectionError("unsupported activity event")
         validate_identifier(entity_id, label="entity_id")
         occurred_at = self._clock()
-        activity_id = generate_id("act")
-        self._prune_activity(collection_id)
-        self._create(
-            ACTIVITY_ENTITY_TYPE,
-            activity_id,
-            activity_payload(
-                activity_id=activity_id,
+        with self.database.transaction(write=True) as connection:
+            return self._record_activity_in(
+                connection,
                 collection_id=collection_id,
+                event_type=event_type,
                 entity_type=entity_type,
                 entity_id=entity_id,
-                event_type=event_type,
                 occurred_at=occurred_at,
-            ),
-            timestamp_ms=_ms_from_iso(occurred_at),
-        )
-        return CollectionActivity(
-            activity_id=activity_id,
-            collection_id=collection_id,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            event_type=event_type,
-            occurred_at=occurred_at,
-        )
-
-    def _prune_activity(self, collection_id: str | None) -> None:
-        rows = []
-        for row in self._scan(ACTIVITY_ENTITY_TYPE):
-            try:
-                data = activity_data(row[2])
-            except CollectionError:
-                continue
-            if data.get("collectionId") == collection_id and collection_id is not None:
-                rows.append(row)
-        if len(rows) < MAX_ACTIVITY_PER_COLLECTION:
-            return
-        rows.sort(key=lambda row: (row[4], row[0]))
-        for _entity_id, revision, _payload, _created, _updated in rows[: len(rows) - MAX_ACTIVITY_PER_COLLECTION + 1]:
-            try:
-                self._delete(ACTIVITY_ENTITY_TYPE, _entity_id, expected_revision=revision)
-            except CollectionError:
-                continue
+            )
 
     def list_activity(self, collection_id: str, *, page: int = 1, page_size: int = DEFAULT_PAGE_SIZE) -> tuple[list[CollectionActivity], int]:
         page, page_size = _bounded_page(page, page_size)

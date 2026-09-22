@@ -188,7 +188,13 @@ def _canonical_payload(
 
 
 class SQLiteVersionedRecordRepository:
-    """Atomic revision/conflict/tombstone primitives without product workflows."""
+    """Atomic revision/conflict/tombstone primitives without product workflows.
+
+    Every public method is one write transaction. The ``*_in`` variants apply the
+    exact same rules on a caller-supplied connection and never commit, so a
+    domain repository can compose several record operations into one logical
+    mutation without inventing a second set of revision or tombstone semantics.
+    """
 
     def __init__(
         self,
@@ -229,49 +235,60 @@ class SQLiteVersionedRecordRepository:
             deleted_at=str(row["deleted_at"]),
         )
 
-    def get(self, entity_type: str, entity_id: str) -> VersionedRecord | None:
+    # -- connection-scoped operations (never commit on their own) ----------
+
+    def get_in(
+        self,
+        connection: sqlite3.Connection,
+        entity_type: str,
+        entity_id: str,
+    ) -> VersionedRecord | None:
         _validate_entity(entity_type, entity_id)
-        with self.database.connection() as connection:
-            row = connection.execute(
-                "SELECT entity_type, entity_id, revision, payload_json, created_at, updated_at "
-                "FROM workspace_records WHERE entity_type = ? AND entity_id = ?",
-                (entity_type, entity_id),
-            ).fetchone()
+        row = connection.execute(
+            "SELECT entity_type, entity_id, revision, payload_json, created_at, updated_at "
+            "FROM workspace_records WHERE entity_type = ? AND entity_id = ?",
+            (entity_type, entity_id),
+        ).fetchone()
         return self._record(row) if row else None
 
-    def get_tombstone(self, entity_type: str, entity_id: str) -> Tombstone | None:
+    def get_tombstone_in(
+        self,
+        connection: sqlite3.Connection,
+        entity_type: str,
+        entity_id: str,
+    ) -> Tombstone | None:
         _validate_entity(entity_type, entity_id)
-        with self.database.connection() as connection:
-            row = connection.execute(
-                "SELECT entity_type, entity_id, revision, deleted_at "
-                "FROM tombstones WHERE entity_type = ? AND entity_id = ?",
-                (entity_type, entity_id),
-            ).fetchone()
+        row = connection.execute(
+            "SELECT entity_type, entity_id, revision, deleted_at "
+            "FROM tombstones WHERE entity_type = ? AND entity_id = ?",
+            (entity_type, entity_id),
+        ).fetchone()
         return self._tombstone(row) if row else None
 
-    def create(
+    def create_in(
         self,
+        connection: sqlite3.Connection,
         entity_type: str,
         entity_id: str,
         payload: Mapping[str, object],
+        *,
+        timestamp: str,
     ) -> VersionedRecord:
         _validate_entity(entity_type, entity_id)
         payload_json = _canonical_payload(payload, self._forbidden_secret_values)
-        timestamp = self._clock()
         try:
-            with self.database.transaction(write=True) as connection:
-                deleted = connection.execute(
-                    "SELECT 1 FROM tombstones WHERE entity_type = ? AND entity_id = ?",
-                    (entity_type, entity_id),
-                ).fetchone()
-                if deleted:
-                    raise RecordDeletedError("workspace record has been deleted")
-                connection.execute(
-                    "INSERT INTO workspace_records("
-                    "entity_type, entity_id, revision, payload_json, created_at, updated_at"
-                    ") VALUES (?, ?, 1, ?, ?, ?)",
-                    (entity_type, entity_id, payload_json, timestamp, timestamp),
-                )
+            deleted = connection.execute(
+                "SELECT 1 FROM tombstones WHERE entity_type = ? AND entity_id = ?",
+                (entity_type, entity_id),
+            ).fetchone()
+            if deleted:
+                raise RecordDeletedError("workspace record has been deleted")
+            connection.execute(
+                "INSERT INTO workspace_records("
+                "entity_type, entity_id, revision, payload_json, created_at, updated_at"
+                ") VALUES (?, ?, 1, ?, ?, ?)",
+                (entity_type, entity_id, payload_json, timestamp, timestamp),
+            )
         except sqlite3.IntegrityError as error:
             raise RecordConflictError("workspace record already exists") from error
         return VersionedRecord(
@@ -283,6 +300,95 @@ class SQLiteVersionedRecordRepository:
             updated_at=timestamp,
         )
 
+    def replace_in(
+        self,
+        connection: sqlite3.Connection,
+        entity_type: str,
+        entity_id: str,
+        payload: Mapping[str, object],
+        *,
+        expected_revision: int,
+        timestamp: str,
+    ) -> VersionedRecord:
+        _validate_entity(entity_type, entity_id)
+        if expected_revision < 1:
+            raise ValueError("expected revision must be positive")
+        payload_json = _canonical_payload(payload, self._forbidden_secret_values)
+        cursor = connection.execute(
+            "UPDATE workspace_records SET payload_json = ?, revision = revision + 1, "
+            "updated_at = ? WHERE entity_type = ? AND entity_id = ? AND revision = ?",
+            (payload_json, timestamp, entity_type, entity_id, expected_revision),
+        )
+        if cursor.rowcount != 1:
+            self._raise_missing_or_conflict(connection, entity_type, entity_id)
+        row = connection.execute(
+            "SELECT entity_type, entity_id, revision, payload_json, created_at, updated_at "
+            "FROM workspace_records WHERE entity_type = ? AND entity_id = ?",
+            (entity_type, entity_id),
+        ).fetchone()
+        if row is None:
+            raise RecordNotFoundError("workspace record does not exist")
+        return self._record(row)
+
+    def delete_in(
+        self,
+        connection: sqlite3.Connection,
+        entity_type: str,
+        entity_id: str,
+        *,
+        expected_revision: int,
+        timestamp: str,
+    ) -> Tombstone:
+        _validate_entity(entity_type, entity_id)
+        if expected_revision < 1:
+            raise ValueError("expected revision must be positive")
+        row = connection.execute(
+            "SELECT revision FROM workspace_records "
+            "WHERE entity_type = ? AND entity_id = ?",
+            (entity_type, entity_id),
+        ).fetchone()
+        if row is None:
+            self._raise_missing_or_conflict(connection, entity_type, entity_id)
+        current_revision = int(row["revision"])
+        if current_revision != expected_revision:
+            raise RecordConflictError("workspace record revision conflict")
+        tombstone_revision = current_revision + 1
+        connection.execute(
+            "DELETE FROM workspace_records WHERE entity_type = ? AND entity_id = ?",
+            (entity_type, entity_id),
+        )
+        connection.execute(
+            "INSERT INTO tombstones(entity_type, entity_id, revision, deleted_at) "
+            "VALUES (?, ?, ?, ?)",
+            (entity_type, entity_id, tombstone_revision, timestamp),
+        )
+        return Tombstone(
+            entity_type=entity_type,
+            entity_id=entity_id,
+            revision=tombstone_revision,
+            deleted_at=timestamp,
+        )
+
+    # -- public operations: one call, one transaction ----------------------
+
+    def get(self, entity_type: str, entity_id: str) -> VersionedRecord | None:
+        with self.database.connection() as connection:
+            return self.get_in(connection, entity_type, entity_id)
+
+    def get_tombstone(self, entity_type: str, entity_id: str) -> Tombstone | None:
+        with self.database.connection() as connection:
+            return self.get_tombstone_in(connection, entity_type, entity_id)
+
+    def create(
+        self,
+        entity_type: str,
+        entity_id: str,
+        payload: Mapping[str, object],
+    ) -> VersionedRecord:
+        timestamp = self._clock()
+        with self.database.transaction(write=True) as connection:
+            return self.create_in(connection, entity_type, entity_id, payload, timestamp=timestamp)
+
     def replace(
         self,
         entity_type: str,
@@ -291,33 +397,16 @@ class SQLiteVersionedRecordRepository:
         *,
         expected_revision: int,
     ) -> VersionedRecord:
-        _validate_entity(entity_type, entity_id)
-        if expected_revision < 1:
-            raise ValueError("expected revision must be positive")
-        payload_json = _canonical_payload(payload, self._forbidden_secret_values)
         timestamp = self._clock()
         with self.database.transaction(write=True) as connection:
-            cursor = connection.execute(
-                "UPDATE workspace_records SET payload_json = ?, revision = revision + 1, "
-                "updated_at = ? WHERE entity_type = ? AND entity_id = ? AND revision = ?",
-                (
-                    payload_json,
-                    timestamp,
-                    entity_type,
-                    entity_id,
-                    expected_revision,
-                ),
+            return self.replace_in(
+                connection,
+                entity_type,
+                entity_id,
+                payload,
+                expected_revision=expected_revision,
+                timestamp=timestamp,
             )
-            if cursor.rowcount != 1:
-                self._raise_missing_or_conflict(connection, entity_type, entity_id)
-            row = connection.execute(
-                "SELECT entity_type, entity_id, revision, payload_json, created_at, updated_at "
-                "FROM workspace_records WHERE entity_type = ? AND entity_id = ?",
-                (entity_type, entity_id),
-            ).fetchone()
-        if row is None:
-            raise RecordNotFoundError("workspace record does not exist")
-        return self._record(row)
 
     def delete(
         self,
@@ -326,37 +415,15 @@ class SQLiteVersionedRecordRepository:
         *,
         expected_revision: int,
     ) -> Tombstone:
-        _validate_entity(entity_type, entity_id)
-        if expected_revision < 1:
-            raise ValueError("expected revision must be positive")
         timestamp = self._clock()
         with self.database.transaction(write=True) as connection:
-            row = connection.execute(
-                "SELECT revision FROM workspace_records "
-                "WHERE entity_type = ? AND entity_id = ?",
-                (entity_type, entity_id),
-            ).fetchone()
-            if row is None:
-                self._raise_missing_or_conflict(connection, entity_type, entity_id)
-            current_revision = int(row["revision"])
-            if current_revision != expected_revision:
-                raise RecordConflictError("workspace record revision conflict")
-            tombstone_revision = current_revision + 1
-            connection.execute(
-                "DELETE FROM workspace_records WHERE entity_type = ? AND entity_id = ?",
-                (entity_type, entity_id),
+            return self.delete_in(
+                connection,
+                entity_type,
+                entity_id,
+                expected_revision=expected_revision,
+                timestamp=timestamp,
             )
-            connection.execute(
-                "INSERT INTO tombstones(entity_type, entity_id, revision, deleted_at) "
-                "VALUES (?, ?, ?, ?)",
-                (entity_type, entity_id, tombstone_revision, timestamp),
-            )
-        return Tombstone(
-            entity_type=entity_type,
-            entity_id=entity_id,
-            revision=tombstone_revision,
-            deleted_at=timestamp,
-        )
 
     @staticmethod
     def _raise_missing_or_conflict(

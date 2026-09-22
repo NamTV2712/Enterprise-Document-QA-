@@ -203,6 +203,10 @@ http://localhost:8000/docs
 | `GET` | `/chunks/{chunk_id}` | Full safe source text and metadata for one indexed chunk; filesystem paths are never returned |
 | `GET` | `/system/info` | Allowlisted corpus, retrieval, and build metadata |
 | `GET` | `/system/configuration-status` | Protected, redacted local-workspace capability status; unavailable in public mode |
+| `GET` | `/models` | Public, provider-free registry of configured and observed generator, embedding, and reranker identities; optional `role` filter |
+| `POST` | `/models/{model_id}/tests` | Local execution-gated runtime-identity check; never performs inference or a provider request |
+| `GET` | `/datasets` | Public, provider-free serving-corpus and evaluation-test-set summaries; optional `kind` filter |
+| `GET` | `/datasets/{dataset_id}` | Public dataset coverage and allowlisted provenance detail |
 | `GET` | `/evaluation/runs` | List validated public evaluation summaries with safe filters |
 | `GET` | `/evaluation/runs/{run_id}` | Read one validated public evaluation report |
 | `GET` | `/cache/stats` | Semantic cache metrics |
@@ -210,6 +214,15 @@ http://localhost:8000/docs
 | `POST` | `/cache/test` | Rate-limited query embedding comparison |
 | `GET` | `/session/{session_id}/history` | Inspect conversation history |
 | `DELETE` | `/session/{session_id}` | Clear one conversation session |
+
+Registry responses use stable role/dataset IDs and keep configuration, runtime
+load, and availability separate. A configured remote generator is not reported
+as reachable without a provider probe; ordinary registry reads never make one.
+Corpus counts reuse the document catalog statistics, while index provenance is
+reported as degraded when its manifest is absent, invalid, or inconsistent.
+Only allowlisted identifiers and credential-presence state are returned—API
+keys, authorization values, cache/database paths, and developer paths are not
+part of these contracts.
 
 The two non-streaming query endpoints enforce a 60-second request timeout and return HTTP `504` when exceeded. Timed-out synchronous workers are abandoned so they cannot hold the response open, but Python cannot safely kill a thread already running; that worker may finish in the background and its result is discarded.
 

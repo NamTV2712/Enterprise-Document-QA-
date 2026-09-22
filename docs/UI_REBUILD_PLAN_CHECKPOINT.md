@@ -4339,3 +4339,143 @@ connection/token owner; API-001 remains unchanged, and Collections continues to
 show its truthful unavailable/unauthorized state until that staged integration
 is implemented. Subject to normal task scoping, the next product task remains
 `API-006 — Model/dataset registries`.
+
+## API-006 — Model/dataset registries
+
+### API-006-A — Exact contract and authority map
+
+Status: ACTIVE. Starting HEAD is `2a651fc` on
+`codex/bilingual-research-workspace`; the tracked tree is clean, the 12
+classified untracked artifact/diagnostic entries remain preserved, and nothing
+is staged.
+
+The master-plan contract resolves to these additive routes:
+
+- `GET /models?role=generator|embedding|reranker` — public (`P`), allowlisted,
+  provider-free configured/runtime registry;
+- `POST /models/{id}/tests` — execution-gated (`J`) bounded local
+  `runtime_identity` test with no provider request, inference, model download,
+  or cache mutation;
+- `GET /datasets?kind=corpus|evaluation` — public (`P`), provider-free registry
+  summaries;
+- `GET /datasets/{id}` — public (`P`) coverage and provenance detail, with 404
+  for an unknown opaque registry ID.
+
+Stable model IDs are the canonical roles `generator`, `embedding`, and
+`reranker`, returned in that order. Each entry separates configured identity
+and revision from observed runtime identity and revision, and reports
+configuration, load, and availability independently. Remote generator
+reachability remains `unknown` unless an explicit provider operation proves it;
+ordinary reads never perform that operation. Embedding/reranker availability is
+reported only from an already-loaded local runtime object. An absent revision
+is `unknown`, not an empty version claim.
+
+Model authorities are the existing Generator default/runtime identity,
+`Settings.embedding_model_*`, `Settings.reranker_model_*`, and the already
+constructed application pipeline. Credential inspection is reduced to a
+boolean configuration fact and no value/alias is serialized. No setting object,
+provider client, model cache path, or device path is exposed.
+
+Stable dataset IDs are `serving-corpus` and `evaluation-test-set`, ordered
+corpus then evaluation. Serving counts and year coverage reuse API-003
+`build_stats` over the application-owned catalog. Index provenance is
+allowlisted from the configured Qdrant index manifest and checked against
+catalog chunk totals plus the configured embedding binding; missing, invalid,
+or mismatched manifests produce explicit degraded provenance rather than fake
+zero/healthy data. The evaluation dataset derives only aggregate coverage and a
+deterministic content fingerprint from `src.evaluation.test_set.TEST_SET`; it
+does not expose questions or ground truth. Dataset is not collection, document,
+search snapshot, retrieval preset, or evaluation report.
+
+Planned files: a typed registry model module, a provider-free registry domain
+service, a thin registry router, app composition and route-contract updates,
+focused API-006 tests, then README/architecture/current project records. No
+frontend runtime file, retrieval/generation algorithm, corpus/index artifact,
+workspace schema, or future UI-009/DATA-004/API-007 behavior is in scope.
+
+### API-006-B — Registry domain and typed contracts
+
+Status: COMPLETE. `src/api/registry_models.py` defines explicit model,
+configuration/load/availability, dataset summary/detail/coverage, provenance,
+and bounded-test response models. `src/api/registry.py` assembles them in fixed
+model-role and dataset order from injected existing authorities. It constructs
+no model, provider client, store, reader, workspace database, or remote request.
+The initial focused API-006 file passes `14/14` tests.
+
+### API-006-C — Model registry and redaction boundary
+
+Status: COMPLETE. The three canonical model IDs are `generator`, `embedding`,
+and `reranker`. Configured identity/revision, observed runtime
+identity/revision, load state, credential-presence state, and availability are
+separate fields. Generator reachability remains unknown without a provider
+probe; already-loaded local embedding/reranker objects may report available
+only when their public identity and configured revision agree. The default
+generator ID was lifted into a shared constant without changing its value or
+generation behavior.
+
+The public-identifier allowlist rejects absolute/local paths, file/credential
+URLs, traversal segments, backslashes, control/unsupported characters, and
+common secret-token prefixes. Secret-bearing settings are inspected only for a
+boolean credential fact. Adversarial tests inject provider secrets, a private
+model-cache path, an unsafe runtime identity, and unsafe manifest metadata and
+prove none are serialized. Reads also use model/provider mocks that fail if
+embedding, reranking, or generation is invoked.
+
+### API-006-D — Dataset registry and provenance
+
+Status: COMPLETE. `serving-corpus` reuses API-003 `build_stats` for document,
+company, chunk, year, section, and configured-company semantics. Its Qdrant
+index manifest is shape-checked, public-field allowlisted, and reconciled with
+catalog chunk count, configured embedding ID/revision, and a recomputed loaded
+corpus fingerprint. Missing, invalid, hash/binding-mismatched, unavailable, and
+genuinely empty states are distinct. `evaluation-test-set` exposes only stable
+aggregate category/priority/ticker/section coverage and a deterministic SHA-256
+revision over the source-controlled `TEST_SET`; question and ground-truth text
+are not returned.
+
+### API-006-E — Router, access, and focused regression
+
+Status: COMPLETE. `src/api/routers/registries.py` owns the four additive routes
+and one execution-gated operation: public `GET /models`, public
+`GET /datasets`, public `GET /datasets/{id}`, and local execution-gated
+`POST /models/{id}/tests`. The bounded test checks configuration/runtime
+identity only and reports `provider_executed=false`; it performs no inference,
+network access, provider call, download, or cache mutation. Public mode returns
+the existing fail-closed 404 for that `J` route. The API-002 route inventory now
+records 67 application routes and retains the frozen legacy extracted-route
+OpenAPI digest.
+
+Focused API-006 + API-001/API-002/API-003 + manifest/embedding/index + model
+regressions pass `175/175` with five existing warnings. Compile/import checks
+pass, and direct application inspection reports exactly the four registry paths
+above. No frontend file is changed.
+
+Implementation and focused tests are committed as `de907a7`
+(`feat(api): add truthful model and dataset registries`). The full hermetic
+backend gate is the next operation; until it completes, API-006 remains active
+and its result is unknown.
+
+### API-006-F — Full gate, audit, and closure
+
+Status: COMPLETE. The full hermetic backend suite in the main worktree passed
+`1050/1050` with zero failures and 188 existing dependency/parser warnings in
+132.90 seconds. The count is higher than the clean-checkout REPAIR-005 baseline
+because this checkout retains the deliberately excluded local corpus/evaluation
+artifacts; no skip was forced and no canonical data was changed. The focused
+registry file passes `14/14`; the cross-layer API-006 regression gate passes
+`175/175`. Compile/import and 67-route inspection passed. No frontend file
+changed, so TypeScript, Vitest, build, and browser gates were correctly not run.
+
+The API-006 delta contains no provider response, environment dump, credential,
+authorization value, database, log, scanner state, generated build output,
+cache, report, or real private/developer path. Synthetic secret/path strings
+exist only in redaction tests. All 12 pre-existing excluded untracked
+artifact/diagnostic entries remain untracked and preserved. Ordinary registry
+reads made no network, SEC, Groq, Hugging Face, Qdrant Cloud, inference,
+download, or cache-mutating call. The implementation commit is `de907a7`
+(`feat(api): add truthful model and dataset registries`).
+
+API-006 is complete without model/dataset mutation or frontend work. The master
+dependency graph at `docs/UI_REBUILD_MASTER_PLAN.md` places `UI-009 —
+Models/Datasets` immediately after API-006; that is the exact next action and it
+has not started.

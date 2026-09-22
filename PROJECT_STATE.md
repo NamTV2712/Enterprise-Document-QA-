@@ -1,5 +1,65 @@
 # Project State
 
+## API-006 model/dataset registries (2026-09-22)
+
+API-006 is complete. Four additive typed routes now provide the future UI-009
+Models/Datasets pages with authoritative backend data: public provider-free
+`GET /models` (optional `role` filter), execution-gated local
+`POST /models/{model_id}/tests`, public provider-free `GET /datasets` (optional
+`kind` filter), and public provider-free `GET /datasets/{dataset_id}`. The
+application now composes 67 routes. No frontend runtime file changed.
+
+The model registry has three stable IDs in fixed order: `generator`,
+`embedding`, and `reranker`. It reads the generator's shared default/runtime
+identity, configured embedding/reranker IDs and revisions, existing loaded
+pipeline objects, and provider-key presence only. Configuration, load,
+credential presence, and availability are distinct. A configured Groq model is
+not claimed reachable: without a provider operation its availability remains
+unknown; absent credentials, unsafe identities, or configuration/runtime
+mismatches are unavailable. Local models are available only when an actual
+runtime object is loaded with the configured identity/revision. The sole
+bounded test is `runtime_identity`; it reports `provider_executed=false` and
+does not infer, embed, rerank, download, mutate caches, or contact a provider.
+
+The dataset registry has two stable IDs in fixed order: `serving-corpus` and
+`evaluation-test-set`. Serving document/company/chunk/year/section and
+configured-company counts reuse API-003 `build_stats`. Index provenance comes
+from the configured Qdrant manifest and is reconciled against catalog chunk
+count, embedding binding, and a fingerprint of the loaded retrieval corpus.
+Unavailable catalog state is not represented as an empty dataset; missing,
+invalid, or mismatched manifests and a genuinely empty catalog are explicit
+degraded states. The evaluation entry exposes only aggregate coverage and a
+deterministic SHA-256 revision derived from the source-controlled `TEST_SET`;
+questions and ground truth are not returned.
+
+All response models are allowlists. API keys, bearer/authorization values,
+settings dumps, database/cache paths, developer-machine paths, and unsafe
+manifest/model identifiers are excluded. Adversarial tests inject synthetic
+secret-looking and private-path values and verify that serialization cannot
+contain them. Registry read tests install fail-on-call model/provider mocks,
+proving ordinary reads are hermetic and provider-free. Public access uses the
+API-001 provider-free grant; the test POST uses the existing execution grant
+and fails closed with 404 in public mode. No switching, installation,
+load/unload, upload/delete/reindex, durable job, pipeline execution, retrieval,
+or generation behavior was added.
+
+Implementation and focused tests are commit `de907a7`
+(`feat(api): add truthful model and dataset registries`). Focused API-006 and
+relevant API-001/API-002/API-003, manifest, embedding, index, and model
+regressions pass 175/175 with five existing warnings. The full hermetic suite in
+the main worktree passes 1050/1050 with 188 existing dependency/parser warnings
+and zero failures; its higher count than the clean-checkout baseline reflects
+the preserved local git-ignored artifacts. Compile/import checks pass and the
+application reports the four expected registry routes. No network, SEC, Groq,
+Hugging Face, or Qdrant Cloud call was made.
+
+Known limitations: generator reachability is intentionally unknown without an
+explicit provider test; model health, latency, and quality are not fabricated;
+the serving dataset is degraded when its manifest cannot be reconciled; the
+registry is descriptive and cannot mutate models or datasets. The exact next
+task in the master-plan dependency graph is `UI-009 — Models/Datasets`; it has
+not started.
+
 ## UI-008 Collections workspace (2026-09-22)
 
 UI-008 is complete. `/collections` and `/collections/:collectionId` are rebuilt

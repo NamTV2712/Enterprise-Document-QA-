@@ -34,12 +34,25 @@ configuration is limited to `VITE_*` values and must not contain secrets.
 
 `src/api/app.py` owns FastAPI creation, lifespan/bootstrap, shared runtime
 state, middleware, exception handling, and route registration. Existing
-health, corpus metadata, system information, published evaluation, session,
-cache, and metrics transports are grouped under `src/api/routers/`; they receive
+health, corpus metadata, system information, model/dataset registries,
+published evaluation, session, cache, and metrics transports are grouped under
+`src/api/routers/`; they receive
 callbacks to the single application-owned pipeline and state instead of loading
 models or stores. Query/SSE, retrieval inspection, and document/reader/PDF
 routes remain at the application boundary while their compatibility-sensitive
 transport and identity flows are still coupled there.
+
+`src/api/registry.py` is the provider-free registry domain boundary. It derives
+the three stable model roles from existing settings and already-loaded runtime
+objects, without constructing or invoking them. Configuration, load, credential
+presence, and availability are independent typed facts; remote provider
+reachability remains unknown until an explicitly authorized provider operation
+proves it. The same service exposes the serving corpus from API-003 catalog
+statistics plus the Qdrant index manifest, and exposes only aggregate metadata
+and a deterministic revision for the source-controlled evaluation test set.
+Missing or inconsistent provenance is degraded rather than converted to healthy
+or empty data. Public fields pass through identifier/hash allowlists, so settings
+objects, credentials, and local filesystem paths never become response payloads.
 
 ## Deployment Topology
 

@@ -2779,3 +2779,26 @@ The master-plan table orders `UI-007 — Retrieval/Reranker` (dependencies
 `UI-002` and `API-005`, both complete) directly after `UI-006`, with
 `DATA-003 — Typed collections` (`DATA-001`/`DATA-002`, complete) also
 dependency-ready. Do not begin either without a new instruction.
+
+### Commit And Post-Commit Records
+
+- `622512f` — `feat(ui): rebuild discovery search on API-004 snapshots` — 22
+  files, 4398 insertions, 810 deletions. Scope verified: frontend sources,
+  frontend tests/specs, one diagnostics script and documentation only; no
+  `src/` application code, `data/`, `requirements.txt`, or tool-scratch path is
+  included. The body discloses the mixed ownership listed above.
+- Dirty tree: 148 → 143 paths. UI-006-owned work is committed; the untracked
+  rebuild specs (`v5-07-handoffs`, `reconciliation-reference`) and the shared
+  `console.css` remain preserved.
+- Pre-commit Mimosa scan could not complete (`scanner_enobufs`), so the scan was
+  re-run after the commit: it completed with a seal
+  (`sha256:5dc941cf7d0dc7bbfef869b6c11f1cf6d72253fc2098af302ba64c91bfad9f55`)
+  and 202 findings, **all** of them static-analysis hits inside generated
+  minified bundles under `frontend/dist-integration/` and
+  `frontend/dist-local/`. **Zero** findings name any UI-006 file, and no
+  credential is present in the committed changes. This is not a
+  repository-wide clean security bill.
+- Reference receipt: `frontend/test-results/ui-006/` (git-ignored) holds the
+  Search receipts, including `search-1586x992-<engine>.png` for the
+  reference-native comparison and `search-{no-match,expired}-<engine>.png` for
+  the distinct states.

@@ -36,6 +36,7 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 | [`docs/ARCHITECTURE_API_GUIDE.md`](docs/ARCHITECTURE_API_GUIDE.md) | Retrieval flow, read-only API surfaces, and frontend state boundaries |
 | [`docs/IMPROVEMENT_ROUND_REPORT.md`](docs/IMPROVEMENT_ROUND_REPORT.md) | M0-M11 improvement receipt, provider accounting, and final verification gates |
 | [`docs/UX_IMPROVEMENT_ROUND_REPORT.md`](docs/UX_IMPROVEMENT_ROUND_REPORT.md) | P0-P14 SEC Research Workspace UX, performance, Archify, and KEY5 receipt |
+| [`docs/frontend/V5_WORKBENCH_CONTRACT.md`](docs/frontend/V5_WORKBENCH_CONTRACT.md) | V5-00 through V5-08 workbench contract, ownership, responsive geometry, and validation receipts |
 | [`docs/EVALUATION_REVIEW_GUIDE.md`](docs/EVALUATION_REVIEW_GUIDE.md) | Evaluation and experiments workflow for live, recorded, and missing reports |
 
 ## Key Features
@@ -55,15 +56,52 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 | Memory | Multi-turn backend memory, query rewriting, and a searchable local conversation library with bookmarks, Markdown export, and versioned JSON backup/restore |
 | Decomposition | Comparative and enumeration queries decomposed into focused sub-queries |
 | Evaluation | Fixed benchmark with faithfulness, relevancy, and context precision metrics |
-| Research workspace | Vite/React interface with searchable company and section controls, English/Vietnamese UI and answer selection, streaming answers, measured request-stage traces when the backend provides them, conservative source-bound financial metric cards when the retrieved evidence supports them, a resizable existing-evidence source rail/reader backed by indexed excerpts, accent-insensitive evidence inspection with per-panel search and copy, per-answer bookmarks, feedback, private notes, local evidence collections, a reliable conversation Library, JSON backup/restore, session context status, glossary/help, research templates, command palette, keyboard shortcuts, lazy tool panels, and responsive Light/Dark themes |
-| Research tools | Provider-free Retrieval Lab for BM25/dense/RRF/reranker trace inspection with preset comparison and JSON/CSV export, read-only Document Explorer with filing/chunk search, Search workspace, Evaluation & experiments with validated/recorded modes, local Analytics, System & provenance metadata without filesystem paths or secrets, and three lazy-loaded Archify diagrams under Architecture |
-| Conversation UX | Separate Overview and Conversation views, a fixed 216px desktop navigation rail, mobile workspace navigation, bounded answer cards, contextual scope controls beside the composer, and interpreted-query metadata |
+| Research workspace | Vite/React interface with searchable company and section controls, English/Vietnamese UI and answer selection, streaming answers, measured request-stage traces when the backend provides them, conservative source-bound financial metric cards when the retrieved evidence supports them, a first-class Sources pane and shared Document pane backed by indexed excerpts with exact chunk/hash/revision synchronization across Structured, Normalized text, and an optional provenance-bound PDF representation, canonical evidence deep links, accent-insensitive evidence inspection with per-panel search and copy, per-answer bookmarks, feedback, private notes, local evidence collections, a reliable conversation Library, JSON backup/restore, session context status, glossary/help, research templates, command palette, keyboard shortcuts, lazy tool panels, and responsive Light/Dark themes |
+| Research tools | Provider-free Retrieval Lab for BM25/dense/RRF/reranker trace inspection with preset comparison and JSON/CSV export, read-only Document Explorer with filing/chunk search, Search workspace, public-report-only Evaluation, truthful read-only Models and serving-corpus Pipeline snapshots, local Analytics, System & provenance metadata without filesystem paths or secrets, and three lazy-loaded Archify diagrams under Architecture |
+| Conversation UX | Separate Overview and Conversation views, responsive 216px wide/56px compact desktop navigation, mobile workspace navigation, bounded answer cards, contextual scope controls beside the composer, and interpreted-query metadata |
 
 The frontend's document reader caches indexed chunk details for five minutes
 with in-flight deduplication and a 100-entry bound. The production browser
 gate covers Chromium and Firefox responsive states from 320px through desktop,
 reduced-motion behavior, keyboard/focus flows, color contrast, and measured
 input/search performance against the local fixture API.
+
+### Current V5 research workbench
+
+The V5 frontend is now an integrated SEC research workbench. At the measured
+wide targets, Research, citation-ordered Sources, and the shared Structured /
+Normalized Document surface are simultaneous bounded panes. The layout uses
+compact 56px navigation below 1600px and expanded 216px navigation at larger
+desktop widths, with context-dock, contextual-surface, drawer, and
+single-surface fallbacks selected from actual width and height. Documents,
+Search, Retrieval Lab, and Library hand off typed document/evidence targets and
+restore the exact invoking action. Exact chunk/hash/revision mismatches remain
+truthful unavailable or stale states. The optional PDF tab uses a real PDF.js
+viewer only when the backend exposes a current `DERIVED_PDF` or trusted
+`OFFICIAL_PDF` manifest; it never turns a missing PDF into fabricated pages or
+changes backend retrieval, generation, corpus, or index behavior.
+
+### Provenance-bound PDF representation
+
+The PDF surface is a document representation, not a new evidence identity. A
+generated artifact is bound to `document_id`, source-document identity,
+source-set/document revisions, the exact admitted normalized text hash, and a
+frozen renderer profile. The current local corpus contains HTML/HTM sources and
+does not currently admit official PDF bytes, so the live path is an explicitly
+labeled `DERIVED_PDF` generated on demand from the verified local source.
+
+Generated page numbers mean generated-representation pages. The backend exposes
+document-bound status, generation, content, mapping, and exact location routes;
+the browser cannot submit a URL, filesystem path, or HTML body. Highlights are
+painted only when the source chunk/hash/revisions match and the mapping proves
+complete rendered block boundaries. Ambiguous, stale, missing, or unsupported
+locations remain visible as truthful fallback states.
+
+The controlled renderer is the backend's fixed ReportLab text renderer (profile
+`reportlab-4.2.5`), with escaped plain text, bounded generation, atomic
+hash-bound storage, and PDF.js for browser viewing. It is intentionally not an
+official SEC pagination claim; official-PDF admission remains a separate
+trusted-source path.
 
 ## Architecture
 
@@ -164,6 +202,7 @@ http://localhost:8000/docs
 | `GET` | `/documents/{document_id}/chunks` | Paginated source previews for a loaded filing |
 | `GET` | `/chunks/{chunk_id}` | Full safe source text and metadata for one indexed chunk; filesystem paths are never returned |
 | `GET` | `/system/info` | Allowlisted corpus, retrieval, and build metadata |
+| `GET` | `/system/configuration-status` | Protected, redacted local-workspace capability status; unavailable in public mode |
 | `GET` | `/evaluation/runs` | List validated public evaluation summaries with safe filters |
 | `GET` | `/evaluation/runs/{run_id}` | Read one validated public evaluation report |
 | `GET` | `/cache/stats` | Semantic cache metrics |
@@ -1155,11 +1194,23 @@ QDRANT_LOCAL_PATH=data/processed/qdrant
 QDRANT_INDEX_MANIFEST_PATH=data/processed/qdrant_index_manifest.json
 QDRANT_CLOUD_URL=
 QDRANT_CLOUD_API_KEY=
+PDF_ARTIFACTS_DIR=data/generated/pdf
+PDF_GENERATION_ENABLED=true
+PDF_GENERATION_TIMEOUT_SECONDS=60
+PDF_GENERATION_CONCURRENCY=2
 EMBEDDING_MODEL_ID=nomic-ai/nomic-embed-text-v1.5
 EMBEDDING_MODEL_REVISION=<exact-hugging-face-commit>
 EMBEDDING_GENERATIONS_DIR=data/embedding_generations
 EMBEDDING_GENERATION_PATH=data/embedding_generations/<generation-id>
 ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+WORKSPACE_MODE=public
+LOCAL_WORKSPACE_TOKEN=
+LOCAL_WORKSPACE_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+LOCAL_WORKSPACE_ALLOWED_HOSTS=localhost,127.0.0.1,[::1]
+ENABLE_WORKSPACE_EXECUTION=false
+WORKSPACE_DB_PATH=.local/workbench/workspace.sqlite3
+WORKSPACE_RUNS_DIR=.local/workbench/runs
+WORKSPACE_SQLITE_BUSY_TIMEOUT_MS=5000
 LLM_RATE_LIMIT_BURST=10/minute
 LLM_RATE_LIMIT_DAILY=100/day
 DECOMPOSED_RATE_LIMIT=5/minute
@@ -1176,6 +1227,30 @@ comma-separated allowlist. Add the final Vercel domain before public
 deployment; do not use `*`. `TRUSTED_PROXY_CIDRS` is empty by default; set it
 to the proxy CIDR ranges only when the API runs behind ngrok or another reverse
 proxy, as described in the rate-limit section above.
+
+`WORKSPACE_MODE=public` is the default and keeps private workspace reads,
+writes, and jobs unavailable. Local workspace access requires the explicit
+`local` mode, a dedicated bearer token of at least 32 non-whitespace
+characters, a direct loopback socket peer, and an exact allowlisted local Host
+and Origin. Keep `LOCAL_WORKSPACE_TOKEN` server-side; never expose it through a
+`VITE_*` variable or reuse a provider credential. Forwarding headers do not
+affect this local-only decision. Execution remains a separate, disabled-by-
+default capability controlled by `ENABLE_WORKSPACE_EXECUTION`.
+
+The local workspace persistence foundation uses Python's built-in SQLite at
+`WORKSPACE_DB_PATH`; run artifacts are reserved under `WORKSPACE_RUNS_DIR`.
+Relative paths must remain under `.local/`, which is git-ignored and isolated
+from canonical `data/`, evaluation, PDF, embedding, and Qdrant storage. The
+database uses explicit ordered migrations, foreign keys, WAL where supported,
+a bounded busy timeout, and short serialized writes. Public mode does not open
+or create the database, and DATA-001 does not connect browser storage or expose
+new persistence endpoints. Browser import, collection workflows, and durable
+job orchestration remain separate later tasks.
+
+`PDF_GENERATION_ENABLED` controls the optional provenance-bound PDF
+representation. Its artifacts remain under the git-ignored `data/` tree;
+generation is bounded by the timeout/concurrency settings and can be disabled
+when the deployment should expose only Structured/Normalized readers.
 
 Build local artifacts in order:
 
@@ -1411,7 +1486,7 @@ require the owner's machine, Docker Desktop, and ngrok tunnel to be running.
 configs/              Environment-backed project settings
 frontend/             Independently deployed Vite/React/TypeScript client
 scripts/              Data pipeline, indexing, smoke test, and evaluation entry points
-src/api/              FastAPI application
+src/api/              FastAPI bootstrap, transport schemas, and route groups
 src/evaluation/       LLM-as-judge evaluation framework
 src/generation/       RAG generation, streaming, and decomposition foundation
 src/ingestion/        SEC download, section extraction, and chunking
@@ -1453,7 +1528,7 @@ Secrets are loaded from `.env` and should never be committed.
 | Multi-turn conversation memory | Complete |
 | Query decomposition | Integrated and validated for comparative and enumeration queries |
 | Docker deployment | Complete; CPU-only image supports local Qdrant or stateless Qdrant Cloud startup |
-| Vite frontend | Deployed on Vercel with Overview/Conversation navigation, local conversation Library, evidence inspection, synchronized light/dark/system themes, and resizable desktop controls; verified against the local Docker backend through the reserved ngrok URL |
+| Vite frontend | Deployed on Vercel with Overview/Conversation navigation, local conversation Library, first-class Sources and shared Document inspection with exact cross-representation evidence synchronization and canonical deep links, synchronized light/dark/system themes, and resizable desktop controls; verified against the local Docker backend through the reserved ngrok URL |
 
 ## Known Limitations
 
@@ -1469,7 +1544,7 @@ Secrets are loaded from `.env` and should never be committed.
 - Hybrid retrieval improves source quality but adds CPU latency due to cross-encoder re-ranking.
 - Semantic cache and conversation memory are currently in-memory and are lost on process restart.
 - Multi-turn query rewriting adds one LLM call for follow-up questions.
-- The API has no authentication. CORS allowlisting, per-IP rate limits, input validation, and generic error messages mitigate abuse but are not access control; any client that knows the URL can call the public routes (see `ARCHITECTURE.md`).
+- Public API routes remain unauthenticated. CORS allowlisting, per-IP rate limits, input validation, and generic error messages mitigate abuse but are not access control; any client that knows the URL can call the public routes. Opt-in local workspace capabilities use the loopback-and-bearer boundary described above (see `ARCHITECTURE.md`).
 - Groq free tier can return `429 Too Many Requests`; SDK retries can recover but increase latency.
 - Answer Scope Closure v1 is complete as a terminal non-official NO-GO. The
   provider-free revenue-intent contract passed all 30 priority-2 contexts and
@@ -1535,3 +1610,10 @@ structured no-match under partial or unknown coverage is explicitly scoped to
 that view and offers a search of the complete local normalized text. The
 retired resolver endpoint is not part of the supported reader surface, so the
 UI does not silently acquire or admit remote document bytes.
+
+PDF status is equally representation-specific: `supported`, `generating`,
+`available`, `failed`, `stale`, `unsupported`, and `unavailable` are reported
+without hiding the source revision. PDF mapping is exact-only; no fuzzy or
+nearest-page highlight is allowed. PDF metadata discloses whether pages are
+official or generated, the source/revision binding, renderer, page count, and
+artifact identity.

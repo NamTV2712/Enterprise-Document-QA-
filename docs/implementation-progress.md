@@ -2812,3 +2812,1137 @@ deferred and was not implemented.
 
 Exact next step: none for V4-P07.1; proceed only with a separately scoped
 product goal.
+
+## V5-00 Research workbench baseline — 2026-09-13
+
+- TASK ID: `V5-00`.
+- STATUS: `[x] COMPLETE`.
+- INTENT: freeze the current SEC research/evidence composition, record the
+  V5 workbench contract, and establish a deterministic checkpoint before any
+  runtime migration.
+- FILES CHANGED: `frontend/e2e/v5-00-baseline.spec.ts`,
+  `docs/frontend/V5_WORKBENCH_CONTRACT.md`,
+  `docs/implementation-progress.md`, and `PROJECT_STATE.md`.
+- FILES CREATED: the test-only baseline capture and
+  `docs/frontend/V5_WORKBENCH_CONTRACT.md`; no files removed.
+- RUNTIME BOUNDARY: no production UI runtime, backend route/DTO, retrieval,
+  generation, model, prompt, corpus, index, Qdrant, persistence schema, or
+  PDF behavior changed. The baseline spec only captures existing behavior,
+  geometry, and screenshots.
+- ARCHITECTURE EFFECT: none. The current App → primary research conversation
+  → EvidenceWorkspaceRail/ContextPanel composition remains unchanged. The
+  contract records the intended future `Research`, `Sources`, and `Document`
+  pane boundaries without introducing them.
+- STATE EFFECT: none. Existing `useResearchDraft`, `useResearchSession`,
+  `useEvidenceSelection`, `useReaderSession`, Library stores, cancellation,
+  stale-response, and read-only/volatile state owners remain authoritative.
+- ASYNC EFFECT: none. No new request owner, fetch, stream, cancellation path,
+  or duplicate source/document load was added.
+- API EFFECT: none. Backend DTOs, SSE events, local indexed-reader behavior,
+  and direct catalog/search/document routes are unchanged.
+- PERSISTENCE EFFECT: none. IndexedDB/localStorage fallback, Web Locks,
+  BroadcastChannel, Library continuity, and existing evidence snapshot data
+  remain unchanged. P07 Library continuity is preserved as complete.
+- PROVENANCE EFFECT: none. The contract freezes the existing exact
+  company/source/document/revision/hash/chunk/location/representation
+  identity requirement; it does not create new identity fields.
+- RESPONSIVE EFFECT: none. Existing viewport behavior was measured only. The
+  later target contract records context-dock, contextual-surface, drawer, and
+  single-surface modes; no breakpoint or resizer changed here.
+- ACCESSIBILITY EFFECT: none. Existing semantic/focus/contrast behavior was
+  exercised; no runtime ARIA, keyboard, or hit-target implementation changed.
+- PERFORMANCE EFFECT: none. The baseline records existing serial browser
+  timings and the token contrast audit; no optimization or instrumentation
+  path was added.
+
+### V5-00 commands and results
+
+- `cd frontend; bun run test` — PASS, 48 files / 245 tests.
+- `cd frontend; bun run lint` — PASS, `tsc --noEmit`.
+- `cd frontend; bun run build` — PASS, Vite transformed 1,993 modules.
+- `python -m compileall src scripts configs` in the repository virtual
+  environment — PASS.
+- `python -m pytest tests/ -v` in the repository virtual environment — PASS,
+  770 passed with 182 existing warnings.
+- `bunx playwright test e2e/workspace-layout.spec.ts
+  e2e/regression.spec.ts e2e/structured-document-reader.spec.ts
+  --workers=1 --retries=0` — PASS, 66/66 across Chromium and Firefox.
+- `bun run test:e2e-local` — PASS, 6/6.
+- `bunx playwright test e2e/v5-00-baseline.spec.ts --workers=1
+  --retries=0` — PASS, 4/4 across Chromium and Firefox.
+- `bun e2e/token-contrast.mjs` — PASS, all reported light/dark token pairs
+  meet their WCAG thresholds.
+- `bunx playwright test --workers=1 --retries=0` — 155 passed, one existing
+  Firefox timing/modal failure in the workspace-layout A–G setup, and four
+  intentional skips. The focused 66-test gate above is the clean checkpoint
+  gate.
+- `bun run test:e2e` — 136 passed, 16 parallel timing/shared-state failures,
+  and four skips; recorded as an unstable operational baseline, not a green
+  gate.
+- `bun run test:e2e-integration` — 12 passed and two failures in both engines
+  at the cited-answer assertion because the harness response did not expose
+  the expected `Open source 1` citation button. The existing harness/test
+  mismatch is outside V5-00 and was not changed.
+
+### V5-00 runtime, visual, and ownership receipt
+
+- Runtime validation: production Vite build and the focused browser gate
+  passed; the baseline capture verified answer/source/excerpt visibility and
+  page `scrollWidth <= viewport width` at 1440×900 and 1920×1080.
+- Visual validation: Chromium and Firefox captures record the current light
+  default composition at both wide viewports. The user-supplied
+  `09-product-reference.png` was used as a visual target reference only; it
+  does not change the representation contract.
+- Current geometry: 216px navigation; primary x=232, width 816 at 1440×900
+  and width 1296 at 1920×1080; current evidence rail x=1064/1544, width
+  360px; two source cards; reader stacked below sources; no separate
+  persistent Document pane.
+- Known limitations: V5 four-pane implementation has not started; real
+  integration retains the two citation-button failures; provider/network,
+  long-stream, and memory timings are not claimed; the historical native
+  browser-chrome zoom gate at 100/125/150/200% remains an external manual
+  gate.
+- Process ownership: Playwright/Vite/harness processes were task-owned and
+  self-cleaned. No project listener remained on 3000, 4173, 4175, 5173,
+  8000, 8765, or 8766. Existing Codex/browser infrastructure was not killed.
+- Unrelated dirty state: pre-existing untracked `.audit-runtime/` and
+  `harness_stacks.txt` were preserved untouched, as was ignored `data/`.
+- ROLLBACK POINT: remove only the V5-00 contract/receipt and the test-only
+  baseline spec if the checkpoint is intentionally rolled back; do not revert
+  unrelated user work or generated/ignored data.
+- EXACT NEXT TASK: `V5-01`, typed workbench primitives and
+  resizer/preference contracts, with no shell migration outside that scope.
+
+## V5-01 Workbench state, preferences, and typed targets — 2026-09-13
+
+- TASK ID: `V5-01`.
+- STATUS: `[x] COMPLETE`.
+- PROBLEM/DECISION: the current App-level booleans and legacy rail width did
+  not model the planned four-pane presentation, actual geometry modes, exact
+  variant-aware return links, or a representation-neutral reader binding.
+  V5-01 adds those typed seams without mounting them in the visible App shell.
+- FILES CREATED: `frontend/src/lib/workbench.ts`,
+  `frontend/src/lib/evidenceDeepLink.ts`,
+  `frontend/src/lib/readerLocationView.ts`,
+  `frontend/src/hooks/useWorkbenchController.ts`,
+  `frontend/src/hooks/useWorkbenchPreferences.ts`, plus focused tests in
+  `frontend/src/lib/workbench.test.ts`,
+  `frontend/src/lib/evidenceDeepLink.test.ts`,
+  `frontend/src/lib/readerLocationView.test.ts`,
+  `frontend/src/hooks/useWorkbenchPreferences.test.tsx`, and
+  `frontend/src/hooks/useWorkbenchController.test.tsx`.
+- FILES CHANGED: the files above and the V5 contract/implementation receipts;
+  no files removed.
+- ARCHITECTURE EFFECT: adds an isolated presentation contract for
+  `WorkbenchLayoutMode`, `ActiveRepresentation`, source/document panes,
+  document context tabs, source filters, and the existing
+  `WorkspaceTarget` identity type. The App and legacy rail remain unchanged;
+  V5-02 is the first shell consumer.
+- STATE EFFECT: `useWorkbenchController` owns transient presentation and
+  coordination only: mode, target handoff, active contextual pane,
+  representation, source filter, document lower tab, find text, focus-return
+  ID, and selected-source binding status. It does not become a second owner
+  for conversations, query lifecycle, evidence persistence, document content,
+  reader network state, or source identity.
+- ASYNC EFFECT: none in transport. The controller has no fetch or stream
+  path. Its generation-guarded evidence binding reducer ignores late
+  Structured/Normalized location outcomes after a newer target or generation;
+  `useReaderSession` remains the cancellation/abort owner.
+- API EFFECT: none. Existing `EvidenceLocation`, `OriginalLocation`, reader
+  responses, `WorkspaceTarget`, and backend DTOs are consumed as types only;
+  no endpoint, query, SSE event, or request payload changed.
+- PERSISTENCE EFFECT: adds only the layout-only V1 preference envelope
+  `sec_qa_workbench_panes_v1`. It stores Sources/Document widths and collapse
+  flags only. No source content, selection, document content, document find
+  query, or fullscreen state is persisted. The old
+  `sec_qa_context_rail_width_v1` value is clamped into Sources width on a
+  missing V5 key, the new key is written, and the old key is left untouched.
+- PROVENANCE EFFECT: no new identity is invented. `readerLocationView.ts`
+  preserves the raw Structured/Normalized response, keeps missing source
+  document/revision facts null, and exposes exact/ambiguous/not-found/
+  unavailable/stale/error states without fuzzy fallback.
+- RESPONSIVE EFFECT: no visible breakpoint change. `deriveWorkbenchLayoutMode`
+  uses measured container width/height, measured navigation width, current
+  pane widths, and separators. It covers four-pane, context-dock,
+  contextual-surface, drawer, and single-surface modes plus short-height
+  downgrade thresholds for the future shell.
+- ACCESSIBILITY EFFECT: no visible runtime change. The typed contract leaves
+  the future splitter and focus-restoration seam explicit; keyboard/focus
+  behavior is not claimed as a rendered V5-01 feature.
+- PERFORMANCE EFFECT: no runtime fetch/render path or dependency added.
+  Preference updates are explicit commits; no pointer-event loop or global
+  state library was introduced.
+- SECURITY/PDF EFFECT: no browser-exposed secret, unsafe content path, raw
+  HTML path, PDF state, PDF control, or PDF endpoint was introduced.
+
+### V5-01 acceptance coverage
+
+- `WorkbenchLayoutMode` derives from actual geometry: tests cover 1440×900
+  and 1920×1080 four-pane, 1366/1280 context-dock, 1024 contextual surface,
+  768 drawer, 390 single surface, and short-height downgrades.
+- Pane width tests cover Sources `280–360`, Document `400–560`, integer
+  clamping, remaining Research width, malformed payload fallback, future
+  schema fallback, and non-destructive old-width migration.
+- Preference hook tests cover V1 envelope writes, reset, storage failures,
+  valid cross-tab updates, malformed/future cross-tab payloads, and clear-to-
+  default behavior.
+- Deep-link tests cover legacy hashes, exact variant/conversation/source-key
+  round trips, short aliases from early links, selection conversion, and
+  malformed/invalid inputs.
+- Reader location tests cover raw-response preservation, Structured and
+  Normalized offset adaptation, exact/ambiguous status, missing identity, and
+  stale/unavailable generation guards.
+- Controller tests cover presentation-only state transitions, target
+  reference preservation, representation reset, explicit focus restoration,
+  and late binding rejection.
+
+### V5-01 commands and results
+
+- `bunx vitest run src/lib/workbench.test.ts src/lib/evidenceDeepLink.test.ts
+  src/lib/readerLocationView.test.ts
+  src/hooks/useWorkbenchPreferences.test.tsx
+  src/hooks/useWorkbenchController.test.tsx` — PASS, 18/18.
+- `bun run test` — PASS, 53 files / 263 tests.
+- `bun run lint` — PASS, `tsc --noEmit`.
+- `bun run build` — PASS, Vite transformed 1,993 modules.
+- `bunx playwright test e2e/v5-00-baseline.spec.ts --workers=1
+  --retries=0` — PASS, 4/4 across Chromium and Firefox; the measured
+  V5-00 visual baseline remains unchanged at 1440×900 and 1920×1080.
+- `git diff --check` — PASS; only normal Git LF/CRLF normalization warnings
+  were reported for the existing journal files.
+
+### V5-01 checkpoint ownership and rollback
+
+- Visual/runtime result: no visible redesign was claimed or introduced;
+  current screenshots and legacy rail geometry remain the V5-00 baseline.
+- Known limitations: the new seams are not yet consumed by App; V5-02 must
+  mount them incrementally. Full browser parallel/serial integration
+  limitations from V5-00 remain unchanged and are not reclassified as V5-01
+  failures.
+- Unrelated dirty state: pre-existing untracked `.audit-runtime/` and
+  `harness_stacks.txt` remain untouched; ignored `data/` remains untouched.
+- Process ownership: no service was started or stopped for V5-01; the final
+  V5-00 baseline browser run self-cleaned and no project listener remained on
+  3000, 4173, 4175, 5173, 8000, 8765, or 8766.
+- ROLLBACK POINT: remove the five new implementation modules and their five
+  focused test files, leaving existing App/rail code and all prior V5-00
+  receipts intact. No data migration is required; the old rail key remains
+  readable because migration is non-destructive.
+- EXACT NEXT TASK: `V5-02`, workbench shell, top bar, navigation, and scoped
+  CSS foundation. Do not begin Sources/Document replacement before V5-02 is
+  accepted.
+
+## V5-02 — Workbench shell, top bar, navigation, and CSS foundation
+
+- TASK ID: `V5-02`
+- STATUS: `[x] COMPLETE`
+- PROBLEM: The previous App composition mixed the global frame with the
+  route-local canvas and exposed only the legacy rail presentation. It also
+  retained a 64px toolbar instead of the V5 56px global bar.
+- DECISION: Add `ApplicationWorkspace`, `ResearchWorkbench`, and
+  `WorkbenchLayout` as a rollback-safe shell boundary. Mount the
+  presentation controller/preferences there, measure the actual rendered
+  shell/navigation geometry, expose future pane CSS variables, and pass the
+  existing route main/reader/rail through unchanged until V5-03/V5-04.
+- FILES CREATED: `frontend/src/components/workbench/ApplicationWorkspace.tsx`,
+  `ResearchWorkbench.tsx`, `WorkbenchLayout.tsx`, their two focused
+  component tests, `frontend/src/styles/workbench.css`, and
+  `frontend/e2e/v5-02-shell.spec.ts`.
+- FILES CHANGED: `frontend/src/App.tsx`, `Sidebar.tsx`,
+  `WorkspaceHeader.tsx`, `index.css`, `lib/i18n.tsx`, and `lib/workspace.ts`.
+- FILES REMOVED: none.
+- ARCHITECTURE CHANGE: App now composes navigation/header/route main/footer
+  through the workbench shell. `WorkbenchLayout` provides a measured,
+  mode-labelled host; `ResearchWorkbench` provides the semantic route-local
+  research region. The legacy `EvidenceWorkspaceRail` remains intentionally
+  available as the V5-02 rollback surface.
+- STATE OWNERSHIP: `useWorkbenchController` and
+  `useWorkbenchPreferences` mount at the shell boundary and own only
+  presentation/coordination and layout-only preferences. Existing
+  `useResearchSession`, `useEvidenceSelection`, `useReaderSession`,
+  Library, storage, and App lifecycle owners remain unchanged.
+- ASYNC OWNERSHIP: no new async path; no duplicated source/document fetch,
+  stream, cancellation, or reader generation owner.
+- API/DTO EFFECT: none.
+- PERSISTENCE EFFECT: no new persisted content. V5-01's clamped pane
+  preference envelope is consumed; source/reader/find/fullscreen state is not
+  persisted.
+- PROVENANCE EFFECT: none. Existing evidence and reader identity pass through.
+- RESPONSIVE EFFECT: mode labels derive from measured shell width/height and
+  measured nav width. Expanded desktop resolves to `context-dock` at
+  1440×900 and `four-pane` at 1920×1080; later pane work will make those
+  modes visibly distinct.
+- ACCESSIBILITY EFFECT: header, navigation, and research landmarks now carry
+  stable data regions and translated EN/VI labels; existing keyboard controls,
+  dialog focus management, and target hit areas remain in use.
+- PERFORMANCE EFFECT: scoped ResizeObserver measurement and one committed
+  mode update; no dependency or network path added.
+- SECURITY/PDF EFFECT: no secrets, unsafe content, backend route, PDF state,
+  PDF control, or PDF implementation added.
+- TEST COMMANDS AND RESULTS:
+  - `bunx vitest run src/components/workbench/ApplicationWorkspace.test.tsx
+    src/components/workbench/WorkbenchLayout.test.tsx src/lib/workspace.test.ts
+    src/lib/i18n.test.tsx src/App.test.tsx` — PASS, `5 files / 27 tests`.
+  - `bun run test` — PASS, `55 files / 265 tests`.
+  - `bun run lint` — PASS, `tsc --noEmit`.
+  - `bun run build` — PASS, `2,000` Vite modules transformed.
+  - `bunx playwright test e2e/v5-02-shell.spec.ts --workers=1
+    --retries=0` — PASS, `4/4` across Chromium/Firefox.
+  - `bunx playwright test e2e/workspace-layout.spec.ts
+    e2e/regression.spec.ts e2e/structured-document-reader.spec.ts
+    e2e/v5-02-shell.spec.ts --workers=1 --retries=0` — PASS, `70/70`
+    across Chromium/Firefox.
+  - `git diff --check` — PASS, with only normal line-ending warnings.
+- RUNTIME/BROWSER VALIDATION: production preview was rebuilt and the shell
+  gate verified route content, measured geometry, compact/expanded nav,
+  mode signals, 56px bar, focus, theme/locale, and no horizontal overflow.
+  The retained reader, route, responsive, Library, and performance gate also
+  passed.
+- VISUAL VALIDATION: final Chromium captures at 1440×900 and 1920×1080 were
+  inspected. The navigation, top bar, overview/research canvas, and composer
+  stay visible and within the viewport. These captures validate the shell
+  foundation only; they do not claim the final Sources/Document panes.
+- KNOWN LIMITATIONS: the vertical `EvidenceWorkspaceRail` is still the
+  source/reader presentation. SourcesPane, DocumentPane, exact synchronization,
+  resizers, collapse, and final route integrations are not part of V5-02.
+- UNRELATED DIRTY WORK PRESERVED: `.audit-runtime/` and
+  `harness_stacks.txt` were untouched; ignored `data/` was untouched.
+- OWNED PROCESSES: only task-owned Playwright/Vite preview processes were
+  started; they self-cleaned. Final listener check was empty for project
+  ports `3000`, `4173`, `4175`, `5173`, `8000`, `8765`, `8766`.
+- ROLLBACK POINT: remove the V5-02 shell components/tests/style import and
+  restore App's prior root composition and 64px header. V5-00/V5-01 files,
+  backend, data, and persistence remain intact.
+- EXACT NEXT TASK: `V5-03` — first-class Sources pane. Preserve the rail
+  until the replacement reference sweep and browser coverage are complete.
+
+## V5-03 — First-class Sources pane
+
+- TASK ID: `V5-03`
+- STATUS: [x] COMPLETE
+- PROBLEM: The answer and inspector used separate legacy source-list renderers,
+  so source states, answer filters, selection focus, and saved evidence affordances
+  were not governed by one first-class source surface.
+- DECISION: Introduce `SourcesPane` and `SourceCard`. Use the pane for the
+  production evidence inspector and the answer fallback disclosure, with the
+  workbench context supplying presentation/filter coordination. Keep
+  `ContextPanel`/`DocumentViewer` as the existing reader/async owner until
+  V5-04.
+- FILES CREATED: `frontend/src/components/workbench/WorkbenchContext.tsx`,
+  `SourceCard.tsx`, `SourcesPane.tsx`,
+  `SourcesPane.test.tsx`, `frontend/src/lib/sourcePresentation.ts`, and
+  `frontend/e2e/v5-03-sources.spec.ts`.
+- FILES CHANGED: `frontend/src/components/workbench/ApplicationWorkspace.tsx`,
+  `frontend/src/components/ChatMessage.tsx`,
+  `frontend/src/components/ContextPanel.tsx`,
+  `frontend/src/components/EvidenceWorkspaceRail.tsx`, and
+  `frontend/src/styles/workbench.css`. No file was deleted.
+- ARCHITECTURE CHANGE: `SourcesPane` owns source-list rendering, literal text
+  filtering, citation-order presentation, answer-only All/Cited/Saved policy,
+  section chips, collapse, list keyboard navigation, and exact focus return.
+  `SourceCard` is the shared card implementation for filing identity,
+  section, excerpt, representation/state facts, Save Evidence, Open document,
+  and advanced ranking disclosure. The removed `ContextPanel` duplicate
+  source functions no longer form a second runtime tree.
+- STATE OWNERSHIP: the V5 controller owns category-filter coordination and the
+  preference context owns layout-only collapse state. `App` and
+  `useEvidenceSelection` remain authoritative for exact selected
+  source identity. Existing evidence collection storage remains the save
+  writer and source provenance owner.
+- ASYNC OWNERSHIP: unchanged. The pane does not fetch source/document content.
+  `DocumentViewer` retains detail and nearby-chunk requests, abort/retry,
+  and reader-generation guards.
+- API/DTO EFFECT: none. No backend/retrieval/model/prompt/index/corpus/Qdrant,
+  endpoint, DTO, query, SSE, PDF, or request behavior changed.
+- PERSISTENCE EFFECT: Save Evidence calls the existing writer and provenance
+  helper. Saved state is derived from exact source identity/content and stored
+  snapshot metadata; the pane adds no schema or writer.
+- PROVENANCE EFFECT: citation order and source/chunk identity remain exact.
+  Saved, stale, and unavailable states are explicit. Selection is not fuzzy,
+  and no document/PDF location is invented.
+- RESPONSIVE EFFECT: answer sources may expose All/Cited/Saved; catalog/search/
+  retrieval origins do not expose answer-only filters. The shared pane renders
+  in the existing inline and drawer surfaces without changing mode thresholds.
+- ACCESSIBILITY EFFECT: stable source labels, `aria-pressed` selection,
+  state descriptions, list semantics, 44px-class actions, keyboard
+  ArrowUp/ArrowDown/ArrowLeft/ArrowRight/Home/End/Enter behavior, and
+  exact deep-link focus are covered.
+- PERFORMANCE EFFECT: visible-index computation and saved-state refresh are
+  local/event-driven; no new network or global lifecycle owner was added.
+- SECURITY/PDF EFFECT: no new URL acquisition, unsafe HTML, secret, PDF control,
+  PDF artifact, or external source path was introduced.
+- PRODUCTION REFERENCE SWEEP: no production component imports
+  `SourcesPanel.tsx`; its direct compatibility tests remain. No
+  destructive legacy migration was performed.
+- TEST COMMANDS AND RESULTS:
+  - `bun run test` — PASS, `56 files / 271 tests`.
+  - `bun run lint` — PASS, `tsc --noEmit`.
+  - `bun run build` — PASS, `2,003` Vite modules transformed.
+  - `bunx playwright test e2e/v5-03-sources.spec.ts --workers=1
+    --retries=0` — PASS, `2/2` across Chromium/Firefox.
+  - V5-00/V5-02/V5-03 serial slice — PASS, `10/10` across Chromium/
+    Firefox.
+  - Full serial browser gate `bunx playwright test --workers=1 --retries=0`
+    discovered `166` tests: `160 passed, 4 skipped, 2 Firefox-only
+    timing failures`. The two pre-existing V4 reader failures passed in an
+    isolated Firefox rerun (`3/3`); no reader fix was made.
+  - `git diff --check` — PASS, with normal LF/CRLF warnings only.
+- RUNTIME/BROWSER VALIDATION: the V5-03 acceptance flow verified source
+  identity, saved-state transition, All/Cited/Saved filtering, keyboard
+  selection, and one-source reader handoff in both engines. The full browser
+  gate retained route, reader, responsive, focus, Library, and performance
+  coverage.
+- VISUAL VALIDATION: `frontend/e2e/screenshots/v5-03-sources-1440x900.png`
+  was inspected from the rebuilt Chromium preview. The pane remains inside the
+  viewport without horizontal overflow and visibly exposes the source stack,
+  filters, search, selection, save action, and reader.
+- KNOWN LIMITATIONS: the source pane still sits in the existing vertical
+  `EvidenceWorkspaceRail`; independent Sources/Document pane geometry and
+  route-specific catalog/search integrations remain future V5-04/V5-05 work.
+  `SourcesPanel.tsx` is retained for compatibility-only references and is
+  not a production import. Backend/data/PDF behavior was not rerun because
+  none of those paths changed; the previous backend baseline remains current.
+- UNRELATED DIRTY WORK PRESERVED: `.audit-runtime/`,
+  `harness_stacks.txt`, and ignored `data/` were untouched.
+- ROLLBACK POINT: remove the V5-03 SourcesPane/SourceCard/context integration,
+  shared display helper, styles, tests, and browser receipt, then restore the
+  previous answer fallback and ContextPanel source-list call. Leave V5-00/
+  V5-01/V5-02, backend, data, and persistence intact.
+- EXACT NEXT TASK: `V5-04` — first-class Document pane, retaining the existing
+  reader/provenance lifecycle while SourcesPane remains the sole source-list
+  owner.
+
+## V5-04 — Shared Document pane and reader adaptation
+
+- TASK ID: `V5-04`
+- STATUS: [x] COMPLETE
+- PROBLEM: The existing readers were valuable but appeared as a standalone
+  route shell or a nested inspector surface, without a shared workbench
+  identity header, genuine representation switcher, lower evidence context,
+  or coordinated find state.
+- DECISION: Add `DocumentPane` and `DocumentContextTabs` as
+  a presentation adapter around `DocumentWorkspace`. Use the
+  existing Structured and Normalized text readers unchanged as the content
+  owners; keep the compatibility workspace mode and legacy tabs for direct
+  consumers.
+- FILES CREATED: `frontend/src/components/workbench/DocumentPane.tsx`,
+  `DocumentContextTabs.tsx`, focused unit tests, and
+  `frontend/e2e/v5-04-document.spec.ts`.
+- FILES CHANGED: `DocumentWorkspace.tsx`,
+  `StructuredDocumentReader.tsx`,
+  `OriginalDocumentReader.tsx`, `ContextPanel.tsx`,
+  `App.tsx`, `document-reader.css`, and test-only
+  original-reader fixture routes.
+- ARCHITECTURE CHANGE: production answer/catalog/search document entry points
+  now use `DocumentPane`. It supplies one identity-bearing shell,
+  Structured/Normalized text controls, one embedded reader canvas, local
+  Evidence/Metadata/conditional Notes tabs, and a bounded expand/restore
+  surface. Indexed excerpt is evidence context, not a representation.
+- STATE OWNERSHIP: the existing workbench controller coordinates
+  representation, context tab, find query, and active pane when available;
+  direct consumers use transient local fallback state. App route identity,
+  reader session/generation, source provenance, evidence selection, and Save
+  Evidence persistence remain in their existing owners.
+- ASYNC OWNERSHIP: unchanged. No new fetch, stream, cancellation owner, or
+  request lifecycle was introduced. Reader manifest/content/search/location,
+  coverage, table semantics, and exact location behavior remain intact.
+- API/DTO EFFECT: none in production. Retrieval, generation, model, prompt,
+  index, corpus, Qdrant, backend/API/DTO/query/SSE, and PDF behavior were not
+  changed. The e2e fixture only adds responses for the existing normalized
+  reader contract.
+- PERSISTENCE/PROVENANCE EFFECT: no new storage or notes model. Find,
+  representation, context-tab, and expansion state are transient. Existing
+  source identity, revision binding, exactness/fallback semantics, SEC link,
+  and evidence save/provenance behavior remain authoritative.
+- RESPONSIVE/ACCESSIBILITY EFFECT: the reader and lower context surface share
+  one bounded scroll composition; container-aware header wrapping keeps
+  narrow inspector controls usable. Representation buttons expose pressed
+  state, context tabs have tablist semantics and roving keyboard focus, and
+  normalized embedded reader states have an explicit accessible label.
+- SECURITY/PDF EFFECT: no unsafe HTML, new external source path, secret, PDF
+  control, PDF artifact, or fake page semantics were introduced.
+- TEST COMMANDS AND RESULTS:
+  - `bun run test` — PASS, `58 files / 277 tests`.
+  - `bun run lint` — PASS, `tsc --noEmit`.
+  - `bun run build` — PASS, `2,005` Vite modules.
+  - V5-04 Chromium/Firefox acceptance — PASS, `2/2`.
+  - V5-00/V5-02/V5-03/V5-04 serial slice — PASS, `12/12`.
+  - Existing document-workspace/structured-reader compatibility slice —
+    PASS, `6/6` across Chromium/Firefox.
+  - `git diff --check` — PASS, normal line-ending warnings only.
+- RUNTIME/VISUAL VALIDATION: the rebuilt Chromium preview at 1440×900 was
+  inspected in `frontend/e2e/screenshots/v5-04-document-1440x900.png`.
+  The shared document identity, reader representation switcher, context
+  tabs, find handoff, and restore control are visible and remain within the
+  viewport. The existing inspector remains a vertical source/reader
+  composition pending the geometry task.
+- KNOWN LIMITATIONS: independent Sources/Document pane geometry, resizers,
+  collapse behavior, and exact cross-pane synchronization remain V5-05/V5-06.
+  The compatibility `DocumentWorkspace` module remains present.
+  Backend/data/PDF behavior was not rerun because no production path changed.
+- UNRELATED DIRTY WORK PRESERVED: `.audit-runtime/`,
+  `harness_stacks.txt`, and ignored `data/` were untouched.
+- ROLLBACK POINT: remove the V5-04 DocumentPane/context-tab adapter,
+  reader prop seam, styles/tests/fixture routes, and App/ContextPanel
+  substitutions; restore their prior DocumentWorkspace imports without
+  touching V5-00 through V5-03 or backend/data/persistence behavior.
+ - EXACT NEXT TASK: `V5-05` — responsive Sources + Document geometry
+  and explicit cross-pane source/document synchronization.
+
+## V5-05 — Exact source synchronization and deep links
+
+- TASK ID: `V5-05`
+- STATUS: [x] COMPLETE
+- PROBLEM: the selected source, reader location, and route target could drift
+  when a source lacked a local hash, when a location response was stale or
+  ambiguous, when representations changed, or when an old/new deep link was
+  reopened.
+- DECISION: keep `App` authoritative for route identity, keep the readers as
+  request/cancellation owners, and add a typed evidence-location seam that
+  verifies chunk/hash/document/source-set/source-revision identity before
+  highlighting. Resolve only live missing-hash details through the existing
+  cache; treat hashless historical snapshots as unavailable.
+- FILES CREATED: `frontend/src/hooks/useReaderEvidenceSource.ts` and its
+  focused test, `frontend/src/lib/api.test.ts`, and
+  `frontend/e2e/v5-05-sync.spec.ts`.
+- FILES CHANGED: `frontend/src/App.tsx`, `ContextPanel.tsx`, `SourcesPane.tsx`,
+  `DocumentWorkspace.tsx`, `StructuredDocumentReader.tsx`,
+  `OriginalDocumentReader.tsx`, their tests, `readerLocationView.ts` and its
+  tests, `useWorkbenchController.ts`, and hermetic normalized-reader
+  fixtures. No file was deleted.
+- STATE/ASYNC OWNERSHIP: exact canonical deep links select the requested
+  conversation/message/variant/citation/source key; missing targets are
+  unavailable or closed rather than falling forward. Readers emit
+  resolving/resolved/stale/unavailable/error events with generation and
+  request guards. Late responses after rapid source switching are ignored.
+- LOCATION TRUTH: exact responses require matching chunk ID/hash, document ID,
+  source-set revision, verified source document, document revision, and a
+  representation range. Ambiguous, stale, not-found, unavailable, and
+  transport-error results remain visible with concise reason text and never
+  produce a yellow mark. Normalized exact locations use the existing nested
+  source/document identity contract.
+- API/DTO EFFECT: none. Existing structured reader-location,
+  normalized original-location, and cached chunk-detail client paths are
+  reused and covered by URL/error tests. No backend, endpoint, DTO, query,
+  SSE, retrieval, generation, model, prompt, index, corpus, Qdrant, or PDF
+  behavior changed.
+- PERSISTENCE/PROVENANCE EFFECT: none. Existing evidence collection and
+  snapshot writers remain unchanged. A saved snapshot without a verifiable
+  hash is explicitly unavailable and is not silently replaced with current
+  content.
+- RESPONSIVE/A11Y EFFECT: no pane geometry was changed; source actions open
+  the existing shared document surface, reader status remains live and
+  accessible, exact structured ranges retain block focus, and current shell
+  EN/VI/dark/keyboard/width coverage remains authoritative.
+- PERFORMANCE/SECURITY EFFECT: resolution uses the existing cache and
+  generation/abort mechanisms, with no new global listener or acquisition
+  path. No unsafe HTML, secret, new external URL, approximate highlight,
+  fabricated page, or PDF control was introduced.
+- TEST COMMANDS AND RESULTS:
+  - `bun run test -- --reporter=dot` — PASS, `60 files / 288 tests`.
+  - `bun run lint` — PASS, `tsc --noEmit`.
+  - `bun run build` — PASS, `2,007` Vite modules transformed.
+  - V5-00/V5-02/V5-03/V5-04/V5-05 Chromium/Firefox serial slice — PASS,
+    `16/16`.
+  - Existing Documents/Search exact-chunk compatibility regression — PASS,
+    `2/2` across Chromium/Firefox.
+  - `git diff --check` — PASS, normal LF/CRLF warnings only; final project
+    listener check empty on ports `3000`, `4173`, `4175`, `5173`, `8000`,
+    `8765`, and `8766`.
+- RUNTIME/VISUAL VALIDATION: `frontend/e2e/screenshots/v5-05-sync-1440x900.png`
+  was captured from the rebuilt Chromium preview and inspected. The answer,
+  sources, selected evidence, document identity, representation controls, and
+  verified reader context stayed legible and inside the viewport. The V5-05
+  browser flow also verified exact structured/normalized marks and reload
+  without source fall-forward.
+- KNOWN LIMITATIONS: the answer inspector still uses the existing vertical
+  evidence rail; independent Sources/Document geometry, resizers, collapse
+  policy, and pane-level visual acceptance remain V5-06. Compatibility
+  `DocumentWorkspace` remains present for direct consumers. Backend/data/PDF
+  behavior was not rerun because no production path in those areas changed.
+- UNRELATED DIRTY WORK PRESERVED: `.audit-runtime/`,
+  `harness_stacks.txt`, and ignored `data/` were untouched. Task-owned
+  browser/preview processes self-cleaned.
+- ROLLBACK POINT: remove the V5-05 location validation/event seam, cached
+  source resolver, canonical target resolution, and focused tests/fixtures;
+  restore the prior source-open/deep-link handoff while leaving V5-00 through
+  V5-04 and backend/data/persistence behavior intact.
+- EXACT NEXT TASK: `V5-06` — responsive Sources + Document geometry,
+  resizers, collapse policy, and visual acceptance.
+
+## V5-06 — Responsive workstation geometry and pane controls
+
+- TASK ID: `V5-06`
+- STATUS: [x] COMPLETE
+- DECISION: the measured `WorkbenchLayout` now composes Research with sibling
+  Sources and Document surfaces. Four-pane, context-dock, contextual-surface,
+  drawer, and single-surface modes are selected from actual shell geometry,
+  navigation width, pane widths, separators, and height. No readable text is
+  reduced to force a mode.
+- FILES CREATED: `frontend/src/components/workbench/PaneResizer.tsx` and
+  `frontend/e2e/v5-06-layout.spec.ts`.
+- FILES CHANGED: `ApplicationWorkspace.tsx`, `WorkbenchLayout.tsx`,
+  `ContextPanel.tsx`, `DocumentWorkspace.tsx`, `App.tsx`,
+  `useNavigationLayout.ts`, layout styles, `README.md`, `DESIGN.md`, and
+  hermetic non-Apple reader fixtures. No production backend/reader endpoint
+  or data file changed.
+- GEOMETRY: 1440×900 is compact-nav 56px + Research 624px + Sources 304px +
+  8px splitter + Document 440px + 8px splitter; 1920×1080 is expanded-nav
+  216px + Research 944px with the same contextual tracks. 1366×768 and
+  1280×800 use a 440px Sources/Document dock; 1024 is contextual-surface;
+  below 1024 uses modal drawer/single-surface behavior.
+- INTERACTION: pointer motion is CSS-variable-only in rAF until pointer-up;
+  cancel restores the start width. Arrow/Home/End/Enter/Space, double-click
+  Reset, Wider/Narrower, and width clamping are available without drag-only
+  access. Source/document collapse retains the last width and exposes a
+  keyboard-accessible restore target. Document reader height is at least 300px;
+  lower context is bounded to `min(17rem, 32%)` and collapses first on short
+  tracks.
+- STATE/ASYNC/PROVENANCE: layout preferences remain the only persisted V5
+  state. Source identity, reader transport, exact location, evidence saves,
+  query lifecycle, and all backend boundaries remain in their prior owners.
+- TEST COMMANDS AND RESULTS:
+  - `bun run test -- --reporter=dot` — PASS, `60 files / 289 tests`.
+  - `bun run lint` — PASS; `bun run build` — PASS, `2,008` Vite modules.
+  - V5-02 shell Chromium — PASS, `2/2`; V5-05 sync Chromium — PASS, `2/2`.
+  - V5-06 layout Chromium — PASS, `3/3`; Firefox — PASS, `3/3`.
+  - `git diff --check` remains limited to normal line-ending warnings.
+- VISUAL VALIDATION: inspected the rebuilt Chromium renders at
+  `frontend/e2e/screenshots/v5-06-four-pane-1440x900.png` and
+  `frontend/e2e/screenshots/v5-06-four-pane-1920x1080.png`; Research,
+  Sources, and Document remain simultaneously legible and inside the viewport.
+- PRESERVED/UNRELATED: `.audit-runtime/`, `harness_stacks.txt`, ignored
+  `data/`, and existing persistence/library behavior were preserved. No
+  retrieval, generation, model, prompt, index, corpus, Qdrant, PDF, or
+  acquisition behavior changed.
+- ROLLBACK POINT: remove `PaneResizer`, sibling composition, responsive CSS,
+  navigation default, document collapse affordance, and V5-06 tests/fixtures;
+  restore the prior rail presentation without touching V5-00 through V5-05 or
+  backend/data/reader ownership.
+- EXACT NEXT TASK: `V5-07` — Documents, Search, Retrieval Lab, and Library
+  handoffs through the shared workbench boundary.
+
+## V5-07 execution checkpoint — 2026-09-13
+
+V5-07 is complete. Documents, Search, Retrieval Lab, and Library now hand off
+through the shared workbench presentation boundary while their existing route,
+fetch, retrieval, cache, reader, and persistence owners remain in place.
+Documents keeps its catalog mounted while a filing is open; Search result
+cards expose analyst identity, filing date, indexed inspection, Document
+workspace, and the existing Save Evidence action; Retrieval Lab emits a typed
+document target without changing Analyst/Advanced diagnostics or score
+semantics. Library reuses the completed P07 saved variant/evidence behavior,
+including exact source identity and truthful historical snapshot/current-source
+distinction.
+
+`RouteDocumentContext` selects the shared contextual slot at four-pane and
+context-dock widths and the existing modal lifecycle at narrower widths.
+Stable route and Library opener IDs restore the exact invoker after Back or
+close. The Search indexed action remains an evidence inspector action, while
+the explicit Document action opens the typed shared Document target; this
+preserves the existing exact-chunk regression semantics.
+
+Validation receipts:
+
+- Full frontend Vitest passed `60 files / 291 tests`.
+- TypeScript lint passed; production Vite build passed with
+  `2,009` transformed modules.
+- V5-07 handoff acceptance passed `4/4` in Chromium and `4/4` in Firefox.
+- Existing affected browser compatibility checks passed: the exact-chunk
+  Documents/Search regression `1/1` and V5-04 document acceptance `1/1` in
+  Chromium.
+- Focused route unit coverage passed `4 files / 35 tests`.
+
+No backend/API/DTO, query/SSE, retrieval, generation, model, prompt, corpus,
+index, Qdrant, reader transport, provenance, persistence schema, acquisition,
+or PDF behavior changed. The only e2e fixture adjustment adds identity fields
+for the existing normalized-reader response. `.audit-runtime/`,
+`harness_stacks.txt`, and ignored `data/` remain untouched; task-owned
+preview/browser processes self-cleaned.
+
+Rollback is limited to the route target adapter, handoff callbacks, stable
+focus IDs, scoped CSS, and V5-07 tests/fixture updates. No data migration or
+backend/domain rollback is required. Exact next task: `V5-08` — complete
+visual, accessibility, browser, performance, and regression closure.
+
+## V5-08 — Final workbench closure
+
+- TASK ID: `V5-08`
+- STATUS: [x] COMPLETE
+- DECISION: close the V5 research workbench at the rendered browser boundary.
+  The shared four-pane composition, measured responsive downgrades, exact
+  reader highlight, accessible focus paths, and existing route handoffs are
+  now validated as one system. No domain or reader transport was redesigned.
+- FINAL ARCHITECTURE: `App.tsx` owns route/document identity;
+  `ApplicationWorkspace`/`WorkbenchLayout` own shell composition and measured
+  mode; `useWorkbenchController` mirrors presentation state;
+  `useWorkbenchPreferences` persists only pane widths/collapse; `SourcesPane`
+  owns source-list filtering/focus; `DocumentPane` adapts existing Structured
+  and Normalized readers; `RouteDocumentContext` carries typed route targets.
+- RESPONSIVE RECEIPT: 1440×900 = 56px navigation + Research 624px + Sources
+  304px + 8px splitter + Document 440px + 8px splitter; 1920×1080 = 216px
+  navigation + Research 944px with the same contextual tracks. 1366×768 and
+  1280×800 use context dock; 1024×768 and 1366×520 use contextual surface;
+  768/390 use drawer/single surface; 640/320 smoke paths stay usable.
+- VISUAL RECEIPT: rebuilt Chromium renders at
+  `frontend/e2e/screenshots/v5-06-four-pane-1440x900.png` and
+  `frontend/e2e/screenshots/v5-06-four-pane-1920x1080.png` were inspected.
+  Both show simultaneous Research/Sources/Document surfaces, selected AAPL
+  evidence, readable document content, the exact amber/yellow structured mark,
+  and no overlap or page-level horizontal overflow. The reader grid now uses a
+  non-shrinking content track at the 1440×900 short wide height.
+- TEST COMMANDS AND RESULTS:
+  - `.venv\Scripts\python.exe -m pytest -q` — PASS, `770 passed`,
+    `182 warnings`.
+  - `bun run test -- --reporter=dot` — PASS, `60 files / 292 tests`.
+  - `bun run lint` — PASS, `tsc --noEmit`.
+  - `bun run build` — PASS, `2,009` Vite modules transformed.
+  - V5-00/V5-02/V5-03/V5-04/V5-05/V5-06/V5-07 serial slice — PASS,
+    `15/15` Chromium and `15/15` Firefox.
+  - Full `app.spec.ts` — PASS, `38/38` Chromium and `38/38` Firefox.
+  - Full `regression.spec.ts` — PASS, `31/31` Chromium and `31/31` Firefox.
+  - Synthetic `workspace-performance.spec.ts` — PASS, `2/2` executed in
+    each engine and `2` provider-dependent checks skipped. Chromium latest
+    p95s: warm composer `14.00ms`, warm view `42.90ms`, Markdown layout
+    `175.70ms`; source switching p50/p95 `166.10/204.30ms`. Firefox:
+    `27.00ms`, `89.00ms`, `314.00ms`; source switching `143.00/164.00ms`.
+  - Production regression p95s: Chromium Library search/composer
+    `62.67/43.50ms`; Firefox `68.21/40.00ms`, below 200/100ms budgets.
+- ACCESSIBILITY: overview Axe serious/critical scan, regression contrast scan,
+  keyboard tabs/splitters/dialogs, focus restoration, EN/VI, and reduced-motion
+  browser journeys passed. Native browser zoom remains a manual external gate.
+- BOUNDARY/PRESERVATION: no backend/API/DTO, query/SSE, retrieval, generation,
+  model, prompt, index, corpus, Qdrant, acquisition, provenance, persistence,
+  or PDF behavior changed. `.audit-runtime/`, `harness_stacks.txt`, ignored
+  `data/`, and unrelated dirty work were preserved. No file was removed, no
+  commit/deploy/benchmark promotion occurred, and task-owned listeners were
+  cleaned up.
+- KNOWN LIMITATIONS: PDF is still deferred and no tracked PDF corpus or
+  provenance-bound PDF location contract exists; native browser zoom remains
+  manual. Historical checkpoint text may mention the former rail, but the
+  current design/contract now identifies the shared workbench as authoritative.
+- ROLLBACK POINT: V5-08-only reader/workbench CSS, performance-probe,
+  responsive-fixture, and documentation changes. POST-V5 NEXT TASK: `PDF-01`,
+  only after a separate real PDF representation and exact-location contract
+  is approved.
+
+## PDF-00 — Current repository / test / process reconciliation
+
+- TASK ID: `PDF-00`
+- STATUS: [x] COMPLETE
+- FILES CHANGED: `docs/implementation-progress.md` only for this checkpoint.
+- FILES CREATED: none by PDF-00. The dirty worktree already contained
+  untracked `src/api/pdf_representation.py`, `src/api/pdf_generator.py`, and
+  `tests/test_pdf_pipeline.py`; these are preserved as existing user-owned
+  work and are not treated as a clean baseline.
+- CURRENT IMPLEMENTATION TRUTH: document identity and source-set/document
+  revisions are owned by `OriginalViewer` and its revision-bound snapshots;
+  Structured and Normalized readers already validate document/source/chunk/hash
+  identity before highlighting. The backend reader manifest has a provisional
+  `pdf` entry and PDF status/generate/content routes, while the frontend
+  `ActiveRepresentation` and live reader UI still support only Structured and
+  Normalized. The legacy `WorkstationDocumentViewer` is fabricated presentation
+  data (fixed page count, page number, and text) and is not a valid PDF path; it
+  must not be reused as evidence or page truth.
+- CURRENT PDF SCAFFOLD CONTRADICTIONS: the existing untracked backend scaffold
+  uses ReportLab and a block-level mapping sidecar, has no mapping retrieval
+  endpoint, and exposes PDF lifecycle strings that do not yet align with the
+  typed reader/frontend status contracts. These are PDF-01 hardening items,
+  not reasons to change retrieval, generation, indexing, or corpus semantics.
+- CURRENT STORAGE: verified raw SEC sources remain under the existing
+  `data/raw` boundary and processed reader/index artifacts under `data`; the
+  configured backend PDF artifact root is `data/generated/pdf` and remains
+  git-ignored. No data files were deleted, moved, regenerated, or committed.
+- CURRENT TEST COMMANDS / RESULTS:
+  - `.venv\\Scripts\\python.exe -m pytest -q tests/test_original_viewer.py tests/test_structured_document.py tests/test_structured_location.py tests/test_pdf_pipeline.py` — PASS, `29 passed`, `50 warnings`.
+  - `bun run test -- --run src/components/workbench/DocumentPane.test.tsx src/components/StructuredDocumentReader.test.tsx src/components/OriginalDocumentReader.test.tsx src/components/DocumentWorkspace.test.tsx` from `frontend/` — PASS, `4 files / 16 tests`.
+  - Existing V5-08 closure remains the broader repository baseline recorded
+    above; no intentionally failing baseline test was introduced.
+- CURRENT PROCESSES / PORTS: read-only inspection found no project-owned
+  listener on ports `3000`, `4173`, `4175`, `5173`, `8000`, `8765`, or `8766`.
+  Existing desktop Chrome/Edge/Codex processes were not killed or claimed as
+  Goal-owned. No PDF/backend/frontend process was started by PDF-00.
+- REPRESENTATION CONTRACT EFFECT: none; reconciliation only.
+- API EFFECT: none; existing provisional PDF routes were inspected only.
+- STORAGE EFFECT: none.
+- PROVENANCE EFFECT: none.
+- SECURITY EFFECT: confirmed the intended boundary must resolve only a
+  verified project-owned `document_id`; arbitrary URL/path/HTML rendering is
+  not an allowed design.
+- FRONTEND EFFECT: none.
+- MAPPING EFFECT: none; the missing mapping transport and representation
+  switch integration are recorded for later phases.
+- BROWSER VALIDATION: no browser session was started; the existing V5-08
+  receipts remain the current workbench visual baseline.
+- PERFORMANCE OBSERVATION: no PDF measurement was claimed at baseline.
+- KNOWN LIMITATIONS: no real PDF.js viewer, official-PDF admission path,
+  mapping API, PDF↔reader synchronization, or PDF-specific browser coverage
+  exists yet; current source corpus truth still needs a live inventory check.
+- UNRELATED WORK PRESERVED: all dirty V5/V5.1 frontend, backend, docs,
+  audit-runtime, screenshots, harness, and ignored `data/` work was preserved.
+- OWNED PROCESSES: none.
+- EXACT NEXT TASK: `PDF-01` — harden the representation/provenance/artifact
+  manifest and reader/API contracts before exposing PDF controls.
+
+## PDF-01 — Representation, provenance, and artifact contracts
+
+- TASK ID: `PDF-01`
+- STATUS: [x] COMPLETE
+- FILES CHANGED: `src/api/pdf_representation.py`, `src/api/pdf_generator.py`,
+  `src/api/app.py`, `src/api/document_reader_models.py`,
+  `src/api/document_sources.py`, `frontend/src/types.ts`,
+  `frontend/src/lib/api.ts`, `tests/test_pdf_pipeline.py`, and this file.
+- FILES CREATED: none in this phase; the pre-existing untracked PDF scaffold
+  was extended in place and remains user-owned dirty work.
+- REPRESENTATION CONTRACT EFFECT: manifests now distinguish `OFFICIAL_PDF`
+  from `DERIVED_PDF`, carry explicit `official_pdf_pages` versus
+  `generated_representation_pages` semantics, include representation identity,
+  artifact status, renderer profile, mapping-manifest identity, page count,
+  and source/artifact hashes. The internal official-admission constructor is
+  explicit and does not relabel generated bytes as official. Current corpus
+  inventory remains 50 `.html` + 1 `.htm` under `data/raw` and no PDF source.
+- ARTIFACT IDENTITY: derived keys bind representation type, document ID,
+  source document ID, source-set revision, document revision, source hash, and
+  the frozen renderer profile. Browser-facing manifests carry no local path.
+- API EFFECT: existing document-bound status/generate/content routes now return
+  the v2 manifest shape and typed PDF availability metadata; the client API
+  has document-bound manifest/generate/content/mapping contracts. No arbitrary
+  URL, filesystem path, or HTML input is accepted or used for rendering.
+- STORAGE EFFECT: artifact keys are path-safe; promotion validates artifact
+  and mapping hashes, writes all files under a unique temporary directory,
+  fsyncs them, and atomically promotes the directory while quarantining a
+  mismatched current directory. Latest-revision markers are written with
+  unique temporary names.
+- PROVENANCE EFFECT: document/source/revision/hash identity remains the
+  authority; PDF page coordinates are representation-specific metadata only.
+- SECURITY EFFECT: route identity is resolved from the verified project-owned
+  document catalog and admitted local source. The contract rejects traversal
+  keys and unbound artifact/mapping bytes; arbitrary source acquisition is
+  outside the PDF surface.
+- FRONTEND EFFECT: browser types and API helpers understand truthful PDF
+  status/manifest metadata, but no PDF tab or fake viewer control was exposed.
+- MAPPING EFFECT: mapping sidecar IDs and artifact-hash binding are now part of
+  the contract; retrieval and exact range resolution remain PDF-04 work.
+- TEST COMMANDS / RESULTS:
+  - `.venv\\Scripts\\python.exe -m pytest -q tests/test_pdf_pipeline.py tests/test_original_viewer.py tests/test_structured_document.py tests/test_structured_location.py` — PASS, `31 passed`, `50 warnings`.
+  - `bun run lint` from `frontend/` — PASS, `tsc --noEmit`.
+  - `git diff --check` — PASS apart from normal line-ending warnings.
+- BROWSER VALIDATION: no PDF browser controls were exposed in PDF-01, so no
+  new browser receipt was claimed.
+- PERFORMANCE OBSERVATION: no PDF performance claim was made.
+- KNOWN LIMITATIONS: generation still uses the existing controlled ReportLab
+  renderer scaffold and needs bounded generation validation, mapping transport,
+  and page/viewer integration. `ReaderAvailability` now admits lifecycle
+  states, but the live frontend still intentionally renders Structured and
+  Normalized only.
+- UNRELATED WORK PRESERVED: all pre-existing V5/V5.1 changes, audit artifacts,
+  screenshots, harness files, processes, and ignored `data/` were preserved.
+- OWNED PROCESSES: none.
+- EXACT NEXT TASK: `PDF-02` — secure DERIVED_PDF generation, real artifact
+  validation, bounded concurrency/timeout, stale invalidation, and fixture
+  coverage without changing retrieval or ingestion semantics.
+
+## PDF-02 — Controlled DERIVED_PDF generation backend
+
+- TASK ID: `PDF-02`
+- STATUS: [x] COMPLETE
+- FILES CHANGED: `configs/settings.py`, `src/api/pdf_generator.py`,
+  `src/api/pdf_representation.py`, `src/api/app.py`,
+  `tests/test_pdf_pipeline.py`, and this file.
+- FILES CREATED: none in this phase; the existing PDF scaffold remains the
+  source tree for the implementation.
+- GENERATOR: the current backend has no Playwright/Python browser runtime and
+  the repository's frontend is independently deployed, so the controlled
+  renderer remains the fixed ReportLab text renderer already present in the
+  scaffold. It consumes only the admitted normalized source snapshot, escapes
+  active content, emits no remote scripts, preserves source text/table lines,
+  and captures PDF-point rectangles during the same draw operation. This
+  direct PDF-coordinate approach avoids an unverified browser viewport-to-PDF
+  transform for the first implementation.
+- ARTIFACT LIFECYCLE: source identity is revalidated after rendering and
+  before promotion; generated bytes pass PDF header/EOF/page-tree/size checks,
+  are hash-bound to the manifest and mapping, then publish via unique
+  temporary-directory writes and atomic promotion. Failed or timed-out output
+  is never published.
+- CONCURRENCY / STATES: generation uses per-artifact single-flight locking,
+  a bounded cross-artifact semaphore, and backend-managed `generating`,
+  `failed`, and `stale` state receipts. A current artifact is reused on repeat
+  requests; stale revision artifacts are not served. The configured bounds are
+  two concurrent jobs, 60 seconds, 8,000,000 source code points, 20,000
+  blocks, and 64 MiB output by default.
+- API EFFECT: the document-only POST lifecycle now marks generation state,
+  rechecks source identity, publishes the latest artifact marker only after
+  atomic promotion, and returns retryable machine-coded failures. No browser
+  URL/path/HTML input is read.
+- STORAGE EFFECT: no generated artifact was written to the repository's
+  ignored `data/` tree by validation; real-fixture generation used a temporary
+  directory that was cleaned up.
+- PROVENANCE EFFECT: generated page numbers remain pages of the generated
+  representation; source/document/revision/hash identity remains canonical.
+- SECURITY EFFECT: source changes during rendering, invalid artifact bytes,
+  traversal keys, unbound hashes, oversize input/output, and render-over-time
+  output are rejected before current-artifact publication.
+- FRONTEND EFFECT: none beyond the PDF-01 typed contracts; PDF controls remain
+  deferred until the real artifact transport/viewer exists.
+- MAPPING EFFECT: every admitted source-line block receives zero or more
+  page/rectangle entries; long documents yield multiple page rectangles, and
+  source-layout table lines remain marked as table blocks without invented
+  financial semantics.
+- TEST COMMANDS / RESULTS:
+  - `.venv\\Scripts\\python.exe -m pytest -q tests/test_pdf_pipeline.py` — PASS, `18 passed`, `1 warning`.
+  - Real local fixture: AAPL `AAPL:0000320193-25-000079` — PASS, `72` generated pages, `170,516` bytes, `1,515/1,515` mapped blocks, `279.9 ms` in a temporary store.
+- BROWSER VALIDATION: not applicable; the PDF.js viewer is the next phase.
+- PERFORMANCE OBSERVATION: the measurement above is a local warm-process
+  generation observation, not a production guarantee; browser first-render and
+  memory behavior remain unmeasured.
+- KNOWN LIMITATIONS: rectangle capture is currently block/line-granular, not
+  character-granular; official-PDF inventory remains empty; no mapping endpoint
+  or PDF.js viewer is wired yet.
+- UNRELATED WORK PRESERVED: all V5/V5.1 dirty work, `data/`, audit artifacts,
+  screenshots, and desktop processes were preserved.
+- OWNED PROCESSES: none; temporary fixture storage was cleaned up.
+- EXACT NEXT TASK: `PDF-03` — integrate a real project-owned PDF.js viewer
+  into the existing DocumentPane without disturbing Structured/Normalized.
+
+## PDF-03 — Real PDF.js viewer and document-bound transport
+
+- TASK ID: `PDF-03`
+- STATUS: [x] COMPLETE
+- FILES CHANGED: `frontend/package.json`, `frontend/bun.lock`,
+  `frontend/src/components/PdfDocumentViewer.tsx`,
+  `frontend/src/styles/pdf-viewer.css`, `frontend/src/components/DocumentWorkspace.tsx`,
+  `frontend/src/lib/api.ts`, `frontend/src/types.ts`,
+  `frontend/src/lib/workbench.ts`, `frontend/src/hooks/useReaderSession.ts`,
+  `frontend/e2e/fixtures.ts`, `frontend/e2e/pdf-viewer.spec.ts`, and this file.
+- FILES CREATED: the real `PdfDocumentViewer`, its scoped stylesheet, and a
+  hermetic browser fixture/spec using valid PDF bytes. No production data or
+  external provider was used.
+- FILES REMOVED: none in this phase.
+- REPRESENTATION CONTRACT EFFECT: the PDF tab is selectable only for an
+  admitted manifest status (`supported`, `generating`, `available`, `stale`, or
+  `failed`). Official and generated page semantics are labeled separately;
+  Structured and Normalized remain available fallbacks.
+- API EFFECT: the frontend uses only document-bound GET/POST manifest routes
+  and the document-bound PDF content route. No browser-supplied URL, path, or
+  HTML is accepted.
+- STORAGE EFFECT: `pdfjs-dist` and its worker are bundled in the independent
+  frontend build; no PDF bytes are stored in the frontend repository.
+- PROVENANCE EFFECT: the viewer displays the backend representation identity,
+  source/revision-bound status, and generated-page truth; it does not infer SEC
+  page numbers from a generated artifact.
+- SECURITY EFFECT: PDF.js receives bytes only from the backend's checked
+  document route. Download and fullscreen controls are bound to the current
+  document, not to arbitrary href/path input.
+- FRONTEND EFFECT: the existing DocumentPane now hosts a real canvas/text-layer
+  viewer with page controls, fit/zoom, search, download, fullscreen, keyboard
+  navigation, loading/error/retry states, and reduced-motion styling.
+- MAPPING EFFECT: the viewer accepts highlight rectangles only as a typed prop;
+  no approximate or locally guessed highlight is painted.
+- TEST COMMANDS / RESULTS:
+  - `bun run lint` — PASS, `tsc --noEmit`.
+  - `bun run build` — PASS, 2,015 modules transformed; the expected PDF worker
+    and large-application-chunk warnings remain non-fatal.
+  - `bunx playwright test e2e/pdf-viewer.spec.ts --project=chromium --workers=1` — PASS, `1/1`.
+  - `bunx playwright test e2e/pdf-viewer.spec.ts --project=firefox --workers=1` — PASS, `1/1`.
+- BROWSER VALIDATION: both engines loaded real PDF.js bytes, rendered a canvas
+  page, exposed the selectable text layer, exercised zoom and find, and kept
+  the generated-page label visible.
+- PERFORMANCE OBSERVATION: final focused runs measured first-page readiness at
+  207 ms in Chromium and 344 ms in Firefox on the local fixture; search took
+  63 ms and 54 ms respectively. Heap reporting was available in Chromium
+  20,500,000 bytes and unavailable in Firefox.
+- KNOWN LIMITATIONS: the backend renderer is the controlled ReportLab profile,
+  not a Chromium print pipeline; the current corpus still has no admitted
+  official PDF bytes. Exact evidence mapping is PDF-04 work.
+- UNRELATED WORK PRESERVED: V5/V5.1 workbench behavior, retrieval/generation,
+  ingestion, corpus/index/Qdrant data, and existing dirty audit artifacts were
+  preserved. The test-only PDF fixture is synthetic and does not touch `data/`.
+- OWNED PROCESSES: browser preview processes were task-owned and cleaned after
+  the focused runs; no persistent project listener was retained.
+- EXACT NEXT TASK: `PDF-04` — expose the hash-bound mapping sidecar and exact
+  PDF evidence-location contract.
+
+## PDF-04 — Exact PDF mapping sidecar and location API
+
+- TASK ID: `PDF-04`
+- STATUS: [x] COMPLETE
+- FILES CHANGED: `src/api/pdf_representation.py`, `src/api/pdf_generator.py`,
+  `src/api/app.py`, `tests/test_pdf_pipeline.py`,
+  `frontend/src/types.ts`, `frontend/src/lib/api.ts`,
+  `frontend/src/lib/readerLocationView.ts`, and this file.
+- FILES CREATED: none beyond the PDF contract/generator files already recorded
+  in PDF-01/PDF-02.
+- FILES REMOVED: none.
+- REPRESENTATION CONTRACT EFFECT: mapping manifests now bind
+  `representation_id`, document/source identities, source content hash,
+  source-set/document revisions, artifact key/hash, and mapping-manifest ID.
+  Coordinates are PDF points with explicit generated-page semantics.
+- API EFFECT: added document-bound `/pdf/mapping` and
+  `/pdf/mapping/location` routes. Location resolution requires chunk ID/hash
+  and source/document revisions; it returns exact, ambiguous, unavailable, or
+  stale states instead of guessing.
+- STORAGE EFFECT: mapping JSON is atomically promoted beside the PDF and is
+  rejected when its identity or artifact hash differs. Status/content routes
+  now detect missing or hash-corrupted bytes rather than reporting a false
+  available artifact.
+- PROVENANCE EFFECT: source text remains canonical. A PDF rectangle is usable
+  only when the complete indexed chunk matches one source interval and aligns
+  with complete mapped source blocks; page coordinates never replace source
+  document/revision identity.
+- SECURITY EFFECT: artifact keys remain path-safe; the API resolves chunks
+  from the current document index and rejects traversal, mismatched hashes,
+  stale revisions, missing sidecars, and corrupted bytes.
+- FRONTEND EFFECT: typed PDF location responses can enter the same reader
+  location validation seam as Structured and Normalized without changing their
+  existing contracts.
+- MAPPING EFFECT: wrapped paragraphs yield multiple rectangles; partial,
+  repeated, and cross-boundary matches remain unhighlighted or ambiguous.
+- TEST COMMANDS / RESULTS:
+  - `.venv\Scripts\python.exe -m pytest -q tests/test_pdf_pipeline.py` — PASS, `21 passed`, `1 warning`.
+  - `.venv\Scripts\python.exe -m pytest -q tests/test_pdf_pipeline.py tests/test_original_viewer.py tests/test_structured_document.py tests/test_structured_location.py tests/test_api.py` — PASS, `103 passed`, `54 warnings`.
+  - `bun run test -- --run src/lib/api.test.ts src/components/workbench/DocumentPane.test.tsx` — PASS, `2 files / 7 tests`.
+- BROWSER VALIDATION: the sidecar-backed exact overlay is exercised by the
+  PDF-05 browser fixture after this API phase.
+- PERFORMANCE OBSERVATION: exact location resolution is local and bounded by
+  the indexed chunk lookup plus one whitespace-literal source match; no remote
+  acquisition or retrieval rerun is introduced.
+- KNOWN LIMITATIONS: mapping is block/line-granular rather than
+  character-granular, and the current source inventory has no official-PDF
+  pagination to compare against.
+- UNRELATED WORK PRESERVED: retrieval/reranking/model/index/corpus/generation
+  semantics and ignored `data/` artifacts were not changed or regenerated.
+- OWNED PROCESSES: none after backend test completion.
+- EXACT NEXT TASK: `PDF-05` — synchronize exact PDF evidence with the shared
+  reader state, add truthful metadata/fallback UI, and remove the fabricated
+  viewer path.
+
+## PDF-05 — Evidence synchronization, metadata, and responsive truthfulness
+
+- TASK ID: `PDF-05`
+- STATUS: [x] COMPLETE
+- FILES CHANGED: `frontend/src/components/DocumentWorkspace.tsx`,
+  `frontend/src/components/ContextPanel.tsx`,
+  `frontend/src/components/workbench/DocumentPane.tsx`,
+  `frontend/src/lib/readerLocationView.ts`,
+  `frontend/src/lib/readerLocationView.test.ts`,
+  `frontend/src/components/workbench/DocumentPane.test.tsx`,
+  `frontend/src/styles/document-reader.css`, `frontend/e2e/fixtures.ts`,
+  `frontend/e2e/pdf-viewer.spec.ts`, and this file.
+- FILES CREATED: no new production component; the shared existing DocumentPane
+  remains the composition owner.
+- FILES REMOVED: `frontend/src/components/workbench/WorkstationDocumentViewer.tsx`,
+  the pre-existing fabricated fixed-page/Apple-data viewer. It had no remaining
+  imports after ContextPanel was switched to the real DocumentPane.
+- REPRESENTATION CONTRACT EFFECT: evidence stays selected across Structured,
+  Normalized, and PDF representation changes. PDF metadata discloses derived
+  versus official type, page semantics, status, source/revisions, renderer,
+  page count, and advanced artifact identity.
+- API EFFECT: DocumentWorkspace requests the exact bound PDF location only for
+  the active current manifest/source identity and reports resolving, resolved,
+  stale, unavailable, or error through the existing reader-session seam.
+- STORAGE EFFECT: no new browser persistence or evidence schema; the selected
+  source remains transient and the existing evidence store is untouched.
+- PROVENANCE EFFECT: exact PDF rectangles are painted only after client-side
+  identity validation of chunk/hash/document/source/revisions/artifact and
+  non-empty rectangles. Stale/unavailable responses preserve the source and
+  show the reason without painting an approximate mark.
+- SECURITY EFFECT: SEC source links in metadata are displayed only when they
+  pass the existing `https://www.sec.gov/` allowlist; arbitrary source URLs are
+  not turned into viewer inputs.
+- FRONTEND EFFECT: the four-pane/dock/drawer compositions share one real PDF
+  path. Responsive remounts preserve the selected representation through the
+  workbench controller instead of resetting to Structured.
+- MAPPING EFFECT: verified amber overlays support multi-rectangle and
+  multi-line locations; unavailable/ambiguous/stale mappings remain visible as
+  truthful status banners and Structured/Normalized remain safe fallbacks.
+- TEST COMMANDS / RESULTS:
+  - `bun run test -- --run --reporter=dot` — PASS, `60 files / 295 tests`.
+  - `bun run lint` — PASS, `tsc --noEmit`.
+  - `bunx playwright test e2e/pdf-viewer.spec.ts --project=chromium --workers=1` — PASS, `1/1`.
+  - `bunx playwright test e2e/pdf-viewer.spec.ts --project=firefox --workers=1` — PASS, `1/1`.
+- BROWSER VALIDATION: screenshots were captured at 1440×900,
+  1920×1080, and 720×900 in `frontend/.audit-runtime/`. Wide captures show
+  the PDF canvas, exact amber overlay, generated-page label, find results, and
+  selected evidence; the narrow capture keeps PDF selected and exposes a
+  responsive toolbar without page-level overflow.
+- PERFORMANCE OBSERVATION: local fixture first-page/search measurements remain
+  207/63 ms in Chromium and 344/54 ms in Firefox; Chromium reported a
+  20.5 MB heap sample, while Firefox did not expose heap telemetry.
+- KNOWN LIMITATIONS: the renderer remains ReportLab rather than Chromium, the
+  mapping is block/line-granular, and official PDF admission is not present in
+  the current HTML-only corpus.
+- UNRELATED WORK PRESERVED: conversation seed behavior, query/SSE, retrieval,
+  generation, model, prompt, index, Qdrant, acquisition, persistence, and
+  corpus artifacts remain outside this change.
+- OWNED PROCESSES: focused browser previews were cleaned; no task-owned
+  listener remains.
+- EXACT NEXT TASK: `PDF-06` — perform final repository/browser/security/
+  performance closure and record the complete handoff.
+
+## PDF-06 — Final PDF representation closure
+
+- TASK ID: `PDF-06`
+- STATUS: [x] COMPLETE
+- FILES CHANGED: `README.md`, `.env.example`, `PROJECT_STATE.md`,
+  `docs/frontend/DESIGN.md`, `docs/frontend/FRONTEND_CONTRACT.md`,
+  `docs/frontend/V5_WORKBENCH_CONTRACT.md`, and this file.
+- FILES CREATED: no new runtime files; ignored visual audit screenshots remain
+  under `frontend/.audit-runtime/` for local inspection.
+- FILES REMOVED: none beyond the fabricated viewer removal recorded in PDF-05.
+- REPRESENTATION CONTRACT EFFECT: public/project docs now describe the
+  optional document-bound `OFFICIAL_PDF`/`DERIVED_PDF` surface, generated-page
+  semantics, exact-only mapping, lifecycle statuses, and official-PDF absence
+  in the current corpus.
+- API EFFECT: environment documentation exposes optional PDF generation,
+  artifact-root, timeout, and concurrency settings. No retrieval, generation,
+  model, index, corpus, or streaming API was changed.
+- STORAGE EFFECT: PDF artifacts remain git-ignored under `data/generated/pdf`;
+  no repository `data/` artifact was deleted, regenerated, moved, or committed.
+- PROVENANCE EFFECT: the final handoff records source/document/revision/hash
+  identity as canonical and clearly labels ReportLab pages as generated
+  representation pages rather than official SEC pagination.
+- SECURITY EFFECT: final checks cover URL/path/HTML rejection, safe artifact
+  keys, source revalidation, atomic promotion, hash-bound content/mapping,
+  stale revisions, corrupt/missing artifact states, SEC-link allowlisting, and
+  hermetic browser network blocking.
+- FRONTEND EFFECT: the real PDF.js path is documented as optional and the
+  Structured/Normalized fallback remains authoritative when PDF is unavailable.
+- MAPPING EFFECT: final docs and tests preserve exact-only behavior; no fuzzy
+  nearest-page or approximate highlight was introduced.
+- TEST COMMANDS / RESULTS:
+  - `.venv\Scripts\python.exe -m pytest -q` — PASS, `791 passed`, `188 warnings`.
+  - `bun run test -- --run --reporter=dot` — PASS, `60 files / 295 tests`.
+  - `bun run lint` — PASS, `tsc --noEmit`.
+  - `bun run build` — PASS, 2,015 modules transformed.
+  - PDF-focused Chromium and Firefox browser tests — PASS, `1/1` each.
+  - The attempted combined legacy `app.spec.ts` + `regression.spec.ts` + PDF
+    run exposed existing seeded-demo/template expectations before reaching the
+    PDF case (overview expected the empty landing copy while the app seeded the
+    sample conversation; template buttons were consequently absent). That run
+    was stopped after the baseline failures; the isolated PDF test is the
+    authoritative PDF browser gate and passed in both engines.
+- BROWSER VALIDATION: PDF.js rendered valid bytes in Chromium and Firefox;
+  page/zoom/find/download/fullscreen controls were mounted; exact evidence
+  was labeled Verified; screenshots were visually inspected at the three
+  required widths.
+- PERFORMANCE OBSERVATION: first page/search were 207/63 ms in Chromium and
+  344/54 ms in Firefox on the hermetic one-page fixture. Backend local fixture
+  generation previously measured 72 pages, 170,516 bytes, 1,515/1,515 mapped
+  blocks, and 279.9 ms in a temporary store; this is an observation, not a
+  production SLA. Native browser-chrome zoom remains a manual gate.
+- KNOWN LIMITATIONS: current corpus inventory is 50 `.html` + 1 `.htm` and no
+  official PDF/XML/XSL source; ReportLab is the controlled renderer because
+  the backend has no browser runtime, so derived pages are not official SEC
+  pagination; mapping is block/line-granular; Firefox does not expose the
+  optional heap metric; the legacy seeded-demo E2E slice remains outside this
+  PDF closure and was not altered.
+- UNRELATED WORK PRESERVED: all pre-existing V5/V5.1 dirty files, audit
+  outputs, harness files, desktop processes, and ignored `data/` artifacts were
+  preserved. No commit, deploy, benchmark promotion, retrieval redesign, or
+  corpus/index rebuild was performed.
+- OWNED PROCESSES: final listener audit is required to be empty for project
+  ports `3000`, `4173`, `4175`, `5173`, `8000`, `8765`, and `8766`; browser
+  preview processes from this task were cleaned.
+- EXACT NEXT TASK: none for the approved PDF-00 through PDF-06 scope. A future
+  evolution should separately decide whether to add trusted official-PDF
+  admission or a backend Chromium renderer; neither is implied by this closure.

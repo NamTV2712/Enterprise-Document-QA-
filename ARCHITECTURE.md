@@ -32,6 +32,15 @@ The frontend and backend are separate applications and deployment units. The
 backend Docker image does not build or serve the frontend. Browser-exposed
 configuration is limited to `VITE_*` values and must not contain secrets.
 
+`src/api/app.py` owns FastAPI creation, lifespan/bootstrap, shared runtime
+state, middleware, exception handling, and route registration. Existing
+health, corpus metadata, system information, published evaluation, session,
+cache, and metrics transports are grouped under `src/api/routers/`; they receive
+callbacks to the single application-owned pipeline and state instead of loading
+models or stores. Query/SSE, retrieval inspection, and document/reader/PDF
+routes remain at the application boundary while their compatibility-sensitive
+transport and identity flows are still coupled there.
+
 ## Deployment Topology
 
 The default portfolio deployment is one FastAPI process with one Uvicorn worker:

@@ -3999,3 +3999,172 @@ it independently corroborates the structure — but per the documented precedenc
 the local screenshot remains authority #1 and no Stitch output, markup or demo
 content was imported into the repository. The page was built from the measured
 reference, the UI-001 tokens and the console primitives.
+
+## REPAIR-R1-R4 Checkpoint (verified repair plan, in progress)
+
+Status: ACTIVE. HEAD before repairs `1858924` (UI-008 complete, API-006 paused).
+Dirty tree: 59 tracked modifications + 77 untracked entries = 136 paths, 0
+staged; the historical work is intentional and preserved.
+
+### Verified Findings (re-checked against current source, not assumed)
+
+- **R1 (P0)** — `src/workspace/collections.py:756` `delete_collection` loops over
+  `_children(ITEM_ENTITY_TYPE)` and `_children(NOTE_ENTITY_TYPE)` and deletes each
+  child through `_delete`, and every `_delete` goes through
+  `SQLiteVersionedRecordRepository.delete` (`src/workspace/repository.py:322`),
+  which opens **its own** `database.transaction(write=True)` and commits. The
+  parent revision check therefore happens *last*, after the children are already
+  committed. `_children`/`_scan` also read outside any write transaction, and
+  `record_activity` is another independent commit. The same shape exists in
+  `create_collection` (list-check → create → activity), `add_item`/`add_note`
+  (get parent live check → capacity count → create → activity), `update_*` and
+  `delete_item`/`delete_note`: checks and writes are separate transactions, so a
+  tombstone or a capacity race can interleave between them.
+- **R2 (P1)** — `src/api/app.py:655` configures CORS with
+  `allow_methods=["GET", "POST", "DELETE"]`. `PATCH` is missing, so a browser
+  preflight for `PATCH /collections/{id}` (rename/settings) and
+  `PATCH /collections/{id}/notes/{id}` is answered `400 Disallowed CORS method`
+  even though both routes exist and the UI uses them.
+- **R3 (P1)** — the collection card's overflow menu ("Delete collection") and the
+  rail's overflow menu call the delete handler straight away; only the rail's
+  Settings tab asks for confirmation first. Two of three entry points therefore
+  write without confirmation.
+- **R4 (P2)** — `CollectionsWorkspace.tsx` `loadSelection` only bumps
+  `selectionEpoch`/aborts in its *network* branch. The cached-collection branch
+  (`inPage`) and the cleared branch (`!selectedCollectionId`) return without
+  invalidating an in-flight read, so a slower response for collection A
+  overwrites the cached selection B (and the cleared state). Mutation callbacks
+  (`handleToggleFavorite`, `handleRename`, `handleDeleteFromList`) also capture a
+  collection by closure and mutate `selected`/navigate with no lifetime guard.
+
+### Planned Order and Files
+
+R1 → R2 → R3 → R4, each with focused regression tests before/with the fix and a
+separate commit. R1: `src/workspace/repository.py`,
+`src/workspace/collections.py`, `tests/test_collections_atomicity.py` (new). R2:
+`src/api/app.py`, access/CORS tests. R3/R4:
+`frontend/src/components/collections/*` (+ the shared confirmation dialog),
+`frontend/src/lib/collectionModel.ts` if needed, `e2e/ui-008-collections.spec.ts`.
+
+### Recorded Baseline (Codex audit, actually verified there)
+
+187 focused backend tests (collections, access, transfer, catalog,
+retrieval-inspection metadata, original viewer, discovery Search) and 23 focused
+frontend tests with `bun run lint` (`tsc --noEmit`) passing. Historical broader
+baseline: backend 1018 passed / 0 failed / 188 warnings; frontend 75 files / 495
+tests. The historical numbers are not re-run results.
+
+### Exact Current Action
+
+R1 — write a regression test that reproduces the stale-delete cascade against the
+current code, then introduce connection-scoped versioned-record operations so one
+logical collection mutation is one SQLite write transaction.
+
+## REPAIR-R1–R4 Closure — 2026-09-22
+
+Status: **COMPLETE**. The repairs were applied in the required R1 → R2 → R3 →
+R4 order. API-006 was not started. HEAD before repairs was `1858924`.
+
+### REPAIR-R1 — COMPLETE
+
+- Root cause: collection mutations composed independently committing
+  versioned-record operations, so validation, child/note cascades, activity, and
+  parent tombstoning did not share a transaction. Stale deletes could mutate
+  children, and parent/capacity checks could race the write they guarded.
+- Repair: `src/workspace/repository.py` now exposes connection-scoped internal
+  get/create/replace/delete/tombstone operations while retaining the public
+  one-transaction APIs. `src/workspace/collections.py` composes each logical
+  mutation inside one SQLite write transaction, validates the live parent and
+  expected revision before cascading, and serializes capacity check + insert.
+- Coverage: `tests/test_collections_atomicity.py` uses controlled barriers/events
+  and injected failures to cover stale-delete preservation, activity, atomic
+  success/rollback, tombstoned-parent rejection, add/delete and capacity races,
+  reopen durability, revision semantics, and transfer compatibility.
+- Result: new atomicity suite `11/11`; combined Collections persistence,
+  repository/domain/API, DATA-001, DATA-002, and DATA-003 regression `135/135`.
+- Commit: `ebb8823 fix(workspace): make collection mutations atomic`.
+
+### REPAIR-R2 — COMPLETE
+
+- Root cause: CORS permitted GET/POST/DELETE but omitted PATCH even though
+  collection and note updates use PATCH.
+- Repair: `src/api/app.py` adds only `PATCH` to the existing explicit method
+  allowlist. Origin/header/Host/loopback/private-mode and bearer enforcement are
+  unchanged; a successful preflight does not authorize the real request.
+- Coverage: `tests/test_collections_cors.py` exercises the ASGI preflight and
+  denied Origin/header/PUT cases plus missing/wrong bearer requests.
+- Result: focused access/CORS/Collections contract selection `50/50` (60
+  deselected).
+- Commit: `6220b18 fix(api): allow collection PATCH preflights`.
+
+### REPAIR-R3 — COMPLETE
+
+- Root cause: list and detail menu actions invoked deletion directly while only
+  Settings confirmed.
+- Repair: `CollectionDeleteDialog` and `CollectionsWorkspace` provide one
+  deletion owner for list, detail, and Settings. Confirmation captures ID,
+  revision, and name; Cancel/Escape are write-free, pending state prevents a
+  second submit, 409 remains visible without retry/overwrite, and the shared
+  modal owns initial/return focus with bilingual copy.
+- Result: the combined collection/model/client frontend slice passed `64/64`;
+  final component coverage is included in the `23/23` workspace suite. Browser
+  coverage now proves list Cancel/Escape/focus, detail conflict/exact revision,
+  and one successful Settings DELETE.
+- Commit: `60562d5 fix(frontend): confirm collection deletion consistently`.
+
+### REPAIR-R4 — COMPLETE
+
+- Root cause: only the network selection branch invalidated the prior read;
+  cached and cleared branches allowed late A data to overwrite B or a newer A
+  lifetime, and mutation completions had no selection-lifetime ownership check.
+- Repair: selection route generations advance synchronously on every route
+  identity change, every read branch first invalidates/aborts the prior epoch,
+  detail UI is keyed by lifetime, and read/mutation callbacks must match the
+  live generation and collection identity before changing detail, drafts,
+  errors/loading, or navigation. AbortError remains non-user-facing; a server
+  mutation may still complete and safely refresh list data.
+- Result: `CollectionsWorkspace.test.tsx` `23/23`, including cached B, clear,
+  A1→B→A2, notes/activity, draft, loading/error, late mutation, and delayed
+  navigation cases.
+- Commit: `47c4ea6 fix(frontend): guard collection async state by selection lifetime`.
+
+### REPAIR-FINAL — COMPLETE
+
+- Additional browser receipt commit:
+  `8aa5af4 test(frontend): cover collection delete repair journeys`.
+- Full hermetic backend: `1035 passed`, `0 failed`, `188 warnings`; warning count
+  did not grow from the recorded baseline.
+- Full frontend: final controlled Vitest `75 files / 507 tests`, all passed.
+  An earlier unconstrained run produced one load-sensitive failure in the
+  pre-existing App route-change cancellation test; its immediate focused rerun
+  passed, and the final controlled full run passed all 507 tests.
+- TypeScript: `bun run lint` passed. Production build: `2060` modules
+  transformed and build passed; only the existing chunk-size advisory remained.
+- Production-like UI-008 browser matrix with one worker: Chromium `18/18`,
+  Firefox `18/18`, `36/36` total. The first draft of the new conflict assertion
+  incorrectly queried modal-hidden background content (`34/36`); the corrected
+  modal-semantic assertion passed focused `4/4` and then full `36/36`.
+- `git diff 1858924..HEAD --check` and the final staged-diff checks are clean
+  apart from normal Windows LF/CRLF notices. No task-created SQLite/WAL/SHM,
+  debug/log/report, screenshot, trace/video, build output, or runtime directory
+  is committed. Existing ignored/untracked artifacts were preserved.
+- Dirty tree: recorded start `59` tracked modifications + `77` untracked entries
+  (`136` paths), `0` staged. Closure returns to the same `136` unrelated paths
+  and `0` staged after the repair/checkpoint commits; no historical path was
+  reset, cleaned, stashed, or mass-staged.
+
+### Remaining Boundaries and Exact Next Action
+
+The browser still does not own or persist the local bearer token; the planned
+memory-only local connection/token owner remains staged architecture. No token
+was hardcoded or placed in localStorage/IndexedDB, and API-001 was not weakened.
+
+The verified clean-checkout issue remains: committed runtime code imports
+dependencies that are still untracked, so a fresh clone is not self-contained.
+Do not solve this by mass-staging the historical worktree.
+
+Roadmap status: UI-008 remains the latest completed product task; no roadmap
+feature is in progress. **Exact next action: `REPAIR-005 — Restore
+clean-checkout/runtime dependency closure`.** After that separate task is
+completed, roadmap work may resume with API-006. Do not begin either task as
+part of this closure.

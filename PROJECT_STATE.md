@@ -5654,3 +5654,58 @@ the current design and frontend contracts identify the shared workbench as
 authoritative. Rollback is limited to V5-08 frontend CSS/test-probe/fixture and
 documentation changes. Exact post-V5 next task: `PDF-01`, only after a real
 PDF contract is separately approved.
+
+## Current repair state — 2026-09-22
+
+REPAIR-R1 through REPAIR-R4 are complete, superseding the earlier post-UI-008
+next-action note. API-006 has not started.
+
+- **R1 atomic collection mutations** (`ebb8823`): independently committing
+  record operations were the cause of partial cascades and check/write races.
+  Connection-scoped versioned-record operations now let every logical
+  collection mutation run in one SQLite write transaction. Parent live/revision
+  validation precedes cascade work; child/note/activity/parent changes roll back
+  together; parent and capacity checks share the serialized transaction.
+- **R2 PATCH preflight** (`6220b18`): the explicit CORS method allowlist now adds
+  only PATCH. Origin/header/Host/loopback/private-mode and bearer controls are
+  unchanged, and preflight still grants no application authorization.
+- **R3 shared delete confirmation** (`60562d5`): list menu, detail menu, and
+  Settings all delegate to one workspace-owned confirmation dialog carrying the
+  collection ID, revision, and name. Cancel/Escape do not write; pending state
+  prevents duplicate submission; 409 is visible and never auto-retried; modal
+  focus/return focus and EN/VI copy are preserved.
+- **R4 selection lifetime ownership** (`47c4ea6`): every network, cached, or
+  cleared selection first invalidates and aborts its predecessor. Route
+  generation + request epoch checks protect detail, notes, activity, drafts,
+  loading/errors, mutation refreshes, and navigation across A→B→A lifetimes.
+  Canceled reads do not surface AbortError; completed old server mutations may
+  refresh safe list state but cannot mutate the current detail lifetime.
+- Browser repair receipts were added in `8aa5af4`, covering list-menu
+  Cancel/Escape and focus restoration, detail-menu 409/exact revision/no retry,
+  and exactly one successful Settings DELETE.
+
+Validation actually run: atomicity `11/11`; combined Collections persistence,
+domain/repository/API and DATA-001/002/003 `135/135`; access/CORS selection
+`50/50`; collection model/component/client selection `64/64`; final workspace
+component suite `23/23`; full backend `1035 passed / 0 failed / 188 warnings`;
+final full frontend `75 files / 507 tests`; TypeScript passed; production build
+passed with `2060` transformed modules; focused production-like UI-008 passed
+Chromium `18/18` and Firefox `18/18` (`36/36`, one worker). Final warning count
+matches the recorded baseline. The checkpoint records the earlier transient
+test observations and their focused/final resolutions rather than hiding them.
+
+Security/data-integrity position: no schema or public HTTP contract changed;
+record formats, IDs, revisions, tombstones/no-resurrection behavior, canonical
+transfer serialization, and DATA-002 compatibility remain intact. No token was
+persisted, hardcoded, or bypassed. The final memory-only local connection/token
+owner remains staged architecture, so unavailable/unauthorized states remain
+truthful.
+
+Repository health: the historical dirty/untracked tree was preserved. A clean
+checkout remains non-self-contained because committed runtime modules still
+depend on untracked files; this was deliberately not repaired by mass-staging.
+UI-008 remains the latest completed product task and no roadmap feature is in
+progress.
+
+**Exact next action: `REPAIR-005 — Restore clean-checkout/runtime dependency
+closure`.** Do not start API-006 until that separate health task is complete.

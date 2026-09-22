@@ -225,3 +225,37 @@ submitted twice while a run is open, while an edited one may be committed
 immediately, in which case the earlier request is aborted and its late response
 is ignored. The Reranker view compares the fusion and cross-encoder orders of
 one same-pool trace and never reranks a second time.
+
+## Models and Datasets registry acceptance (UI-009)
+
+`/models` and `/datasets` are read-only registry destinations backed only by
+API-006. Their list filters are server filters, and their selected record is
+keyed by the backend ID. The route contract defines no detail URL, so detail is
+page-local; direct routing, sidebar navigation, and browser Back/Forward own
+only the page route.
+
+Models preserves configured identity/revision, observed runtime
+identity/revision, configuration, load, credential presence, and availability
+as separate fields. `unknown` is displayed as unknown, never as false,
+offline, healthy, or reachable. Browsing issues only `GET /models`; it cannot
+test a provider, run inference, download a model, or mutate configuration. The
+bounded Runtime identity check is an explicit user action to
+`POST /models/{id}/tests` with `runtime_identity`. It is selection-bound,
+duplicate-protected, reports `provider_executed` verbatim, and treats an access
+or deployment refusal as an unavailable action rather than provider failure.
+
+Datasets reads `GET /datasets` and selected detail from
+`GET /datasets/{id}`. Corpus and evaluation coverage retain their discriminated
+contracts. Recorded zero, unknown count, an empty registry, unavailable detail,
+and missing/invalid/mismatched provenance are different states. The evaluation
+detail may display only API-provided aggregates and revision; question text,
+expected answers, ground truth, and judge labels are forbidden. Browsing has no
+upload, delete, reindex, execution, provider, or cache-mutating action.
+
+List, detail, and explicit test requests have independent lifetime ownership.
+Each successor aborts or invalidates its predecessor, and a completion must
+still match both its request epoch and selected backend ID before it may paint.
+Desktop presents a registry/detail split, compact widths stack the regions,
+and Models uses cards at 800px and below instead of compressing its table.
+Both themes require non-color state labels, visible focus, reduced-motion
+support, reachable detail/actions, and zero body/root horizontal overflow.

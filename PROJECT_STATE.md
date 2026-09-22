@@ -1,5 +1,73 @@
 # Project State
 
+## UI-009 Models/Datasets workspace (2026-09-22)
+
+UI-009 is complete. `/models` and `/datasets` are now available product routes
+over the completed API-006 registry contract. The implementation commit is
+`b35e1b5` (`feat(ui): build truthful model and dataset registries`). The backend
+and its 67-route contract are unchanged.
+
+Models reads `GET /models` with the API's optional role filter and selects by
+the stable backend ID. Generator, embedding, and reranker entries keep
+configured identity/revision, observed runtime identity/revision, load,
+availability, and credential presence separate. Unknown remains unknown; the
+page does not fabricate reachability, health, latency, cost, quality,
+throughput, context length, or benchmark data. The only write-shaped request is
+an explicit user-initiated `POST /models/{id}/tests` for `runtime_identity`.
+It is never sent while browsing, is duplicate-protected and selection-bound,
+reports `provider_executed=false`, and classifies local-access, deployment-mode,
+validation, and unexpected failures without presenting them as provider
+failure.
+
+Datasets reads `GET /datasets` with the optional kind filter and
+`GET /datasets/{id}` for page-local detail. The stable `serving-corpus` and
+`evaluation-test-set` IDs own selection. Corpus coverage and allowlisted index
+provenance preserve available, degraded, unavailable, missing, invalid,
+mismatch, recorded zero, and unknown/null semantics. Evaluation renders only
+aggregate category/priority/ticker/section coverage and the deterministic
+revision; questions, expected answers, ground truth, and judge labels never
+enter the browser. There is no upload, delete, reindex, model switch,
+installation, download, provider configuration, or job action.
+
+Both pages use request epochs plus `AbortController` ownership so older filter,
+detail, or test completions cannot repaint the active identity. Selection is
+page-local because the route contract defines no model/dataset detail URLs;
+direct `/models` and `/datasets`, sidebar navigation, and browser Back/Forward
+remain coherent. Ordinary browsing issues GETs only and invokes no provider,
+generation, embedding, reranking, SEC request, download, cache mutation, or
+dataset mutation.
+
+The Models visual authority is
+`docs/ui-references/models-ui-reference-dark-v1.png` at 1586×992. The rendered
+page preserves its measured 205px navigation, 58px topbar, compact tab/filter,
+dense selected registry, detail-card rhythm, blue selection, and dark surface
+language while removing unsupported routing, benchmark, pricing, health, and
+mutation controls. Datasets has no dedicated reference and deliberately uses
+the same registry/detail language without inventing a baseline. Receipts cover
+1586×992, 1440×900, 1280×856, 1024×768, 768×900, 390×844, and short-height
+1440×700 in Chromium and Firefox; body/root horizontal overflow is zero, the
+detail remains reachable, and Models switches from its table to touch-friendly
+cards at 800px and below. Focused dark-theme axe checks have no critical or
+serious violations.
+
+Validation: API/route/component focus passed 47/47; the two registry component
+files plus the existing Collections timing check passed 29/29 after making the
+new dataset assertion await its detail payload. The final full Vitest gate
+passed 77 files / 521 tests. TypeScript passed. Production build passed with
+2061 transformed modules and only the existing >500 kB chunk advisory. The
+dedicated UI-009 spec passed Chromium 7/7 and Firefox 7/7; the broader UI-002
+routing regression passed 6/6 across both engines. `git diff --check` passed.
+Temporary Playwright receipts, traces, videos, build output, and audit material
+remain ignored and uncommitted.
+
+Known limitations: the bounded model identity test still requires the existing
+local execution capability and therefore truthfully reports unavailable in a
+public deployment; remote generator reachability remains unknown without a
+future provider operation; model and dataset detail are intentionally not
+deep-linkable because UI-009 defines no such route. The master-plan dependency
+graph identifies the exact next task as `DATA-004 — Durable jobs`. It has not
+started.
+
 ## API-006 model/dataset registries (2026-09-22)
 
 API-006 is complete. Four additive typed routes now provide the future UI-009

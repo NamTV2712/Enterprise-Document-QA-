@@ -4481,3 +4481,170 @@ API-006 is complete without model/dataset mutation or frontend work. The master
 dependency graph at `docs/UI_REBUILD_MASTER_PLAN.md` places `UI-009 —
 Models/Datasets` immediately after API-006; that is the exact next action and it
 has not started.
+
+## UI-009 — Models/Datasets
+
+### UI-009-A — Contract, reference, ownership, and baseline map
+
+Status: ACTIVE. Starting HEAD is `ed22100` on
+`codex/bilingual-research-workspace`; tracked and staged state are clean and all
+12 deliberately excluded artifact/diagnostic entries remain preserved.
+
+Owned routes are the existing direct `/models` and `/datasets` shell routes.
+The master plan defines a configured/runtime model registry with role filtering,
+allowlisted details, and bounded supported local tests, plus a corpus/evaluation
+dataset registry with coverage, provenance, and distinct missing/degraded
+states. There is no model or dataset detail URL in the route plan, so selection
+and detail stay page-local; direct route, sidebar, Back, and Forward behavior
+remain under UI-002. Backend IDs (`generator`, `embedding`, `reranker`,
+`serving-corpus`, and `evaluation-test-set`) are the only selection keys.
+
+Models reads `GET /models` and its optional role filter. Its explicit Test
+action, owned by the Models reference and gap matrix, calls only
+`POST /models/{id}/tests` with `runtime_identity`; it is never automatic,
+prevents duplicate submission, displays `provider_executed`, and treats
+401/403/404/422 separately from an unavailable/failed check. It does not add a
+token editor or imply provider reachability. Configured identity/revision,
+observed runtime identity/revision, load, availability, and credential presence
+remain separate. Unsupported reference controls—routing mutation, fallback,
+cost optimization, performance routing, A/B testing, add/default/enable,
+playground, comparison, latency, accuracy, cost, throughput, context window,
+and dimensions—are omitted.
+
+Datasets reads `GET /datasets` and optional kind filtering, then
+`GET /datasets/{id}` for the selected summary. Corpus and evaluation details
+use their discriminated coverage contracts. Availability, provenance status,
+reason code/text, recorded zero, unknown/null, missing manifest, invalid
+manifest, mismatch, unavailable catalog, and empty catalog remain distinct.
+Evaluation renders aggregate coverage and deterministic revision only; no
+question, expected answer, ground truth, or judge label is exposed. There are
+no upload, delete, reindex, mutation, or job actions.
+
+`models-ui-reference-dark-v1.png` is the sole UI-009 screenshot authority and
+is 1586×992. Measured geometry: 205px grouped navigation, 58px top bar, content
+beginning near x=224/y=80 with roughly 16px outer gutters; the upper region is
+a 766px main card plus a 570px secondary card separated by about 10px; the
+registry begins near y=470 and runs to the bottom with approximately 52px rows,
+10–14px card padding, 8–12px control gaps, 8–10px radii, compact tabs, and a
+blue selected state. UI-009 reuses that hierarchy—header, role/filter strip,
+dense selectable registry, and a detail/test surface—but replaces every mock
+control and metric with API-006 facts. Datasets has no reference screenshot per
+`UI_REFERENCE_GAP_MATRIX.md`; it will reuse the Models registry/detail visual
+language and current semantic tokens without fabricating screenshot data.
+
+Task semantics: entry is a direct/sidebar Models or Datasets route; intent is
+to inspect real runtime configuration or corpus/evaluation provenance;
+available evidence is the corresponding API-006 response; primary interaction
+is selection/filtering, with a separately explicit bounded model identity test;
+success is a selected record whose facts and explanations match the response;
+recovery is retry, filter reset, or selection of another record. List request
+epochs own filter results; dataset-detail epochs own selected dataset results;
+the model-test request is bound to the selected model ID. Abort and identity
+checks prevent stale completions from repainting a newer selection. Nothing is
+persisted and the page scroll remains the shell's workspace scroll owner.
+
+Information hierarchy is page identity → filters/summary → selectable registry
+→ selected detail/provenance → bounded action/result. Desktop uses a main/detail
+split; compact widths stack detail after the registry; mobile uses cards rather
+than squeezing a table. Required states are loading, empty, error/retry,
+selected, unknown, unavailable, degraded, missing/invalid/mismatch, test
+pending/result/refusal, and read-only. Risks under review: accidentally equating
+configured with available; presenting unknown as false; showing reference-only
+fake metrics/actions; stale list/detail/test results crossing identities; and
+desktop tables causing page overflow or inaccessible mobile detail.
+
+Planned files are exact API-006 types/wrappers and tests, page-owned Models and
+Datasets components/tests/styles, minimal route/App composition, a dedicated
+hermetic UI-009 Playwright spec/fixtures, and current checkpoint/project/frontend
+contract records. No backend, package dependency, data artifact, DATA-004 job,
+Pipeline execution, or unrelated frontend journey is in scope.
+
+### UI-009-B — Typed clients, routes, and base surfaces
+
+Status: COMPLETE. Exact frontend representations now cover every API-006 model
+and dataset response field and preserve the backend unions for role, load,
+availability, dataset kind, coverage discriminator, and provenance status.
+The shared API client owns all six consumed request shapes (`GET /models`, its
+role-filtered form, bounded model test POST, `GET /datasets`, its kind-filtered
+form, and selected dataset detail) and forwards `AbortSignal`. `/datasets` is
+now an available first-class workspace view instead of the old deferred
+Evaluation placeholder. The initial API/route/component focus passes `47/47`.
+
+### UI-009-C — Models state semantics and bounded action
+
+Status: COMPLETE. The old `/system/info` diagnostic substitute is replaced by
+the API-006 registry. Rows/cards use backend IDs, fixed backend role ordering,
+and separate configured, runtime, load, availability, credential, and revision
+facts. Page load and filtering perform GETs only. The explicit runtime identity
+button is duplicate-protected, aborts when selection changes, renders
+`provider_executed=false`, and classifies 401/403/404/422 separately. Tests
+cover ordering, missing facts, unknown availability, selection, no automatic
+POST, duplicate prevention, access refusal, and late filter response rejection.
+
+### UI-009-D — Datasets detail, provenance, and race ownership
+
+Status: COMPLETE. `DatasetsWorkspace` renders the API-owned corpus and
+evaluation summaries and fetches detail only for the selected backend ID.
+Corpus coverage distinguishes recorded zero, unknown, missing, invalid,
+mismatch, unavailable, and degraded reason text; evaluation displays only
+aggregates plus revision and explicitly states that questions/ground truth are
+not sent to the browser. Detail/list requests have independent abort/epoch
+ownership. Component tests cover corpus/evaluation discrimination, zero versus
+unknown, 404 versus empty, kind filtering, no mutations, and both late-success
+and late-failure rejection.
+
+### UI-009-E — Visual, responsive, and accessibility loop
+
+Status: COMPLETE. Direct comparison at the Models reference-native 1586×992
+viewport preserves the measured 205px navigation, 58px topbar, x≈224/y≈80
+content boundary, compact tabs, dense selected rows, 8–12px gaps, 8–10px
+radii, blue selection, and dark registry/detail surfaces. The largest necessary
+difference is contractual: the reference's routing/benchmark/mutation cards
+are replaced by API-006 summaries and allowlisted detail. Datasets has no local
+reference and uses the same established language without a fabricated visual
+baseline.
+
+Dark receipts were inspected at 1586×992, 1440×900, 1280×856, 1024×768,
+768×900, 390×844, and 1440×700. Models changes from table to cards at 800px;
+detail stays in document flow and reachable at every width. All measured
+body/root overflows are zero. The visual loop exposed and fixed compact-table
+compression plus light/dark status and secondary-text contrast. Focused axe
+checks over both registry main regions now report no critical or serious
+violations, with reduced motion enabled for deterministic inspection.
+
+### UI-009-F — TypeScript, unit suite, and production build
+
+Status: COMPLETE. TypeScript passes. The final full Vitest run passes `77/77`
+files and `521/521` tests. An earlier full run under simultaneous build load
+observed one new assertion reading its selected-detail shell before payload
+paint and one pre-existing Collections timing assertion; the new assertion was
+corrected to await the payload, the pair then passed `29/29`, and the isolated
+final full run is green. Production build passes with 2061 modules and the
+existing >500 kB chunk advisory only.
+
+### UI-009-G — Browser and routing gates
+
+Status: COMPLETE. The hermetic UI-009 Playwright fixture mirrors the API-006
+schema and permits no real backend/provider traffic. The final dedicated spec
+passes Chromium `7/7` and Firefox `7/7`. It covers direct loads, role/kind
+filters, typed rows/cards, selection/detail, unknown and not-loaded semantics,
+explicit identity test and provider flag, no browsing POST, execution-gate
+refusal, degraded/missing/mismatched provenance, evaluation-safe aggregates,
+Back/Forward, accessibility, both desktop/mobile compositions, all required
+receipt widths, and zero overflow. The controlled UI-002 routing regression
+passes `6/6` across Chromium and Firefox.
+
+### UI-009-H — Audit, commits, and closure
+
+Status: COMPLETE. Runtime and test implementation is commit `b35e1b5`
+(`feat(ui): build truthful model and dataset registries`). The backend, package
+graph, corpus/index data, route count, and API-006 contract are unchanged.
+Production contains no reference fixture data, fake health/benchmark/cost
+metric, secret, key, environment dump, private path, provider call, or dataset
+mutation. Playwright screenshots/traces/videos, `dist`, test results, and audit
+material are ignored and uncommitted. The 12 pre-existing excluded
+artifact/diagnostic entries remain untracked and preserved.
+
+UI-009 is complete. The dependency/priority graph places `DATA-004 — Durable
+jobs` immediately after UI-009 and before API-007. That is the exact next
+action; DATA-004 has not started.

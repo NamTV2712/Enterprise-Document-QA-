@@ -38,6 +38,24 @@ import {
   EvaluationRun,
   EvaluationRunListResponse,
   EvaluationRunStatus,
+  CollectionActivityListResponse,
+  CollectionCreateRequest,
+  CollectionExportDocument,
+  CollectionExportFormat,
+  CollectionItemKind,
+  CollectionItemListResponse,
+  CollectionItemRecord,
+  CollectionItemRequest,
+  CollectionListResponse,
+  CollectionNoteListResponse,
+  CollectionNoteRecord,
+  CollectionNoteRequest,
+  CollectionNoteUpdateRequest,
+  CollectionReceipt,
+  CollectionRecord,
+  CollectionSortDirection,
+  CollectionSortField,
+  CollectionUpdateRequest,
 } from "../types";
 
 export class ApiError extends Error {
@@ -740,4 +758,240 @@ export async function streamDecomposedQuery(
     if (signal?.aborted || error?.name === "AbortError") return;
     onError(error instanceof Error ? error : new Error(error?.message || "Unknown comparative streaming error occurred."));
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * DATA-003 typed collections.
+ *
+ * These routes are private local-workspace routes (API-001 grant `L`): a
+ * 404 means the capability is unavailable in this deployment mode, 401 that
+ * the workspace token is required, 403 that the request is not from the
+ * local machine, 410 that the record is tombstoned, 409 that the caller's
+ * revision is stale and 422 that a bound, kind or reference was refused.
+ * `throwApiError` keeps the status and the server's bounded detail, so the
+ * page can tell those states apart instead of collapsing them into one.
+ * ------------------------------------------------------------------ */
+
+function collectionQuery(params: Record<string, unknown>): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    if (Array.isArray(value)) {
+      for (const entry of value) if (entry !== undefined && entry !== null && entry !== "") query.append(key, String(entry));
+      continue;
+    }
+    query.set(key, String(value));
+  }
+  const encoded = query.toString();
+  return encoded ? `?${encoded}` : "";
+}
+
+async function collectionsJson<T>(
+  path: string,
+  init: RequestInit,
+  fallback: string,
+): Promise<T> {
+  const response = await apiFetch(`${getApiBaseUrl()}${path}`, init);
+  if (!response.ok) await throwApiError(response, fallback);
+  return response.json() as Promise<T>;
+}
+
+export async function listCollections(
+  params: {
+    search?: string | null;
+    tags?: string[] | null;
+    favorite?: boolean | null;
+    sort?: CollectionSortField;
+    direction?: CollectionSortDirection;
+    page?: number;
+    page_size?: number;
+  } = {},
+  signal?: AbortSignal,
+): Promise<CollectionListResponse> {
+  const path = `/collections${collectionQuery({ ...params })}`;
+  return collectionsJson<CollectionListResponse>(path, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal,
+  }, `Failed to list collections: ${path}`);
+}
+
+export async function getCollection(collectionId: string, signal?: AbortSignal): Promise<CollectionRecord> {
+  return collectionsJson<CollectionRecord>(`/collections/${encodeURIComponent(collectionId)}`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal,
+  }, "Failed to read the collection");
+}
+
+export async function createCollection(
+  body: CollectionCreateRequest,
+  signal?: AbortSignal,
+): Promise<CollectionRecord> {
+  return collectionsJson<CollectionRecord>("/collections", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  }, "Failed to create the collection");
+}
+
+export async function updateCollection(
+  collectionId: string,
+  body: CollectionUpdateRequest,
+  signal?: AbortSignal,
+): Promise<CollectionRecord> {
+  return collectionsJson<CollectionRecord>(`/collections/${encodeURIComponent(collectionId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  }, "Failed to update the collection");
+}
+
+export async function deleteCollection(
+  collectionId: string,
+  revision: number,
+  signal?: AbortSignal,
+): Promise<CollectionReceipt> {
+  return collectionsJson<CollectionReceipt>(
+    `/collections/${encodeURIComponent(collectionId)}${collectionQuery({ revision })}`,
+    { method: "DELETE", headers: { Accept: "application/json" }, signal },
+    "Failed to delete the collection",
+  );
+}
+
+export async function listCollectionItems(
+  collectionId: string,
+  params: { kind?: CollectionItemKind | null; page?: number; page_size?: number } = {},
+  signal?: AbortSignal,
+): Promise<CollectionItemListResponse> {
+  const path = `/collections/${encodeURIComponent(collectionId)}/items${collectionQuery({ ...params })}`;
+  return collectionsJson<CollectionItemListResponse>(path, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal,
+  }, "Failed to list the collection items");
+}
+
+export async function addCollectionItem(
+  collectionId: string,
+  body: CollectionItemRequest,
+  signal?: AbortSignal,
+): Promise<CollectionItemRecord> {
+  return collectionsJson<CollectionItemRecord>(`/collections/${encodeURIComponent(collectionId)}/items`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  }, "Failed to add the collection item");
+}
+
+export async function deleteCollectionItem(
+  collectionId: string,
+  itemId: string,
+  revision: number,
+  signal?: AbortSignal,
+): Promise<CollectionReceipt> {
+  return collectionsJson<CollectionReceipt>(
+    `/collections/${encodeURIComponent(collectionId)}/items/${encodeURIComponent(itemId)}${collectionQuery({ revision })}`,
+    { method: "DELETE", headers: { Accept: "application/json" }, signal },
+    "Failed to remove the collection item",
+  );
+}
+
+export async function listCollectionNotes(
+  collectionId: string,
+  params: { page?: number; page_size?: number } = {},
+  signal?: AbortSignal,
+): Promise<CollectionNoteListResponse> {
+  const path = `/collections/${encodeURIComponent(collectionId)}/notes${collectionQuery({ ...params })}`;
+  return collectionsJson<CollectionNoteListResponse>(path, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal,
+  }, "Failed to list the collection notes");
+}
+
+export async function addCollectionNote(
+  collectionId: string,
+  body: CollectionNoteRequest,
+  signal?: AbortSignal,
+): Promise<CollectionNoteRecord> {
+  return collectionsJson<CollectionNoteRecord>(`/collections/${encodeURIComponent(collectionId)}/notes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  }, "Failed to add the collection note");
+}
+
+export async function updateCollectionNote(
+  collectionId: string,
+  noteId: string,
+  body: CollectionNoteUpdateRequest,
+  signal?: AbortSignal,
+): Promise<CollectionNoteRecord> {
+  return collectionsJson<CollectionNoteRecord>(
+    `/collections/${encodeURIComponent(collectionId)}/notes/${encodeURIComponent(noteId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(body),
+      signal,
+    },
+    "Failed to update the collection note",
+  );
+}
+
+export async function deleteCollectionNote(
+  collectionId: string,
+  noteId: string,
+  revision: number,
+  signal?: AbortSignal,
+): Promise<CollectionReceipt> {
+  return collectionsJson<CollectionReceipt>(
+    `/collections/${encodeURIComponent(collectionId)}/notes/${encodeURIComponent(noteId)}${collectionQuery({ revision })}`,
+    { method: "DELETE", headers: { Accept: "application/json" }, signal },
+    "Failed to delete the collection note",
+  );
+}
+
+export async function listCollectionActivity(
+  collectionId: string,
+  params: { page?: number; page_size?: number } = {},
+  signal?: AbortSignal,
+): Promise<CollectionActivityListResponse> {
+  const path = `/collections/${encodeURIComponent(collectionId)}/activity${collectionQuery({ ...params })}`;
+  return collectionsJson<CollectionActivityListResponse>(path, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal,
+  }, "Failed to list the collection activity");
+}
+
+export type CollectionExportResult =
+  | { format: "json"; document: CollectionExportDocument }
+  | { format: "markdown"; content: string };
+
+export async function exportCollection(
+  collectionId: string,
+  format: CollectionExportFormat = "json",
+  signal?: AbortSignal,
+): Promise<CollectionExportResult> {
+  const response = await apiFetch(
+    `${getApiBaseUrl()}/collections/${encodeURIComponent(collectionId)}/export${collectionQuery({ format })}`,
+    { method: "GET", headers: { Accept: "application/json" }, cache: "no-store", signal },
+  );
+  if (!response.ok) await throwApiError(response, "Failed to export the collection");
+  const payload = await response.json();
+  if (payload && typeof payload === "object" && (payload as { format?: unknown }).format === "markdown") {
+    return { format: "markdown", content: String((payload as { content?: unknown }).content ?? "") };
+  }
+  return { format: "json", document: payload as CollectionExportDocument };
 }

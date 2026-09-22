@@ -21,6 +21,7 @@ import { SampleQuestion, SampleQuestionChips } from "./components/SampleQuestion
 import { OverviewPanel } from "./components/OverviewPanel";
 import { WorkspaceHeader } from "./components/WorkspaceHeader";
 import { ConversationLibrary } from "./components/ConversationLibrary";
+import { CollectionTargetDialog } from "./components/collections/CollectionTargetDialog";
 import { HelpDialog } from "./components/HelpDialog";
 import { ModalDialog } from "./components/ui/ModalDialog";
 import { CommandPalette } from "./components/CommandPalette";
@@ -135,8 +136,8 @@ const DiscoverySearchPage = lazy(() =>
 const ArchitecturePanel = lazy(() =>
   import("./components/ArchitecturePanel").then(({ ArchitecturePanel }) => ({ default: ArchitecturePanel })),
 );
-const CollectionsConsole = lazy(() =>
-  import("./components/CollectionsConsole").then(({ CollectionsConsole }) => ({ default: CollectionsConsole })),
+const CollectionsWorkspace = lazy(() =>
+  import("./components/collections/CollectionsWorkspace").then(({ CollectionsWorkspace }) => ({ default: CollectionsWorkspace })),
 );
 const ModelsConsole = lazy(() =>
   import("./components/ModelsConsole").then(({ ModelsConsole }) => ({ default: ModelsConsole })),
@@ -364,6 +365,11 @@ function AppWorkspace() {
   );
   const activeView = resolvedRoute.workspaceView;
   const activeRouteId = primaryRouteId(resolvedRoute);
+  /** `?tab=conversations` opens the preserved conversation library directly. */
+  const libraryInitialTab: "collections" | "conversations" = useMemo(
+    () => (new URLSearchParams(location.search).get("tab") === "conversations" ? "conversations" : "collections"),
+    [location.search],
+  );
   const [tickers, setTickers] = useState<string[]>([]);
   const [sections, setSections] = useState<string[]>([]);
   const [isBackendConnected, setIsBackendConnected] = useState<boolean | null>(
@@ -385,6 +391,8 @@ function AppWorkspace() {
   const [pendingFocusMessageId, setPendingFocusMessageId] = useState<string | null>(null);
   const [pendingOpenVariant, setPendingOpenVariant] = useState<{ conversationId: string; messageId: string; variantId: string } | null>(null);
   const [shouldFocusLibrarySearch, setShouldFocusLibrarySearch] = useState(false);
+  /** A retrieved source awaiting an explicit collection target (UI-008). */
+  const [saveTargetSource, setSaveTargetSource] = useState<Source | null>(null);
   const [activeSidebarPanel, setActiveSidebarPanel] = useState<"research" | "library">("research");
   const [stageEventsByMessage, setStageEventsByMessage] = useState<Record<string, StageEvent[]>>({});
   const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
@@ -751,6 +759,14 @@ function AppWorkspace() {
     const { stored_snapshot: _storedSnapshot, ...currentSource } = source;
     handleOpenStandaloneSource({ ...currentSource, chunk_id: chunkId });
   }, [handleOpenStandaloneSource]);
+  /**
+   * Collections selection lives on its own route so Back/Forward and deep
+   * links behave like every other workspace destination.
+   */
+  const handleSelectCollectionRoute = useCallback((collectionId: string | null) => {
+    navigate(collectionId ? `/collections/${encodeURIComponent(collectionId)}` : "/collections");
+  }, [navigate]);
+
   const handleOpenSavedEvidence = useCallback((item: EvidenceItem) => {
     handleOpenStandaloneSource({
       citation: item.citation,
@@ -1910,14 +1926,17 @@ function AppWorkspace() {
     handleUseRetrievalQuestion(question, scope);
   }, [handleUseRetrievalQuestion, locale]);
 
+  /**
+   * "Save evidence" / "Add to Collection" now targets the typed workspace
+   * collections (DATA-003) instead of the browser store, because the
+   * Collections page shows those collections. The user names the target, so
+   * nothing is written until they choose one and there is no dual write; the
+   * on-device library keeps whatever conversation surfaces already saved.
+   */
   const handleSaveRetrievedEvidence = useCallback((source: Source) => {
-    try {
-      saveEvidence(source, { provenance: snapshotProvenanceFromSource(source) });
-      setContextualCommandNotice(locale === "vi" ? "Đã lưu evidence vào Thư viện." : "Evidence saved to Library.");
-    } catch (error) {
-      setContextualCommandNotice(error instanceof Error ? error.message : (locale === "vi" ? "Không thể lưu evidence." : "Could not save evidence."));
-    }
-  }, [locale]);
+    setContextualCommandNotice(null);
+    setSaveTargetSource(source);
+  }, []);
 
   const handlePaletteNavigate = useCallback((routeId: ShellRouteId) => {
     navigate(routePath(routeId));
@@ -2227,6 +2246,20 @@ function AppWorkspace() {
   const overlays = (
     <>
       <HelpDialog open={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+      <CollectionTargetDialog
+        open={saveTargetSource !== null}
+        vi={locale === "vi"}
+        source={saveTargetSource}
+        onClose={() => setSaveTargetSource(null)}
+        onSaved={(collectionName) => {
+          setContextualCommandNotice(
+            locale === "vi" ? `Đã thêm vào bộ sưu tập “${collectionName}”.` : `Added to the collection “${collectionName}”.`,
+          );
+        }}
+        // The dialog announces its own failures in place, with the API's own
+        // status mapped to the state it is, so no second notice is raised.
+        onFailure={() => undefined}
+      />
       <TemplateQuestionDialog
         open={templateToCustomize !== null}
         template={templateToCustomize}
@@ -2466,7 +2499,14 @@ function AppWorkspace() {
                 ) : activeView === "documents" ? (
               null
                 ) : activeView === "library" ? (
-              <CollectionsConsole
+              <CollectionsWorkspace
+                selectedCollectionId={resolvedRoute.id === "collection-detail" ? resolvedRoute.params.collectionId ?? null : null}
+                onSelectCollection={handleSelectCollectionRoute}
+                onOpenDocument={handleOpenDocumentWorkspace}
+                onOpenEvidence={handleOpenStandaloneSource}
+                onOpenMessage={(conversationId, messageId) => {
+                  void handleOpenMessage(conversationId, messageId ?? "");
+                }}
                 librarySlot={
                   <ConversationLibrary
                     conversations={conversations}
@@ -2492,7 +2532,7 @@ function AppWorkspace() {
                     onClose={() => navigateWorkspaceRoute("overview")}
                   />
                 }
-                onDownloadBackup={handleExportBackup}
+                initialTab={libraryInitialTab}
                 focusConversationSearch={shouldFocusLibrarySearch}
                 onConversationSearchFocused={handleConversationSearchFocused}
               />

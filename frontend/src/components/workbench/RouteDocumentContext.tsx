@@ -16,7 +16,10 @@ interface RouteDocumentContextProps {
   readerSession: ReaderSessionController;
 }
 
-function originFor(target: DocumentWorkspaceTarget): "catalog" | "search" | "retrieval" {
+function originFor(target: DocumentWorkspaceTarget): "catalog" | "search" | "retrieval" | "library" {
+  // A catalog document opened from Collections returns there, so the reader
+  // names that origin instead of claiming the Documents page.
+  if (target.kind === "catalog" && target.returnView === "library") return "library";
   return target.kind;
 }
 
@@ -76,6 +79,7 @@ function RouteDocumentAside({ target, onBack, readerSession }: RouteDocumentCont
       className="workbench-route-document-layout"
       data-workbench-context="true"
       data-workbench-route-origin={target.kind}
+      data-workbench-return-view={target.returnView}
       aria-label="Document workspace"
     >
       <DocumentPane
@@ -125,6 +129,7 @@ export function RouteDocumentContext(props: RouteDocumentContextProps) {
         className="workbench-route-document-layout"
         data-workbench-context="true"
         data-workbench-route-origin={props.target.kind}
+        data-workbench-return-view={props.target.returnView}
         aria-label={locale === "vi" ? "Không gian tài liệu" : "Document workspace"}
       >
         <DocumentPane

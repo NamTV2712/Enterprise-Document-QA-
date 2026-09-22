@@ -286,7 +286,9 @@ export interface CatalogWorkspaceTarget {
   sourceUrl?: string | null;
   selectedSource?: Source;
   initialTab?: "document" | "excerpt" | "metadata";
-  returnView: "documents";
+  /** "library" is the Collections origin, added by UI-008 alongside the pages
+   * that already opened the reader from Documents, Search and Retrieval. */
+  returnView: "documents" | "library";
   returnFocusId: string;
 }
 
@@ -1143,4 +1145,179 @@ export interface Message {
   visualAnswer?: VisualAnswer;
   note?: string;
   feedback?: MessageFeedback;
+}
+
+/**
+ * DATA-003 typed collections.
+ *
+ * Everything here mirrors the protected local-workspace routes exactly:
+ * responses are the repository payloads, so the frontend never invents a
+ * collection field, a member kind, or a revision of its own.
+ */
+export type CollectionItemKind = "document" | "evidence" | "answer" | "note";
+export type CollectionSortField = "name" | "updated_at" | "created_at" | "item_count";
+export type CollectionSortDirection = "asc" | "desc";
+export type CollectionExportFormat = "json" | "markdown";
+
+export type CollectionActivityEvent =
+  | "collection_created"
+  | "collection_updated"
+  | "collection_deleted"
+  | "item_added"
+  | "item_removed"
+  | "note_added"
+  | "note_updated"
+  | "note_removed";
+
+export interface CollectionRecord {
+  collection_id: string;
+  name: string;
+  description: string;
+  tags: string[];
+  favorite: boolean;
+  private: boolean;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+  item_count: number;
+}
+
+export interface CollectionListResponse {
+  items: CollectionRecord[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface CollectionItemRecord {
+  item_id: string;
+  collection_id: string;
+  item_kind: CollectionItemKind;
+  citation: string;
+  excerpt: string;
+  reference: Record<string, unknown>;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+  snapshot?: Record<string, unknown>;
+}
+
+export interface CollectionItemListResponse {
+  items: CollectionItemRecord[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface CollectionNoteRecord {
+  note_id: string;
+  collection_id: string;
+  text: string;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+  evidence_ref?: Record<string, unknown>;
+}
+
+export interface CollectionNoteListResponse {
+  items: CollectionNoteRecord[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface CollectionActivityRecord {
+  activity_id: string;
+  collection_id: string;
+  entity_type: string;
+  entity_id: string;
+  event_type: CollectionActivityEvent;
+  occurred_at: string;
+}
+
+export interface CollectionActivityListResponse {
+  items: CollectionActivityRecord[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+/** The receipt a delete returns; it names the tombstoned entity and revision. */
+export interface CollectionReceipt {
+  operation: string;
+  entity_type: string;
+  entity_id: string;
+  revision: number;
+  deleted_at: string | null;
+}
+
+export interface CollectionCreateRequest {
+  name: string;
+  description?: string;
+  tags?: string[];
+  favorite?: boolean;
+  private?: boolean;
+}
+
+/** Every mutable collection field, with the revision the caller last read. */
+export interface CollectionUpdateRequest {
+  revision: number;
+  name?: string;
+  description?: string;
+  tags?: string[];
+  favorite?: boolean;
+  private?: boolean;
+}
+
+export interface CollectionItemRequest {
+  item_kind: CollectionItemKind;
+  citation?: string;
+  excerpt?: string;
+  reference?: Record<string, unknown>;
+  snapshot?: Record<string, unknown>;
+}
+
+export interface CollectionNoteRequest {
+  text: string;
+  evidence_ref?: Record<string, unknown>;
+}
+
+export interface CollectionNoteUpdateRequest {
+  revision: number;
+  text: string;
+}
+
+/** `GET /collections/{id}/export?format=json` — the collection as a document. */
+export interface CollectionExportDocument {
+  id: string;
+  name: string;
+  description: string;
+  tags: string[];
+  favorite: boolean;
+  private: boolean;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+  items: Array<{
+    id: string;
+    kind: CollectionItemKind;
+    citation: string;
+    excerpt: string;
+    reference: Record<string, unknown>;
+    snapshot?: Record<string, unknown>;
+    created_at: string;
+  }>;
+  notes: Array<{
+    id: string;
+    text: string;
+    evidence_ref?: Record<string, unknown>;
+    revision: number;
+    created_at: string;
+    updated_at: string;
+  }>;
+}
+
+export interface CollectionExportMarkdown {
+  format: "markdown";
+  content: string;
 }

@@ -8,7 +8,6 @@ interface CollectionSettingsProps {
   vi: boolean;
   collection: CollectionRecord;
   saving: boolean;
-  deleting: boolean;
   /** A conflict or validation failure from the last write, if any. */
   failure: CollectionFailure | null;
   /** The revision the workspace currently holds; a mismatch is a conflict. */
@@ -27,7 +26,6 @@ export function CollectionSettings({
   vi,
   collection,
   saving,
-  deleting,
   failure,
   staleRevision,
   onReload,
@@ -39,7 +37,6 @@ export function CollectionSettings({
   const [tags, setTags] = useState(collection.tags.join(", "));
   const [privateFlag, setPrivateFlag] = useState(collection.private);
   const [favorite, setFavorite] = useState(collection.favorite);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const parsedTags = tags
     .split(",")
@@ -171,31 +168,10 @@ export function CollectionSettings({
             ? "Xoá sẽ tạo tombstone cho bộ sưu tập cùng mọi mục và ghi chú bên trong; định danh này không thể tạo lại."
             : "Deleting tombstones the collection with every member and note it holds; the identity cannot be recreated."}
         </p>
-        {confirmingDelete ? (
-          <div className="collection-settings__actions">
-            <button type="button" className="console-btn" onClick={() => setConfirmingDelete(false)} disabled={deleting}>
-              {vi ? "Huỷ" : "Cancel"}
-            </button>
-            <button type="button" className="console-btn console-btn--danger" onClick={onDelete} disabled={deleting}>
-              {deleting ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                  {vi ? "Đang xoá…" : "Deleting…"}
-                </>
-              ) : (
-                <>
-                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                  {vi ? "Xoá vĩnh viễn" : "Delete permanently"}
-                </>
-              )}
-            </button>
-          </div>
-        ) : (
-          <button type="button" className="console-btn console-btn--danger" onClick={() => setConfirmingDelete(true)}>
-            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-            {vi ? "Xoá bộ sưu tập" : "Delete collection"}
-          </button>
-        )}
+        <button type="button" className="console-btn console-btn--danger" onClick={onDelete}>
+          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+          {vi ? "Xoá bộ sưu tập" : "Delete collection"}
+        </button>
       </div>
     </div>
   );

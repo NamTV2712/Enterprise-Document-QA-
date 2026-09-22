@@ -3,7 +3,6 @@ import { Activity, Clock, FileText, FolderOpen, Info, Loader2, ShieldCheck, Stic
 
 import {
   addCollectionNote,
-  deleteCollection,
   deleteCollectionItem,
   deleteCollectionNote,
   exportCollection,
@@ -45,7 +44,7 @@ interface CollectionDetailProps {
   onClose: () => void;
   onReload: () => void;
   onChanged: (collection: CollectionRecord) => void;
-  onDeleted: (collectionId: string) => void;
+  onDeleteRequested: (collection: CollectionRecord) => void;
   onOpenItem: (item: CollectionItemRecord) => void;
   onAddDocuments: () => void;
   onRename: () => void;
@@ -70,7 +69,7 @@ export function CollectionDetail({
   onClose,
   onReload,
   onChanged,
-  onDeleted,
+  onDeleteRequested,
   onOpenItem,
   onAddDocuments,
   onRename,
@@ -102,7 +101,6 @@ export function CollectionDetail({
 
   const [pendingItemId, setPendingItemId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [writeFailure, setWriteFailure] = useState<CollectionFailure | null>(null);
   const [writeNotice, setWriteNotice] = useState<string | null>(null);
 
@@ -328,23 +326,6 @@ export function CollectionDetail({
     }
   }, [collection, onChanged, vi]);
 
-  const handleDeleteCollection = useCallback(async () => {
-    if (!collection) return;
-    setDeleting(true);
-    setWriteFailure(null);
-    try {
-      await deleteCollection(collection.collection_id, collection.revision);
-      onDeleted(collection.collection_id);
-    } catch (error) {
-      const described = describeCollectionFailure(error, vi);
-      setWriteFailure(described);
-      // A tombstone that is already gone is not a failure of this action.
-      if (described.kind === "gone") onDeleted(collection.collection_id);
-    } finally {
-      setDeleting(false);
-    }
-  }, [collection, onDeleted, vi]);
-
   const handleExport = useCallback(
     async (format: "json" | "markdown") => {
       if (!collection) return;
@@ -451,7 +432,7 @@ export function CollectionDetail({
                 {
                   key: "delete",
                   label: vi ? "Xoá bộ sưu tập" : "Delete collection",
-                  onSelect: () => void handleDeleteCollection(),
+                  onSelect: () => onDeleteRequested(collection),
                   danger: true,
                 },
               ]}
@@ -598,7 +579,6 @@ export function CollectionDetail({
               vi={vi}
               collection={collection}
               saving={saving}
-              deleting={deleting}
               failure={writeFailure}
               staleRevision={writeFailure?.kind === "conflict"}
               onReload={() => {
@@ -606,7 +586,7 @@ export function CollectionDetail({
                 onReload();
               }}
               onSave={(patch) => void handleSaveSettings(patch)}
-              onDelete={() => void handleDeleteCollection()}
+              onDelete={() => onDeleteRequested(collection)}
             />
           )}
         </div>

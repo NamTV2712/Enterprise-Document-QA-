@@ -29,6 +29,7 @@ import { useLocale } from "../../lib/i18n";
 import { AddItemsDialog } from "./AddItemsDialog";
 import { CollectionCard } from "./CollectionCard";
 import { CollectionDetail } from "./CollectionDetail";
+import { CollectionDeleteDialog } from "./CollectionDeleteDialog";
 import { CollectionFormDialog } from "./CollectionFormDialog";
 import { CollectionsToolbar } from "./CollectionsToolbar";
 import { ExportDialog } from "./ExportDialog";
@@ -107,6 +108,9 @@ export function CollectionsWorkspace({
   const [exportFor, setExportFor] = useState<CollectionRecord | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CollectionRecord | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [formCollection, setFormCollection] = useState<CollectionRecord | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -114,6 +118,7 @@ export function CollectionsWorkspace({
   const listController = useRef<AbortController | null>(null);
   const selectionEpoch = useRef(0);
   const selectionController = useRef<AbortController | null>(null);
+  const deleteInFlight = useRef(false);
 
   const favoritesOnly = tab === "favorites";
 
@@ -315,26 +320,46 @@ export function CollectionsWorkspace({
     setFormOpen(true);
   }, []);
 
-  const handleDeleteFromList = useCallback(
-    async (collection: CollectionRecord) => {
+  const requestDelete = useCallback((collection: CollectionRecord) => {
+    setDeleteError(null);
+    setDeleteTarget(collection);
+  }, []);
+
+  const handleDeleteConfirmed = useCallback(
+    async () => {
+      const collection = deleteTarget;
+      if (!collection || deleteInFlight.current) return;
+      deleteInFlight.current = true;
+      setDeleteSubmitting(true);
       setNotice(null);
       try {
         await deleteCollection(collection.collection_id, collection.revision);
+        setDeleteTarget(null);
         setNotice(vi ? `Đã xoá “${collection.name}”.` : `Deleted “${collection.name}”.`);
-        if (selectedCollectionId === collection.collection_id) onSelectCollection(null);
+        if (selectedCollectionId === collection.collection_id) {
+          setSelected(null);
+          onSelectCollection(null);
+        }
         await loadCollections();
       } catch (error) {
         const described = describeCollectionFailure(error, vi);
         if (described.kind === "gone") {
+          setDeleteTarget(null);
           setNotice(vi ? "Bộ sưu tập đã bị xoá trước đó." : "The collection was already deleted.");
-          if (selectedCollectionId === collection.collection_id) onSelectCollection(null);
+          if (selectedCollectionId === collection.collection_id) {
+            setSelected(null);
+            onSelectCollection(null);
+          }
           await loadCollections();
           return;
         }
-        setNotice(`${described.title}: ${described.message}`);
+        setDeleteError(`${described.title}: ${described.message}`);
+      } finally {
+        deleteInFlight.current = false;
+        setDeleteSubmitting(false);
       }
     },
-    [loadCollections, onSelectCollection, selectedCollectionId, vi],
+    [deleteTarget, loadCollections, onSelectCollection, selectedCollectionId, vi],
   );
 
   const handleExport = useCallback(
@@ -547,7 +572,7 @@ export function CollectionsWorkspace({
                         setExportFor(collection);
                       }}
                       onRename={() => openRename(collection)}
-                      onDelete={() => void handleDeleteFromList(collection)}
+                      onDelete={() => requestDelete(collection)}
                     />
                   </li>
                 ))}
@@ -578,12 +603,7 @@ export function CollectionsWorkspace({
               setSelected(updated);
               void loadCollections();
             }}
-            onDeleted={(collectionId) => {
-              setNotice(vi ? "Đã xoá bộ sưu tập." : "Collection deleted.");
-              setSelected(null);
-              if (selectedCollectionId === collectionId) onSelectCollection(null);
-              void loadCollections();
-            }}
+            onDeleteRequested={requestDelete}
             onOpenItem={handleOpenItem}
             onAddDocuments={() => {
               if (selected) setAddItemsFor(selected);
@@ -640,6 +660,19 @@ export function CollectionsWorkspace({
           if (exportFor) void handleExport(exportFor, format);
         }}
         onClose={() => setExportFor(null)}
+      />
+
+      <CollectionDeleteDialog
+        vi={vi}
+        collection={deleteTarget}
+        deleting={deleteSubmitting}
+        errorMessage={deleteError}
+        onCancel={() => {
+          if (deleteInFlight.current) return;
+          setDeleteTarget(null);
+          setDeleteError(null);
+        }}
+        onConfirm={() => void handleDeleteConfirmed()}
       />
     </section>
   );

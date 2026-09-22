@@ -103,6 +103,7 @@ function renderWorkspace(props: Partial<Parameters<typeof CollectionsWorkspace>[
 }
 
 beforeEach(() => {
+  localStorage.clear();
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.setSystemTime(NOW);
   listCollectionsMock.mockReset();
@@ -330,5 +331,87 @@ describe("CollectionsWorkspace", () => {
     expect(kinds).toEqual(["Document", "Evidence", "Note"]);
     expect(within(rail).getByText("Items (3)")).toBeInTheDocument();
     expect(within(rail).getByText("Revision 4 · activity and notes recorded by the workspace")).toBeInTheDocument();
+  });
+
+  test("the list menu requires confirmation and Cancel or Escape performs no write", async () => {
+    listCollectionsMock.mockResolvedValue(listResponse([record()]));
+    renderWorkspace();
+
+    const trigger = await screen.findByRole("button", { name: "Actions for Risk Analysis" });
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete collection" }));
+
+    let dialog = screen.getByRole("dialog", { name: "Delete collection?" });
+    expect(within(dialog).getByText(/Risk Analysis/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(deleteCollectionMock).not.toHaveBeenCalled();
+    await waitFor(() => expect(trigger).toHaveFocus());
+
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete collection" }));
+    dialog = screen.getByRole("dialog", { name: "Delete collection?" });
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
+    expect(deleteCollectionMock).not.toHaveBeenCalled();
+  });
+
+  test("the detail menu confirms once with the captured identity and revision", async () => {
+    const current = record({ revision: 7 });
+    listCollectionsMock.mockResolvedValue(listResponse([current]));
+    getCollectionMock.mockResolvedValue(current);
+    let finishDelete: (() => void) | null = null;
+    deleteCollectionMock.mockImplementation(() => new Promise<void>((resolve) => {
+      finishDelete = resolve;
+    }));
+    renderWorkspace({ selectedCollectionId: current.collection_id });
+
+    const rail = await screen.findByRole("complementary", { name: /Risk Analysis/ });
+    fireEvent.click(within(rail).getByRole("button", { name: "Collection actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete collection" }));
+    const confirm = within(screen.getByRole("dialog", { name: "Delete collection?" }))
+      .getByRole("button", { name: "Delete permanently" });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+
+    expect(deleteCollectionMock).toHaveBeenCalledTimes(1);
+    expect(deleteCollectionMock).toHaveBeenCalledWith("col-risk", 7);
+    finishDelete?.();
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Delete collection?" })).toBeNull());
+  });
+
+  test("Settings opens the same confirmation and a conflict is visible without retry", async () => {
+    const current = record({ revision: 9 });
+    listCollectionsMock.mockResolvedValue(listResponse([current]));
+    getCollectionMock.mockResolvedValue(current);
+    deleteCollectionMock.mockRejectedValue(new ApiError("Collection revision is stale", 409));
+    renderWorkspace({ selectedCollectionId: current.collection_id });
+
+    const rail = await screen.findByRole("complementary", { name: /Risk Analysis/ });
+    fireEvent.click(within(rail).getByRole("tab", { name: "Settings" }));
+    const deleteFromSettings = await waitFor(() =>
+      within(rail).getByRole("button", { name: "Delete collection" }),
+    );
+    fireEvent.click(deleteFromSettings);
+    const dialog = screen.getByRole("dialog", { name: "Delete collection?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete permanently" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(/changed elsewhere/i);
+    expect(deleteCollectionMock).toHaveBeenCalledTimes(1);
+    expect(deleteCollectionMock).toHaveBeenCalledWith("col-risk", 9);
+  });
+
+  test("the shared confirmation has Vietnamese labels and consequences", async () => {
+    localStorage.setItem("sec_qa_locale", "vi");
+    listCollectionsMock.mockResolvedValue(listResponse([record()]));
+    renderWorkspace();
+
+    const trigger = await screen.findByRole("button", { name: "Hành động cho Risk Analysis" });
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Xoá bộ sưu tập" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Xoá bộ sưu tập?" });
+    expect(within(dialog).getByText(/không thể tạo lại/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Huỷ" })).toHaveFocus();
+    expect(within(dialog).getByRole("button", { name: "Xoá vĩnh viễn" })).toBeInTheDocument();
   });
 });

@@ -52,7 +52,7 @@ const features: Array<{
       "Scans individual 10-K blocks in business descriptions, risk matrices, and financial statements.",
     iconKey: "reader",
     accentFamily: "documents",
-    badge: "500-900 Tokens",
+    badge: "Evidence-bound",
   },
   {
     title: "Multi-Hop Querying",

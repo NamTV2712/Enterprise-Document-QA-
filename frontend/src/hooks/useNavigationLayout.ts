@@ -4,21 +4,29 @@ export type NavigationLayout = "expanded" | "compact";
 
 export const NAVIGATION_LAYOUT_STORAGE_KEY = "sec_qa_navigation_layout_v1";
 
-const DEFAULT_LAYOUT: NavigationLayout = "expanded";
-
 type NavigationLayoutUpdate = NavigationLayout | ((current: NavigationLayout) => NavigationLayout);
 
 function isNavigationLayout(value: string | null): value is NavigationLayout {
   return value === "expanded" || value === "compact";
 }
 
+function defaultLayoutForViewport(): NavigationLayout {
+  // Desktop screenshots and the inline-navigation contract both begin at the
+  // same 1025px breakpoint. Keep the full information architecture visible
+  // unless a person explicitly chooses the compact rail.
+  return typeof window !== "undefined" && window.innerWidth >= 1025
+    ? "expanded"
+    : "compact";
+}
+
 function readStoredLayout(): NavigationLayout {
-  if (typeof window === "undefined") return DEFAULT_LAYOUT;
+  const fallback = defaultLayoutForViewport();
+  if (typeof window === "undefined") return fallback;
   try {
     const stored = window.localStorage.getItem(NAVIGATION_LAYOUT_STORAGE_KEY);
-    return isNavigationLayout(stored) ? stored : DEFAULT_LAYOUT;
+    return isNavigationLayout(stored) ? stored : fallback;
   } catch {
-    return DEFAULT_LAYOUT;
+    return fallback;
   }
 }
 

@@ -21,6 +21,14 @@ interface EvidenceCollectionsPanelProps {
   onOpenCurrentSource?: (item: EvidenceItem) => Promise<CurrentSourceCheckResult>;
 }
 
+export function evidenceItemFocusId(itemId: string): string {
+  return `library-evidence-${itemId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
+export function evidenceCurrentSourceFocusId(itemId: string): string {
+  return `${evidenceItemFocusId(itemId)}-current`;
+}
+
 function normalizeExcerpt(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
@@ -189,7 +197,7 @@ export function EvidenceCollectionsPanel({ searchQuery = "", onOpenEvidence, onO
                    const details = provenanceRows(item, locale);
                    return (
                     <div key={item.id} className="library-evidence-item">
-                      <button type="button" className="library-evidence-item__open" onClick={() => onOpenEvidence?.(item)} disabled={!onOpenEvidence}>
+                      <button id={evidenceItemFocusId(item.id)} type="button" className="library-evidence-item__open" onClick={() => onOpenEvidence?.(item)} disabled={!onOpenEvidence}>
                         <span className="library-evidence-item__citation">{item.citation}</span>
                         <span className="library-evidence-item__excerpt">{normalizeExcerpt(item.excerpt).slice(0, 220)}</span>
                         <span className="library-evidence-item__meta">{item.ticker ? formatCompanyLabel(item.ticker) : (locale === "vi" ? "Công ty chưa xác minh" : "Company not verified")}{item.section ? ` · ${SECTION_METADATA[item.section]?.shortLabel ?? item.section}` : ""}{item.filingDate ? ` · ${item.filingDate}` : ""}</span>
@@ -204,7 +212,7 @@ export function EvidenceCollectionsPanel({ searchQuery = "", onOpenEvidence, onO
                         </details>
                       )}
                       <div className="library-evidence-item__actions">
-                        {sourceAvailable && <button type="button" className="library-evidence-action" onClick={() => void handleOpenCurrent(item)} disabled={checkingId === item.id} aria-label={locale === "vi" ? "Mở nguồn hiện tại exact" : "Open exact current source"}>{checkingId === item.id ? (locale === "vi" ? "Đang kiểm tra…" : "Checking…") : <><ExternalLink className="h-3.5 w-3.5" />{locale === "vi" ? "Mở corpus hiện tại" : "Open current source"}</>}</button>}
+                        {sourceAvailable && <button id={evidenceCurrentSourceFocusId(item.id)} type="button" className="library-evidence-action" onClick={() => void handleOpenCurrent(item)} disabled={checkingId === item.id} aria-label={locale === "vi" ? "Mở nguồn hiện tại exact" : "Open exact current source"}>{checkingId === item.id ? (locale === "vi" ? "Đang kiểm tra…" : "Checking…") : <><ExternalLink className="h-3.5 w-3.5" />{locale === "vi" ? "Mở corpus hiện tại" : "Open current source"}</>}</button>}
                         <span className="library-evidence-action__hint">{sourceAvailable ? (locale === "vi" ? "Chỉ mở khi chunk ID và hash exact khớp." : "Opens only when exact chunk identity and hash match.") : (locale === "vi" ? "Không có định danh exact để mở corpus hiện tại." : "No exact identity is available for a current-source handoff.")}</span>
                       </div>
                       <details className="library-evidence-item__note">

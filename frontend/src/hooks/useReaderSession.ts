@@ -6,7 +6,7 @@ export interface ReaderSessionTarget {
   variantId?: string | null;
   documentId?: string | null;
   sourceKey?: string | null;
-  representation?: "indexed" | "normalized" | "structured";
+  representation?: "indexed" | "normalized" | "structured" | "pdf";
 }
 
 export interface ReaderSessionSnapshot {

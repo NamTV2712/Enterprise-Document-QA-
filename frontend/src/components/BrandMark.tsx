@@ -10,10 +10,7 @@ interface BrandMarkProps {
   className?: string;
 }
 
-/**
- * A folded filing page with one evidence/search connection: compact enough
- * for the sidebar, but specific to document retrieval rather than generic AI.
- */
+/** A compact, project-owned mark for the document/evidence workspace. */
 export const BrandMark = React.memo<BrandMarkProps>(
   ({ size = "md", className = "" }) => (
     <span
@@ -21,11 +18,10 @@ export const BrandMark = React.memo<BrandMarkProps>(
       aria-hidden="true"
     >
       <span className="brand-mark__surface">
-        <svg viewBox="0 0 24 24" className="brand-mark__icon" fill="none" aria-hidden="true">
-          <path d="M6.5 4.5h6.1l4.9 4.4v10.6H6.5V4.5Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-          <path d="M12.6 4.5v4.4h4.9" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-          <circle cx="14.9" cy="14.9" r="2.65" stroke="currentColor" strokeWidth="1.7" />
-          <path d="m16.8 16.8 2.4 2.4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        <svg viewBox="0 0 32 32" className="brand-mark__icon" fill="none" aria-hidden="true">
+          <path d="m3 8.5 13-6 13 6-13 6-13-6Z" stroke="currentColor" strokeWidth="2.35" strokeLinejoin="round" />
+          <path d="m3 15.5 13 6 13-6" stroke="currentColor" strokeWidth="2.35" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="m3 22.5 13 6 13-6" stroke="var(--evidence-accent)" strokeWidth="2.35" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </span>
     </span>

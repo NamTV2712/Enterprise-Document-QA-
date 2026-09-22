@@ -6,16 +6,16 @@ import {
 import { COMMAND_REGISTRY, type CommandIcon, type ContextualCommandDefinition } from "../lib/commandRegistry";
 import { getResearchTemplateCopy, RESEARCH_TEMPLATES, type ResearchTemplate } from "../lib/researchTemplates";
 import { normalizeLocaleSearch, useLocale } from "../lib/i18n";
-import type { WorkspaceView } from "../lib/workspace";
+import type { ShellRouteId } from "../app/routes";
 import { ModalDialog } from "./ui/ModalDialog";
 import { getSemanticIcon } from "../lib/semanticIcons";
 
-export type PaletteView = WorkspaceView;
+export type PaletteRoute = ShellRouteId;
 
 interface CommandPaletteProps {
   open: boolean;
   onClose: () => void;
-  onNavigate: (view: PaletteView) => void;
+  onNavigate: (routeId: PaletteRoute) => void;
   onTemplate: (template: ResearchTemplate) => void;
   onHelp: () => void;
   onNewConversation: () => void;
@@ -59,7 +59,7 @@ export function CommandPalette({
       accentFamily: command.accentFamily,
       icon: command.icon,
       run: () => {
-        if (command.action === "navigate" && command.view) onNavigate(command.view);
+        if (command.action === "navigate" && command.routeId) onNavigate(command.routeId);
         if (command.action === "help") onHelp();
         if (command.action === "new-conversation") onNewConversation();
       },

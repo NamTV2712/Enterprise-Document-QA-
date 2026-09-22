@@ -11,7 +11,9 @@ export type WorkspaceView =
   | "architecture"
   | "evaluation"
   | "analytics"
-  | "system";
+  | "system"
+  | "models"
+  | "pipeline";
 
 export type WorkspaceIcon = Extract<SemanticIconKey,
   | "research"
@@ -23,9 +25,22 @@ export type WorkspaceIcon = Extract<SemanticIconKey,
   | "evaluation"
   | "analytics"
   | "architecture"
-  | "system">;
+  | "system"
+  | "models"
+  | "pipeline">;
 
 export type WorkspaceSectionId = "workspace" | "retrieval" | "evaluate" | "system";
+
+/** Semantic regions used by the V5 shell composition boundary. */
+export type WorkbenchRegion = "navigation" | "header" | "research" | "sources" | "document";
+
+export const WORKBENCH_REGION_LABEL_KEYS = {
+  navigation: "nav.workspaceViews",
+  header: "workbench.header",
+  research: "workbench.research",
+  sources: "workbench.sources",
+  document: "workbench.document",
+} as const satisfies Record<WorkbenchRegion, MessageKey>;
 
 export interface WorkspaceNavItem {
   view: WorkspaceView;
@@ -73,6 +88,8 @@ export const WORKSPACE_NAV_SECTIONS: readonly WorkspaceNavSection[] = [
     labelKey: "nav.groupRetrieval",
     items: [
       { view: "retrieval", labelKey: "nav.retrieval", descriptionKey: "nav.retrievalDescription", icon: "retrieval", accentFamily: "retrieval", keywords: ["bm25", "reranking"] },
+      { view: "models", labelKey: "nav.models", descriptionKey: "nav.modelsDescription", icon: "models", accentFamily: "retrieval", keywords: ["embedding", "reranker"] },
+      { view: "pipeline", labelKey: "nav.pipeline", descriptionKey: "nav.pipelineDescription", icon: "pipeline", accentFamily: "retrieval", keywords: ["ingestion", "index"] },
     ],
   },
   {

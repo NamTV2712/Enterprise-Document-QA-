@@ -6,6 +6,8 @@ import { describeRequestError } from "../lib/requestError";
 import { useLocale } from "../lib/i18n";
 import { formatCompanyLabel } from "../lib/displayMetadata";
 import type { ReaderSessionController } from "../hooks/useReaderSession";
+import { useReaderEvidenceSource } from "../hooks/useReaderEvidenceSource";
+import { getDocumentLocationErrorMessage, getDocumentLocationMessage, toDocumentLocationView, validateDocumentLocation, type ReaderLocationEvent } from "../lib/readerLocationView";
 import "../styles/document-reader.css";
 import type { ReactNode } from "react";
 
@@ -16,12 +18,25 @@ interface StructuredDocumentReaderProps {
   readerSession?: ReaderSessionController;
   embedded?: boolean;
   onOpenNormalized?: () => void;
+  findQuery?: string;
+  onFindQueryChange?: (query: string) => void;
+  onLocationEvent?: (event: ReaderLocationEvent) => void;
 }
 
 const CONTENT_LIMIT = 64;
 
 function isAbortError(reason: unknown): boolean {
   return reason instanceof DOMException && reason.name === "AbortError";
+}
+
+function isStaleLocationError(reason: unknown): boolean {
+  if (!reason || typeof reason !== "object") return false;
+  const candidate = reason as { status?: unknown; code?: unknown };
+  return candidate.status === 409 || candidate.code === "source_changed" || candidate.code === "chunk_changed";
+}
+
+function isNotFoundLocationError(reason: unknown): boolean {
+  return Boolean(reason && typeof reason === "object" && (reason as { status?: unknown }).status === 404);
 }
 
 function SourceLabel({ source }: { source: CanonicalSource }) {
@@ -105,7 +120,7 @@ function Block({ block, onAnchor, evidenceRange, onOpenNormalized, vi }: { block
   );
 }
 
-export function StructuredDocumentReader({ documentId, indexedSource, onBack, readerSession, embedded = false, onOpenNormalized }: StructuredDocumentReaderProps) {
+export function StructuredDocumentReader({ documentId, indexedSource, onBack, readerSession, embedded = false, onOpenNormalized, findQuery: controlledFindQuery, onFindQueryChange, onLocationEvent }: StructuredDocumentReaderProps) {
   const { locale } = useLocale();
   const vi = locale === "vi";
   const [manifest, setManifest] = useState<ReaderManifest | null>(null);
@@ -116,7 +131,7 @@ export function StructuredDocumentReader({ documentId, indexedSource, onBack, re
   const [nextCursor, setNextCursor] = useState<number | null>(null);
   const [loadingManifest, setLoadingManifest] = useState(true);
   const [loadingContent, setLoadingContent] = useState(false);
-  const [findQuery, setFindQuery] = useState("");
+  const [internalFindQuery, setInternalFindQuery] = useState("");
   const [findStatus, setFindStatus] = useState<string | null>(null);
   const [showNormalizedFallback, setShowNormalizedFallback] = useState(false);
   const [coverageStatus, setCoverageStatus] = useState<ReaderCoverageStatus>("unknown");
@@ -136,6 +151,13 @@ export function StructuredDocumentReader({ documentId, indexedSource, onBack, re
   const contentRef = useRef<HTMLDivElement>(null);
   const sessionSelect = readerSession?.select;
   const sessionIsCurrent = readerSession?.isCurrent;
+  const readerSourceResolution = useReaderEvidenceSource(documentId, indexedSource);
+  const resolvedIndexedSource = readerSourceResolution.source;
+  const findQuery = controlledFindQuery ?? internalFindQuery;
+  const updateFindQuery = useCallback((next: string) => {
+    setInternalFindQuery(next);
+    onFindQueryChange?.(next);
+  }, [onFindQueryChange]);
 
   const isCurrentSession = useCallback(() => {
     const generation = readerGenerationRef.current;
@@ -143,7 +165,7 @@ export function StructuredDocumentReader({ documentId, indexedSource, onBack, re
   }, [sessionIsCurrent]);
 
   useEffect(() => {
-    readerGenerationRef.current = sessionSelect?.({ documentId, sourceKey: indexedSource?.chunk_id ?? null, representation: "structured" }) ?? null;
+    readerGenerationRef.current = sessionSelect?.({ documentId, sourceKey: resolvedIndexedSource?.chunk_id ?? resolvedIndexedSource?.chunk_text_hash ?? null, representation: "structured" }) ?? null;
     const controller = new AbortController();
     const requestId = ++manifestRequestId.current;
     setLoadingManifest(true);
@@ -168,7 +190,7 @@ export function StructuredDocumentReader({ documentId, indexedSource, onBack, re
       if (requestId === manifestRequestId.current && isCurrentSession()) setLoadingManifest(false);
     });
     return () => controller.abort();
-  }, [documentId, indexedSource?.chunk_id, isCurrentSession, sessionSelect, vi]);
+  }, [documentId, isCurrentSession, resolvedIndexedSource?.chunk_id, resolvedIndexedSource?.chunk_text_hash, sessionSelect, vi]);
 
   const selectedSource = useMemo(() => manifest?.sources.find((source) => source.source_document_id === sourceId) ?? null, [manifest, sourceId]);
   const sourceParams = useMemo(() => selectedSource && manifest ? {
@@ -199,23 +221,74 @@ export function StructuredDocumentReader({ documentId, indexedSource, onBack, re
     setBlocks([]);
     setFindStatus(null);
     setShowNormalizedFallback(false);
-  }, [sourceId]);
+  }, [sourceId, resolvedIndexedSource?.chunk_id, resolvedIndexedSource?.chunk_text_hash]);
 
   useEffect(() => {
-    if (!sourceParams?.source_document_id || !indexedSource?.chunk_id || !indexedSource.chunk_text_hash) {
+    setFocusBlockId(null);
+    manualNavigationRef.current = false;
+  }, [resolvedIndexedSource?.chunk_id, resolvedIndexedSource?.chunk_text_hash]);
+
+  useEffect(() => {
+    const source = resolvedIndexedSource;
+    const requestId = ++locationRequestId.current;
+    const generation = readerGenerationRef.current ?? requestId;
+    if (!sourceParams?.source_document_id || !source?.chunk_id) {
       setLocation(null);
       setLocationError(null);
       return;
     }
+    if (readerSourceResolution.state === "resolving") {
+      setLocation(null);
+      setLocationError(null);
+      onLocationEvent?.({ state: "resolving", generation, source });
+      return;
+    }
+    if (!source.chunk_text_hash) {
+      const reason = readerSourceResolution.reason || (vi ? "Không thể xác minh hash của chunk đã chọn." : "The selected chunk has no verifiable text hash.");
+      setLocation(null);
+      setLocationError(reason);
+      onLocationEvent?.({
+        state: readerSourceResolution.state === "stale" ? "stale" : readerSourceResolution.state === "error" ? "error" : "unavailable",
+        generation,
+        source,
+        reason,
+      });
+      return;
+    }
     const controller = new AbortController();
-    const requestId = ++locationRequestId.current;
     setLocationError(null);
-    void getReaderLocation(indexedSource.chunk_id, {
-      chunk_text_hash: indexedSource.chunk_text_hash,
+    onLocationEvent?.({ state: "resolving", generation, source });
+    void getReaderLocation(source.chunk_id, {
+      chunk_text_hash: source.chunk_text_hash,
       source_set_revision: sourceParams.source_set_revision,
     }, controller.signal).then((response) => {
       if (requestId !== locationRequestId.current || !isCurrentSession()) return;
+      const view = toDocumentLocationView("structured", response);
+      const validation = validateDocumentLocation(view, {
+        documentId,
+        chunkId: source.chunk_id,
+        chunkTextHash: source.chunk_text_hash,
+        sourceSetRevision: sourceParams.source_set_revision,
+      });
+      const responseSource = response.source_document_id
+        ? manifest?.sources.find((candidate) => candidate.source_document_id === response.source_document_id)
+        : null;
+      const sourceRevisionMatches = response.status !== "exact"
+        || Boolean(responseSource?.status === "available" && responseSource.document_revision === response.document_revision);
+      if (!validation.ok || !sourceRevisionMatches) {
+        const reason = validation.reason || (vi ? "Không thể liên kết vị trí exact với revision tài liệu." : "The exact location could not be linked to a verified document revision.");
+        setLocation(null);
+        setLocationError(reason);
+        onLocationEvent?.({ state: validation.state === "ready" ? "stale" : validation.state, generation, source, reason });
+        return;
+      }
       setLocation(response);
+      setLocationError(null);
+      if (response.status === "stale" || response.status === "unavailable") {
+        onLocationEvent?.({ state: response.status, generation, source, reason: response.reason || getDocumentLocationMessage(view, vi) });
+      } else {
+        onLocationEvent?.({ state: "resolved", generation, source, location: view });
+      }
       if (response.status === "exact" && !manualNavigationRef.current) {
         if (response.source_document_id && response.source_document_id !== sourceId) setSourceId(response.source_document_id);
         const range = response.ranges[0];
@@ -224,13 +297,32 @@ export function StructuredDocumentReader({ documentId, indexedSource, onBack, re
     }).catch((reason) => {
       if (requestId !== locationRequestId.current || !isCurrentSession() || isAbortError(reason)) return;
       setLocation(null);
-      setLocationError(describeRequestError(reason, vi ? "Không thể xác minh vị trí evidence." : "Could not verify evidence location.", vi ? "vi" : "en").message);
+      const errorMessage = getDocumentLocationErrorMessage(reason, vi) || describeRequestError(reason, vi ? "Không thể xác minh vị trí evidence." : "Could not verify evidence location.", vi ? "vi" : "en").message;
+      setLocationError(errorMessage);
+      onLocationEvent?.({
+        state: isStaleLocationError(reason) ? "stale" : isNotFoundLocationError(reason) ? "unavailable" : "error",
+        generation,
+        source,
+        reason: errorMessage,
+      });
     });
     return () => {
       controller.abort();
       locationRequestId.current += 1;
     };
-  }, [documentId, indexedSource?.chunk_id, indexedSource?.chunk_text_hash, isCurrentSession, sourceId, sourceParams]);
+  }, [
+    documentId,
+    isCurrentSession,
+    manifest,
+    onLocationEvent,
+    readerSourceResolution.reason,
+    readerSourceResolution.state,
+    resolvedIndexedSource?.chunk_id,
+    resolvedIndexedSource?.chunk_text_hash,
+    sourceParams?.source_document_id,
+    sourceParams?.source_set_revision,
+    vi,
+  ]);
 
   useEffect(() => {
     if (!sourceParams?.document_revision || !selectedSource || selectedSource.status !== "available" || structuredRepresentation?.status === "unavailable") {
@@ -290,20 +382,24 @@ export function StructuredDocumentReader({ documentId, indexedSource, onBack, re
     }
   };
 
-  if (loadingManifest) return <section className="structured-reader" aria-labelledby={!embedded ? "structured-reader-title" : undefined} aria-label={embedded ? (vi ? "Tài liệu có cấu trúc" : "Structured document") : undefined}>{!embedded && <ReaderHeader onBack={onBack} vi={vi} />}<p className="structured-reader__status" role="status">{vi ? "Đang kiểm tra tài liệu…" : "Checking document…"}</p></section>;
-  if (error && !manifest) return <section className="structured-reader" aria-labelledby={!embedded ? "structured-reader-title" : undefined} aria-label={embedded ? (vi ? "Tài liệu có cấu trúc" : "Structured document") : undefined}>{!embedded && <ReaderHeader onBack={onBack} vi={vi} />}<div className="structured-reader__error" role="alert">{error}</div></section>;
+  if (loadingManifest) return <section className="structured-reader" data-reader-representation="structured" aria-labelledby={!embedded ? "structured-reader-title" : undefined} aria-label={embedded ? (vi ? "Tài liệu có cấu trúc" : "Structured document") : undefined}>{!embedded && <ReaderHeader onBack={onBack} vi={vi} />}<p className="structured-reader__status" role="status">{vi ? "Đang kiểm tra tài liệu…" : "Checking document…"}</p></section>;
+  if (error && !manifest) return <section className="structured-reader" data-reader-representation="structured" aria-labelledby={!embedded ? "structured-reader-title" : undefined} aria-label={embedded ? (vi ? "Tài liệu có cấu trúc" : "Structured document") : undefined}>{!embedded && <ReaderHeader onBack={onBack} vi={vi} />}<div className="structured-reader__error" role="alert">{error}</div></section>;
 
   const available = Boolean(selectedSource && selectedSource.status === "available" && sourceParams?.document_revision && structuredRepresentation?.status !== "unavailable");
   const identity = manifest?.identity;
   const primaryUrl = manifest?.sources.find((source) => source.role === "primary_filing")?.canonical_url;
   const sourceSet = manifest?.sources ?? [];
+  const pdfRepresentation = manifest?.representations.find((representation) => representation.kind === "pdf");
+  const pdfAvailabilityReason = pdfRepresentation && pdfRepresentation.status !== "available"
+    ? pdfRepresentation.reason ?? (vi ? "PDF chưa khả dụng cho tài liệu này." : "PDF is not available for this document.")
+    : null;
   const coverageLabel = coverageStatus === "complete"
     ? (vi ? "Đã xác minh phạm vi văn bản của chế độ xem có cấu trúc" : "Structured view coverage verified")
     : coverageStatus === "partial"
       ? (vi ? "Chế độ xem có cấu trúc chỉ bao phủ một phần; hãy tìm trong văn bản chuẩn hóa để có đầy đủ văn bản cục bộ." : "Structured view has partial coverage; search normalized text for complete local text.")
       : (vi ? "Chưa xác minh phạm vi của chế độ xem có cấu trúc; hãy tìm trong văn bản chuẩn hóa." : "Structured view coverage is unknown; search normalized text for complete local text.");
   return (
-    <section className={`structured-reader ${wide ? "is-wide" : ""}`} aria-labelledby={!embedded ? "structured-reader-title" : undefined} aria-label={embedded ? (vi ? "Tài liệu có cấu trúc" : "Structured document") : undefined}>
+    <section className={`structured-reader ${wide ? "is-wide" : ""}`} data-reader-representation="structured" aria-labelledby={!embedded ? "structured-reader-title" : undefined} aria-label={embedded ? (vi ? "Tài liệu có cấu trúc" : "Structured document") : undefined}>
       {!embedded && <ReaderHeader onBack={onBack} vi={vi} />}
       {!embedded && <header className="structured-reader__identity">
         <div>
@@ -317,17 +413,17 @@ export function StructuredDocumentReader({ documentId, indexedSource, onBack, re
         <label><span>{vi ? "Nguồn" : "Source"}</span><select value={sourceId} onChange={(event) => setSourceId(event.target.value)} aria-label={vi ? "Chọn nguồn tài liệu" : "Select document source"}>{sourceSet.map((source) => <option key={source.source_document_id} value={source.source_document_id} disabled={source.status !== "available"}><SourceLabel source={source} /></option>)}</select></label>
         <div className="structured-reader__controls"><button type="button" onClick={() => setTextScale((value) => Math.max(90, value - 10))} disabled={textScale <= 90} aria-label={vi ? "Giảm cỡ chữ" : "Decrease text size"}>A−</button><span>{textScale}%</span><button type="button" onClick={() => setTextScale((value) => Math.min(130, value + 10))} disabled={textScale >= 130} aria-label={vi ? "Tăng cỡ chữ" : "Increase text size"}>A+</button><button type="button" onClick={() => setWide((value) => !value)} aria-pressed={wide}>{wide ? (vi ? "Độ rộng chuẩn" : "Standard width") : (vi ? "Mở rộng" : "Widen")}</button>{primaryUrl && <a href={primaryUrl} target="_blank" rel="noreferrer">{vi ? "Mở SEC" : "Open SEC"}</a>}<a href={sourceParams ? getReaderSectionExportUrl(documentId, { ...sourceParams, format: "html" }) : undefined} download>{<Download aria-hidden="true" />}{vi ? "Xuất mục đọc" : "Export reading"}</a></div>
       </div>
-      <div className="structured-reader__availability" role="status"><span>{available ? (vi ? "Nguồn HTML có cấu trúc sẵn sàng" : "Structured HTML source ready") : (vi ? "Nguồn đầy đủ chưa khả dụng" : "Full source unavailable")}</span><span>{coverageLabel}</span><span>{vi ? "PDF chưa khả dụng trong corpus hiện tại" : "PDF is not available in the current corpus"}</span></div>
+      <div className="structured-reader__availability" role="status"><span>{available ? (vi ? "Nguồn HTML có cấu trúc sẵn sàng" : "Structured HTML source ready") : (vi ? "Nguồn đầy đủ chưa khả dụng" : "Full source unavailable")}</span><span>{coverageLabel}</span>{pdfAvailabilityReason && <span>{pdfAvailabilityReason}</span>}</div>
       {!available ? <div className="structured-reader__fallback" role="status">{vi ? "Bản đọc có cấu trúc chưa khả dụng; indexed excerpt vẫn được giữ nguyên." : "The structured document is unavailable; the indexed excerpt remains available."}</div> : <>
-        <div className="structured-reader__find"><Search aria-hidden="true" /><label className="sr-only" htmlFor="structured-reader-find">{vi ? "Tìm trong tài liệu" : "Find in document"}</label><input id="structured-reader-find" value={findQuery} onChange={(event) => setFindQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void runFind(); }} placeholder={vi ? "Tìm trong tài liệu…" : "Find in document…"} maxLength={200} /><button type="button" onClick={() => void runFind()}>{vi ? "Tìm" : "Find"}</button>{findStatus && <span role="status">{findStatus}</span>}{showNormalizedFallback && onOpenNormalized && <button type="button" className="structured-reader__fallback-action" onClick={onOpenNormalized}>{vi ? "Tìm trong văn bản chuẩn hóa" : "Search normalized text"}</button>}</div>
+        <div className="structured-reader__find"><Search aria-hidden="true" /><label className="sr-only" htmlFor="structured-reader-find">{vi ? "Tìm trong tài liệu" : "Find in document"}</label><input id="structured-reader-find" value={findQuery} onChange={(event) => updateFindQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void runFind(); }} placeholder={vi ? "Tìm trong tài liệu…" : "Find in document…"} maxLength={200} /><button type="button" onClick={() => void runFind()}>{vi ? "Tìm" : "Find"}</button>{findStatus && <span role="status">{findStatus}</span>}{showNormalizedFallback && onOpenNormalized && <button type="button" className="structured-reader__fallback-action" onClick={onOpenNormalized}>{vi ? "Tìm trong văn bản chuẩn hóa" : "Search normalized text"}</button>}</div>
         {locationError && <p className="structured-reader__limitation" role="status">{locationError}</p>}
         {coverageReason && coverageStatus !== "complete" && <p className="structured-reader__limitation" role="status">{coverageReason}</p>}
-        {location && <p className={`structured-reader__location structured-reader__location--${location.status}`} role="status">{location.status === "exact" ? (vi ? "Evidence đã được xác minh trong tài liệu có cấu trúc." : "Evidence correspondence verified in the structured document.") : location.reason}</p>}
+        {location && <p className={`structured-reader__location structured-reader__location--${location.status}`} role="status">{location.status === "exact" ? (vi ? "Evidence đã được xác minh trong tài liệu có cấu trúc." : "Evidence correspondence verified in the structured document.") : location.reason || getDocumentLocationMessage(toDocumentLocationView("structured", location), vi)}</p>}
         <div className="structured-reader__layout">
           <nav className="structured-reader__outline" aria-label={vi ? "Mục lục tài liệu" : "Document outline"}><h3>{vi ? "Mục lục" : "Outline"}</h3>{outline.length === 0 ? <p>{vi ? "Không phát hiện tiêu đề." : "No source headings detected."}</p> : outline.map((item) => <button type="button" key={item.block_id} onClick={() => { manualNavigationRef.current = true; setFocusBlockId(item.block_id); if (!blocks.some((block) => block.block_id === item.block_id)) setFindStatus(vi ? "Tiếp tục đọc để tải mục này." : "Continue reading to load this section."); }}>{item.label}</button>)}</nav>
           <article className="structured-reader__canvas" ref={contentRef} data-original-window style={{ fontSize: `${textScale / 100}em` }} aria-busy={loadingContent}>{loadingContent && <p role="status">{vi ? "Đang tải nội dung…" : "Loading document content…"}</p>}{blocks.map((block) => <Block key={block.block_id} block={block} evidenceRange={location?.status === "exact" ? location.ranges.find((range) => range.block_id === block.block_id) : undefined} onAnchor={setFocusBlockId} onOpenNormalized={onOpenNormalized} vi={vi} />)}{manifest?.reason && <p className="structured-reader__limitation">{manifest.reason}</p>}{nextCursor !== null && <button type="button" className="structured-reader__continue" onClick={() => { manualNavigationRef.current = true; setCursor(nextCursor); }} disabled={loadingContent}>{vi ? "Tiếp tục đọc" : "Continue reading"}<ChevronRight aria-hidden="true" /></button>}{cursor > 0 && <button type="button" className="structured-reader__previous" onClick={() => { manualNavigationRef.current = true; setCursor(Math.max(0, cursor - CONTENT_LIMIT)); }} disabled={loadingContent}><ChevronLeft aria-hidden="true" />{vi ? "Về phần trước" : "Previous section"}</button>}</article>
         </div>
-        {manifest?.representations.filter((representation) => representation.status !== "available").map((representation) => <p key={representation.kind} className="structured-reader__limitation">{representation.reason}</p>)}
+        {manifest?.representations.filter((representation) => representation.kind !== "pdf" && representation.status !== "available").map((representation) => <p key={representation.kind} className="structured-reader__limitation">{representation.reason}</p>)}
       </>}
     </section>
   );

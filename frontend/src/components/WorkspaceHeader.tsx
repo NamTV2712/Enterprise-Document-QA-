@@ -15,13 +15,15 @@ import {
   Check,
   Search,
   X,
+  ChevronDown,
+  Settings,
 } from "lucide-react";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { BrandMark } from "./BrandMark";
 import { SelectField } from "./ui/SelectField";
 import { ThemePreference } from "../types";
 import { useLocale } from "../lib/i18n";
-import { WORKSPACE_NAV_SECTIONS, type WorkspaceView } from "../lib/workspace";
+import { type WorkspaceView } from "../lib/workspace";
 import { getSemanticIcon } from "../lib/semanticIcons";
 import type { NavigationLayout } from "../hooks/useNavigationLayout";
 import { ModalDialog } from "./ui/ModalDialog";
@@ -44,6 +46,8 @@ interface WorkspaceHeaderProps {
   onReset: () => void;
   onOpenHelp?: () => void;
   onOpenCommandPalette?: () => void;
+  selectedTicker?: string | null;
+  modelLabel?: string | null;
 }
 
 const THEME_OPTIONS: ThemePreference[] = ["system", "light", "dark"];
@@ -67,11 +71,14 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
     isPipelineReady,
     companyCount,
     theme,
+    resolvedTheme,
     onSelectTheme,
     isClearingSession,
     onReset,
     onOpenHelp,
     onOpenCommandPalette,
+    selectedTicker,
+    modelLabel,
   }) => {
     const { locale, setLocale, t } = useLocale();
     const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
@@ -141,9 +148,13 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
 
     const themeLabel =
       theme === "system" ? t("theme.system") : theme === "light" ? t("theme.light") : t("theme.dark");
-    const moreControlsLabel = locale === "vi" ? "Mở điều khiển workspace" : "More workspace controls";
-    const workspaceControlsLabel = locale === "vi" ? "Điều khiển workspace" : "Workspace controls";
-    const closeWorkspaceControlsLabel = locale === "vi" ? "Đóng điều khiển workspace" : "Close workspace controls";
+    const moreControlsLabel = t("header.moreControls");
+    const workspaceControlsLabel = t("header.workspaceControls");
+    const closeWorkspaceControlsLabel = t("header.closeWorkspaceControls");
+    const scopeLabel = selectedTicker
+      ? t("header.sec10kScope").replace("{ticker}", selectedTicker)
+      : t("header.noTicker");
+    const visibleModelLabel = modelLabel?.trim() || t("header.modelUnavailable");
     const openHelpFromMore = () => {
       setIsMoreOpen(false);
       window.requestAnimationFrame(() => onOpenHelp?.());
@@ -151,7 +162,11 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
 
     return (
     <>
-      <header className="workspace-header">
+      <header
+        className="workspace-header"
+        data-workbench-region="header"
+        aria-label={t("workbench.header")}
+      >
       <div className="flex items-center gap-3 min-w-0">
         <button
           type="button"
@@ -169,51 +184,48 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
         <button
           type="button"
           onClick={onToggleNavigationLayout}
-          className="sidebar-layout-toggle"
+          className={`sidebar-layout-toggle${navigationLayout === "expanded" ? " sidebar-layout-toggle--header-expanded" : ""}`}
           aria-label={navigationLayout === "expanded" ? t("nav.compactNavigation") : t("nav.expandNavigation")}
           title={navigationLayout === "expanded" ? t("nav.compactNavigation") : t("nav.expandNavigation")}
           aria-pressed={navigationLayout === "compact"}
         >
           <NavigationLayoutIcon className="h-4 w-4" aria-hidden="true" />
         </button>
-        <div className="header-product-identity flex items-center gap-2.5 min-w-0">
+        <div className={`header-product-identity flex items-center gap-2.5 min-w-0${navigationLayout === "expanded" ? " header-product-identity--sidebar-owned" : ""}`}>
           <BrandMark size="sm" />
           <div className="flex flex-col min-w-0">
-            <span className="header-product-title-long font-bold text-sm md:text-base text-[var(--text-primary)] truncate leading-tight tracking-tight">
-              Enterprise Document QA
+            <span className="font-bold text-sm text-[var(--text-primary)] truncate leading-tight tracking-tight">
+              RAG System
             </span>
-            <span className="header-product-title-short font-bold text-sm text-[var(--text-primary)] leading-tight tracking-tight">
-              SEC Research
-            </span>
-            <span className="header-product-subtitle hidden sm:inline">
-              SEC 10-K Intelligence
+            <span className="text-[10px] text-slate-400 leading-none truncate">
+              Enterprise Knowledge Assistant
             </span>
           </div>
         </div>
-        {hasMessages && activeView === "conversation" && (
-          <button
-            type="button"
-            onClick={() => onSelectView("overview")}
-            aria-label={t("nav.showOverview")}
-            className="header-overview-button lg:hidden"
-          >
-            <span className="text-xs">{t("nav.overview")}</span>
-          </button>
-        )}
-        <SelectField
-          label={t("nav.workspaceViews")}
-          value={activeView}
-          onValueChange={(value) => onSelectView(value as WorkspaceView)}
-          className="header-view-select lg:hidden"
-          options={[
-            ...WORKSPACE_NAV_SECTIONS.flatMap((section) => section.items.map((item) => ({
-              value: item.view,
-              label: t(item.labelKey),
-              disabled: item.requiresMessages && !hasMessages,
-            }))),
-          ]}
-        />
+        <div className="header-scope-pill flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-1 rounded-lg border border-slate-800 bg-slate-900/90 text-xs text-[var(--text-primary)] font-medium">
+          <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+          <span>{scopeLabel}</span>
+          <ChevronDown className="w-3.5 h-3.5 text-slate-500 ml-0.5" />
+        </div>
       </div>
+
+      {onOpenCommandPalette && (
+        <button
+          type="button"
+          onClick={onOpenCommandPalette}
+          className="header-command-button flex items-center justify-between gap-3 px-3.5 py-1.5 rounded-xl border border-slate-800 bg-slate-900/90 text-xs text-slate-400 hover:border-slate-700 transition-colors w-[260px] md:w-[380px] lg:w-[460px]"
+          aria-label={t("header.openCommandPalette")}
+          title={t("header.commandPaletteTitle")}
+        >
+          <div className="flex items-center gap-2 truncate">
+            <Search className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
+            <span className="truncate text-slate-400">
+              {t("header.commandPaletteTitle").replace(" (⌘ K)", "...")}
+            </span>
+          </div>
+          <kbd className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400 shrink-0">⌘ K</kbd>
+        </button>
+      )}
 
       <div className="flex items-center gap-2 md:gap-3">
         <ConnectionStatus
@@ -221,8 +233,13 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
           isPipelineReady={isPipelineReady}
           companyCount={companyCount}
         />
-        {onOpenCommandPalette && <button type="button" onClick={onOpenCommandPalette} className="header-command-button" aria-label="Open command palette" title="Open command palette (Ctrl+Shift+P)"><Search className="h-3.5 w-3.5" aria-hidden="true" /><span className="header-command-button__label">{locale === "vi" ? "Lệnh" : "Command"}</span><kbd className="header-command-button__shortcut">Ctrl+Shift+P</kbd></button>}
-        <div className="theme-menu header-wide-control" ref={themeMenuRef}>
+
+        <div className="header-model-label flex items-center gap-1.5 px-3 py-1 rounded-full border border-slate-800 bg-slate-900/80 text-xs font-medium text-[var(--text-muted)]">
+          <span>{visibleModelLabel}</span>
+        </div>
+
+        {/* Theme Toggle Menu */}
+        <div className="theme-menu header-theme-control relative" ref={themeMenuRef}>
           <button
             type="button"
             id="theme-switcher-btn"
@@ -230,21 +247,15 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
             onClick={() => setIsThemeMenuOpen((open) => !open)}
             aria-expanded={isThemeMenuOpen}
             aria-haspopup="menu"
-            className="theme-toggle"
+            className="theme-toggle theme-switcher-trigger p-1.5 rounded-lg text-slate-400 hover:text-[var(--text-primary)] hover:bg-slate-800 transition-colors"
             title={`${t("theme.system")} / ${themeLabel}`}
             aria-label={`Theme ${themeLabel}. ${t("theme.choose")}`}
           >
-            <span className="theme-toggle__icon" aria-hidden="true">
-              <ThemeOptionIcon
-                option={theme}
-                className="w-4 h-4"
-              />
-            </span>
-            <span className="theme-toggle__label">{themeLabel}</span>
+            <ThemeOptionIcon option={theme} className="w-4 h-4" />
           </button>
           {isThemeMenuOpen && (
             <div
-              className="theme-menu__popover"
+              className="theme-menu__popover absolute right-0 mt-2 py-1 w-32 rounded-xl bg-slate-900 border border-slate-800 shadow-xl z-50 text-xs"
               role="menu"
               aria-label={t("theme.preference")}
               ref={themeMenuListRef}
@@ -259,24 +270,40 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
                     role="menuitemradio"
                     aria-checked={isSelected}
                     tabIndex={isSelected ? 0 : -1}
-                    className="theme-menu__item"
+                    className={`flex items-center justify-between w-full px-3 py-1.5 text-xs transition-colors ${
+                      isSelected ? "text-blue-400 font-medium bg-slate-800/60" : "text-[var(--text-muted)] hover:bg-slate-800"
+                    }`}
                     onClick={() => {
                       onSelectTheme(option);
                       setIsThemeMenuOpen(false);
                       themeTriggerRef.current?.focus();
                     }}
                   >
-                    <ThemeOptionIcon option={option} className="h-4 w-4" />
-                    <span>
-                      {option === "system" ? t("theme.system") : option === "light" ? t("theme.light") : t("theme.dark")}
-                    </span>
-                    {isSelected && <Check className="ml-auto h-4 w-4" aria-hidden="true" />}
+                    <div className="flex items-center gap-2">
+                      <ThemeOptionIcon option={option} className="h-3.5 w-3.5" />
+                      <span>
+                        {option === "system" ? t("theme.system") : option === "light" ? t("theme.light") : t("theme.dark")}
+                      </span>
+                    </div>
+                    {isSelected && <Check className="h-3.5 w-3.5" aria-hidden="true" />}
                   </button>
                 );
               })}
             </div>
           )}
         </div>
+
+        {/* Settings Gear */}
+        <button
+          type="button"
+          onClick={() => onSelectView("system")}
+          className="header-settings-trigger p-1.5 rounded-lg text-slate-400 hover:text-[var(--text-primary)] hover:bg-slate-800 transition-colors"
+          title={t("header.openSettings")}
+          aria-label={t("header.openSettings")}
+        >
+          <Settings className="w-4 h-4" />
+        </button>
+
         <div className="locale-switcher header-wide-control" role="group" aria-label={t("language.label")}>
           <button
             type="button"
@@ -295,32 +322,33 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
             VI
           </button>
         </div>
+
         {onOpenHelp && (
           <button
             type="button"
+            className="header-help-trigger"
             onClick={onOpenHelp}
             aria-haspopup="dialog"
             aria-label={t("nav.help")}
             title={t("nav.help")}
-            className="theme-toggle header-wide-control"
           >
-            <CircleHelp className="w-4 h-4" aria-hidden="true" />
+            <CircleHelp className="h-4 w-4" aria-hidden="true" />
           </button>
         )}
-        <button
-          type="button"
-          id="quick-reset-btn"
-          disabled={isClearingSession || !hasMessages}
-          aria-busy={isClearingSession}
-          onClick={onReset}
-          className="quick-reset-button header-wide-control"
-          title="Start a new conversation"
-          aria-label="Start a new conversation"
+
+        <div
+          className="header-account-identity flex items-center gap-2 pl-2 border-l border-slate-800"
+          aria-label={t("header.localWorkspace")}
         >
-          <RefreshCw
-            className={`w-4 h-4 ${isClearingSession ? "animate-spin" : ""}`}
-          />
-        </button>
+          <div className="w-7 h-7 rounded-lg border border-slate-700 bg-slate-800 flex items-center justify-center text-slate-400 shadow-sm shrink-0" aria-hidden="true">
+            <Monitor className="h-3.5 w-3.5" />
+          </div>
+          <div className="hidden sm:flex flex-col text-left leading-none">
+            <span className="text-xs font-semibold text-[var(--text-primary)]">{t("header.localWorkspace")}</span>
+            <span className="text-[10px] text-slate-400 mt-0.5">{t("header.localSession")}</span>
+          </div>
+        </div>
+
         <button
           type="button"
           className="header-more-trigger"
@@ -332,6 +360,7 @@ export const WorkspaceHeader = React.memo<WorkspaceHeaderProps>(
         >
           <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
         </button>
+
       </div>
       </header>
 

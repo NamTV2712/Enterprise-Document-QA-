@@ -177,9 +177,21 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
     return () => { cancelAnimationFrame(frame); observer?.disconnect(); };
   }, [inputText]);
 
+  useEffect(() => {
+    const handleSetQuestion = (e: Event) => {
+      const customEvent = e as CustomEvent<{ question: string }>;
+      if (customEvent.detail?.question) {
+        setInputText(customEvent.detail.question);
+        textareaRef.current?.focus();
+      }
+    };
+    window.addEventListener("sec-qa-set-question", handleSetQuestion);
+    return () => window.removeEventListener("sec-qa-set-question", handleSetQuestion);
+  }, [setInputText]);
+
   return (
-    <div className="w-full max-w-full min-w-0 pt-2 pb-[calc(0.875rem+env(safe-area-inset-bottom))] md:pb-3.5 px-4 transition-colors">
-      <div className="w-full max-w-4xl mx-auto space-y-3 min-w-0">
+    <div className="w-full max-w-full min-w-0 pt-2 pb-[calc(0.875rem+env(safe-area-inset-bottom))] md:pb-3 px-3 md:px-4 transition-colors">
+      <div className="w-full space-y-2 min-w-0">
         {/* Banner Alert for Pipeline Not Ready or Disconnected */}
         {showBanner && (
           <ConnectionBanner
@@ -203,7 +215,7 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
         <form
           aria-label="Ask a research question"
           onSubmit={handleSubmit}
-          className="chat-input-island relative flex items-end gap-2 p-2 pl-4 overflow-hidden"
+          className="chat-input-island relative flex flex-col p-2.5 px-3.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] shadow-md overflow-hidden"
         >
           {/* Subtle loading shimmer bar along the top edge of the input area */}
           {isLoading && (
@@ -212,7 +224,6 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
             </div>
           )}
 
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
           <textarea
             ref={textareaRef}
             id="chat-textarea"
@@ -236,76 +247,112 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
                   ? t("input.unavailable")
                   : !isPipelineReady
                     ? t("input.loading")
-                    : t("input.placeholder")
+                    : "Ask your documents... (Shift + Enter for new line)"
             }
             disabled={isTextareaDisabled}
             aria-describedby="chat-input-hint"
-            className="flex-1 resize-none bg-transparent border-0 outline-none focus:ring-0 text-sm md:text-base text-[var(--text-primary)] py-2.5 min-h-[40px] pr-2 font-sans"
+            className="w-full resize-none bg-transparent border-0 outline-none focus:ring-0 text-sm md:text-base text-[var(--text-primary)] py-1 min-h-[38px] font-sans"
           />
-          </div>
 
-          <div className="flex items-center gap-2.5 pr-1.5 pb-1">
-            {/* Character Counter */}
-            {charCount > 0 && (
-              <Tooltip content="Maximum 500 characters per question.">
-                <span
-                  className={`composer-character-count text-xs font-mono font-semibold select-none cursor-help px-1.5 py-0.5 rounded ${
-                    isTooShort || isTooLong
-                      ? "composer-character-count--invalid"
-                      : ""
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 mt-1 border-t border-[var(--border-subtle)]">
+            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+              <ScopeEditor
+                scopeLabel={scopeLabel}
+                tickers={tickers}
+                sections={sections}
+                selectedTicker={selectedTicker}
+                onSelectTicker={onSelectTicker}
+                selectedSection={selectedSection}
+                onSelectSection={onSelectSection}
+                topK={topK}
+                onChangeTopK={onChangeTopK}
+                enableComparative={enableComparative}
+                onToggleComparative={onToggleComparative}
+                open={scopeOpen}
+                onOpenChange={onScopeOpenChange}
+                disabled={isLoading}
+              />
+
+              {/* Retrieval stack is fixed by the backend (BM25 + dense + RRF +
+                  rerank); it is stated as a static fact instead of a dead
+                  dropdown, and the reference's Web search control is omitted
+                  because this product has no web retrieval capability. */}
+              <span
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-[var(--surface-muted)] border border-[var(--border-subtle)] text-[var(--text-secondary)]"
+                title="BM25 keyword search, dense vector search, reciprocal rank fusion, and cross-encoder re-ranking"
+              >
+                <span>Hybrid Search</span>
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3 shrink-0">
+              <label className="flex items-center gap-2 text-xs font-medium text-[var(--text-secondary)] cursor-pointer select-none">
+                <span>{locale === "vi" ? "Nghiên cứu sâu" : "Deep Research"}</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={enableComparative}
+                  aria-label={locale === "vi" ? "Bật hoặc tắt nghiên cứu sâu" : "Toggle Deep Research"}
+                  disabled={isLoading}
+                  onClick={() => !isLoading && onToggleComparative(!enableComparative)}
+                  className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    enableComparative ? "bg-blue-600" : "bg-[var(--border-strong)]"
                   }`}
                 >
-                  {charCount}/500
-                </span>
-              </Tooltip>
-            )}
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                      enableComparative ? "translate-x-3" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </label>
 
-            {isStreaming || isLoading ? (
-              <button
-                type="button"
-                onClick={onStopGenerating}
-                aria-label="Stop generating response"
-                className="composer-stop-button min-h-10 px-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-3xs"
-              >
-                <Square className="w-3 h-3 fill-current" />
-                <span className="text-xs font-semibold">{t("input.stop")}</span>
-              </button>
-            ) : (
-              <button
-                type="submit"
-                id="send-message-btn"
-                title={t("input.ask")}
-                aria-label={t("input.sendAria")}
-                disabled={!isValidLength || isDisabled}
-                className={`min-h-10 min-w-10 sm:min-w-[4.5rem] px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all duration-200 ${
-                  isValidLength && !isDisabled
-                    ? "primary-action-button cursor-pointer"
-                    : "composer-send-button--disabled cursor-not-allowed"
-                }`}
-              >
-                <Send className="w-4 h-4" />
-                <span className="hidden sm:inline text-xs font-semibold">{t("input.ask")}</span>
-              </button>
-            )}
+              {/* Character Counter */}
+              {charCount > 0 && (
+                <Tooltip content="Maximum 500 characters per question.">
+                  <span
+                    className={`composer-character-count text-xs font-mono font-semibold select-none cursor-help px-1.5 py-0.5 rounded ${
+                      isTooShort || isTooLong
+                        ? "composer-character-count--invalid"
+                        : ""
+                    }`}
+                  >
+                    {charCount}/500
+                  </span>
+                </Tooltip>
+              )}
+
+              {isStreaming || isLoading ? (
+                <button
+                  type="button"
+                  onClick={onStopGenerating}
+                  aria-label="Stop generating response"
+                  className="composer-stop-button min-h-8 px-3 rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-3xs text-xs font-semibold"
+                >
+                  <Square className="w-3 h-3 fill-current" />
+                  <span>{t("input.stop")}</span>
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  id="send-message-btn"
+                  title={t("input.ask")}
+                  aria-label={t("input.sendAria")}
+                  disabled={!isValidLength || isDisabled}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-150 ${
+                    isValidLength && !isDisabled
+                      ? "bg-blue-600 hover:bg-blue-500 text-white shadow-sm cursor-pointer"
+                      : "bg-[var(--surface-muted)] text-[var(--text-subtle)] opacity-40 cursor-not-allowed"
+                  }`}
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span className="sr-only">{t("input.ask")}</span>
+                </button>
+              )}
+            </div>
           </div>
         </form>
-
-        <ScopeEditor
-          scopeLabel={scopeLabel}
-          tickers={tickers}
-          sections={sections}
-          selectedTicker={selectedTicker}
-          onSelectTicker={onSelectTicker}
-          selectedSection={selectedSection}
-          onSelectSection={onSelectSection}
-          topK={topK}
-          onChangeTopK={onChangeTopK}
-          enableComparative={enableComparative}
-          onToggleComparative={onToggleComparative}
-          open={scopeOpen}
-          onOpenChange={onScopeOpenChange}
-          disabled={isLoading}
-        />
 
         {/* Char count warnings & shortcuts hint */}
         <div id="chat-input-hint" className="composer-input-hint flex justify-between items-center text-xs font-sans font-medium px-1.5" role="status" aria-live="polite">
@@ -328,7 +375,7 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
               )}
             </>
           ) : (
-            <span className="text-[11px] flex items-center gap-1">
+            <span className="sr-only text-[11px] flex items-center gap-1">
               <span>↵ {t("input.enter")}</span>
               <span>·</span>
               <span>{t("input.newline")}</span>

@@ -1,5 +1,5 @@
 import type { MessageKey } from "./i18n";
-import { WORKSPACE_NAV_SECTIONS, type WorkspaceView } from "./workspace";
+import { SHELL_NAVIGATION_SECTIONS, type ShellRouteId } from "../app/routes";
 import type { SemanticIconKey } from "./semanticIcons";
 
 export type CommandIcon = SemanticIconKey;
@@ -11,7 +11,7 @@ export interface CommandDefinition {
   descriptionKey?: MessageKey;
   accentFamily?: "research" | "documents" | "retrieval" | "evidence" | "evaluation" | "analytics" | "system";
   icon: CommandIcon;
-  view?: WorkspaceView;
+  routeId?: ShellRouteId;
   action: "navigate" | "help" | "new-conversation";
   keywords?: readonly string[];
 }
@@ -31,19 +31,18 @@ export interface ContextualCommandDefinition {
 /**
  * Palette commands are data so filtering and keyboard execution cannot drift
  * from the visible command rows. Product destinations stay limited to the
- * real WorkspaceView union.
+ * real shell route registry.
  */
-const NAVIGATION_COMMANDS: readonly CommandDefinition[] = WORKSPACE_NAV_SECTIONS.flatMap((section) =>
+const NAVIGATION_COMMANDS: readonly CommandDefinition[] = SHELL_NAVIGATION_SECTIONS.flatMap((section) =>
   section.items.map((item) => ({
-    id: `navigate-${item.view}`,
+    id: `navigate-${item.routeId}`,
     kind: "navigation" as const,
     labelKey: item.labelKey,
     descriptionKey: item.descriptionKey,
     accentFamily: item.accentFamily,
     icon: item.icon,
-    view: item.view,
+    routeId: item.routeId,
     action: "navigate" as const,
-    keywords: item.keywords,
   })),
 );
 

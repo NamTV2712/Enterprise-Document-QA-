@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   Compass,
   Copy,
+  Cpu,
   Files,
   FileText,
   FlaskConical,
@@ -44,6 +45,8 @@ export type SemanticIconKey =
   | "analytics"
   | "architecture"
   | "system"
+  | "models"
+  | "pipeline"
   | "sources"
   | "reader"
   | "citation"
@@ -77,6 +80,8 @@ export const SEMANTIC_ICONS: Record<SemanticIconKey, LucideIcon> = {
   analytics: ChartNoAxesCombined,
   architecture: Network,
   system: Server,
+  models: Cpu,
+  pipeline: Workflow,
   sources: ListFilter,
   reader: FileText,
   citation: Quote,

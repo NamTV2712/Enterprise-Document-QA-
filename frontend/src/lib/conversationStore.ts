@@ -1,5 +1,6 @@
 import {
   AnswerVariant,
+  ConversationMode,
   ConversationNote,
   Message,
   MessageFeedback,
@@ -75,6 +76,11 @@ export interface ConversationRecord {
   /** Saved answer alternatives with independent evidence provenance. */
   variants?: AnswerVariant[];
   /**
+   * Presentation mode this conversation was started in. Optional so existing
+   * schema-v4 records remain valid; absence means the mode is unknown.
+   */
+  mode?: ConversationMode;
+  /**
    * Set by the repository for records that a durable tombstone suppresses
    * while a writable backend still holds a copy. Never persisted.
    */
@@ -92,6 +98,10 @@ export interface ConversationWriteResult {
   storageMode: ConversationStorageMode;
   warning: string | null;
 }
+
+export type ConversationDeleteGuard = (
+  record: ConversationRecord,
+) => boolean | Promise<boolean>;
 
 export interface ConversationLibraryState {
   conversations: ConversationRecord[];
@@ -152,6 +162,17 @@ function browserBroadcastChannel(): typeof BroadcastChannel | null {
     return null;
   }
   return window.BroadcastChannel;
+}
+
+export interface ConversationWorkspaceExportSnapshot {
+  conversations: ConversationRecord[];
+  tombstones: TombstoneRecord[];
+  unsupported: Array<{
+    source: string;
+    schemaVersion: number | null;
+    count: number;
+    reason: string;
+  }>;
 }
 
 export interface WriterStatus {
@@ -296,8 +317,22 @@ function notifyLibraryChanged(): void {
 
 export function subscribeConversationLibrary(listener: () => void): () => void {
   writerListeners.add(listener);
+  const handleStorage = (event: StorageEvent) => {
+    if (
+      event.key === LOCAL_ENVELOPE_KEY ||
+      event.key === LOCAL_STORAGE_V1_KEY ||
+      event.key === LOCAL_STORAGE_V2_KEY ||
+      event.key === LOCAL_TOMBSTONES_V2_KEY
+    ) listener();
+  };
+  window.addEventListener("storage", handleStorage);
   const Channel = browserBroadcastChannel();
-  if (!Channel) return () => writerListeners.delete(listener);
+  if (!Channel) {
+    return () => {
+      writerListeners.delete(listener);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }
   if (!libraryChannel) libraryChannel = new Channel(LIBRARY_CHANNEL_NAME);
   libraryListeners.add(listener);
   const handleMessage = (event: MessageEvent) => {
@@ -308,6 +343,7 @@ export function subscribeConversationLibrary(listener: () => void): () => void {
     writerListeners.delete(listener);
     libraryListeners.delete(listener);
     libraryChannel?.removeEventListener("message", handleMessage);
+    window.removeEventListener("storage", handleStorage);
   };
 }
 
@@ -424,7 +460,8 @@ function normalizeRequestSnapshot(value: unknown): RequestSnapshot | undefined |
     !Number.isInteger(snapshot.topK) ||
     snapshot.topK < 1 ||
     typeof snapshot.enableComparative !== "boolean" ||
-    (snapshot.answerLanguage !== "en" && snapshot.answerLanguage !== "vi")
+    (snapshot.answerLanguage !== "en" && snapshot.answerLanguage !== "vi") ||
+    (snapshot.mode !== undefined && snapshot.mode !== "chat" && snapshot.mode !== "research")
   ) return null;
   return {
     ticker: snapshot.ticker ?? null,
@@ -432,6 +469,7 @@ function normalizeRequestSnapshot(value: unknown): RequestSnapshot | undefined |
     topK: snapshot.topK,
     enableComparative: snapshot.enableComparative,
     answerLanguage: snapshot.answerLanguage,
+    ...(snapshot.mode ? { mode: snapshot.mode } : {}),
   };
 }
 
@@ -634,6 +672,10 @@ function normalizeRecord(value: unknown): ConversationRecord | null | "future" {
       : title !== generatedTitle
         ? "custom"
         : "auto";
+  // A malformed mode is unreadable data, not something to silently coerce.
+  if (candidate.mode !== undefined && candidate.mode !== "chat" && candidate.mode !== "research") {
+    return null;
+  }
 
   return {
     schemaVersion: CONVERSATION_SCHEMA_VERSION,
@@ -653,6 +695,7 @@ function normalizeRecord(value: unknown): ConversationRecord | null | "future" {
     tags,
     notes,
     variants,
+    ...(candidate.mode ? { mode: candidate.mode } : {}),
   };
 }
 
@@ -753,6 +796,21 @@ export interface BuildRecordInput {
   tags?: string[];
   notes?: ConversationNote[];
   variants?: AnswerVariant[];
+  /** Presentation mode; preserved from the existing record when omitted. */
+  mode?: ConversationMode;
+}
+
+/**
+ * The mode a conversation was started in is stamped by the first submitted
+ * request, so a record can always derive it from its own stored messages.
+ * Explicit inputs and the existing record take precedence over this fallback.
+ */
+export function conversationModeFromMessages(messages: Message[]): ConversationMode | undefined {
+  for (const message of messages) {
+    const mode = message.requestSnapshot?.mode;
+    if (mode === "chat" || mode === "research") return mode;
+  }
+  return undefined;
 }
 
 /**
@@ -783,6 +841,10 @@ export function buildConversationRecord(
     tags: input.tags ?? existing?.tags ?? [],
     notes: input.notes ?? existing?.notes ?? [],
     variants: input.variants ?? existing?.variants ?? [],
+    // A conversation keeps the mode it was started in; an explicit input wins
+    // so a new conversation can stamp its mode on the first save. When neither
+    // is available the stored messages carry the submitted mode.
+    mode: input.mode ?? existing?.mode ?? conversationModeFromMessages(input.messages),
   };
 }
 
@@ -797,6 +859,7 @@ function recordFingerprint(record: ConversationRecord): string {
     tags: record.tags ?? [],
     notes: record.notes ?? [],
     variants: record.variants ?? [],
+    mode: record.mode ?? null,
     createdAt: record.createdAt,
   });
 }
@@ -1631,7 +1694,10 @@ export async function mutateConversationRecord(
   }));
 }
 
-export async function deleteConversationRecord(id: string): Promise<ConversationWriteResult> {
+export async function deleteConversationRecord(
+  id: string,
+  canDelete?: ConversationDeleteGuard,
+): Promise<ConversationWriteResult> {
   return enqueue(() => withWriterLock(async () => {
     rearmTransientLocks();
     if (!snapshotLoaded) {
@@ -1643,6 +1709,16 @@ export async function deleteConversationRecord(id: string): Promise<Conversation
         "This tab is read-only because it does not own the Library writer lock. The conversation was not deleted.";
       libraryWarning = combineWarning(transientWarning);
       return { status: "failed", storageMode: activeStorageMode, warning: libraryWarning };
+    }
+
+    if (canDelete) {
+      const latest = listConversations().find((record) => record.id === id);
+      if (!latest || !(await canDelete(latest))) {
+        transientWarning =
+          "The conversation changed before automatic cleanup, so it was preserved.";
+        libraryWarning = combineWarning(transientWarning);
+        return { status: "failed", storageMode: activeStorageMode, warning: libraryWarning };
+      }
     }
 
     const persisted = persistedRecords.get(id);
@@ -1753,6 +1829,49 @@ export function getStorageStatus(): { storageMode: ConversationStorageMode; warn
 
 export function getLibrarySnapshotLoaded(): boolean {
   return snapshotLoaded;
+}
+
+/**
+ * Return the already-reconciled browser Library without writing either
+ * backend. Callers must explicitly load the Library first so export never
+ * becomes an implicit migration or reconciliation trigger.
+ */
+export function exportConversationWorkspaceSnapshot(): ConversationWorkspaceExportSnapshot {
+  if (!snapshotLoaded) {
+    throw new Error("Conversation Library must be loaded before workspace export.");
+  }
+  const unsupported: ConversationWorkspaceExportSnapshot["unsupported"] = [];
+  if (idbLock.reason && ["newer-schema", "read-failed"].includes(idbLock.reason)) {
+    unsupported.push({
+      source: "indexeddb.conversations",
+      schemaVersion: null,
+      count: 1,
+      reason: "IndexedDB contains unreadable or future-schema records that were left untouched.",
+    });
+  }
+  if (localLock.reason && ["newer-envelope", "corrupt", "unreadable-envelope", "unreadable-tombstones"].includes(localLock.reason)) {
+    unsupported.push({
+      source: "localstorage.conversations",
+      schemaVersion: null,
+      count: 1,
+      reason: "localStorage contains unreadable or future-schema records that were left untouched.",
+    });
+  }
+  if (libraryWarning && unsupported.length === 0 && /older conversation backup could not be read/i.test(libraryWarning)) {
+    unsupported.push({
+      source: "localstorage.legacy-conversations",
+      schemaVersion: null,
+      count: 1,
+      reason: "A legacy conversation source could not be normalized and was left untouched.",
+    });
+  }
+  return {
+    conversations: listConversations().map(({ deletionPending: _pending, ...record }) =>
+      JSON.parse(JSON.stringify(record)) as ConversationRecord
+    ),
+    tombstones: Array.from(tombstones.values(), (tombstone) => ({ ...tombstone })),
+    unsupported,
+  };
 }
 
 export function legacySessionId(): string | null {

@@ -7,7 +7,7 @@ export interface SelectOption {
   disabled?: boolean;
 }
 
-interface SelectFieldProps {
+export interface SelectFieldProps {
   label: string;
   value: string;
   options: SelectOption[];

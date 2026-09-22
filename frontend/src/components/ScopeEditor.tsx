@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { X, ChevronDown } from "lucide-react";
 
 import { NumberRangeField } from "./NumberRangeField";
 import { SelectField } from "./ui/SelectField";
@@ -117,8 +117,12 @@ export function ScopeEditor({
         aria-controls={isOpen ? panelId : undefined}
         onClick={() => setIsOpen(!isOpen)}
       >
-        <span>{t("input.scope")} {scopeLabel ? `· ${scopeLabel}` : ""}</span>
-        <span className="composer-settings__edit">{vi ? "Chỉnh sửa" : "Edit"}</span>
+        <span className="sr-only">{t("input.scope")} {scopeLabel ? `· ${scopeLabel}` : ""}</span>
+        <span aria-hidden="true" className="flex items-center gap-1 font-sans">
+          <span>{selectedTicker ? `${selectedTicker} SEC 10-K` : (vi ? "Tất cả công ty" : "All companies")}</span>
+          <ChevronDown className="w-3 h-3 opacity-60 ml-0.5" />
+        </span>
+        <span className="composer-settings__edit sr-only">{vi ? "Chỉnh sửa" : "Edit"}</span>
       </button>
       {isOpen && (
         <section

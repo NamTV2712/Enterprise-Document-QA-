@@ -5,6 +5,8 @@ import type { OriginalContent, OriginalLocation, OriginalManifest, OriginalSearc
 import { describeRequestError } from "../lib/requestError";
 import { useLocale } from "../lib/i18n";
 import type { ReaderSessionController } from "../hooks/useReaderSession";
+import { useReaderEvidenceSource } from "../hooks/useReaderEvidenceSource";
+import { getDocumentLocationErrorMessage, getDocumentLocationMessage, toDocumentLocationView, validateDocumentLocation, type ReaderLocationEvent } from "../lib/readerLocationView";
 
 interface OriginalDocumentReaderProps {
   documentId: string;
@@ -12,11 +14,25 @@ interface OriginalDocumentReaderProps {
   onBack: () => void;
   readerSession?: ReaderSessionController;
   backLabel?: string;
+  embedded?: boolean;
+  findQuery?: string;
+  onFindQueryChange?: (query: string) => void;
+  onLocationEvent?: (event: ReaderLocationEvent) => void;
 }
 
 const WINDOW_SIZE = 16_000;
 
-export function OriginalDocumentReader({ documentId, indexedSource, onBack, readerSession, backLabel }: OriginalDocumentReaderProps) {
+function isStaleLocationError(reason: unknown): boolean {
+  if (!reason || typeof reason !== "object") return false;
+  const candidate = reason as { status?: unknown; code?: unknown };
+  return candidate.status === 409 || candidate.code === "source_changed" || candidate.code === "chunk_changed";
+}
+
+function isNotFoundLocationError(reason: unknown): boolean {
+  return Boolean(reason && typeof reason === "object" && (reason as { status?: unknown }).status === 404);
+}
+
+export function OriginalDocumentReader({ documentId, indexedSource, onBack, readerSession, backLabel, embedded = false, findQuery: controlledFindQuery, onFindQueryChange, onLocationEvent }: OriginalDocumentReaderProps) {
   const { locale } = useLocale();
   const vi = locale === "vi";
   const [manifest, setManifest] = useState<OriginalManifest | null>(null);
@@ -24,19 +40,27 @@ export function OriginalDocumentReader({ documentId, indexedSource, onBack, read
   const [content, setContent] = useState<OriginalContent | null>(null);
   const [location, setLocation] = useState<OriginalLocation | null>(null);
   const [start, setStart] = useState(0);
-  const [findQuery, setFindQuery] = useState("");
+  const [internalFindQuery, setInternalFindQuery] = useState("");
   const [activeFind, setActiveFind] = useState("");
   const [matches, setMatches] = useState<OriginalSearchMatch[]>([]);
   const [loadingManifest, setLoadingManifest] = useState(true);
   const [loadingContent, setLoadingContent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [findError, setFindError] = useState<string | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const manifestRequestId = useRef(0);
   const contentRequestId = useRef(0);
   const locationRequestId = useRef(0);
   const findRequestId = useRef(0);
   const findControllerRef = useRef<AbortController | null>(null);
   const readerGenerationRef = useRef<number | null>(null);
+  const readerSourceResolution = useReaderEvidenceSource(documentId, indexedSource);
+  const resolvedIndexedSource = readerSourceResolution.source;
+  const findQuery = controlledFindQuery ?? internalFindQuery;
+  const updateFindQuery = useCallback((next: string) => {
+    setInternalFindQuery(next);
+    onFindQueryChange?.(next);
+  }, [onFindQueryChange]);
 
   const isCurrentReaderSession = useCallback(() => {
     const generation = readerGenerationRef.current;
@@ -46,7 +70,7 @@ export function OriginalDocumentReader({ documentId, indexedSource, onBack, read
   useEffect(() => {
     readerGenerationRef.current = readerSession?.select({
       documentId,
-      sourceKey: indexedSource?.chunk_id ?? indexedSource?.chunk_text_hash ?? null,
+      sourceKey: resolvedIndexedSource?.chunk_id ?? resolvedIndexedSource?.chunk_text_hash ?? null,
       representation: "normalized",
     }) ?? null;
     const controller = new AbortController();
@@ -56,6 +80,7 @@ export function OriginalDocumentReader({ documentId, indexedSource, onBack, read
     setManifest(null);
     setContent(null);
     setLocation(null);
+    setLocationError(null);
     setSourceId("");
     void getOriginalManifest(documentId, controller.signal)
       .then((response) => {
@@ -72,7 +97,7 @@ export function OriginalDocumentReader({ documentId, indexedSource, onBack, read
         if (requestId === manifestRequestId.current && isCurrentReaderSession()) setLoadingManifest(false);
       });
     return () => controller.abort();
-  }, [documentId, indexedSource?.chunk_id, indexedSource?.chunk_text_hash, isCurrentReaderSession, readerSession, vi]);
+  }, [documentId, isCurrentReaderSession, readerSession, resolvedIndexedSource?.chunk_id, resolvedIndexedSource?.chunk_text_hash, vi]);
 
   const selectedManifestSource = useMemo(
     () => manifest?.sources.find((source) => source.source_document_id === sourceId) ?? null,
@@ -89,15 +114,15 @@ export function OriginalDocumentReader({ documentId, indexedSource, onBack, read
     const requestId = ++contentRequestId.current;
     setLoadingContent(true);
     setError(null);
-    const hasChunkBinding = Boolean(indexedSource?.chunk_id && indexedSource.chunk_text_hash);
+    const hasChunkBinding = Boolean(resolvedIndexedSource?.chunk_id && resolvedIndexedSource.chunk_text_hash);
     void getOriginalContent(documentId, {
       source_document_id: selectedManifestSource.source_document_id,
       source_set_revision: manifest.source_set_revision,
       document_revision: selectedManifestSource.document_revision,
       start,
       limit: WINDOW_SIZE,
-      chunk_id: hasChunkBinding ? indexedSource?.chunk_id : null,
-      chunk_text_hash: hasChunkBinding ? indexedSource?.chunk_text_hash : null,
+      chunk_id: hasChunkBinding ? resolvedIndexedSource?.chunk_id : null,
+      chunk_text_hash: hasChunkBinding ? resolvedIndexedSource?.chunk_text_hash : null,
       find: activeFind || null,
     }, controller.signal)
       .then((response) => {
@@ -111,31 +136,91 @@ export function OriginalDocumentReader({ documentId, indexedSource, onBack, read
         if (requestId === contentRequestId.current && isCurrentReaderSession()) setLoadingContent(false);
       });
     return () => controller.abort();
-  }, [activeFind, documentId, indexedSource?.chunk_id, indexedSource?.chunk_text_hash, isCurrentReaderSession, manifest, selectedManifestSource, start, vi]);
+  }, [activeFind, documentId, isCurrentReaderSession, manifest, resolvedIndexedSource?.chunk_id, resolvedIndexedSource?.chunk_text_hash, selectedManifestSource, start, vi]);
 
   useEffect(() => {
-    if (!manifest || !indexedSource?.chunk_id || !indexedSource.chunk_text_hash) {
+    const source = resolvedIndexedSource;
+    const requestId = ++locationRequestId.current;
+    const generation = readerGenerationRef.current ?? requestId;
+    if (!manifest || !source?.chunk_id) {
       setLocation(null);
+      setLocationError(null);
+      return;
+    }
+    if (readerSourceResolution.state === "resolving") {
+      setLocation(null);
+      setLocationError(null);
+      onLocationEvent?.({ state: "resolving", generation, source });
+      return;
+    }
+    if (!source.chunk_text_hash) {
+      const reason = readerSourceResolution.reason || (vi ? "Không thể xác minh hash của chunk đã chọn." : "The selected chunk has no verifiable text hash.");
+      setLocation(null);
+      setLocationError(reason);
+      onLocationEvent?.({
+        state: readerSourceResolution.state === "stale" ? "stale" : readerSourceResolution.state === "error" ? "error" : "unavailable",
+        generation,
+        source,
+        reason,
+      });
       return;
     }
     const controller = new AbortController();
-    const requestId = ++locationRequestId.current;
-    void getOriginalLocation(indexedSource.chunk_id, {
-      chunk_text_hash: indexedSource.chunk_text_hash,
+    setLocationError(null);
+    onLocationEvent?.({ state: "resolving", generation, source });
+    void getOriginalLocation(source.chunk_id, {
+      chunk_text_hash: source.chunk_text_hash,
       source_set_revision: manifest.source_set_revision,
     }, controller.signal)
       .then((response) => {
-        if (requestId === locationRequestId.current && isCurrentReaderSession()) setLocation(response);
+        if (requestId !== locationRequestId.current || !isCurrentReaderSession()) return;
+        const view = toDocumentLocationView("normalized", response);
+        const validation = validateDocumentLocation(view, {
+          documentId,
+          chunkId: source.chunk_id,
+          chunkTextHash: source.chunk_text_hash,
+          sourceSetRevision: manifest.source_set_revision,
+        });
+        const responseSource = response.location
+          ? manifest.sources.find((candidate) => candidate.source_document_id === response.location?.source_document_id)
+          : null;
+        const sourceRevisionMatches = response.status !== "exact"
+          || Boolean(response.location && responseSource?.status === "available" && responseSource.document_revision === response.location.document_revision);
+        if (!validation.ok || !sourceRevisionMatches) {
+          const reason = validation.reason || (vi ? "Không thể liên kết vị trí exact với revision tài liệu." : "The exact location could not be linked to a verified document revision.");
+          setLocation(null);
+          setLocationError(reason);
+          onLocationEvent?.({ state: validation.state === "ready" ? "stale" : validation.state, generation, source, reason });
+          return;
+        }
+        setLocation(response);
+        setLocationError(null);
+        if (response.status === "unavailable") {
+          onLocationEvent?.({ state: "unavailable", generation, source, reason: response.reason || getDocumentLocationMessage(view, vi) });
+        } else {
+          onLocationEvent?.({ state: "resolved", generation, source, location: view });
+        }
+        if (response.status === "exact" && response.location && response.location.source_document_id !== sourceId) {
+          setSourceId(response.location.source_document_id);
+        }
       })
       .catch((reason) => {
         if (requestId !== locationRequestId.current || !isCurrentReaderSession() || (reason instanceof DOMException && reason.name === "AbortError")) return;
         setLocation(null);
+        const errorMessage = getDocumentLocationErrorMessage(reason, vi) || describeRequestError(reason, vi ? "Không thể xác minh vị trí evidence." : "Could not verify evidence location.", vi ? "vi" : "en").message;
+        setLocationError(errorMessage);
+        onLocationEvent?.({
+          state: isStaleLocationError(reason) ? "stale" : isNotFoundLocationError(reason) ? "unavailable" : "error",
+          generation,
+          source,
+          reason: errorMessage,
+        });
       });
     return () => {
       controller.abort();
       locationRequestId.current += 1;
     };
-  }, [indexedSource?.chunk_id, indexedSource?.chunk_text_hash, isCurrentReaderSession, manifest]);
+  }, [documentId, isCurrentReaderSession, manifest, onLocationEvent, readerSourceResolution.reason, readerSourceResolution.state, resolvedIndexedSource?.chunk_id, resolvedIndexedSource?.chunk_text_hash, vi]);
 
   const runFind = async () => {
     const query = findQuery.trim();
@@ -172,25 +257,25 @@ export function OriginalDocumentReader({ documentId, indexedSource, onBack, read
   };
 
   if (loadingManifest) {
-    return <section className="original-reader" aria-labelledby="original-reader-title"><div className="original-reader__header"><button type="button" onClick={onBack} className="original-reader__back"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{backLabel ?? (vi ? "Về indexed excerpt" : "Back to indexed excerpt")}</button><h2 id="original-reader-title">{vi ? "Original source" : "Original source"}</h2></div><p role="status" className="original-reader__status">{vi ? "Đang kiểm tra bản gốc…" : "Checking original source…"}</p></section>;
+    return <section className="original-reader" data-reader-representation="normalized" aria-labelledby={!embedded ? "original-reader-title" : undefined} aria-label={embedded ? (vi ? "Văn bản chuẩn hóa" : "Normalized text") : undefined}>{!embedded && <div className="original-reader__header"><button type="button" onClick={onBack} className="original-reader__back"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{backLabel ?? (vi ? "Về indexed excerpt" : "Back to indexed excerpt")}</button><h2 id="original-reader-title">{vi ? "Original source" : "Original source"}</h2></div>}<p role="status" className="original-reader__status">{vi ? "Đang kiểm tra bản gốc…" : "Checking original source…"}</p></section>;
   }
 
   if (error && !manifest) {
-    return <section className="original-reader" aria-labelledby="original-reader-title"><div className="original-reader__header"><button type="button" onClick={onBack} className="original-reader__back"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{backLabel ?? (vi ? "Về indexed excerpt" : "Back to indexed excerpt")}</button><h2 id="original-reader-title">{vi ? "Original source" : "Original source"}</h2></div><div className="original-reader__error" role="alert">{error}</div></section>;
+    return <section className="original-reader" data-reader-representation="normalized" aria-labelledby={!embedded ? "original-reader-title" : undefined} aria-label={embedded ? (vi ? "Văn bản chuẩn hóa" : "Normalized text") : undefined}>{!embedded && <div className="original-reader__header"><button type="button" onClick={onBack} className="original-reader__back"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{backLabel ?? (vi ? "Về indexed excerpt" : "Back to indexed excerpt")}</button><h2 id="original-reader-title">{vi ? "Original source" : "Original source"}</h2></div>}<div className="original-reader__error" role="alert">{error}</div></section>;
   }
 
   const availableSources = manifest?.sources ?? [];
   const hasAvailableSource = availableSources.some((source) => source.status === "available");
   return (
-    <section className="original-reader" aria-labelledby="original-reader-title">
-      <div className="original-reader__header">
+    <section className="original-reader" data-reader-representation="normalized" aria-labelledby={!embedded ? "original-reader-title" : undefined} aria-label={embedded ? (vi ? "Văn bản chuẩn hóa" : "Normalized text") : undefined}>
+      {!embedded && <div className="original-reader__header">
         <div>
           <button type="button" onClick={onBack} className="original-reader__back"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{backLabel ?? (vi ? "Về indexed excerpt" : "Back to indexed excerpt")}</button>
           <p className="evidence-rail-eyebrow">{vi ? "Bản gốc an toàn" : "Safe original browsing"}</p>
           <h2 id="original-reader-title">Original source — normalized text</h2>
         </div>
         <FileSearch className="h-5 w-5 text-[var(--accent-text)]" aria-hidden="true" />
-      </div>
+      </div>}
       {manifest?.reason && <p className="original-reader__note" role="status">{manifest.reason}</p>}
       {!hasAvailableSource ? (
         <div className="original-reader__fallback" role="status">{vi ? "Bản gốc không khả dụng; indexed excerpt vẫn còn sẵn sàng." : "The original source is unavailable; the indexed excerpt remains available."}</div>
@@ -204,13 +289,13 @@ export function OriginalDocumentReader({ documentId, indexedSource, onBack, read
           </label>
           <div className="original-reader__find">
             <Search className="h-4 w-4" aria-hidden="true" />
-            <input value={findQuery} onChange={(event) => setFindQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void runFind(); }} placeholder={vi ? "Tìm literal trong bản gốc…" : "Find literal text in original…"} aria-label={vi ? "Tìm trong bản gốc" : "Find in original source"} maxLength={200} />
+            <input value={findQuery} onChange={(event) => updateFindQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void runFind(); }} placeholder={vi ? "Tìm literal trong bản gốc…" : "Find literal text in original…"} aria-label={vi ? "Tìm trong bản gốc" : "Find in original source"} maxLength={200} />
             <button type="button" onClick={() => void runFind()} disabled={loadingContent}>{vi ? "Tìm" : "Find"}</button>
           </div>
           {findError && <p className="original-reader__error" role="alert">{findError}</p>}
+          {locationError && <p className="original-reader__error" role="status">{locationError}</p>}
           {matches.length > 0 && <p className="original-reader__note" role="status">{matches.length} {vi ? "kết quả trong trang tìm kiếm hiện tại" : "matches in this bounded search page"}</p>}
-          {location?.status === "ambiguous" && <p className="original-reader__note" role="status">{vi ? "Không đánh dấu evidence: đoạn khớp nhiều vị trí." : "Evidence is not highlighted because the indexed text has multiple matches."}</p>}
-          {location?.status === "not_found" && <p className="original-reader__note" role="status">{vi ? "Không tìm thấy toàn bộ chunk trong bản gốc chuẩn hóa." : "The full indexed chunk was not found in the normalized original."}</p>}
+          {location && <p className="original-reader__note" role="status">{location.status === "exact" ? getDocumentLocationMessage(toDocumentLocationView("normalized", location), vi) : location.reason || getDocumentLocationMessage(toDocumentLocationView("normalized", location), vi)}</p>}
           <div className="original-reader__window" aria-busy={loadingContent}>
             {loadingContent && <p role="status">{vi ? "Đang tải…" : "Loading…"}</p>}
             {content && <div className="original-reader__text" data-original-window>{content.segments.map((segment, index) => {

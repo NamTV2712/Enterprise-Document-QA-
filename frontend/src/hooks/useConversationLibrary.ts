@@ -13,12 +13,14 @@ import {
   mutateConversationRecord,
   saveConversationRecord,
   ConversationWriteResult,
+  ConversationDeleteGuard,
   subscribeConversationLibrary,
   getWriterStatus,
   requestWriterOwnership,
   subscribeConversationWriter,
   WriterStatus,
 } from "../lib/conversationStore";
+import { isLegacySeedRecord, isPristineLegacySeedRecord } from "../lib/legacySeed";
 
 const DRAFT_PERSIST_DEBOUNCE_MS = 1000;
 
@@ -153,6 +155,8 @@ export interface ConversationLibraryController {
   sessionContext: SessionContextStatus;
   /** True when follow-up questions must not be sent for this conversation. */
   isReadOnly: boolean;
+  /** True when an edited legacy startup example must remain visibly non-live. */
+  isLegacyExample: boolean;
   /** True while a send preflight is running; duplicate sends are blocked. */
   isPreflightRunning: boolean;
   setInputText: (text: string) => void;
@@ -257,6 +261,7 @@ export function useConversationLibrary(
   const draftTimerRef = useRef<number | null>(null);
   const lastSavedSignatureRef = useRef<string>("");
   const skipNextDraftPersistRef = useRef(false);
+  const legacyMigrationInFlightRef = useRef(false);
 
   const bumpEpoch = useCallback((): number => {
     epochRef.current += 1;
@@ -324,7 +329,10 @@ export function useConversationLibrary(
             sessionId: snapshot.sessionId,
             messages: persistedMessages,
             draft: snapshot.draft,
-            bookmarkedMessageIds: snapshot.bookmarks,
+            // A completed-answer snapshot can be queued just before a user
+            // toggles a bookmark. Its message/draft data is still useful,
+            // but it must never roll the later answer-local mutation back.
+            bookmarkedMessageIds: latest.bookmarkedMessageIds,
             createdAt: snapshot.createdAt,
           }))
         : await saveConversationRecord(record);
@@ -935,6 +943,14 @@ export function useConversationLibrary(
       const conversation = conversationsRef.current.find((item) => item.id === conversationId);
       if (!conversation) return unavailable("Conversation not found.");
       if (conversation.deletionPending) return unavailable("This conversation is pending deletion.");
+      const displayedMessage = conversationId === activeIdRef.current
+        ? messagesRef.current.find((message) => message.id === messageId)
+        : conversation.messages.find((message) => message.id === messageId);
+      if (!displayedMessage || displayedMessage.sender !== "assistant" || displayedMessage.isStreaming) {
+        return unavailable("Only completed answers can be bookmarked.");
+      }
+      const persistedMessage = normalizeStoredMessages([displayedMessage])[0];
+      if (!persistedMessage) return unavailable("The answer could not be prepared for saving.");
       const currentBookmarks = conversationId === activeIdRef.current
         ? bookmarksRef.current
         : conversation.bookmarkedMessageIds;
@@ -958,7 +974,14 @@ export function useConversationLibrary(
         const nextBookmarks = isBookmarked
           ? latest.bookmarkedMessageIds.filter((id) => id !== messageId)
           : [...latest.bookmarkedMessageIds, messageId];
-        return { ...latest, bookmarkedMessageIds: nextBookmarks, updatedAt: Date.now() };
+        // A reader can bookmark a just-finished answer before the queued
+        // exchange snapshot reaches storage. Add only that exact displayed
+        // answer when needed, so the schema-valid bookmark is durable without
+        // replacing any newer persisted history.
+        const nextMessages = !isBookmarked && !latest.messages.some((message) => message.id === messageId)
+          ? [...latest.messages, persistedMessage]
+          : latest.messages;
+        return { ...latest, messages: nextMessages, bookmarkedMessageIds: nextBookmarks, updatedAt: Date.now() };
       });
       applyWriteResult(result, { setStorageMode, setStorageWarning });
       syncConversationsFromRepository();
@@ -972,13 +995,13 @@ export function useConversationLibrary(
   );
 
   const deleteConversation = useCallback(
-    async (conversationId: string) => {
+    async (conversationId: string, canDelete?: ConversationDeleteGuard) => {
       // Only deleting the ACTIVE conversation may invalidate its running
       // requests and preflight; deleting a background Library item must
       // never cancel the user's in-flight work.
       const isActive = conversationId === activeIdRef.current;
       const epoch = isActive ? invalidateActiveOperation() : epochRef.current;
-      const result = await deleteConversationRecord(conversationId);
+      const result = await deleteConversationRecord(conversationId, canDelete);
       applyWriteResult(result, { setStorageMode, setStorageWarning });
       syncConversationsFromRepository();
       // The deletion is only complete when the record is gone from the
@@ -1008,6 +1031,28 @@ export function useConversationLibrary(
     },
     [invalidateActiveOperation, switchToConversation, syncConversationsFromRepository],
   );
+
+  const migrateLegacySeed = useCallback(async () => {
+    if (!isLibraryReadyRef.current || legacyMigrationInFlightRef.current) return;
+    legacyMigrationInFlightRef.current = true;
+    try {
+      const candidates = listConversations().filter(isLegacySeedRecord);
+      for (const candidate of candidates) {
+        if (!(await isPristineLegacySeedRecord(candidate))) continue;
+        // The repository revalidates this async guard inside its serialized
+        // delete operation, so a user edit cannot be mistaken for the old
+        // untouched startup record between inspection and removal.
+        await deleteConversation(candidate.id, isPristineLegacySeedRecord);
+      }
+    } finally {
+      legacyMigrationInFlightRef.current = false;
+    }
+  }, [deleteConversation]);
+
+  useEffect(() => {
+    if (!isLibraryReady) return;
+    void migrateLegacySeed();
+  }, [isLibraryReady, migrateLegacySeed]);
 
   const importConversationRecords = useCallback(
     async (records: ConversationRecord[]): Promise<ConversationImportResult> => {
@@ -1102,13 +1147,15 @@ export function useConversationLibrary(
     () => conversations.find((record) => record.id === activeConversationId) ?? null,
     [activeConversationId, conversations],
   );
+  const isLegacyExample = isLegacySeedRecord(activeRecord);
 
   // Read-only saved conversations and conversations pending deletion lock
   // sending; the composer still accepts a draft for the next conversation.
   const isReadOnly =
     sessionContext === "missing" ||
     sessionContext === "unknown" ||
-    (activeRecord?.deletionPending ?? false);
+    (activeRecord?.deletionPending ?? false) ||
+    isLegacyExample;
 
   return {
     sessionId,
@@ -1124,6 +1171,7 @@ export function useConversationLibrary(
     saveIndicator,
     sessionContext,
     isReadOnly,
+    isLegacyExample,
     isPreflightRunning,
     setInputText,
     updateMessages: setMessages,

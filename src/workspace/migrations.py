@@ -230,10 +230,39 @@ OPERATIONS_FOUNDATION = Migration(
 )
 
 
+DURABLE_JOB_CONTRACT = Migration(
+    version=4,
+    name="durable_job_contract",
+    statements=(
+        "ALTER TABLE jobs ADD COLUMN record_schema_version INTEGER",
+        "ALTER TABLE jobs ADD COLUMN idempotency_key_hash TEXT",
+        "ALTER TABLE jobs ADD COLUMN payload_json TEXT",
+        "ALTER TABLE jobs ADD COLUMN artifact_references_json TEXT",
+        "ALTER TABLE jobs ADD COLUMN progress_stage TEXT",
+        "ALTER TABLE jobs ADD COLUMN progress_current INTEGER",
+        "ALTER TABLE jobs ADD COLUMN progress_total INTEGER",
+        "ALTER TABLE jobs ADD COLUMN result_json TEXT",
+        "ALTER TABLE jobs ADD COLUMN failure_message TEXT",
+        "ALTER TABLE jobs ADD COLUMN cancellation_requested_at TEXT",
+        "ALTER TABLE job_events ADD COLUMN progress_stage TEXT",
+        """
+        CREATE UNIQUE INDEX jobs_idempotency_idx
+        ON jobs (namespace, idempotency_key_hash)
+        WHERE idempotency_key_hash IS NOT NULL
+        """,
+        """
+        CREATE INDEX jobs_listing_idx
+        ON jobs (namespace, state, created_at DESC, job_id DESC)
+        """,
+    ),
+)
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     CORE_FOUNDATION,
     RESEARCH_DOMAINS,
     OPERATIONS_FOUNDATION,
+    DURABLE_JOB_CONTRACT,
 )
 
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
@@ -258,6 +287,7 @@ EXPECTED_TABLES_BY_VERSION: dict[int, frozenset[str]] = {
         }
     ),
     3: frozenset({"jobs", "job_steps", "job_events", "telemetry_events"}),
+    4: frozenset(),
 }
 
 

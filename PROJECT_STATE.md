@@ -1,5 +1,68 @@
 # Project State
 
+## DATA-003 typed collections (2026-09-22)
+
+DATA-003 is complete. The local workspace now has a typed collection domain,
+repository and protected HTTP surface, built for the Collections interface
+(UI-008) without a second persistence design.
+
+Typed model: a collection carries id/name/description/tags/favorite/private
+visibility/revision/timestamps, and its members are typed by kind — `document`,
+`evidence`, `answer` or `note`, exactly the four the rebuild plan defines. Each
+kind declares the identity its reference must carry (a document needs a
+`document_id`; an answer needs a conversation, message or answer identity;
+evidence needs a real `EvidenceRef` with at least one document/chunk/source
+identity; a note may be unbound or bound to an `EvidenceRef`). The declared kind
+decides the rule, so an incompatible reference is refused deterministically and
+nothing is inferred from a reference's shape or coerced into another kind.
+Collections carry their own fields; items are immutable references or snapshots
+(the plan gives them only create and delete) and notes are editable.
+
+Persistence: typed records live in the DATA-001 versioned-record store, so
+revisions, revision preconditions, tombstones, no-resurrection, canonical
+payloads and secret-field rejection are inherited rather than re-implemented.
+Records keep the DATA-002 transfer wrapper and the typed truth lives in `data`,
+and storage keys are the transfer's own deterministic mapping, so a collection
+keeps one key across create, restart, export, import and repeated import.
+**No migration and no schema change were needed**, and the four unused
+foundation tables from migration v2 stay unused on purpose: writing them would
+create a second source of truth and break the export path. One allowlisted
+entity type (`collection_activity`) was added for append-only recorded
+operations; nothing else in DATA-001 changed.
+
+Semantics: stale revisions are conflicts (409) and never overwrite; deleting is
+atomic and tombstones the collection with its members and notes; deleted records
+report themselves as gone (410), re-deletion is not a conflict, and recreation
+is refused; item deletion requires the owning collection; duplicate identifiers
+are conflicts, not silent merges; listing filters on search, tags and
+favorite (both true and false) with bound sort/page; activity records real
+operations and is bounded; per-collection export returns the truth as JSON or
+Markdown and mutates nothing.
+
+Transfer: typed collections and their members round-trip through the existing
+version 1 workspace backup with the same canonicalization and digest —
+export → validate → import → repeat import → export preserves types, identities,
+membership, metadata, revisions and favourites, repeated import is idempotent,
+an older backup cannot resurrect a tombstoned collection, and an older backup
+cannot overwrite a newer revision. Notes and activity are reported as an
+unsupported source in that envelope rather than silently dropped, because the
+backup format has no record type for them; they remain fully covered by the
+per-collection export. The backup format, its version, its canonical
+serialization and the Python/TypeScript digest parity are unchanged.
+
+HTTP: `/collections…` is registered under the API-001 `L` local-workspace grant,
+reads included, with list/create/get/patch/delete collections, list/add/delete
+items, list/add/patch/delete notes, list activity and export. Domain outcomes map
+to 404 (unknown), 410 (tombstoned), 409 (revision conflict) and 422 (bounds,
+kind, membership, or request validation). Public mode answers 404 and never opens
+the private database.
+
+Validation: 49 new focused tests (18 domain, 13 repository, 6 transfer, 12 API)
+plus the focused DATA-001/DATA-002 regressions (105 tests) and the route
+inventory contract, which grew to include the new protected routes. Full hermetic
+backend suite: 1018 passed, 0 failed, 188 warnings — the warning count is
+unchanged from the baseline.
+
 ## UI-007 Retrieval and Reranker (2026-09-22)
 
 UI-007 is complete. The Retrieval page is rebuilt against

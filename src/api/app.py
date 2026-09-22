@@ -80,6 +80,7 @@ from src.api.routers.evaluations import create_evaluation_router
 from src.api.routers.health import create_health_router
 from src.api.routers.sessions import create_session_router
 from src.api.routers.system import create_system_router
+from src.api.routers.collections import create_collections_router
 from src.api.routers.workspace_transfer import create_workspace_transfer_router
 from src.api.schemas import (
     DecomposedQueryResponse,
@@ -90,6 +91,7 @@ from src.api.schemas import (
     SourceChunk,
     SubQueryInfo,
 )
+from src.workspace.collections import SQLiteCollectionRepository
 from src.workspace.database import WorkspaceDatabase
 from src.workspace.transfer import WorkspaceTransferService
 
@@ -127,6 +129,18 @@ def _workspace_transfer_service() -> WorkspaceTransferService:
     database = WorkspaceDatabase.from_settings(settings)
     database.initialize()
     return WorkspaceTransferService(database)
+
+
+def _collections_repository() -> SQLiteCollectionRepository:
+    """Open the same local workspace for typed collection work.
+
+    Construction happens only after the API-001 access boundary granted local
+    workspace access, exactly like the transfer service, so a public deployment
+    never opens the private database.
+    """
+    database = WorkspaceDatabase.from_settings(settings)
+    database.initialize()
+    return SQLiteCollectionRepository(database)
 
 
 def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
@@ -736,6 +750,7 @@ def _query_interpretation(original_question: str, normalized: Any) -> QueryInter
 
 app.include_router(create_health_router(_health_payload))
 app.include_router(create_workspace_transfer_router(_workspace_transfer_service))
+app.include_router(create_collections_router(_collections_repository))
 
 
 @app.post("/query", response_model=QueryResponse)

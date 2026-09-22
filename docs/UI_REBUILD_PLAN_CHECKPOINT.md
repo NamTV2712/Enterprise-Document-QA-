@@ -3231,3 +3231,254 @@ The master-plan table orders `DATA-003 — Typed collections` (`DATA-001` and
 `API-006 — Model/dataset registries` (`API-002`, complete) and
 `UI-008 — Collections` (needs `DATA-003` and `UI-004`) also on the graph. Do not
 begin any of them without a new instruction.
+
+## DATA-003-A Checkpoint (recovery, exact contract, persistence mapped)
+
+### Active Task
+
+DATA-003 — Typed collections. Status: ACTIVE (A complete; implementation
+starting).
+
+### Recovery Verified
+
+- HEAD `2d75091` on `codex/bilingual-research-workspace`; dirty tree 142 paths.
+  UI-001…UI-007, API-001…API-005, DATA-001/DATA-002, TEST-001 complete. No
+  partial DATA-003 work exists (no collections router, no typed collection
+  module, and the collection tables are created but unused).
+- Master-plan row: `| DATA-003 | Typed collections | DATA-001, DATA-002 |
+  Collections repository/router | Mixed assets/conflicts | UI-006 |` — both
+  dependencies complete, so DATA-003 is the correct Exact Next Action, and it
+  unblocks `UI-008 — Collections`.
+
+### Exact DATA-003 Contract (read from the master plan, not assumed)
+
+The plan's shared-contract section states it directly:
+
+- `Collection`: **id/name/description/tags/favorite/private visibility/revision/
+  timestamps**.
+- `CollectionItem`: **kind is `document`, `evidence`, `answer` or `note`** with
+  typed snapshot/reference.
+- `EvidenceRef`: document/chunk/source IDs, content hash, revisions and
+  representation/location when known.
+- `Receipt` identifies committed operations; **tombstones prevent
+  resurrection**; activity records real operations.
+- Mutations return committed revisions; **revision preconditions and 409
+  conflicts**; imports are idempotent; **opaque IDs never accept arbitrary
+  filesystem paths**.
+
+Owned API surface (access class `L` = protected local workspace, reads
+included): `GET/POST /collections`, `GET/PATCH/DELETE /collections/{id}`,
+`GET/POST /collections/{id}/items`, `DELETE /collections/{id}/items/{item_id}`,
+`POST/PATCH/DELETE /collections/{id}/notes[/{note_id}]`,
+`GET /collections/{id}/activity`, `GET /collections/{id}/export`. The contract
+tests named there: stable filters, bounds, identity, concurrency, atomic
+deletion, mixed assets, duplicate/stale, parent ownership, conflict, actual
+history, portable export.
+
+Completion criteria from the plan: Collections is "list/cards and
+contents/notes/activity/settings details", persistence covers
+"documents/evidence/answers/notes and actual activity", risks are "import loss,
+duplicates, conflicts and stale references", tests are "idempotency, failed
+writes, conflicts, tombstones, missing sources", done is "lossless round trip
+with honest stale/source-gone state", and priority row 5 marks Collections/import
+as requiring a lossless round trip.
+
+### Current Persistence Mapped
+
+- DATA-001 (`src/workspace/database.py`, `migrations.py`, `repository.py`):
+  SQLite with WAL, foreign keys, busy timeout, serialized writes, versioned
+  checksummed migrations, integrity checks, and a **generic versioned-record
+  store** `workspace_records(entity_type, entity_id, revision, payload_json,
+  created_at, updated_at)` plus a generic `tombstones` table and
+  `workspace_imports` receipts. `SQLiteVersionedRecordRepository` provides
+  `get`/`create`/`replace`/`delete`/`get_tombstone` with canonicalised payloads,
+  secret-field rejection, revision preconditions → `RecordConflictError`,
+  tombstones → `RecordDeletedError`, and an injectable clock.
+- Migration v2 `research_domain_foundation` already creates `collections`,
+  `collection_items` (with `item_kind CHECK IN ('document','evidence','answer',
+  'note')`), `notes` and `activity_events`. **No application code reads or
+  writes those four tables** — only `tests/test_workspace_persistence.py` proves
+  the schema and its foreign keys exist. They are unused foundation tables.
+- DATA-002 (`src/workspace/transfer.py`): the workspace backup envelope
+  (`version 1`) carries `conversations`, `collections`, `evidence_items`,
+  `favorites`, `tombstones`, `unsupported`, `source_schemas`, `source_counts`
+  and a canonical digest. Import maps legacy kinds to entity types
+  (`conversation`, `collection`, `collection_item`), writes the **wrapped**
+  payload `{workspace_transfer_version, source_kind, legacy_id,
+  source_schema_version, data}` into `workspace_records`, is transactional with
+  rollback, idempotent by source digest, blocks tombstoned records, refuses to
+  overwrite newer revisions, and records a receipt with id mappings.
+  `export_backup` reads `workspace_records` and **skips any row that is not
+  wrapped with `workspace_transfer_version == 1`**, counting it as unsupported.
+- Browser domain (`frontend/src/lib/evidenceCollections.ts`): `EvidenceCollection
+  {schemaVersion: 2, id, name, items[], createdAt, updatedAt}` and
+  `EvidenceItem {id, citation, excerpt, chunkId?, ticker?, section?,
+  filingDate?, …, savedAt}`, with `MAX_COLLECTIONS = 50` and
+  `MAX_ITEMS_PER_COLLECTION = 100`. The transfer's legacy validators require
+  exactly those spines: a collection payload needs `schemaVersion 2`, a
+  non-empty `name`, no `items` key, and `createdAt`/`updatedAt` equal to the
+  record timestamps; an evidence item needs `citation` and `excerpt` strings and
+  `savedAt == created_at == updated_at`.
+- Frontend canonicalization (`frontend/src/lib/workspaceBackup.ts`) validates the
+  envelope with exact top-level keys, requires `payload.id === legacy_id` on
+  every record, and computes the same digest, so a new envelope section would
+  break that parity contract.
+
+### Design Decision (the load-bearing one)
+
+Typed collections are persisted **through the DATA-001 versioned-record store**,
+not by writing the four unused foundation tables:
+
+- Entity types: `collection`, `collection_item`, `collection_note`, plus
+  `collection_activity` for real recorded operations.
+- Collection and item records carry the store's existing transfer wrapper
+  (`workspace_transfer_version == 1`, `source_kind`, `legacy_id`,
+  `source_schema_version`, `data`), so the **existing DATA-002 export/import
+  round-trips typed collections and their items with no format change, no
+  version bump, no canonicalization change and no digest change**. The typed
+  truth lives inside `data` and is unwrapped by the domain before it leaves the
+  repository.
+- The typed payload keeps the legacy spine the envelope validators require.
+  Collections carry their real name/description/tags/favorite/private and
+  timestamps; items carry the real `citation`/`excerpt`/`savedAt` supplied by the
+  caller (the server never invents a citation). Items are immutable except
+  deletion — the plan gives them only POST and DELETE — which keeps
+  `updated_at == created_at` true, as the item spine requires.
+- Notes get their own entity type because the plan gives them PATCH (they are
+  editable) and an optional EvidenceRef ("bound/unbound"). The envelope has no
+  note record type, so notes are not carried by the workspace backup today; they
+  are fully carried by `/collections/{id}/export`. This limitation is recorded
+  rather than fixed by changing the canonical backup format, which this task
+  forbids changing casually.
+- Activity is append-only and is written **without** a transfer wrapper, so an
+  export classifies it as an unsupported source instead of silently dropping it
+  or corrupting the envelope: truthful about this build's backup coverage.
+- Revisions, conflicts, tombstones and no-resurrection come from DATA-001; the
+  domain adds kind/membership/bounds validation, receipts and unwrapping.
+- The unused `collections`/`collection_items`/`notes`/`activity_events` tables
+  stay unused; no migration is added, deliberately.
+
+### Planned Files
+
+- New: `src/workspace/collections.py` (typed domain + SQLite-backed repository),
+  `src/api/routers/collections.py` (protected `L` routes),
+  `tests/test_collections_domain.py`, `tests/test_collections_repository.py`,
+  `tests/test_collections_transfer.py`, `tests/test_collections_api.py`.
+- Modified: `src/workspace/__init__.py` (exports), `src/api/schemas.py`
+  (additive models), `src/api/app.py` (router registration), checkpoint and
+  PROJECT_STATE.
+- Frontend: additive types only if a real compatibility need appears; UI-008 owns
+  the Collections interface.
+
+### Exact Next Action
+
+DATA-003-B: implement the typed domain (collection, item, note, activity models
+with validation, membership rules, bounds and receipts) and its focused tests
+before touching persistence.
+
+## DATA-003-B/C/D/E/F Checkpoint (domain, persistence, transfer, HTTP contract)
+
+### Active Task
+
+DATA-003 — Typed collections. Status: B–F complete; G (full gate, audits,
+docs, commits) running.
+
+### Typed Domain (B)
+
+`src/workspace/collections.py` (new) is the whole domain:
+
+- Item kinds are exactly the plan's four — `document`, `evidence`, `answer`,
+  `note` — and each declares the identity its reference must carry: a document
+  needs a `document_id`, an answer needs a conversation/message/answer identity,
+  evidence needs a real `EvidenceRef` (at least one of document/chunk/source
+  identity), and a note may be unbound or bound to an `EvidenceRef`. Nothing is
+  inferred from a reference's shape and nothing is coerced: the caller's declared
+  kind decides the rule and an incompatible reference is refused deterministically.
+- Collections carry name/description/tags/favorite/**private**/revision and
+  timestamps; notes are editable and may be bound or unbound; items are immutable
+  references or snapshots (the plan gives them only create and delete).
+- Bounds are enforced here: 50 collections, 100 members per collection, 50 notes,
+  500 activity rows, 200-char names, 2 000-char descriptions, 20 tags of 64
+  characters, bounded citation/excerpt/note text, and a bounded reference tree
+  (depth 12, 500 values) that rejects non-JSON values. Identifiers are opaque and
+  path-hostile (`..`, `/`, `\`, NUL and over-long values are refused).
+- Errors are one small family the HTTP layer can map: not found, deleted,
+  conflict, limit, domain error.
+
+### Persistence (C) — no migration, deliberately
+
+- Typed collections, items, notes and activity are stored in the DATA-001
+  versioned-record store, so revisions, revision preconditions, tombstones,
+  no-resurrection, canonical payloads and secret-field rejection are inherited
+  rather than re-implemented.
+- Records carry the DATA-002 transfer wrapper (`workspace_transfer_version`,
+  `source_kind`, `legacy_id`, `source_schema_version`, `data`), and the typed
+  truth lives in `data`. Notes carry their own workspace marker and activity
+  carries another, because the envelope has no record type for either; both stay
+  outside the portable kinds on purpose.
+- Storage keys are the transfer's own deterministic mapping
+  (`stable_legacy_id`), so a collection and its items keep one key across
+  create, restart, export, import and repeated import; importing a backup into
+  the workspace that produced it cannot duplicate anything.
+- The four unused foundation tables from migration v2 stay unused: writing them
+  would create a second source of truth and break the export path. **No
+  migration was added and no schema changed**, which is recorded as deliberate.
+- `src/workspace/repository.py` gained one allowlisted entity type
+  (`collection_activity`) for append-only recorded operations; nothing else in
+  DATA-001 changed.
+
+### Behavior (D)
+
+Revision increments on every update; a stale revision is a `409` and never
+overwrites; deleting is atomic and tombstones the collection *and* its members
+and notes; a deleted record reports itself as gone (`410`), re-deleting it is not
+a conflict, and recreating it is refused; item deletion requires the collection
+that actually owns it; duplicate identifiers are conflicts rather than silent
+merges; listing supports search/tags/favorite/sort/page with the favorite filter
+honouring both `true` and `false`; activity records real operations, is bounded,
+and is pruned oldest-first instead of failing a committed write; export carries
+the collection's truth as JSON or Markdown without mutating anything.
+
+### Transfer (E)
+
+Six tests drive the real envelope: typed collections and their members export
+inside the existing `version 1` format with the same canonicalization and digest,
+`validate_workspace_backup` accepts the result, import into a fresh workspace
+restores names, tags, favorite, private, kinds, references, snapshots and
+revisions, a repeated import returns the stored receipt unchanged and creates
+nothing, re-importing an older backup cannot resurrect a tombstoned collection,
+and an older backup cannot overwrite a newer revision. Notes and activity are
+reported as an unsupported source in that same envelope — truthful about this
+build's backup coverage rather than a silent drop.
+
+### HTTP Contract (F)
+
+`src/api/routers/collections.py` (new) serves the plan's collection surface under
+the API-001 `L` grant, reads included: list/create/get/patch/delete collections,
+list/add/delete items, list/add/patch/delete notes, list activity, and export.
+Domain outcomes map to `404` (unknown), `410` (tombstoned), `409` (revision
+conflict), `422` (bounds, kind, membership and request-model validation).
+Twelve API tests drive the real ASGI app over a real SQLite workspace, including
+the access boundary (public mode answers 404 and never creates the private
+database, non-loopback is 403, unauthenticated reads are 401) and the bounds.
+
+### Tests Actually Run
+
+- `pytest tests/test_collections_domain.py tests/test_collections_repository.py
+  tests/test_collections_transfer.py tests/test_collections_api.py` — 49 pass.
+- DATA-001/DATA-002 focused regressions
+  (`test_workspace_persistence`, `test_workspace_transfer`,
+  `test_workspace_transfer_api`, `test_workspace_transfer_canonical`,
+  `test_workspace_access`, `test_workspace_matrix`) — 105 pass, 1 warning (a
+  pre-existing third-party `ast.NameConstant` deprecation).
+- Full hermetic backend suite — running at checkpoint time; recorded in G.
+
+### Remaining Work
+
+DATA-003-G: full backend suite result, compile/import checks, `git diff --check`,
+artifact/dependency audit, documentation, commits, then select the next task.
+
+### Exact Next Action
+
+Read the full-suite result, classify any failure, then finish the audits, docs
+and commits.

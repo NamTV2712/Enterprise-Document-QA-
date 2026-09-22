@@ -1,6 +1,6 @@
 """Stable request and response models for the existing HTTP API."""
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -340,3 +340,65 @@ class DiscoverySnapshotResponse(BaseModel):
     created_at: str
     expires_at: str
     ttl_seconds: int = Field(ge=0)
+
+
+# --- DATA-003 typed collections --------------------------------------------
+# Request bodies only: responses are the repository's own typed payloads, so one
+# shape serves the routes, the repository and the per-collection export.
+
+
+class CollectionCreateRequest(BaseModel):
+    """Create one collection; the caller may name its opaque identity."""
+
+    name: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=2_000)
+    tags: list[str] = Field(default_factory=list, max_length=20)
+    favorite: bool = False
+    private: bool = True
+    collection_id: str | None = Field(
+        default=None,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+    )
+
+
+class CollectionUpdateRequest(BaseModel):
+    """Update mutable fields with a revision precondition."""
+
+    revision: int = Field(ge=1)
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2_000)
+    tags: list[str] | None = Field(default=None, max_length=20)
+    favorite: bool | None = None
+    private: bool | None = None
+
+
+class CollectionItemRequest(BaseModel):
+    """Add one typed member; membership is validated by the domain, by kind."""
+
+    item_kind: str = Field(min_length=1, max_length=32)
+    citation: str = Field(default="", max_length=500)
+    excerpt: str = Field(default="", max_length=10_000)
+    reference: dict[str, Any] | None = None
+    snapshot: dict[str, Any] | None = None
+    item_id: str | None = Field(
+        default=None,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+    )
+
+
+class CollectionNoteRequest(BaseModel):
+    """Add a note, bound to an evidence reference when one is supplied."""
+
+    text: str = Field(min_length=1, max_length=10_000)
+    evidence_ref: dict[str, Any] | None = None
+    note_id: str | None = Field(
+        default=None,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+    )
+
+
+class CollectionNoteUpdateRequest(BaseModel):
+    """Edit a note's text with a revision precondition."""
+
+    revision: int = Field(ge=1)
+    text: str = Field(min_length=1, max_length=10_000)

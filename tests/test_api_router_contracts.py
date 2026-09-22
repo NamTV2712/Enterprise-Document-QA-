@@ -21,6 +21,24 @@ EXPECTED_ROUTE_ORDER = [
     ("POST", "/workspace/imports/preview"),
     ("POST", "/workspace/imports"),
     ("GET", "/workspace/export"),
+    # DATA-003 typed collections are registered as their own protected group
+    # after the workspace transfer routes. Collection detail and member paths
+    # come after the list and create routes, so an item path can never resolve
+    # as a collection_id.
+    ("GET", "/collections"),
+    ("POST", "/collections"),
+    ("GET", "/collections/{collection_id}"),
+    ("PATCH", "/collections/{collection_id}"),
+    ("DELETE", "/collections/{collection_id}"),
+    ("GET", "/collections/{collection_id}/items"),
+    ("POST", "/collections/{collection_id}/items"),
+    ("DELETE", "/collections/{collection_id}/items/{item_id}"),
+    ("GET", "/collections/{collection_id}/notes"),
+    ("POST", "/collections/{collection_id}/notes"),
+    ("PATCH", "/collections/{collection_id}/notes/{note_id}"),
+    ("DELETE", "/collections/{collection_id}/notes/{note_id}"),
+    ("GET", "/collections/{collection_id}/activity"),
+    ("GET", "/collections/{collection_id}/export"),
     ("POST", "/query"),
     ("POST", "/query/decomposed"),
     ("POST", "/query/decomposed/stream"),

@@ -1,0 +1,96 @@
+"""Local workspace persistence primitives.
+
+The package is intentionally not imported by the public API bootstrap. Later
+protected routers may construct it only after the API-001 access boundary has
+granted local workspace access.
+"""
+
+from src.workspace.database import (
+    WorkspaceBusyError,
+    WorkspaceDatabase,
+    WorkspaceDatabaseError,
+    WorkspaceDatabaseStateError,
+    WorkspaceDisabledError,
+    WorkspaceMigrationError,
+    WorkspaceStorageConfig,
+)
+from src.workspace.repository import (
+    RecordConflictError,
+    RecordDeletedError,
+    RecordNotFoundError,
+    SQLiteVersionedRecordRepository,
+    Tombstone,
+    VersionedRecord,
+    VersionedRecordRepository,
+)
+from src.workspace.collections import (
+    ACTIVITY_ENTITY_TYPE,
+    COLLECTION_ENTITY_TYPE,
+    COLLECTION_ITEM_KINDS,
+    ITEM_ENTITY_TYPE,
+    NOTE_ENTITY_TYPE,
+    Collection,
+    CollectionActivity,
+    CollectionConflictError,
+    CollectionDeletedError,
+    CollectionError,
+    CollectionItem,
+    CollectionLimitError,
+    CollectionNote,
+    CollectionNotFoundError,
+    Receipt,
+    SQLiteCollectionRepository,
+)
+from src.workspace.transfer import (
+    MAX_BACKUP_BYTES,
+    WORKSPACE_BACKUP_FORMAT,
+    WORKSPACE_BACKUP_VERSION,
+    WorkspaceTransferError,
+    WorkspaceTransferService,
+    build_workspace_backup,
+    compute_backup_digest,
+    stable_legacy_id,
+    validate_workspace_backup,
+)
+
+__all__ = [
+    "ACTIVITY_ENTITY_TYPE",
+    "COLLECTION_ENTITY_TYPE",
+    "COLLECTION_ITEM_KINDS",
+    "ITEM_ENTITY_TYPE",
+    "NOTE_ENTITY_TYPE",
+    "Collection",
+    "CollectionActivity",
+    "CollectionConflictError",
+    "CollectionDeletedError",
+    "CollectionError",
+    "CollectionItem",
+    "CollectionLimitError",
+    "CollectionNote",
+    "CollectionNotFoundError",
+    "Receipt",
+    "SQLiteCollectionRepository",
+    "RecordConflictError",
+    "RecordDeletedError",
+    "RecordNotFoundError",
+    "SQLiteVersionedRecordRepository",
+    "Tombstone",
+    "VersionedRecord",
+    "VersionedRecordRepository",
+    "WorkspaceBusyError",
+    "WorkspaceDatabase",
+    "WorkspaceDatabaseError",
+    "WorkspaceDatabaseStateError",
+    "WorkspaceDisabledError",
+    "WorkspaceMigrationError",
+    "WorkspaceStorageConfig",
+    "MAX_BACKUP_BYTES",
+    "WORKSPACE_BACKUP_FORMAT",
+    "WORKSPACE_BACKUP_VERSION",
+    "WorkspaceTransferError",
+    "WorkspaceTransferService",
+    "build_workspace_backup",
+    "compute_backup_digest",
+    "stable_legacy_id",
+    "validate_workspace_backup",
+]

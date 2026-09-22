@@ -86,6 +86,7 @@ def build_reader_manifest(
     *,
     viewer: OriginalViewer,
     structured_reader: StructuredDocumentService | None = None,
+    pdf_availability: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Resolve one catalog row to a stable, revision-bound reader manifest."""
     snapshot = viewer.snapshot(row)
@@ -162,12 +163,20 @@ def build_reader_manifest(
             ),
             ReaderAvailability(
                 kind="pdf",
-                status="unavailable",
-                reason_code="pdf_representation_unavailable",
-                reason="An official or derived PDF is not available in the local corpus.",
+                status=(pdf_availability or {}).get("status", "unavailable"),
+                reason_code=(pdf_availability or {}).get("reason_code", "pdf_representation_unavailable"),
+                reason=(pdf_availability or {}).get("reason", "An official or derived PDF is not available in the local corpus."),
                 coverage_status="unknown",
-                coverage_reason="An official or derived PDF is not available in the local corpus.",
-                coverage_reason_code="pdf_representation_unavailable",
+                coverage_reason=(pdf_availability or {}).get("reason", "An official or derived PDF is not available in the local corpus."),
+                coverage_reason_code=(pdf_availability or {}).get("reason_code", "pdf_representation_unavailable"),
+                representation_id=(pdf_availability or {}).get("representation_id"),
+                representation_type=(pdf_availability or {}).get("representation_type"),
+                page_semantics=(pdf_availability or {}).get("page_semantics"),
+                artifact_key=(pdf_availability or {}).get("artifact_key"),
+                artifact_hash=(pdf_availability or {}).get("artifact_hash"),
+                source_content_hash=(pdf_availability or {}).get("source_content_hash"),
+                page_count=(pdf_availability or {}).get("page_count"),
+                mapping_status=(pdf_availability or {}).get("mapping_status"),
             ),
         ],
     ).model_dump(mode="json")

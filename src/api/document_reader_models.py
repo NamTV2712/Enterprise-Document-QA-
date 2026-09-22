@@ -7,6 +7,16 @@ from pydantic import BaseModel, Field
 
 
 ReaderStatus = Literal["available", "partial", "unavailable"]
+RepresentationStatus = Literal[
+    "available",
+    "partial",
+    "unavailable",
+    "supported",
+    "generating",
+    "failed",
+    "stale",
+    "unsupported",
+]
 SourceStatus = Literal["available", "unavailable"]
 AvailabilityCode = Literal[
     "available",
@@ -14,6 +24,11 @@ AvailabilityCode = Literal[
     "source_unavailable",
     "structured_representation_unavailable",
     "pdf_representation_unavailable",
+    "pdf_available",
+    "pdf_supported",
+    "pdf_generating",
+    "pdf_generation_failed",
+    "pdf_stale",
 ]
 CoverageStatus = Literal["complete", "partial", "unknown"]
 
@@ -34,7 +49,7 @@ class ReaderAvailability(BaseModel):
     """Availability of one representation without implying remote acquisition."""
 
     kind: Literal["normalized_text", "structured", "pdf"]
-    status: ReaderStatus
+    status: RepresentationStatus
     reason_code: AvailabilityCode
     reason: str | None = None
     # Coverage is scoped to this representation. Availability and
@@ -44,6 +59,14 @@ class ReaderAvailability(BaseModel):
     # Additive machine-readable detail used by the UI; coverage_reason remains
     # the public explanatory text required by the reader contract.
     coverage_reason_code: str | None = None
+    representation_id: str | None = None
+    representation_type: Literal["OFFICIAL_PDF", "DERIVED_PDF"] | None = None
+    page_semantics: Literal["official_pdf_pages", "generated_representation_pages"] | None = None
+    artifact_key: str | None = None
+    artifact_hash: str | None = None
+    source_content_hash: str | None = None
+    page_count: int | None = Field(default=None, ge=0)
+    mapping_status: Literal["exact", "ambiguous", "unavailable", "stale"] | None = None
 
 
 class CanonicalSource(BaseModel):

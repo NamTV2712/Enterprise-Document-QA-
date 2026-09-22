@@ -2034,3 +2034,69 @@ None.
 ### Exact Next Action
 
 UI-004 — Source/document composition (dependencies UI-003 and the reader/inspection surfaces are satisfied; it is the next table row after API-005). Do not start UI-004 without explicit user authorization.
+
+## UI-004-A/B Quota-Safe Checkpoint (references, geometry parity, receipts)
+
+### Active Task
+
+UI-004 — Source/document composition. Status: IN PROGRESS (B implemented; C-F next).
+
+### Authoritative References Identified
+
+- `docs/ui-references/rag-workbench-master-reference-dark.png` (1254x856): navigation ~150px | conversation ~493px | "Retrieved Sources" ~335px | "Document Viewer" ~262px, all four visible at once.
+- `docs/ui-references/research-ui-reference-dark-v1.png` (1586x992): navigation 200 | research 620 | sources 340 | reader 420.
+- Both show: sources rail = header + count badge + sort + filter, numbered cards (rank chip, document name, score, excerpt, section + page chips, "View all sources"); document viewer = document header with page navigation and icon actions, paper preview with highlighted passages, tabs (Highlighted Chunks / Page Content / Metadata), and a selected-chunk card with score, page and context action.
+
+### Gap Found And Closed (B)
+
+The old geometry only produced the four-pane workbench above 1384px of content, so the 1280/1254 reference widths fell back to a contextual overlay — the reference composition was unreachable at its own reference width. Fixed by:
+
+- `WORKBENCH_PANE_LIMITS`: sources 332 default (300-400), document 400 default (272-560) — matching the reference rails.
+- `WORKBENCH_LAYOUT_CONSTRAINTS`: research minimum 430.
+- New `deriveEffectivePaneWidths`: sources keep their preferred width while the document pane narrows into the remaining room before the layout changes mode, and `WorkbenchLayout` now feeds those effective widths to the CSS tracks so the rendered geometry always matches the mode decision.
+- Tests updated deliberately (not to hide regressions): `workbench.test.ts` now asserts the reference composition at 1254 and 1280, the shrink-to-fit rule, and the new limits; `useWorkbenchPreferences.test.tsx` follows the new clamp. Both cite the reference as the reason.
+
+### Receipts Captured (deterministic fixtures, no provider)
+
+`frontend/e2e/ui-004-source-document.spec.ts` (3 tests, Chromium, all passing) asserts the four-pane mode at 1440 and at the 1254 reference width, that the sources rail lists the answer's real sources, and that no body/root horizontal overflow appears at 1254/1280/1440/1024/390. Screenshots: `frontend/test-results/ui-004/evidence-{1254x856,1280x856,1440x900,1024x768,390x844}-chromium.png`.
+
+### Visual Comparison Result (rendered vs reference)
+
+- Four-pane composition now matches the reference structure at its own width: navigation, conversation, retrieved-sources rail (header + count + filters + numbered cards with rank chip, document name, score badge, excerpt, section chip and page), and the document pane (document identity, representation tabs, real reader content with the selected evidence highlighted).
+- Justified deltas: the reference's paper preview and page numbers correspond to an official PDF representation that this corpus does not admit (the live path is an explicit `DERIVED_PDF`), so the document pane shows the real structured/normalized readers; the reference's page-level navigation is therefore omitted rather than fabricated. Source cards additionally expose real per-source actions (copy, open document, save evidence) and an advanced-ranking disclosure.
+- Known cosmetic limitation (no reference target): at 390px the evidence sheet's content can scroll horizontally inside the panel; body/root overflow is asserted zero.
+
+### Remaining Work
+
+- C/D: source-rail and document-pane chrome polish if the gates allow; integration invariants are already asserted (no regeneration, real identity, no overflow).
+- E/F/G: full unit suite, build, Chromium/Firefox gates, nine-reference receipt, docs, commit.
+
+### Exact Next Action
+
+Run the full frontend unit suite and production build (checkpoint recorded before these long commands).
+
+## UI-004-C/D Quota-Safe Checkpoint (integration invariants, spec contract updates)
+
+### Completed Work
+
+- Integration invariants asserted in the new spec: the evidence surface opens from a real citation, the sources rail lists the answer's real sources, the four-pane composition is the active mode at 1440 and at the 1254 reference width, and no body/root horizontal overflow appears at 1254/1280/1440/1024/390. The answer stream is not re-requested when a source is selected (the spec asserts the mode and rail directly; the existing v5-05 sync and workspace regression specs continue to cover identity handoff).
+- Real drift found and fixed while updating the specs: `ContextPanel` hardcoded the pane reset/fallback widths (304 / 440) instead of using `WORKBENCH_PANE_LIMITS`, so the double-click reset and the null-preference fallback disagreed with the documented defaults. Both now read the documented limits.
+- Spec contract updates (reference-driven, disclosed):
+  - `v5-06-layout.spec.ts`: the 1440 target now asserts the reference four-pane geometry (research 508 / sources 332 / document 400 and two 8px splitters); 1920 asserts research 956; the dock is exercised at the wide-but-short 1920x700 target where it remains the honest presentation (with its Sources/Document tab switcher); the 768-tall note records that the measured container excludes the 56px toolbar so the four-pane height floor needs the reference's 856-tall viewport; resizer limits are 300-400 and the drag delta (356) and reset default (332) follow the new limits.
+  - `v5-03-sources.spec.ts`: the pane switcher is now conditional, because four-pane shows both panes at once and therefore has no switcher; the dock/overlay presentations still exercise it.
+- Every changed assertion carries a comment citing the reference or the contract it now follows.
+
+### Tests Run with Exact Results
+
+- `bunx playwright test e2e/v5-06-layout.spec.ts e2e/v5-03-sources.spec.ts e2e/ui-004-source-document.spec.ts --project=chromium --workers=1 --retries=0` — PASS: 7 passed, 0 failed.
+- `bun run lint` (tsc) — PASS.
+- `bun run test` — PASS: 70 files / 398 tests.
+- `bun run build` — PASS.
+
+### Remaining Work
+
+- E/F/G: full Chromium and Firefox gates, nine-reference receipt, frontend contract documentation update for the new geometry, artifact/diff audit, commit, documentation.
+
+### Exact Next Action
+
+Run the full Chromium suite (checkpoint recorded before this long command), then Firefox and the nine-reference receipt.

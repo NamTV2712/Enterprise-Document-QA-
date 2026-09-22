@@ -68,3 +68,56 @@ must not substitute a nearby source. Browser-local, read-only, volatile, and
 storage-failure states are explicit, and raw IDs/revisions remain behind a
 provenance disclosure. Recent items are bounded and continuation fills a draft
 without submitting a query.
+
+## V5 current workbench architecture and closure
+
+V5-08 is the current frontend baseline. `App.tsx` is the route and identity
+coordinator; `ApplicationWorkspace` and `WorkbenchLayout` compose the shared
+shell; `useWorkbenchController` mirrors presentation state; and
+`useWorkbenchPreferences` persists only pane widths and collapse booleans.
+`SourcesPane` owns source-list filtering/focus, `DocumentPane` adapts the
+existing reader lifecycle, and `RouteDocumentContext` handles typed route
+handoffs. Existing API, reader, cancellation, provenance, evidence-save,
+conversation, retrieval, and persistence owners remain authoritative.
+
+The responsive source of truth is measured geometry: four panes from the
+~1254px reference width upward (the document pane narrows toward its own
+minimum before the layout changes mode), a context dock for wide-but-short
+viewports, a contextual modal surface at 1024px or below the height floor, and
+drawer/single-surface behavior below that boundary. Pointer resize is rAF/CSS-
+variable driven until commit; keyboard, reset, collapse, restore, modal focus
+return, and reduced-motion paths are covered. The pane limits are the
+documented reference geometry (sources 300-400px, document 272-560px), and the
+workbench derives the rendered tracks from the same effective widths it used to
+choose the mode, so the rendered geometry always matches the decision.
+The Document region supports Structured, Normalized text, and a
+manifest-gated PDF representation. An exact reader mark requires matching
+source/chunk/hash/document/revision identity; mismatches remain explicitly
+stale, unavailable, or error and never fall forward to a nearby source.
+Current corpus support is `DERIVED_PDF` only; `OFFICIAL_PDF` is schema/helper
+support without admitted official bytes. PDF.js is loaded lazily after the
+backend manifest admits the representation. The document pane deliberately
+omits page-level navigation for representations that do not define pages,
+rather than fabricating page numbers from the reference screenshot.
+
+The visual and regression receipt is maintained in
+`V5_WORKBENCH_CONTRACT.md`; historical rail references in earlier checkpoint
+sections are historical only and are not the current composition.
+
+## PDF representation extension
+
+The post-V5 PDF surface is optional and representation-bound. `DocumentPane`
+may expose a PDF tab only for a current backend manifest whose type is
+`OFFICIAL_PDF` or `DERIVED_PDF`; missing, unsupported, failed, or stale status
+must keep Structured/Normalized text usable. The browser uses PDF.js with the
+document-only content route and never accepts a remote URL, filesystem path, or
+HTML payload for rendering.
+
+The PDF location contract is stricter than a visual search: exact source and
+chunk identity, source/document revisions, content hash, artifact hash, and
+sidecar mapping identity must validate before a highlight is painted. A
+non-exact response is a visible fallback state, not a yellow approximation.
+Generated pages are labeled as generated representation pages and are never
+presented as official SEC pagination. The PDF metadata panel exposes the
+representation type, page semantics, renderer, revisions, page count, and
+advanced artifact identity.

@@ -1,16 +1,16 @@
 import {
   AlertCircle,
-  ArrowUpRight,
   ChevronLeft,
   ChevronRight,
   Clipboard,
   ExternalLink,
   Loader2,
+  Maximize2,
   Save,
   Search,
   X,
 } from "lucide-react";
-import React, { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import React, { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { DocumentChunk, DocumentChunkDetail, Source } from "../types";
 import { formatCompanyLabel, SECTION_METADATA } from "../lib/displayMetadata";
 import { getCachedChunkDetail, getCachedDocumentChunks } from "../lib/documentCache";
@@ -18,11 +18,17 @@ import { describeRequestError } from "../lib/requestError";
 import { saveEvidence, snapshotProvenanceFromSource } from "../lib/evidenceCollections";
 import { useLocale } from "../lib/i18n";
 import { getSourceKey } from "../lib/sourceIdentity";
-import { getSectionDisplay } from "./SourcesPanel";
+import { getSectionDisplay } from "../lib/sourcePresentation";
+import { sanitizeSecBrowserUrl } from "../lib/secUrls";
+import { SourcesPane } from "./workbench/SourcesPane";
 import { getSemanticIcon } from "../lib/semanticIcons";
 import { ModalDialog } from "./ui/ModalDialog";
 import { renderStructuredTableNode } from "./StructuredTable";
-import { DocumentWorkspace } from "./DocumentWorkspace";
+import { DocumentPane } from "./workbench/DocumentPane";
+import { PaneResizer } from "./workbench/PaneResizer";
+import { useOptionalWorkbenchContext } from "./workbench/WorkbenchContext";
+import type { WorkbenchLayoutMode } from "../lib/workbench";
+import { WORKBENCH_PANE_LIMITS } from "../lib/workbench";
 import type { ReaderSessionController } from "../hooks/useReaderSession";
 
 export interface ContextPanelProps {
@@ -30,12 +36,13 @@ export interface ContextPanelProps {
   selectedIndex: number;
   onSelectIndex: (index: number) => void;
   unavailable?: boolean;
+  unavailableReason?: string;
   messageId?: string;
   conversationId?: string;
   railWidth?: number;
   onRailWidthChange?: (width: number) => void;
   isOpen?: boolean;
-  presentation?: "inline" | "drawer";
+  presentation?: "inline" | "drawer" | "workbench";
   onClose?: () => void;
   onOpenCurrentSource?: (source: Source) => void;
   readerSession?: ReaderSessionController;
@@ -57,10 +64,6 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
 }
 
-function isValidSecUrl(value: string | null | undefined): value is string {
-  return typeof value === "string" && /^https:\/\/www\.sec\.gov\//i.test(value);
-}
-
 function excerptText(source: Source): string {
   return source.text || source.text_preview;
 }
@@ -79,16 +82,6 @@ function copyText(source: Source, index: number): string {
   return lines.join("\n");
 }
 
-function scoreLabel(source: Source, locale: "en" | "vi"): string | null {
-  if (typeof source.score !== "number") return null;
-  const kind = source.score_kind === "cross_encoder"
-    ? locale === "vi" ? "điểm reranker" : "reranker score"
-    : source.score_kind === "retrieval"
-      ? locale === "vi" ? "điểm truy hồi" : "retrieval score"
-      : locale === "vi" ? "điểm xếp hạng" : "rank score";
-  return `${kind} ${source.score.toFixed(3)}`;
-}
-
 function HighlightedText({ text, excerpt }: { text: string; excerpt: string }): ReactNode {
   const needle = excerpt.trim();
   if (!needle) return text;
@@ -100,132 +93,6 @@ function HighlightedText({ text, excerpt }: { text: string; excerpt: string }): 
       <mark className="context-excerpt-highlight">{text.slice(start, start + needle.length)}</mark>
       {text.slice(start + needle.length)}
     </>
-  );
-}
-
-function SourceCard({
-  source,
-  index,
-  selected,
-  onSelect,
-}: {
-  source: Source;
-  index: number;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  const { locale } = useLocale();
-  const meta = getSectionDisplay(source.citation, source.section);
-  return (
-    <button
-      type="button"
-      className={`context-source-card ${selected ? "is-selected" : ""}`}
-      onClick={onSelect}
-      aria-pressed={selected}
-    >
-      <span className="context-source-rank">{index + 1}</span>
-      <span className="context-source-card__body">
-        <span className="context-source-card__title">
-          {source.ticker ? formatCompanyLabel(source.ticker) : meta.ticker} · {source.citation}
-        </span>
-        <span className="context-source-card__meta">
-          {source.section || meta.section}
-          {source.filing_date ? ` · ${source.filing_date}` : ""}
-          {scoreLabel(source, locale) ? ` · ${scoreLabel(source, locale)}` : ""}
-        </span>
-        <span className="context-source-card__excerpt">{source.text_preview || excerptText(source)}</span>
-        <span className="sr-only">{locale === "vi" ? "Mở đoạn trích nguồn" : "Open source excerpt"}</span>
-      </span>
-      <ArrowUpRight className="context-source-card__arrow" aria-hidden="true" />
-    </button>
-  );
-}
-
-export function RetrievedSources({
-  sources,
-  selectedIndex,
-  onSelectIndex,
-  unavailable = false,
-}: Pick<ContextPanelProps, "sources" | "selectedIndex" | "onSelectIndex" | "unavailable">) {
-  const { locale } = useLocale();
-  const vi = locale === "vi";
-  const [filter, setFilter] = useState("");
-  const visible = useMemo(() => {
-    const needle = filter.trim().toLocaleLowerCase();
-    return sources
-      .map((source, index) => ({ source, index }))
-      .filter(({ source }) => !needle || `${source.citation} ${source.text || source.text_preview} ${source.section || ""}`.toLocaleLowerCase().includes(needle));
-  }, [filter, sources]);
-  const sections = useMemo(() => {
-    const seen = new Set<string>();
-    return sources.reduce<string[]>((result, source) => {
-      const label = getSectionDisplay(source.citation, source.section).section;
-      if (!seen.has(label)) {
-        seen.add(label);
-        result.push(label);
-      }
-      return result;
-    }, []);
-  }, [sources]);
-
-  return (
-    <section className="context-sources" aria-labelledby="context-sources-title">
-      <div className="context-panel-heading">
-        <div>
-          <p className="evidence-rail-eyebrow">Evidence</p>
-          <h2 id="context-sources-title">{vi ? "Nguồn truy xuất" : "Retrieved sources"}</h2>
-          <p className="context-panel-heading__description">
-            {vi ? "Các đoạn được trả về cho câu trả lời này được giữ theo thứ tự citation. Điểm chỉ dùng để sắp xếp, không phải độ tin cậy." : "Excerpts returned for this answer are shown in citation order. Scores order results; they are not confidence."}
-          </p>
-        </div>
-        <span className="evidence-rail-count" aria-label={`${sources.length} ${vi ? "nguồn được truy xuất" : "retrieved sources"}`}>{sources.length}</span>
-      </div>
-      <label className="context-indexed-search" data-composite-field>
-        <Search className="h-4 w-4" aria-hidden="true" />
-        <span className="sr-only">{vi ? "Tìm trong nguồn" : "Search sources"}</span>
-        <input data-composite-input
-          type="search"
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-          placeholder={vi ? "Lọc citation và excerpt…" : "Filter citations and excerpts…"}
-          aria-label={vi ? "Tìm trong nguồn" : "Search sources"}
-        />
-      </label>
-      {sections.length > 1 && (
-        <nav className="context-section-nav" aria-label={vi ? "Mục nguồn" : "Source sections"}>
-          {sections.map((section) => (
-            <button
-              type="button"
-              key={section}
-              onClick={() => {
-                const index = sources.findIndex((source) => getSectionDisplay(source.citation, source.section).section === section);
-                if (index >= 0) onSelectIndex(index);
-              }}
-            >
-              {section}
-            </button>
-          ))}
-        </nav>
-      )}
-      {unavailable && (
-        <div className="context-unavailable" role="status">
-          <AlertCircle className="h-4 w-4" aria-hidden="true" />
-          {vi ? "Nguồn đã chọn không còn khả dụng trong phiên bản này." : "The selected source is unavailable in this answer variant."}
-        </div>
-      )}
-      <div className="context-source-list">
-        {visible.map(({ source, index }) => (
-          <SourceCard
-            key={`${getSourceKey(source)}-${index}`}
-            source={source}
-            index={index}
-            selected={index === selectedIndex}
-            onSelect={() => onSelectIndex(index)}
-          />
-        ))}
-        {visible.length === 0 && <p className="evidence-rail-empty">{vi ? "Không có evidence phù hợp." : "No matching evidence."}</p>}
-      </div>
-    </section>
   );
 }
 
@@ -241,6 +108,9 @@ interface DocumentViewerProps {
   textScale?: number;
   onTextScaleChange?: (value: number | ((scale: number) => number)) => void;
   onOpenCurrentSource?: (source: Source) => void;
+  showOriginal?: boolean;
+  onShowOriginalChange?: (show: boolean) => void;
+  onCollapse?: () => void;
   readerSession?: ReaderSessionController;
 }
 
@@ -256,6 +126,9 @@ export function DocumentViewer({
   textScale: controlledTextScale,
   onTextScaleChange,
   onOpenCurrentSource,
+  showOriginal: controlledShowOriginal,
+  onShowOriginalChange,
+  onCollapse,
   readerSession,
 }: DocumentViewerProps) {
   const { locale } = useLocale();
@@ -274,7 +147,7 @@ export function DocumentViewer({
   const [detailRetryNonce, setDetailRetryNonce] = useState(0);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [showOriginal, setShowOriginal] = useState(false);
+  const [internalShowOriginal, setInternalShowOriginal] = useState(false);
   const [internalTextScale, setInternalTextScale] = useState(100);
   const detailRequestId = useRef(0);
   const nearbyRequestId = useRef(0);
@@ -288,6 +161,11 @@ export function DocumentViewer({
   const setNearbySearch = onNearbySearchChange ?? setInternalNearbySearch;
   const setNearbyPage = onNearbyPageChange ?? setInternalNearbyPage;
   const setTextScale = onTextScaleChange ?? setInternalTextScale;
+  const showOriginal = controlledShowOriginal ?? internalShowOriginal;
+  const setShowOriginal = useCallback((next: boolean) => {
+    setInternalShowOriginal(next);
+    onShowOriginalChange?.(next);
+  }, [onShowOriginalChange]);
   const debouncedNearbySearch = useDebouncedValue(nearbySearch);
   const selectedSourceKey = source ? getSourceKey(source) : "";
   latestSourceKey.current = selectedSourceKey;
@@ -416,6 +294,16 @@ export function DocumentViewer({
     : detail
       ? { ...source, ...detail }
       : source;
+  const handleSave = () => {
+    try {
+      saveEvidence(currentSource, { conversationId, messageId, provenance: snapshotProvenanceFromSource(currentSource) });
+      setSaved(true);
+      setActionError(null);
+      window.setTimeout(() => setSaved(false), 1800);
+    } catch (reason) {
+      setActionError(describeRequestError(reason, vi ? "Không thể lưu evidence." : "Could not save evidence.", vi ? "vi" : "en").message);
+    }
+  };
 
   if (showOriginal && currentSource.document_id) {
     const workspaceText = currentSource.text || currentSource.text_preview || "";
@@ -427,12 +315,16 @@ export function DocumentViewer({
       currentSource.filing_date ? [vi ? "Ngày nộp" : "Filed", currentSource.filing_date] : null,
       currentSource.report_date ? [vi ? "Ngày báo cáo" : "Report date", currentSource.report_date] : null,
     ].filter(Boolean) as string[][];
-    return <DocumentWorkspace
+    return <DocumentPane
       documentId={currentSource.document_id}
       indexedSource={currentSource}
       indexedExcerpt={<div className="document-workspace__excerpt-content"><p className="context-viewer-citation">{currentSource.citation}</p><p>{<HighlightedText text={workspaceText} excerpt={currentSource.text_preview || ""} />}</p></div>}
       metadata={<dl>{workspaceMetadata.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>}
       onBack={() => setShowOriginal(false)}
+      onShowContext={() => setShowOriginal(false)}
+      onCollapse={onCollapse}
+      onSaveEvidence={handleSave}
+      saved={saved}
       readerSession={readerSession}
     />;
   }
@@ -440,11 +332,8 @@ export function DocumentViewer({
   const selectedSection = getSectionDisplay(currentSource.citation, currentSource.section).section;
   const displayText = loading ? (vi ? "Đang tải đoạn nguồn được lập chỉ mục…" : "Loading indexed excerpt…") : indexedText;
   const currentDetail = contextDetail ?? detail;
-  const openSec = isValidSecUrl(currentSource.sec_index_url)
-    ? currentSource.sec_index_url
-    : isValidSecUrl(currentSource.source_url)
-      ? currentSource.source_url
-      : null;
+  const openSec = sanitizeSecBrowserUrl(currentSource.sec_index_url)
+    ?? sanitizeSecBrowserUrl(currentSource.source_url);
   const metadata = [
     currentSource.ticker ? `${vi ? "Công ty" : "Company"}: ${formatCompanyLabel(currentSource.ticker)}` : null,
     currentSource.filing_type ? `${vi ? "Loại hồ sơ" : "Filing type"}: ${currentSource.filing_type}` : null,
@@ -460,17 +349,6 @@ export function DocumentViewer({
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
       setActionError(vi ? "Không thể sao chép excerpt." : "Could not copy the excerpt.");
-    }
-  };
-
-  const handleSave = () => {
-    try {
-      saveEvidence(currentSource, { conversationId, messageId, provenance: snapshotProvenanceFromSource(currentSource) });
-      setSaved(true);
-      setActionError(null);
-      window.setTimeout(() => setSaved(false), 1800);
-    } catch (reason) {
-      setActionError(describeRequestError(reason, vi ? "Không thể lưu evidence." : "Could not save evidence.", vi ? "vi" : "en").message);
     }
   };
 
@@ -569,11 +447,30 @@ function clampRailWidth(value: number): number {
   return Math.min(MAX_RAIL_WIDTH, Math.max(MIN_RAIL_WIDTH, Math.round(value)));
 }
 
+function CollapsedDocumentPane({ onExpand }: { onExpand: () => void }) {
+  const { locale } = useLocale();
+  const vi = locale === "vi";
+  return (
+    <section className="workbench-document-collapsed" data-document-pane-collapsed="true" aria-label={vi ? "Bảng tài liệu đã thu gọn" : "Collapsed document pane"}>
+      <button
+        type="button"
+        className="workbench-document-collapsed__button"
+        aria-label={vi ? "Mở rộng bảng tài liệu" : "Expand document pane"}
+        onClick={onExpand}
+      >
+        <Maximize2 className="h-4 w-4" aria-hidden="true" />
+        <span>{vi ? "Tài liệu" : "Document"}</span>
+      </button>
+    </section>
+  );
+}
+
 export function ContextPanel({
   sources,
   selectedIndex,
   onSelectIndex,
   unavailable = false,
+  unavailableReason,
   messageId,
   conversationId,
   railWidth = 384,
@@ -591,6 +488,15 @@ export function ContextPanel({
   const [nearbySearch, setNearbySearch] = useState("");
   const [nearbyPage, setNearbyPage] = useState(1);
   const [textScale, setTextScale] = useState(100);
+  const [showOriginal, setShowOriginal] = useState(false);
+  const workbench = useOptionalWorkbenchContext();
+  const workbenchMode: WorkbenchLayoutMode | null = presentation === "workbench"
+    ? workbench?.controller.state.layoutMode ?? null
+    : null;
+  const isFourPane = workbenchMode === "four-pane";
+  const isContextDock = workbenchMode === "context-dock";
+  const sourceCollapsed = workbench?.preferences.sourcesCollapsed ?? false;
+  const documentCollapsed = workbench?.preferences.documentCollapsed ?? false;
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const cleanupResizeListenersRef = useRef<(() => void) | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -632,7 +538,137 @@ export function ContextPanel({
     if (event.key === "End") { event.preventDefault(); updateWidth(MAX_RAIL_WIDTH); }
   };
 
+  const selectSource = useCallback((index: number) => {
+    onSelectIndex(index);
+    if (isFourPane) setShowOriginal(true);
+    if (isContextDock) workbench?.controller.setActivePane("sources");
+  }, [isContextDock, isFourPane, onSelectIndex, workbench]);
+
+  const openDocument = useCallback((source: Source, index: number) => {
+    onSelectIndex(index);
+    if (source.document_id) setShowOriginal(true);
+    if (isContextDock) workbench?.controller.setActivePane("document");
+  }, [isContextDock, onSelectIndex, workbench]);
+
+  const handleShowOriginalChange = useCallback((next: boolean) => {
+    setShowOriginal(next);
+    if (isContextDock) workbench?.controller.setActivePane(next ? "document" : "sources");
+  }, [isContextDock, workbench]);
+
+  const sourcePane = (
+    <SourcesPane
+      sources={sources}
+      selectedIndex={selectedIndex}
+      onSelectIndex={selectSource}
+      unavailable={unavailable}
+      unavailableReason={unavailableReason}
+      messageId={messageId}
+      conversationId={conversationId}
+      collapsed={presentation === "workbench" && isFourPane ? sourceCollapsed : undefined}
+      onCollapsedChange={presentation === "workbench" && isFourPane ? workbench?.preferences.setSourcesCollapsed : undefined}
+      onOpenDocument={openDocument}
+    />
+  );
+
+  const documentViewer = (
+    <DocumentViewer
+      source={selected}
+      sourceIndex={selected ? sources.indexOf(selected) : -1}
+      messageId={messageId}
+      conversationId={conversationId}
+      nearbySearch={nearbySearch}
+      onNearbySearchChange={setNearbySearch}
+      nearbyPage={nearbyPage}
+      onNearbyPageChange={setNearbyPage}
+      textScale={textScale}
+      onTextScaleChange={setTextScale}
+      onOpenCurrentSource={onOpenCurrentSource}
+      showOriginal={isFourPane ? true : showOriginal}
+      onShowOriginalChange={handleShowOriginalChange}
+      onCollapse={presentation === "workbench" && isFourPane ? () => workbench?.preferences.setDocumentCollapsed(true) : undefined}
+      readerSession={readerSession}
+    />
+  );
+
   if (!isOpen) return null;
+
+  if (presentation === "workbench" && (isFourPane || isContextDock)) {
+    const activePane = workbench?.controller.state.activePane ?? "sources";
+    const contextToolbar = (
+      <div className="context-panel__toolbar workbench-context__toolbar">
+        {isContextDock ? (
+          <div className="workbench-context__switcher" role="tablist" aria-label={locale === "vi" ? "Bảng ngữ cảnh" : "Context panes"}>
+            <button type="button" role="tab" aria-selected={activePane === "sources"} onClick={() => workbench?.controller.setActivePane("sources")}>
+              {locale === "vi" ? "Nguồn" : "Sources"}
+            </button>
+            <button type="button" role="tab" aria-selected={activePane === "document"} onClick={() => { setShowOriginal(true); workbench?.controller.setActivePane("document"); }}>
+              {locale === "vi" ? "Tài liệu" : "Document"}
+            </button>
+          </div>
+        ) : <span>{locale === "vi" ? "Nguồn và tài liệu" : "Sources and document"}</span>}
+        <button
+          ref={closeButtonRef}
+          type="button"
+          className="context-panel__close"
+          aria-label={locale === "vi" ? "Đóng trình kiểm tra bằng chứng" : "Close evidence inspector"}
+          onClick={onClose}
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </div>
+    );
+
+    if (isFourPane) {
+      return (
+        <aside
+          className="workbench-evidence-layout workbench-evidence-layout--four-pane context-panel"
+          data-workbench-context="true"
+          data-workbench-layout-mode="four-pane"
+          aria-label={locale === "vi" ? "Nguồn và tài liệu" : "Sources and document"}
+        >
+          {contextToolbar}
+          <PaneResizer
+            pane="sources"
+            width={workbench?.preferences.sourcesWidth ?? WORKBENCH_PANE_LIMITS.sources.default}
+            collapsed={sourceCollapsed}
+            onCommit={workbench?.preferences.setSourcesWidth ?? (() => undefined)}
+            onReset={() =>
+              workbench?.preferences.commit({ sourcesWidth: WORKBENCH_PANE_LIMITS.sources.default })
+            }
+            onCollapsedChange={workbench?.preferences.setSourcesCollapsed}
+          />
+          {sourcePane}
+          <PaneResizer
+            pane="document"
+            width={workbench?.preferences.documentWidth ?? WORKBENCH_PANE_LIMITS.document.default}
+            collapsed={documentCollapsed}
+            onCommit={workbench?.preferences.setDocumentWidth ?? (() => undefined)}
+            onReset={() =>
+              workbench?.preferences.commit({ documentWidth: WORKBENCH_PANE_LIMITS.document.default })
+            }
+            onCollapsedChange={workbench?.preferences.setDocumentCollapsed}
+          />
+          {documentCollapsed ? (
+            <CollapsedDocumentPane onExpand={() => workbench?.preferences.setDocumentCollapsed(false)} />
+          ) : (
+            documentViewer
+          )}
+        </aside>
+      );
+    }
+
+    return (
+      <aside
+        className="workbench-evidence-layout workbench-evidence-layout--context-dock context-panel"
+        data-workbench-context="true"
+        data-workbench-layout-mode="context-dock"
+        aria-label={locale === "vi" ? "Nguồn và tài liệu" : "Sources and document"}
+      >
+        {contextToolbar}
+        {activePane === "document" ? documentViewer : sourcePane}
+      </aside>
+    );
+  }
 
   const panel = (
     <aside className="evidence-workspace-rail context-panel" aria-label={locale === "vi" ? "Nguồn và bằng chứng" : "Sources and evidence"}>
@@ -660,25 +696,19 @@ export function ContextPanel({
         onPointerDown={handlePointerDown}
         onKeyDown={handleResizeKeyDown}
       />}
-      <RetrievedSources sources={sources} selectedIndex={selectedIndex} onSelectIndex={onSelectIndex} unavailable={unavailable} />
-      <DocumentViewer
-        source={selected}
-        sourceIndex={selected ? sources.indexOf(selected) : -1}
-        messageId={messageId}
-        conversationId={conversationId}
-        nearbySearch={nearbySearch}
-        onNearbySearchChange={setNearbySearch}
-        nearbyPage={nearbyPage}
-        onNearbyPageChange={setNearbyPage}
-        textScale={textScale}
-        onTextScaleChange={setTextScale}
-        onOpenCurrentSource={onOpenCurrentSource}
-        readerSession={readerSession}
-      />
+      {sourcePane}
+      {documentViewer}
     </aside>
   );
 
-  if (presentation === "drawer") {
+  const useEvidenceModal = presentation === "drawer" || (
+    presentation === "workbench" &&
+    workbenchMode !== null &&
+    !isFourPane &&
+    !isContextDock
+  );
+
+  if (useEvidenceModal) {
     return (
       <ModalDialog
         open

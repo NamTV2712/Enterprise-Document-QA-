@@ -1,5 +1,56 @@
 # Project State
 
+## UI-004 source/document composition (2026-09-21)
+
+UI-004 is complete. The source/evidence rail and the document pane now compose
+the four-pane workbench the authoritative references show, at the reference's
+own width.
+
+Reference-first geometry: `docs/ui-references/rag-workbench-master-reference-dark.png`
+(1254x856) shows navigation, conversation, "Retrieved Sources" (~335px) and the
+document viewer side by side, and `research-ui-reference-dark-v1.png`
+(1586x992) shows the same composition with wider panes. The previous shell only
+produced four panes above 1384px of content, so its own reference width fell
+back to a contextual overlay. Fixed:
+
+- Pane limits follow the reference rails (sources 300-400px, default 332;
+  document 272-560px, default 400) and the research column minimum is 430px.
+- `deriveEffectivePaneWidths` lets the sources rail keep its preferred width
+  while the document pane narrows toward its minimum, and `WorkbenchLayout`
+  feeds those effective widths into the CSS tracks, so the rendered geometry
+  always matches the mode decision instead of overflowing.
+- Presentation ladder: four panes from ~1254px, context dock for wide-but-short
+  viewports (its Sources/Document tab switcher remains covered), contextual
+  modal surface at 1024px or below the height floor, drawer at 1024px,
+  single-surface below 640px.
+- Real drift fixed while updating the specs: `ContextPanel` hardcoded the pane
+  reset/fallback widths (304/440) instead of the documented limits; both now
+  read `WORKBENCH_PANE_LIMITS`.
+
+Truthfulness: the composition renders the real SourcesPane and the real
+readers (Structured / Normalized text / manifest-gated PDF) with real
+citations, scores, sections and page markers where the data defines them. The
+reference's paper preview and page-level navigation correspond to an official
+PDF representation this corpus does not admit (the live path is an explicit
+`DERIVED_PDF`), so those are omitted rather than fabricated, and the document
+pane keeps its real representation tabs.
+
+Validation: new hermetic spec `frontend/e2e/ui-004-source-document.spec.ts`
+(3 tests) asserts the four-pane mode at 1440 and at the 1254 reference width,
+the sources rail listing the answer's real sources, and zero body/root
+horizontal overflow at 1254/1280/1440/1024/390, with screenshots captured under
+the git-ignored `frontend/test-results/ui-004/`. Contract updates in
+`v5-06-layout.spec.ts` (reference geometry, dock at the wide-but-short target,
+resizer limits/delta/reset) and `v5-03-sources.spec.ts` (the pane switcher is
+conditional because four-pane shows both panes) each carry a comment citing the
+reference or contract they follow. Frontend: 70 files / 398 tests, `tsc` clean,
+production build passed. Browser gates: Chromium 128 passed / 2 intentional
+skips / 0 failed and Firefox 128 passed / 2 intentional skips / 0 failed
+(baseline 125/2; +3 is the new spec). Nine-reference receipt unchanged at
+15/15. Backend untouched, so its 969-test baseline stands.
+
+Exact next task from the master graph: UI-005.
+
 ## API-005 inspection metadata (2026-09-21)
 
 API-005 is complete. `POST /retrieval/inspect` (existing endpoint, public,

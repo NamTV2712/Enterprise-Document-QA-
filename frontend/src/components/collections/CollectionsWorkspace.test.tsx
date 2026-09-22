@@ -4,11 +4,14 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { CollectionsWorkspace, collectionItemFocusId } from "./CollectionsWorkspace";
 import { LocaleProvider } from "../../lib/i18n";
 import {
+  addCollectionNote,
   ApiError,
   deleteCollection,
   exportCollection,
   getCollection,
+  listCollectionActivity,
   listCollectionItems,
+  listCollectionNotes,
   listCollections,
   updateCollection,
 } from "../../lib/api";
@@ -34,12 +37,16 @@ vi.mock("../../lib/api", async (importOriginal) => {
     exportCollection: vi.fn(),
     createCollection: vi.fn(),
     addCollectionItem: vi.fn(),
+    addCollectionNote: vi.fn(),
   };
 });
 
 const listCollectionsMock = vi.mocked(listCollections);
 const getCollectionMock = vi.mocked(getCollection);
 const listItemsMock = vi.mocked(listCollectionItems);
+const listNotesMock = vi.mocked(listCollectionNotes);
+const listActivityMock = vi.mocked(listCollectionActivity);
+const addNoteMock = vi.mocked(addCollectionNote);
 const updateCollectionMock = vi.mocked(updateCollection);
 const deleteCollectionMock = vi.mocked(deleteCollection);
 const exportCollectionMock = vi.mocked(exportCollection);
@@ -81,25 +88,49 @@ function listResponse(items: CollectionRecord[], total = items.length): Collecti
   return { items, total, page: 1, page_size: 25 };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+async function selectDetailTab(rail: HTMLElement, name: "Notes" | "Activity" | "Settings") {
+  await waitFor(() => expect(within(rail).queryByText("Reading items…")).toBeNull());
+  const tab = within(rail).getByRole("tab", { name });
+  fireEvent.click(tab);
+  await waitFor(() => expect(tab).toHaveAttribute("aria-selected", "true"));
+}
+
 function renderWorkspace(props: Partial<Parameters<typeof CollectionsWorkspace>[0]> = {}) {
   const onSelectCollection = vi.fn();
   const onOpenDocument = vi.fn<(target: DocumentWorkspaceTarget) => void>();
   const onOpenEvidence = vi.fn<(source: Source, returnFocusId: string) => void>();
   const onOpenMessage = vi.fn();
-  render(
+  const view = (selectedCollectionId: string | null) => (
     <LocaleProvider>
       <CollectionsWorkspace
-        selectedCollectionId={null}
         onSelectCollection={onSelectCollection}
         onOpenDocument={onOpenDocument}
         onOpenEvidence={onOpenEvidence}
         onOpenMessage={onOpenMessage}
         librarySlot={<input id="library-search-input" type="search" aria-label="Search saved conversations" />}
         {...props}
+        selectedCollectionId={selectedCollectionId}
       />
-    </LocaleProvider>,
+    </LocaleProvider>
   );
-  return { onSelectCollection, onOpenDocument, onOpenEvidence, onOpenMessage };
+  const rendered = render(view(props.selectedCollectionId ?? null));
+  return {
+    onSelectCollection,
+    onOpenDocument,
+    onOpenEvidence,
+    onOpenMessage,
+    rerenderSelection: (collectionId: string | null) => rendered.rerender(view(collectionId)),
+  };
 }
 
 beforeEach(() => {
@@ -109,10 +140,15 @@ beforeEach(() => {
   listCollectionsMock.mockReset();
   getCollectionMock.mockReset();
   listItemsMock.mockReset();
+  listNotesMock.mockReset();
+  listActivityMock.mockReset();
+  addNoteMock.mockReset();
   updateCollectionMock.mockReset();
   deleteCollectionMock.mockReset();
   exportCollectionMock.mockReset();
   listItemsMock.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 100 });
+  listNotesMock.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 100 });
+  listActivityMock.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 100 });
 });
 
 afterEach(() => {
@@ -359,8 +395,8 @@ describe("CollectionsWorkspace", () => {
     const current = record({ revision: 7 });
     listCollectionsMock.mockResolvedValue(listResponse([current]));
     getCollectionMock.mockResolvedValue(current);
-    let finishDelete: (() => void) | null = null;
-    deleteCollectionMock.mockImplementation(() => new Promise<void>((resolve) => {
+    let finishDelete: ((receipt: Awaited<ReturnType<typeof deleteCollection>>) => void) | null = null;
+    deleteCollectionMock.mockImplementation(() => new Promise((resolve) => {
       finishDelete = resolve;
     }));
     renderWorkspace({ selectedCollectionId: current.collection_id });
@@ -375,7 +411,13 @@ describe("CollectionsWorkspace", () => {
 
     expect(deleteCollectionMock).toHaveBeenCalledTimes(1);
     expect(deleteCollectionMock).toHaveBeenCalledWith("col-risk", 7);
-    finishDelete?.();
+    finishDelete?.({
+      operation: "delete_collection",
+      entity_type: "collection",
+      entity_id: "col-risk",
+      revision: 8,
+      deleted_at: "2026-09-22T12:00:00Z",
+    });
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Delete collection?" })).toBeNull());
   });
 
@@ -387,7 +429,7 @@ describe("CollectionsWorkspace", () => {
     renderWorkspace({ selectedCollectionId: current.collection_id });
 
     const rail = await screen.findByRole("complementary", { name: /Risk Analysis/ });
-    fireEvent.click(within(rail).getByRole("tab", { name: "Settings" }));
+    await selectDetailTab(rail, "Settings");
     const deleteFromSettings = await waitFor(() =>
       within(rail).getByRole("button", { name: "Delete collection" }),
     );
@@ -413,5 +455,240 @@ describe("CollectionsWorkspace", () => {
     expect(within(dialog).getByText(/không thể tạo lại/)).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Huỷ" })).toHaveFocus();
     expect(within(dialog).getByRole("button", { name: "Xoá vĩnh viễn" })).toBeInTheDocument();
+  });
+
+  test("late A cannot replace cached B or a cleared selection", async () => {
+    const pendingA: Array<ReturnType<typeof deferred<CollectionRecord>>> = [];
+    const collectionB = record({ collection_id: "col-b", name: "Collection B" });
+    listCollectionsMock.mockResolvedValue(listResponse([collectionB]));
+    getCollectionMock.mockImplementation(() => {
+      const request = deferred<CollectionRecord>();
+      pendingA.push(request);
+      return request.promise;
+    });
+    const { rerenderSelection } = renderWorkspace({ selectedCollectionId: "col-a" });
+    await waitFor(() => expect(getCollectionMock).toHaveBeenCalledWith("col-a", expect.any(AbortSignal)));
+
+    rerenderSelection("col-b");
+    expect(await screen.findByRole("complementary", { name: /Collection B/ })).toBeInTheDocument();
+    const firstLifetimeCount = pendingA.length;
+    pendingA.slice(0, firstLifetimeCount).forEach((request) => {
+      request.resolve(record({ collection_id: "col-a", name: "Late Collection A" }));
+    });
+    await Promise.resolve();
+    expect(screen.getByRole("complementary", { name: /Collection B/ })).toBeInTheDocument();
+    expect(screen.queryByText("Late Collection A")).toBeNull();
+
+    rerenderSelection("col-a");
+    await waitFor(() => expect(pendingA.length).toBeGreaterThan(firstLifetimeCount));
+    rerenderSelection(null);
+    pendingA.slice(firstLifetimeCount).forEach((request) => {
+      request.resolve(record({ collection_id: "col-a", name: "Late after close" }));
+    });
+    await Promise.resolve();
+    expect(screen.queryByText("Late after close")).toBeNull();
+    expect(screen.getByText("Select a collection")).toBeInTheDocument();
+  });
+
+  test("an older A lifetime cannot overwrite a newer A lifetime", async () => {
+    const pendingA: Array<ReturnType<typeof deferred<CollectionRecord>>> = [];
+    const collectionB = record({ collection_id: "col-b", name: "Collection B" });
+    listCollectionsMock.mockResolvedValue(listResponse([collectionB]));
+    getCollectionMock.mockImplementation(() => {
+      const request = deferred<CollectionRecord>();
+      pendingA.push(request);
+      return request.promise;
+    });
+    const { rerenderSelection } = renderWorkspace({ selectedCollectionId: "col-a" });
+    await waitFor(() => expect(pendingA.length).toBeGreaterThan(0));
+    rerenderSelection("col-b");
+    await screen.findByRole("complementary", { name: /Collection B/ });
+    const firstLifetimeCount = pendingA.length;
+    rerenderSelection("col-a");
+    await waitFor(() => expect(pendingA.length).toBeGreaterThan(firstLifetimeCount));
+
+    pendingA.at(-1)?.resolve(record({ collection_id: "col-a", name: "Current Collection A" }));
+    expect(await screen.findByRole("complementary", { name: /Current Collection A/ })).toBeInTheDocument();
+    pendingA.slice(0, firstLifetimeCount).forEach((request) => {
+      request.resolve(record({ collection_id: "col-a", name: "Obsolete Collection A" }));
+    });
+    await Promise.resolve();
+    expect(screen.queryByText("Obsolete Collection A")).toBeNull();
+    expect(screen.getByRole("complementary", { name: /Current Collection A/ })).toBeInTheDocument();
+  });
+
+  test("old notes and activity cannot paint into another collection", async () => {
+    const collectionA = record({ collection_id: "col-a", name: "Collection A" });
+    const collectionB = record({ collection_id: "col-b", name: "Collection B" });
+    const notesA = deferred<Awaited<ReturnType<typeof listCollectionNotes>>>();
+    const activityA = deferred<Awaited<ReturnType<typeof listCollectionActivity>>>();
+    listCollectionsMock.mockResolvedValue(listResponse([collectionA, collectionB]));
+    listNotesMock.mockImplementation((collectionId) => collectionId === "col-a"
+      ? notesA.promise
+      : Promise.resolve({
+          items: [{ note_id: "note-b", collection_id: "col-b", text: "B note", revision: 1, created_at: "2026-09-22T10:00:00Z", updated_at: "2026-09-22T10:00:00Z" }],
+          total: 1,
+          page: 1,
+          page_size: 100,
+        }));
+    listActivityMock.mockImplementation((collectionId) => collectionId === "col-a"
+      ? activityA.promise
+      : Promise.resolve({
+          items: [{ activity_id: "act-b", collection_id: "col-b", entity_type: "collection", entity_id: "col-b", event_type: "collection_created", occurred_at: "2026-09-22T10:00:00Z" }],
+          total: 1,
+          page: 1,
+          page_size: 100,
+        }));
+    const { rerenderSelection } = renderWorkspace({ selectedCollectionId: "col-a" });
+    let rail = await screen.findByRole("complementary", { name: /Collection A/ });
+    await selectDetailTab(rail, "Notes");
+    await waitFor(() => expect(listNotesMock).toHaveBeenCalledWith("col-a", expect.anything(), expect.any(AbortSignal)));
+    rerenderSelection("col-b");
+    rail = await screen.findByRole("complementary", { name: /Collection B/ });
+    await selectDetailTab(rail, "Notes");
+    expect(await within(rail).findByText("B note")).toBeInTheDocument();
+    notesA.resolve({
+      items: [{ note_id: "note-a", collection_id: "col-a", text: "Late A note", revision: 1, created_at: "2026-09-22T10:00:00Z", updated_at: "2026-09-22T10:00:00Z" }],
+      total: 1,
+      page: 1,
+      page_size: 100,
+    });
+    await Promise.resolve();
+    expect(screen.queryByText("Late A note")).toBeNull();
+
+    rerenderSelection("col-a");
+    rail = await screen.findByRole("complementary", { name: /Collection A/ });
+    await selectDetailTab(rail, "Activity");
+    await waitFor(() => expect(listActivityMock).toHaveBeenCalledWith("col-a", expect.anything(), expect.any(AbortSignal)));
+    rerenderSelection("col-b");
+    rail = await screen.findByRole("complementary", { name: /Collection B/ });
+    await selectDetailTab(rail, "Activity");
+    expect(await within(rail).findByText("Collection created")).toBeInTheDocument();
+    activityA.resolve({
+      items: [{ activity_id: "act-a", collection_id: "col-a", entity_type: "note", entity_id: "note-a", event_type: "note_added", occurred_at: "2026-09-22T10:00:00Z" }],
+      total: 1,
+      page: 1,
+      page_size: 100,
+    });
+    await Promise.resolve();
+    expect(screen.queryByText("Note added")).toBeNull();
+  });
+
+  test("a late old mutation cannot replace B, clear its draft, or navigate away", async () => {
+    const collectionA = record({ collection_id: "col-a", name: "Collection A" });
+    const collectionB = record({ collection_id: "col-b", name: "Collection B" });
+    const noteWrite = deferred<Awaited<ReturnType<typeof addCollectionNote>>>();
+    listCollectionsMock.mockResolvedValue(listResponse([collectionA, collectionB]));
+    addNoteMock.mockReturnValue(noteWrite.promise);
+    const { onSelectCollection, rerenderSelection } = renderWorkspace({ selectedCollectionId: "col-a" });
+    let rail = await screen.findByRole("complementary", { name: /Collection A/ });
+    await selectDetailTab(rail, "Notes");
+    const draftA = await within(rail).findByLabelText("Add note");
+    fireEvent.change(draftA, { target: { value: "A draft" } });
+    fireEvent.click(within(rail).getByRole("button", { name: "Save note" }));
+    await waitFor(() => expect(addNoteMock).toHaveBeenCalledWith("col-a", { text: "A draft" }));
+
+    rerenderSelection("col-b");
+    rail = await screen.findByRole("complementary", { name: /Collection B/ });
+    await selectDetailTab(rail, "Notes");
+    const draftB = await within(rail).findByLabelText("Add note");
+    fireEvent.change(draftB, { target: { value: "B draft stays" } });
+    noteWrite.resolve({
+      note_id: "note-a",
+      collection_id: "col-a",
+      text: "A draft",
+      revision: 1,
+      created_at: "2026-09-22T10:00:00Z",
+      updated_at: "2026-09-22T10:00:00Z",
+    });
+    await Promise.resolve();
+
+    expect(screen.getByRole("complementary", { name: /Collection B/ })).toBeInTheDocument();
+    expect(draftB).toHaveValue("B draft stays");
+    expect(onSelectCollection).not.toHaveBeenCalled();
+  });
+
+  test("a late detail update cannot replace the newer selected collection", async () => {
+    const collectionA = record({ collection_id: "col-a", name: "Collection A", favorite: true });
+    const collectionB = record({ collection_id: "col-b", name: "Collection B", favorite: false });
+    const updateA = deferred<CollectionRecord>();
+    listCollectionsMock.mockResolvedValue(listResponse([collectionA, collectionB]));
+    updateCollectionMock.mockReturnValue(updateA.promise);
+    const { rerenderSelection } = renderWorkspace({ selectedCollectionId: "col-a" });
+    let rail = await screen.findByRole("complementary", { name: /Collection A/ });
+    fireEvent.click(within(rail).getByRole("button", { name: "Remove from favorites" }));
+    await waitFor(() => expect(updateCollectionMock).toHaveBeenCalledWith("col-a", { revision: 4, favorite: false }));
+
+    rerenderSelection("col-b");
+    rail = await screen.findByRole("complementary", { name: /Collection B/ });
+    updateA.resolve({ ...collectionA, name: "Late updated A", favorite: false, revision: 5 });
+    await Promise.resolve();
+
+    expect(rail).toBeInTheDocument();
+    expect(screen.queryByText("Late updated A")).toBeNull();
+  });
+
+  test("a late delete completion cannot navigate away from a newer selection", async () => {
+    const collectionA = record({ collection_id: "col-a", name: "Collection A" });
+    const collectionB = record({ collection_id: "col-b", name: "Collection B" });
+    const deleteA = deferred<Awaited<ReturnType<typeof deleteCollection>>>();
+    listCollectionsMock.mockResolvedValue(listResponse([collectionA, collectionB]));
+    deleteCollectionMock.mockReturnValue(deleteA.promise);
+    const { onSelectCollection, rerenderSelection } = renderWorkspace({ selectedCollectionId: "col-a" });
+    let rail = await screen.findByRole("complementary", { name: /Collection A/ });
+    fireEvent.click(within(rail).getByRole("button", { name: "Collection actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete collection" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Delete collection?" }))
+      .getByRole("button", { name: "Delete permanently" }));
+    await waitFor(() => expect(deleteCollectionMock).toHaveBeenCalledWith("col-a", 4));
+
+    rerenderSelection("col-b");
+    rail = await screen.findByRole("complementary", { name: /Collection B/ });
+    deleteA.resolve({
+      operation: "delete_collection",
+      entity_type: "collection",
+      entity_id: "col-a",
+      revision: 5,
+      deleted_at: "2026-09-22T12:00:00Z",
+    });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Delete collection?" })).toBeNull());
+
+    expect(rail).toBeInTheDocument();
+    expect(onSelectCollection).not.toHaveBeenCalledWith(null);
+  });
+
+  test("a failed old selection cannot publish an error under B", async () => {
+    const pendingA: Array<ReturnType<typeof deferred<CollectionRecord>>> = [];
+    const collectionB = record({ collection_id: "col-b", name: "Collection B" });
+    listCollectionsMock.mockResolvedValue(listResponse([collectionB]));
+    getCollectionMock.mockImplementation(() => {
+      const request = deferred<CollectionRecord>();
+      pendingA.push(request);
+      return request.promise;
+    });
+    const { rerenderSelection } = renderWorkspace({ selectedCollectionId: "col-a" });
+    await waitFor(() => expect(pendingA.length).toBeGreaterThan(0));
+    rerenderSelection("col-b");
+    const rail = await screen.findByRole("complementary", { name: /Collection B/ });
+    pendingA.forEach((request) => request.reject(new ApiError("Old A failed", 503)));
+    await Promise.resolve();
+
+    expect(within(rail).queryByRole("alert")).toBeNull();
+    expect(screen.queryByText("Old A failed")).toBeNull();
+  });
+
+  test("aborted and failed old reads do not own B loading or error state", async () => {
+    const collectionB = record({ collection_id: "col-b", name: "Collection B" });
+    listCollectionsMock.mockResolvedValue(listResponse([collectionB]));
+    getCollectionMock.mockImplementation((_collectionId, signal) => new Promise<CollectionRecord>((_resolve, reject) => {
+      signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+    }));
+    const { rerenderSelection } = renderWorkspace({ selectedCollectionId: "col-a" });
+    await waitFor(() => expect(getCollectionMock).toHaveBeenCalledTimes(1));
+    rerenderSelection("col-b");
+
+    const rail = await screen.findByRole("complementary", { name: /Collection B/ });
+    expect(within(rail).queryByText("Reading the collection…")).toBeNull();
+    expect(within(rail).queryByRole("alert")).toBeNull();
   });
 });

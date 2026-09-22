@@ -119,6 +119,14 @@ export function CollectionsWorkspace({
   const selectionEpoch = useRef(0);
   const selectionController = useRef<AbortController | null>(null);
   const deleteInFlight = useRef(false);
+  const selectionLifetimeRef = useRef({ id: selectedCollectionId, generation: 0 });
+  if (selectionLifetimeRef.current.id !== selectedCollectionId) {
+    selectionLifetimeRef.current = {
+      id: selectedCollectionId,
+      generation: selectionLifetimeRef.current.generation + 1,
+    };
+  }
+  const selectionLifetime = selectionLifetimeRef.current.generation;
 
   const favoritesOnly = tab === "favorites";
 
@@ -174,6 +182,10 @@ export function CollectionsWorkspace({
   // The selection can come from a deep link that is not on the current page, so
   // it is read directly and guarded against the page's own list responses.
   const loadSelection = useCallback(async () => {
+    const epoch = ++selectionEpoch.current;
+    selectionController.current?.abort();
+    selectionController.current = null;
+    setSelectionLoading(false);
     if (!selectedCollectionId) {
       setSelected(null);
       setSelectionFailure(null);
@@ -185,25 +197,33 @@ export function CollectionsWorkspace({
       setSelectionFailure(null);
       return;
     }
-    const epoch = ++selectionEpoch.current;
-    selectionController.current?.abort();
     const controller = new AbortController();
     selectionController.current = controller;
     setSelectionLoading(true);
+    setSelectionFailure(null);
     try {
       const record = await getCollection(selectedCollectionId, controller.signal);
-      if (selectionEpoch.current !== epoch) return;
+      if (
+        selectionEpoch.current !== epoch
+        || selectionLifetimeRef.current.generation !== selectionLifetime
+      ) return;
       setSelected(record);
       setSelectionFailure(null);
     } catch (error) {
-      if (selectionEpoch.current !== epoch) return;
+      if (
+        selectionEpoch.current !== epoch
+        || selectionLifetimeRef.current.generation !== selectionLifetime
+      ) return;
       if ((error as { name?: string })?.name === "AbortError") return;
       setSelected(null);
       setSelectionFailure(describeCollectionFailure(error, vi));
     } finally {
-      if (selectionEpoch.current === epoch) setSelectionLoading(false);
+      if (
+        selectionEpoch.current === epoch
+        && selectionLifetimeRef.current.generation === selectionLifetime
+      ) setSelectionLoading(false);
     }
-  }, [collections, selectedCollectionId, vi]);
+  }, [collections, selectedCollectionId, selectionLifetime, vi]);
 
   useEffect(() => {
     void loadSelection();
@@ -336,7 +356,7 @@ export function CollectionsWorkspace({
         await deleteCollection(collection.collection_id, collection.revision);
         setDeleteTarget(null);
         setNotice(vi ? `Đã xoá “${collection.name}”.` : `Deleted “${collection.name}”.`);
-        if (selectedCollectionId === collection.collection_id) {
+        if (selectionLifetimeRef.current.id === collection.collection_id) {
           setSelected(null);
           onSelectCollection(null);
         }
@@ -346,7 +366,7 @@ export function CollectionsWorkspace({
         if (described.kind === "gone") {
           setDeleteTarget(null);
           setNotice(vi ? "Bộ sưu tập đã bị xoá trước đó." : "The collection was already deleted.");
-          if (selectedCollectionId === collection.collection_id) {
+          if (selectionLifetimeRef.current.id === collection.collection_id) {
             setSelected(null);
             onSelectCollection(null);
           }
@@ -359,7 +379,7 @@ export function CollectionsWorkspace({
         setDeleteSubmitting(false);
       }
     },
-    [deleteTarget, loadCollections, onSelectCollection, selectedCollectionId, vi],
+    [deleteTarget, loadCollections, onSelectCollection, vi],
   );
 
   const handleExport = useCallback(
@@ -589,17 +609,23 @@ export function CollectionsWorkspace({
           </div>
 
           <CollectionDetail
+            key={`collection-detail:${selectionLifetime}`}
             vi={vi}
-            collection={selected}
+            collection={selected?.collection_id === selectedCollectionId ? selected : null}
             loading={selectionLoading}
             failure={selectionFailure}
             now={now}
             onClose={() => onSelectCollection(null)}
             onReload={() => {
+              if (selectionLifetimeRef.current.generation !== selectionLifetime) return;
               void loadSelection();
               void loadCollections();
             }}
             onChanged={(updated) => {
+              if (
+                selectionLifetimeRef.current.generation !== selectionLifetime
+                || selectionLifetimeRef.current.id !== updated.collection_id
+              ) return;
               setSelected(updated);
               void loadCollections();
             }}
@@ -611,7 +637,9 @@ export function CollectionsWorkspace({
             onRename={() => {
               if (selected) openRename(selected);
             }}
-            onExportRequested={(message) => setNotice(message)}
+            onExportRequested={(message) => {
+              if (selectionLifetimeRef.current.generation === selectionLifetime) setNotice(message);
+            }}
             returnFocusIdFor={collectionItemFocusId}
           />
         </div>

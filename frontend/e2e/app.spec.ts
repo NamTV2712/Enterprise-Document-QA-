@@ -235,7 +235,7 @@ test("answer can be bookmarked and found through the Library filter", async ({ p
 
   await openLibrary(page);
   await page.getByRole("button", { name: "Bookmarked answers" }).click();
-  await expect(page.getByText(/Apple's total net sales were/).first()).toBeVisible();
+  await expect(page.getByText(/Apple's filing says the company faces competition risks/).first()).toBeVisible();
 });
 
 test("evidence panel search filters excerpts and keeps source numbers", async ({ page }) => {
@@ -269,8 +269,8 @@ test("evidence excerpt copy writes citation context to the clipboard", async ({
   await askQuestion(page, "What was Apple's total net sales in fiscal year 2025?");
   await page.getByRole("button", { name: "Open 2 sources", exact: true }).click();
 
-  await page.getByRole("button", { name: "Copy", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Copied", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Copy excerpt 1 with citation", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Copied excerpt 1", exact: true })).toBeVisible();
   if (!isFirefox) {
     const clipboard = await page.evaluate(() => navigator.clipboard.readText());
     expect(clipboard).toContain("[Source 1] AAPL 10-K (filed 2025-10-31)");
@@ -396,6 +396,10 @@ test("conversation survives a full page reload through IndexedDB", async ({ page
 
   await page.reload();
   await expect(page.getByText("Research ready")).toBeVisible();
+  // Reload restores the last Library route. Reopen the real conversation
+  // surface before checking that the persisted answer can be read again.
+  await openLibrary(page);
+  await page.getByRole("button", { name: "Open research" }).first().click();
   await expect(page.getByText(LONG_ANSWER.split("\n")[0]).first()).toBeVisible();
 });
 
@@ -465,7 +469,7 @@ test("citation deep links survive reload and Markdown export keeps evidence anch
   await expect(page.getByText(LONG_ANSWER.split("\n")[0]).first()).toBeVisible();
 
   await page.getByRole("button", { name: "Open source 1" }).first().click();
-  await expect(page).toHaveURL(/#evidence=assistant-[A-Za-z0-9_-]+-0$/);
+  await expect(page).toHaveURL(/#evidence=assistant-[A-Za-z0-9_-]+-0\?/);
   const deepLink = page.url();
 
   await page.reload();
@@ -670,14 +674,14 @@ test("unreadable library data survives load and later operations untouched", asy
   // The unreadable payload is reported and the legacy copy still shows.
   await openLibrary(page);
   await expect(page.getByText("Legacy copy")).toBeVisible();
-  await expect(page.getByText(/could not be read/i)).toBeVisible();
+  await expect(page.locator(".conversation-library .library-warning").filter({ hasText: /could not be read/i }).first()).toBeVisible();
 
   // Ask a question in a new conversation; the corrupt bytes must survive.
-  await page.getByRole("button", { name: "Research", exact: true }).click();
+  await page.getByRole("link", { name: "Research", exact: true }).click();
   await askQuestion(page, "What was Apple's total net sales in fiscal year 2025?");
   await expect(page.getByText(LONG_ANSWER.split("\n")[0]).first()).toBeVisible();
   await openLibrary(page);
-  await expect(page.getByText(/could not be read/i)).toBeVisible();
+  await expect(page.locator(".conversation-library .library-warning").filter({ hasText: /could not be read/i }).first()).toBeVisible();
 
   const stored = await page.evaluate(() => localStorage.getItem("sec_qa_library_v3"));
   expect(stored).toBe(corrupt);

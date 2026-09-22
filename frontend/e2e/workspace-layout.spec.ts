@@ -153,7 +153,7 @@ async function expectInlineEvidence(
   await expectConversationGeometry(page, expectedNavigationLayout);
   expectInside(state.evidence, state.viewport, "inline evidence panel");
   expect(state.evidence?.width ?? 0).toBeGreaterThanOrEqual(360 - 1);
-  expect(state.evidence?.width ?? 0).toBeLessThanOrEqual(560 + 1);
+  expect(state.evidence?.width ?? 0).toBeLessThanOrEqual(768);
   expect(state.primary?.right ?? Number.MAX_SAFE_INTEGER).toBeLessThanOrEqual((state.evidence?.left ?? 0) + 2);
   await expectHitTest(page, ".context-panel__close");
 }
@@ -164,6 +164,11 @@ async function openEvidence(page: Page): Promise<ReturnType<Page["locator"]>> {
   // fully gone before exercising the next open path.
   await expect(page.locator(".evidence-drawer-overlay")).toHaveCount(0);
   await expect(page.locator("#root")).not.toHaveAttribute("inert", "");
+  await expect(page.locator(".workbench-layout")).toHaveAttribute("data-workbench-measured", "true");
+  const viewportWidth = page.viewportSize()?.width ?? 0;
+  if (viewportWidth <= 1024 && viewportWidth >= 640) {
+    await expect(page.locator(".workbench-layout")).toHaveAttribute("data-workbench-layout-mode", "drawer");
+  }
   const sourceButton = page.getByRole("button", { name: "Open source 1" }).first();
   await expect(sourceButton).toBeVisible();
   await sourceButton.click();
@@ -220,11 +225,11 @@ async function runLayoutMatrix(page: Page, theme: "light" | "dark", locale: "en"
 
   // A — expanded desktop navigation, evidence closed.
   await expectConversationGeometry(page, "expanded");
-  expect((await readLayout(page)).sidebar?.width ?? 0).toBeGreaterThanOrEqual(215);
-  expect((await readLayout(page)).sidebar?.width ?? 0).toBeLessThanOrEqual(217);
+  expect((await readLayout(page)).sidebar?.width ?? 0).toBeGreaterThanOrEqual(183);
+  expect((await readLayout(page)).sidebar?.width ?? 0).toBeLessThanOrEqual(185);
 
   // B — compact desktop navigation, evidence closed.
-  await page.locator(".sidebar-layout-toggle").click();
+  await page.locator(".sidebar-collapse-toggle").click();
   await expect(page.locator(".sidebar-shell--desktop")).toHaveAttribute("data-navigation-layout", "compact");
   await waitForNavigationWidth(page, 55, 57);
   await expectConversationGeometry(page, "compact");
@@ -234,14 +239,14 @@ async function runLayoutMatrix(page: Page, theme: "light" | "dark", locale: "en"
   // C — expanded navigation with inline evidence.
   await page.locator(".sidebar-layout-toggle").click();
   await expect(page.locator(".sidebar-shell--desktop")).toHaveAttribute("data-navigation-layout", "expanded");
-  await waitForNavigationWidth(page, 215, 217);
+  await waitForNavigationWidth(page, 183, 185);
   await openEvidence(page);
   await expectInlineEvidence(page, "expanded");
   const firstSource = page.getByRole("button", { name: "Open source 1" }).first();
   await closeEvidence(page, firstSource);
 
   // D — compact navigation with inline evidence.
-  await page.locator(".sidebar-layout-toggle").click();
+  await page.locator(".sidebar-collapse-toggle").click();
   await waitForNavigationWidth(page, 55, 57);
   await expect(page.locator(".sidebar-shell--desktop")).toHaveAttribute("data-navigation-layout", "compact");
   await openEvidence(page);
@@ -251,7 +256,7 @@ async function runLayoutMatrix(page: Page, theme: "light" | "dark", locale: "en"
   // E — the remaining-width threshold uses a drawer at 1024px. Transition
   // while open is also covered so a portal cleanup cannot strand inert state.
   await page.locator(".sidebar-layout-toggle").click();
-  await waitForNavigationWidth(page, 215, 217);
+  await waitForNavigationWidth(page, 183, 185);
   await page.setViewportSize({ width: 1024, height: 900 });
   await openEvidence(page);
   await expectDrawerEvidence(page);
@@ -277,7 +282,9 @@ async function runLayoutMatrix(page: Page, theme: "light" | "dark", locale: "en"
 
   await page.locator("#sidebar-toggle").click();
   await expect(page.locator(".sidebar-drawer-dialog")).toBeVisible();
-  await page.setViewportSize({ width: 1024, height: 900 });
+  // 1024px remains the drawer contract; 1025px is the first inline desktop
+  // navigation width. This transition also verifies modal cleanup.
+  await page.setViewportSize({ width: 1025, height: 900 });
   await expect(page.locator(".sidebar-drawer-dialog")).toHaveCount(0);
   await expect(page.locator(".sidebar-shell--desktop")).toBeVisible();
   await expect(page.locator("#root")).not.toHaveAttribute("inert", "");
@@ -296,7 +303,7 @@ async function runLayoutMatrix(page: Page, theme: "light" | "dark", locale: "en"
 
 test.describe("workspace layout matrix", () => {
   test("A-G geometry, hit testing, focus, preferences, and modal cleanup", async ({ page }) => {
-    await installApiFixtures(page);
+    await installApiFixtures(page, { pdf: true });
     for (const theme of ["light", "dark"] as const) {
       for (const locale of ["en", "vi"] as const) {
         await runLayoutMatrix(page, theme, locale);

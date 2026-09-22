@@ -310,6 +310,56 @@ describe("useConversationLibrary request isolation", () => {
     expect(saved?.messages.some((message) => message.isStreaming)).toBe(false);
   });
 
+  it("does not let a queued completed-answer save erase a later bookmark after reload", async () => {
+    const record = makeRecord("conversation-bookmark-race", "session-bookmark-race", [
+      { id: "u-1", sender: "user", text: "What were net sales?" },
+    ]);
+    localStorage.setItem(V3_KEY, JSON.stringify({ envelopeVersion: 3, records: [record], tombstones: [] }));
+    localStorage.setItem("sec_qa_session_id", "session-bookmark-race");
+    localStorage.setItem("sec_qa_active_conversation_id", "conversation-bookmark-race");
+
+    const { store, rendered } = await freshHook();
+    await waitFor(() => expect(rendered.result.current.activeConversationId).toBe("conversation-bookmark-race"));
+    await waitFor(() => expect(
+      rendered.result.current.conversations.some((item) => item.id === "conversation-bookmark-race"),
+    ).toBe(true));
+
+    const queuedExchange = deferred<void>();
+    const originalMutate = store.mutateConversationRecord;
+    const mutateSpy = vi.spyOn(store, "mutateConversationRecord").mockImplementationOnce(async (conversationId, mutate) => {
+      await queuedExchange.promise;
+      return originalMutate(conversationId, mutate);
+    });
+
+    act(() => {
+      rendered.result.current.updateMessages((previous) => [
+        ...previous,
+        { id: "a-1", sender: "assistant", text: "Net sales were reported.", status: "completed" },
+      ]);
+    });
+    await waitFor(() => expect(mutateSpy).toHaveBeenCalledTimes(1));
+
+    let bookmarkResult!: Awaited<ReturnType<typeof rendered.result.current.toggleConversationBookmark>>;
+    await act(async () => {
+      bookmarkResult = await rendered.result.current.toggleConversationBookmark("conversation-bookmark-race", "a-1");
+    });
+    expect(bookmarkResult.status).not.toBe("failed");
+    await waitFor(() => expect(rendered.result.current.bookmarkedMessageIds).toEqual(["a-1"]));
+
+    await act(async () => {
+      queuedExchange.resolve();
+    });
+    await waitFor(() => expect(
+      store.listConversations().find((item) => item.id === "conversation-bookmark-race")?.bookmarkedMessageIds,
+    ).toEqual(["a-1"]));
+
+    rendered.unmount();
+    const reloaded = await freshHook();
+    await waitFor(() => expect(reloaded.rendered.result.current.activeConversationId).toBe("conversation-bookmark-race"));
+    expect(reloaded.rendered.result.current.bookmarkedMessageIds).toEqual(["a-1"]);
+    expect(reloaded.rendered.result.current.messages.some((message) => message.id === "a-1")).toBe(true);
+  });
+
   it("saves the normalized partial answer of the old conversation when starting a new one", async () => {
     const { rendered } = await freshHook();
 

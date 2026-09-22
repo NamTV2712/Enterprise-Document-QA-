@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import App, { resolveDisplayedAnswerTarget, resolveEvidenceCommandTarget } from "./App";
@@ -22,6 +22,7 @@ vi.mock("./lib/api", () => ({
 
 describe("App request cancellation", () => {
   beforeEach(() => {
+    window.history.replaceState(null, "", "/");
     localStorage.clear();
     vi.clearAllMocks();
     apiMocks.checkHealth.mockResolvedValue({
@@ -66,6 +67,27 @@ describe("App request cancellation", () => {
     await Promise.resolve();
     expect(warnSpy).not.toHaveBeenCalled();
     warnSpy.mockRestore();
+  });
+
+  test("ignores a stale health/readiness response from an unmounted initialization", async () => {
+    let resolveStaleHealth: ((value: { status: string; pipeline_ready: boolean; memory: { active_sessions: number; total_turns: number } }) => void) | undefined;
+    apiMocks.checkHealth.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        resolveStaleHealth = resolve;
+      }),
+    );
+
+    const firstMount = render(<App />);
+    await waitFor(() => expect(apiMocks.checkHealth).toHaveBeenCalledTimes(1));
+    firstMount.unmount();
+
+    render(<App />);
+    await waitFor(() => expect(apiMocks.checkHealth).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      resolveStaleHealth?.({ status: "ok", pipeline_ready: false, memory: { active_sessions: 99, total_turns: 99 } });
+    });
+
+    expect(await screen.findByText("Research ready")).toBeInTheDocument();
   });
 
   test("initialization shares one abort signal across health and metadata requests", async () => {
@@ -130,7 +152,7 @@ describe("App request cancellation", () => {
     ).toHaveTextContent(longAnswer);
 
     fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
-    fireEvent.click(screen.getByRole("button", { name: "Research" }));
+    fireEvent.click(screen.getByRole("link", { name: "Research" }));
     expect(
       await screen.findByText("Ask questions. Verify every answer."),
     ).toBeInTheDocument();
@@ -140,7 +162,7 @@ describe("App request cancellation", () => {
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
-    fireEvent.click(screen.getByRole("button", { name: "Current conversation" }));
+    fireEvent.click(screen.getByRole("link", { name: "Chat" }));
     expect(
       await screen.findByRole(
         "article",
@@ -291,13 +313,13 @@ describe("App request cancellation", () => {
     });
   });
 
-  test("sidebar is a stable navigation surface without a resizer or duplicate Library", async () => {
+  test("sidebar is a stable navigation surface without a resizer or duplicate Collections", async () => {
     render(<App />);
     await screen.findByText("Research ready");
 
     expect(screen.queryByRole("separator", { name: /Resize/i })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
-    expect(screen.getAllByRole("button", { name: /Library/i })).toHaveLength(1);
+    expect(screen.getAllByRole("link", { name: /Collections/i })).toHaveLength(1);
   });
 
   test("research scope is controlled next to the composer", async () => {
@@ -358,8 +380,8 @@ describe("App request cancellation", () => {
     render(<App />);
     await screen.findByText("Research ready");
     fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
-    expect(screen.getByText("Retrieval")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Retrieval Lab" })).toBeInTheDocument();
+    expect(screen.getByText("Build")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Retrieval Lab" })).toBeInTheDocument();
   });
 
   test("sends the shared interface language without changing the evidence request", async () => {
@@ -439,6 +461,36 @@ describe("App request cancellation", () => {
     setItemSpy.mockRestore();
   });
 
+  test("changing routes while a request is pending aborts the stream and ignores late events", async () => {
+    let streamSignal: AbortSignal | undefined;
+    let emitLate: (() => void) | undefined;
+    apiMocks.streamQuery.mockImplementation(
+      async (_payload, onEvent, _onError, signal?: AbortSignal) => {
+        streamSignal = signal;
+        onEvent({ type: "token", data: "Partial before route change" });
+        await new Promise<void>((resolve) => {
+          emitLate = () => {
+            onEvent({ type: "token", data: "Late event after route change" });
+            resolve();
+          };
+          signal?.addEventListener("abort", () => undefined, { once: true });
+        });
+      },
+    );
+
+    render(<App />);
+    await screen.findByText("Research ready");
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Pending route query" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send question" }));
+    await screen.findByText("Partial before route change");
+
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
+    fireEvent.click(screen.getByRole("link", { name: "Research" }));
+    await waitFor(() => expect(streamSignal?.aborted).toBe(true));
+    emitLate?.();
+    await waitFor(() => expect(screen.queryByText("Late event after route change")).not.toBeInTheDocument());
+  });
+
   test("comparative analysis can be stopped while the request is pending", async () => {
     let querySignal: AbortSignal | undefined;
     apiMocks.queryDecomposed.mockImplementation(
@@ -497,7 +549,7 @@ describe("App request cancellation", () => {
     expect(await screen.findByText("Full historical answer")).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Start a new conversation" }),
+      screen.getByRole("button", { name: "New Research" }),
     );
     expect(
       screen.getByRole("dialog", { name: "Start a new conversation?" }),
@@ -508,7 +560,7 @@ describe("App request cancellation", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Start a new conversation" }),
+      screen.getByRole("button", { name: "New Research" }),
     );
     const dialog = screen.getByRole("dialog", { name: "Start a new conversation?" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Start new conversation" }));
@@ -519,6 +571,167 @@ describe("App request cancellation", () => {
     expect(apiMocks.deleteSession).not.toHaveBeenCalled();
   });
 });
+
+describe("conversation modes", () => {
+  beforeEach(() => {
+    window.history.replaceState(null, "", "/");
+    localStorage.clear();
+    vi.clearAllMocks();
+    apiMocks.checkHealth.mockResolvedValue({
+      status: "ok",
+      pipeline_ready: true,
+      memory: { active_sessions: 0, total_turns: 0 },
+    });
+    apiMocks.getSupportedTickers.mockResolvedValue({
+      tickers: ["AAPL", "MSFT"],
+      sections: ["business", "risk_factors", "mdna", "financial_statements", "financial_table"],
+    });
+    apiMocks.getSessionHistory.mockResolvedValue({ session_id: "test-session", turns: [] });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  test("the chat route presents the chat composition and the research route its own", async () => {
+    window.history.replaceState(null, "", "/chat");
+    const chat = render(<App />);
+    expect(await screen.findByText("Research ready")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Chat" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Research" })).toBeNull();
+    chat.unmount();
+
+    window.history.replaceState(null, "", "/research?mode=conversation");
+    render(<App />);
+    expect(await screen.findByText("Research ready")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Research" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Chat" })).toBeNull();
+  });
+
+  test("a question asked on the chat page records the chat mode with its request", async () => {
+    window.history.replaceState(null, "", "/chat");
+    apiMocks.streamQuery.mockImplementation(async (_payload, onEvent) => {
+      onEvent({ type: "token", data: "Revenue grew [Source 1]." });
+      onEvent({ type: "done", data: { answer_language: "en" } });
+    });
+
+    render(<App />);
+    await screen.findByText("Research ready");
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "What was Apple revenue?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send question" }));
+
+    await waitFor(() => {
+      const raw = localStorage.getItem("sec_qa_library_v3");
+      expect(raw).toContain("\"mode\":\"chat\"");
+    });
+    const envelope = JSON.parse(localStorage.getItem("sec_qa_library_v3") ?? "{}");
+    const record = envelope.records[0];
+    expect(record.mode).toBe("chat");
+    expect(record.messages[0].requestSnapshot).toMatchObject({ mode: "chat" });
+  });
+
+  test("opening a saved research conversation never regenerates its answer", async () => {
+    seedStoredConversation({ mode: "research" });
+    window.history.replaceState(null, "", "/chat");
+
+    render(<App />);
+    await screen.findByText("Research ready");
+    apiMocks.streamQuery.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
+    fireEvent.click(screen.getByRole("link", { name: "Collections" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Conversations" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Open recent research: Stored research question/ }),
+    );
+
+    // The stored conversation opens in the research family and its answer is
+    // read from storage; the request path is never entered again.
+    expect(
+      await screen.findByRole("article", { name: "Research assistant response" }, { timeout: 5_000 }),
+    ).toHaveTextContent("Stored research answer");
+    expect(screen.getByRole("heading", { name: "Research" })).toBeTruthy();
+    expect(window.location.pathname).toBe("/research/conversation-stored");
+    expect(apiMocks.streamQuery).not.toHaveBeenCalled();
+    expect(apiMocks.queryDecomposed).not.toHaveBeenCalled();
+  });
+
+  test("a chat conversation keeps its chat composition when opened from a research URL", async () => {
+    seedStoredConversation({ mode: "chat" });
+    window.history.replaceState(null, "", "/research/conversation-stored");
+
+    render(<App />);
+
+    // The stored mode wins over the URL family: the answer is presented in
+    // the composition it was created in, and no new request is issued.
+    expect(
+      await screen.findByRole("article", { name: "Research assistant response" }, { timeout: 5_000 }),
+    ).toHaveTextContent("Stored research answer");
+    expect(screen.getByRole("heading", { name: "Chat" })).toBeTruthy();
+    expect(apiMocks.streamQuery).not.toHaveBeenCalled();
+  });
+});
+
+function seedStoredConversation({ mode }: { mode: "chat" | "research" }) {
+  const now = Date.now();
+  localStorage.setItem(
+    "sec_qa_library_v3",
+    JSON.stringify({
+      envelopeVersion: 4,
+      records: [
+        {
+          schemaVersion: 4,
+          id: "conversation-stored",
+          sessionId: "session-stored",
+          title: "Stored research question",
+          titleMode: "auto",
+          revision: 2,
+          createdAt: now - 1_000,
+          updatedAt: now,
+          draft: "",
+          bookmarkedMessageIds: [],
+          tags: [],
+          notes: [],
+          variants: [],
+          mode,
+          messages: [
+            {
+              id: "user-stored",
+              sender: "user",
+              text: "Stored research question",
+              requestSnapshot: {
+                ticker: "AAPL",
+                section: "risk_factors",
+                topK: 5,
+                enableComparative: false,
+                answerLanguage: "en",
+                mode,
+              },
+            },
+            {
+              id: "answer-stored",
+              sender: "assistant",
+              text: "Stored research answer [Source 1].",
+              status: "completed",
+              sources: [
+                {
+                  citation: "AAPL 10-K [Source 1]",
+                  chunk_id: "chunk-stored",
+                  document_id: "doc-stored",
+                  text_preview: "Stored excerpt",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      tombstones: [],
+    }),
+  );
+  localStorage.setItem("sec_qa_session_id", "session-stored");
+}
 
 describe("displayed answer command identity", () => {
   const messages: Message[] = [

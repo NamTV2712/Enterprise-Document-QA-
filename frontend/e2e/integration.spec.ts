@@ -67,6 +67,18 @@ test("health readiness and ticker discovery over real HTTP", async ({ page }) =>
   await page.keyboard.press("Escape");
 });
 
+test("retrieval lab receives a provider-free trace from the real harness route", async ({ page }) => {
+  await setup(page);
+  await page.getByRole("button", { name: /Open navigation|Expand navigation/ }).click();
+  await page.getByRole("link", { name: "Retrieval Lab" }).click();
+  await expect(page.getByRole("heading", { name: "Retrieval", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Run retrieval" }).click();
+  await expect(page.getByTestId("retrieval-analyst-summary")).toBeVisible();
+  await expect(page.getByText(/provider-free/i).first()).toBeVisible();
+  await expect(page.getByText(/candidate/i).first()).toBeVisible();
+  await expect(page.getByText(/AAPL/i).first()).toBeVisible();
+});
+
 test("asked question streams cited answer over real SSE with sources", async ({ page }) => {
   await setup(page);
   await askQuestion(page, "What was Apple total revenue?");

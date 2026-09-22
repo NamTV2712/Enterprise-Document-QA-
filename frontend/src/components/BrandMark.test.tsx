@@ -21,7 +21,7 @@ describe("BrandMark", () => {
     expect(container.querySelectorAll("svg")).toHaveLength(4);
   });
 
-  test("uses a static decorative filing/search silhouette without a glow layer", () => {
+  test("uses a static decorative three-layer mark without a glow layer", () => {
     const { container } = render(<BrandMark size="xs" />);
     const mark = container.querySelector<HTMLElement>(".brand-mark");
     const svg = container.querySelector<SVGElement>("svg");
@@ -31,6 +31,8 @@ describe("BrandMark", () => {
     expect(svg).toHaveAttribute("aria-hidden", "true");
     expect(svg).not.toHaveAttribute("filter");
     expect(svg?.querySelector("animate, animateTransform, filter")).not.toBeInTheDocument();
-    expect(svg?.querySelectorAll('[stroke="currentColor"]')).toHaveLength(4);
+    expect(svg?.querySelectorAll("path")).toHaveLength(3);
+    expect(svg?.querySelectorAll('[stroke="currentColor"]')).toHaveLength(2);
+    expect(svg?.querySelectorAll('[stroke="var(--evidence-accent)"]')).toHaveLength(1);
   });
 });

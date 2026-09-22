@@ -111,6 +111,7 @@ describe("ChatMessage", () => {
     const answer = screen.getByText("The answer is grounded in the filing.");
     const sourceAction = screen.getByRole("button", { name: "Open 1 sources" });
     expect(answer.compareDocumentPosition(sourceAction) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(sourceAction).toBeVisible();
     expect(screen.queryByRole("button", { name: /Show 1 retrieved filing evidence excerpts/i })).not.toBeInTheDocument();
 
     fireEvent.click(sourceAction);
@@ -297,6 +298,38 @@ describe("ChatMessage", () => {
 
     expect(onSaveNote).toHaveBeenCalledWith("Verify the fiscal-year label.");
     expect(screen.getByText("Revenue was reported.")).toBeInTheDocument();
+  });
+
+  test("keeps bookmark and exact variant saving available from the visible overflow menu", () => {
+    const onToggleBookmark = vi.fn();
+    const onSaveVariant = vi.fn();
+    render(
+      <ChatMessage
+        message={{ id: "assistant-actions", sender: "assistant", text: "Revenue was reported." }}
+        variants={[{
+          id: "variant-actions",
+          originMessageId: "assistant-actions",
+          text: "Saved variant text.",
+          sources: [],
+          answerLanguage: "en",
+          status: "completed",
+          createdAt: 1,
+          updatedAt: 1,
+        }]}
+        onToggleBookmark={onToggleBookmark}
+        onSaveVariant={onSaveVariant}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Variant 1" }));
+    const moreActions = screen.getByLabelText("Secondary answer actions");
+    expect(moreActions).toBeVisible();
+    fireEvent.click(moreActions);
+    fireEvent.click(screen.getByRole("button", { name: "Bookmark this answer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save answer version" }));
+
+    expect(onToggleBookmark).toHaveBeenCalledTimes(1);
+    expect(onSaveVariant).toHaveBeenCalledWith({ messageId: "assistant-actions", variantId: "variant-actions" });
   });
 
   test("renders the request scope snapshot on a user question", () => {

@@ -43,6 +43,7 @@ test.describe("V4 document workspace shell", () => {
     await page.goto("/");
     await expect(page.getByRole("textbox", { name: "Research question" })).toBeEnabled();
     await askQuestion(page, "What are Apple's main business risks?");
+    await expect(page.locator(".workbench-layout")).toHaveAttribute("data-workbench-layout-mode", "drawer");
     await page.getByRole("button", { name: "Open source 1", exact: true }).first().click();
 
     await expect(page.getByRole("dialog", { name: "Evidence inspector" })).toBeVisible();

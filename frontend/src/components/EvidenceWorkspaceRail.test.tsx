@@ -129,7 +129,7 @@ describe("EvidenceWorkspaceRail", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  test("ignores a late reader response after the selected source changes", async () => {
+  test("rapid source switching ignores late reader responses from the previous source", async () => {
     let resolveFirst: (value: { text: string }) => void = () => undefined;
     let resolveSecond: (value: { text: string }) => void = () => undefined;
     const first = new Promise<{ text: string }>((resolve) => { resolveFirst = resolve; });

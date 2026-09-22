@@ -62,4 +62,69 @@ describe("OriginalDocumentReader", () => {
     fireEvent.click(screen.getByRole("button", { name: "Back to indexed excerpt" }));
     expect(onBack).toHaveBeenCalledTimes(1);
   });
+
+  test("switches to the exact normalized source and preserves the evidence mark", async () => {
+    manifestMock.mockResolvedValue({
+      document_id: "AAPL:fixture",
+      status: "available",
+      reason: null,
+      normalizer_version: "sec-viewer-text-v1",
+      source_set_revision: "set-1",
+      sources: [{ source_document_id: "source-1", role: "primary_filing", label: "Primary filing", status: "available", reason: null, document_revision: "doc-1", text_length: 40 }],
+    });
+    locationMock.mockResolvedValue({
+      chunk_id: "chunk-1",
+      chunk_text_hash: "hash-1",
+      document_id: "AAPL:fixture",
+      source_set_revision: "set-1",
+      matcher_version: "sec-viewer-location-v1",
+      status: "exact",
+      reason: null,
+      match_count: 1,
+      match_count_capped: false,
+      location: { source_document_id: "source-1", document_revision: "doc-1", method: "full_text_whitespace", start: 0, end: 8 },
+    });
+    contentMock.mockResolvedValue({
+      document_id: "AAPL:fixture",
+      source_document_id: "source-1",
+      source_set_revision: "set-1",
+      document_revision: "doc-1",
+      start: 0,
+      end: 8,
+      total_length: 8,
+      previous_start: null,
+      next_start: null,
+      segments: [{ text: "Risk text", evidence: true, search: false }],
+    });
+    const onLocationEvent = vi.fn();
+
+    render(<LocaleProvider><OriginalDocumentReader documentId="AAPL:fixture" indexedSource={{ citation: "AAPL source", text_preview: "Risk text", document_id: "AAPL:fixture", chunk_id: "chunk-1", chunk_text_hash: "hash-1" }} onBack={vi.fn()} onLocationEvent={onLocationEvent} /></LocaleProvider>);
+
+    expect(await screen.findByText("Evidence correspondence verified in this document representation.", { exact: true })).toBeInTheDocument();
+    expect(document.querySelector(".original-reader__evidence-match")).toBeInTheDocument();
+    expect(onLocationEvent).toHaveBeenCalledWith(expect.objectContaining({ state: "resolved" }));
+  });
+
+  test("shows a stale lookup error without clearing the selected reader context", async () => {
+    manifestMock.mockResolvedValue({
+      document_id: "AAPL:fixture",
+      status: "available",
+      reason: null,
+      normalizer_version: "sec-viewer-text-v1",
+      source_set_revision: "set-1",
+      sources: [{ source_document_id: "source-1", role: "primary_filing", label: "Primary filing", status: "available", reason: null, document_revision: "doc-1", text_length: 40 }],
+    });
+    locationMock.mockRejectedValue({ status: 409, code: "source_changed", message: "The original source set changed." });
+    contentMock.mockResolvedValue({
+      document_id: "AAPL:fixture", source_document_id: "source-1", source_set_revision: "set-1", document_revision: "doc-1", start: 0, end: 8, total_length: 8, previous_start: null, next_start: null,
+      segments: [{ text: "Risk text", evidence: false, search: false }],
+    });
+    const onLocationEvent = vi.fn();
+
+    render(<LocaleProvider><OriginalDocumentReader documentId="AAPL:fixture" indexedSource={{ citation: "AAPL source", text_preview: "Risk text", document_id: "AAPL:fixture", chunk_id: "chunk-1", chunk_text_hash: "hash-1" }} onBack={vi.fn()} onLocationEvent={onLocationEvent} /></LocaleProvider>);
+
+    expect(await screen.findByText("The source revision changed; the source remains selected but is not highlighted.", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("Risk text")).toBeInTheDocument();
+    expect(onLocationEvent).toHaveBeenCalledWith(expect.objectContaining({ state: "stale" }));
+  });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { COMMAND_REGISTRY } from "./commandRegistry";
 import { getWorkspaceNavItem, WORKSPACE_NAV_SECTIONS, WORKSPACE_VIEWS } from "./workspace";
+import { SHELL_NAVIGATION_SECTIONS } from "../app/routes";
 
 describe("workspace navigation registry", () => {
   test("exposes the exact four navigation groups and only real views", () => {
@@ -28,11 +29,10 @@ describe("workspace navigation registry", () => {
 
   test("derives navigation palette commands from the same registry", () => {
     const navigation = COMMAND_REGISTRY.filter((command) => command.kind === "navigation");
-    expect(navigation.map((command) => command.view)).toEqual(WORKSPACE_VIEWS);
-    expect(navigation.some((command) => String(command.view) === "research")).toBe(false);
-    expect(navigation.find((command) => command.view === "conversation")?.labelKey).toBe(
-      "nav.currentConversation",
-    );
+    const shellRoutes = SHELL_NAVIGATION_SECTIONS.flatMap((section) => section.items.map((item) => item.routeId));
+    expect(navigation.map((command) => command.routeId)).toEqual(shellRoutes);
+    expect(navigation.find((command) => command.routeId === "research")?.labelKey).toBe("nav.research");
+    expect(navigation.find((command) => command.routeId === "chat")?.labelKey).toBe("nav.chat");
   });
 
   test("keeps tool introductions bound to registered icon and description metadata", () => {

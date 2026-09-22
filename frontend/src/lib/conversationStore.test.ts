@@ -721,6 +721,32 @@ describe("conversation store repository", () => {
     expect(store.listConversations().map((record) => record.id)).toContain("conversation-fallback");
   });
 
+  it("notifies a tab about migrated storage changes even while a write failure is recoverable", async () => {
+    const store = await freshStore();
+    await store.loadConversationLibrary();
+    const listener = vi.fn();
+    const unsubscribe = store.subscribeConversationLibrary(listener);
+
+    window.dispatchEvent(new StorageEvent("storage", {
+      key: "sec_qa_library_v3",
+      newValue: JSON.stringify({ envelopeVersion: 4, records: [], tombstones: [] }),
+      storageArea: window.localStorage,
+    }));
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    const setItemSpy = breakLocalStorageWrites();
+    const idbWriteSpy = breakIdbTransactions(await openDb());
+    const record = store.createConversationRecord("conversation-storage-race", "session-storage-race", [
+      userMessage("u1", "Storage race question"),
+    ]);
+    const result = await store.saveConversationRecord(record);
+    expect(result.status).toBe("volatile");
+    expect(store.listConversations().some((item) => item.id === "conversation-storage-race")).toBe(true);
+    setItemSpy.mockRestore();
+    idbWriteSpy.mockRestore();
+    unsubscribe();
+  });
+
   it("merges a version-1 payload and preserves a renamed title as custom", async () => {
     seedRaw(
       V1_KEY,
@@ -1064,5 +1090,111 @@ describe("tombstone and envelope validation", () => {
     expect(
       (envelope.records as { id: string }[]).some((record) => record.id === "conversation-a"),
     ).toBe(true);
+  });
+});
+
+describe("conversation mode provenance", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    globalThis.indexedDB = new IDBFactory() as unknown as IDBFactory;
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("derives the mode from the first submitted request when nothing else sets it", async () => {
+    const store = await freshStore();
+    const record = store.buildConversationRecord(null, {
+      id: "conversation-1",
+      sessionId: "session-1",
+      createdAt: 1_700_000_000_000,
+      draft: "",
+      bookmarkedMessageIds: [],
+      messages: [
+        {
+          id: "user-1",
+          sender: "user",
+          text: "What are Apple's main risk factors?",
+          requestSnapshot: {
+            ticker: "AAPL",
+            section: "risk_factors",
+            topK: 5,
+            enableComparative: false,
+            answerLanguage: "en",
+            mode: "chat",
+          },
+        },
+      ],
+    });
+    expect(record.mode).toBe("chat");
+    expect(store.conversationModeFromMessages(record.messages)).toBe("chat");
+  });
+
+  it("keeps the existing mode across later saves even when a newer request differs", async () => {
+    const store = await freshStore();
+    const existing: ConversationRecord = {
+      schemaVersion: 4,
+      id: "conversation-1",
+      sessionId: "session-1",
+      title: "Revenue review",
+      titleMode: "auto",
+      revision: 2,
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_010,
+      messages: [],
+      draft: "",
+      bookmarkedMessageIds: [],
+      mode: "research",
+    };
+    const next = store.buildConversationRecord(existing, {
+      id: existing.id,
+      sessionId: existing.sessionId,
+      createdAt: existing.createdAt,
+      draft: "",
+      bookmarkedMessageIds: [],
+      messages: [
+        {
+          id: "user-1",
+          sender: "user",
+          text: "Follow-up",
+          requestSnapshot: {
+            ticker: null,
+            section: null,
+            topK: 5,
+            enableComparative: false,
+            answerLanguage: "en",
+            mode: "chat",
+          },
+        },
+      ],
+    });
+    expect(next.mode).toBe("research");
+  });
+
+  it("preserves a stored mode across a reload and rejects a malformed one", async () => {
+    const store = await freshStore();
+    const record = store.buildConversationRecord(null, {
+      id: "conversation-1",
+      sessionId: "session-1",
+      createdAt: 1_700_000_000_000,
+      draft: "",
+      bookmarkedMessageIds: [],
+      mode: "chat",
+      messages: [userMessage("u1", "First question")],
+    });
+    const saved = await store.saveConversationRecord(record);
+    expect(saved.status).toBe("persisted");
+
+    const reloaded = await store.loadConversationLibrary("session-1", "conversation-1");
+    expect(reloaded.conversations.find((item) => item.id === "conversation-1")?.mode).toBe("chat");
+
+    // A record whose mode is not a known value is unreadable data, not
+    // something to silently coerce into a different mode.
+    seedLocal([makeRecord({ id: "conversation-bad", sessionId: "session-1", mode: "analysis" })]);
+    const poisoned = await store.loadConversationLibrary("session-1", "conversation-1");
+    expect(poisoned.conversations.some((item) => item.id === "conversation-bad")).toBe(false);
+    expect(poisoned.warning).toBeTruthy();
   });
 });

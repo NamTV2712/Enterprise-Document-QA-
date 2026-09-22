@@ -28,4 +28,21 @@ describe("useReaderSession", () => {
     expect(result.current.snapshot).toBeNull();
     expect(result.current.isCurrent(first)).toBe(false);
   });
+
+  test("representation switches abort the old reader load before the new one becomes current", () => {
+    const { result } = renderHook(() => useReaderSession());
+    let structuredGeneration = 0;
+    act(() => {
+      structuredGeneration = result.current.select({ documentId: "doc-1", sourceKey: "chunk-1", representation: "structured" });
+    });
+    const structuredSignal = result.current.snapshot?.signal;
+    let normalizedGeneration = 0;
+    act(() => {
+      normalizedGeneration = result.current.select({ documentId: "doc-1", sourceKey: "chunk-1", representation: "normalized" });
+    });
+
+    expect(structuredSignal?.aborted).toBe(true);
+    expect(result.current.isCurrent(structuredGeneration)).toBe(false);
+    expect(result.current.isCurrent(normalizedGeneration, { documentId: "doc-1", sourceKey: "chunk-1", representation: "normalized" })).toBe(true);
+  });
 });

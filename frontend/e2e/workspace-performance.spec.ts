@@ -1,5 +1,5 @@
 import { expect, Page, test } from "@playwright/test";
-import { askQuestion, installApiFixtures } from "./fixtures";
+import { askQuestion, installApiFixtures, LONG_ANSWER } from "./fixtures";
 
 const REAL_BACKEND = process.env.PLAYWRIGHT_REAL_BACKEND === "1";
 const REAL_API_ORIGIN = "http://127.0.0.1:8000";
@@ -26,6 +26,28 @@ async function setupSynthetic(page: Page): Promise<void> {
   await installApiFixtures(page);
   await page.goto("/");
   await expect(page.getByRole("textbox", { name: "Research question" })).toBeEnabled();
+}
+
+async function openDocumentForSelectedSource(page: Page, sourceIndex: number): Promise<void> {
+  const contextTabs = page.getByRole("tablist", { name: "Context panes" });
+  if (await contextTabs.isVisible().catch(() => false)) {
+    await contextTabs.getByRole("tab", { name: "Document", exact: true }).click();
+    return;
+  }
+  // At the measured contextual-surface width the evidence panel is modal and
+  // has no tablist; use the source card's explicit document action instead.
+  await page.getByRole("button", { name: `Open document for source ${sourceIndex + 1}`, exact: true }).click();
+}
+
+async function showSourcesForNextSample(page: Page): Promise<void> {
+  const contextTabs = page.getByRole("tablist", { name: "Context panes" });
+  if (await contextTabs.isVisible().catch(() => false)) {
+    await contextTabs.getByRole("tab", { name: "Sources", exact: true }).click();
+    return;
+  }
+  await page.getByRole("button", { name: "Close evidence inspector", exact: true }).click();
+  await expect(page.locator(".evidence-drawer-dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "Open 2 sources", exact: true }).click();
 }
 
 type ReaderLayoutMetrics = {
@@ -165,17 +187,17 @@ test("records synthetic frontend baselines for warm controls and workspace paths
 
   // Warm the lazy route once so the measured samples represent repeated
   // navigation rather than the first module fetch and initial mount.
-  await page.locator('[data-workspace-view="documents"]').click({ force: true });
+  await page.locator('[data-route-id="documents"]').click({ force: true });
   await expect(page.locator(".document-explorer")).toBeVisible();
-  await page.locator('[data-workspace-view="overview"]').click({ force: true });
+  await page.locator('[data-route-id="research"]').click({ force: true });
   await expect(page.locator(".overview-panel")).toBeVisible();
 
   const viewSamples: number[] = [];
   for (let index = 0; index < 30; index += 1) {
     viewSamples.push(await elapsed(page, async () => {
-      await page.locator('[data-workspace-view="documents"]').click({ force: true });
+      await page.locator('[data-route-id="documents"]').click({ force: true });
       await expect(page.locator(".document-explorer")).toBeVisible();
-      await page.locator('[data-workspace-view="overview"]').click({ force: true });
+      await page.locator('[data-route-id="research"]').click({ force: true });
       await expect(page.locator(".overview-panel")).toBeVisible();
     }));
   }
@@ -200,8 +222,8 @@ test("records synthetic frontend baselines for warm controls and workspace paths
 test("records source switching, reader warm/cold paths, and final Markdown render", async ({ page }) => {
   test.skip(REAL_BACKEND, "Synthetic reader baseline runs with provider-free browser fixtures.");
   await setupSynthetic(page);
-  await askQuestion(page, "What was Apple's total net sales in fiscal year 2025?");
-  await expect(page.getByText("Apple's total net sales were", { exact: false }).first()).toBeVisible();
+  await askQuestion(page, "What are Apple's main business risks?");
+  await expect(page.getByText(LONG_ANSWER.split("\n")[0], { exact: true }).first()).toBeVisible();
 
   const response = page.getByRole("article", { name: "Research assistant response" });
   await expect(response.locator(".markdown-body")).toBeVisible();
@@ -216,14 +238,17 @@ test("records source switching, reader warm/cold paths, and final Markdown rende
 
   const coldReader = await elapsed(page, async () => {
     await cards.nth(0).click();
-    await expect(page.locator(".context-viewer-text")).toContainText("competition risks");
+    await openDocumentForSelectedSource(page, 0);
+    await expect(page.locator(".structured-reader__canvas:visible")).toContainText("competition risks");
   });
   const readerSamples: number[] = [coldReader];
   for (let index = 0; index < 30; index += 1) {
     const cardIndex = index % 2;
     readerSamples.push(await elapsed(page, async () => {
+      await showSourcesForNextSample(page);
       await cards.nth(cardIndex).click();
-      await expect(page.locator(".context-viewer-text")).toBeVisible();
+      await openDocumentForSelectedSource(page, cardIndex);
+      await expect(page.locator(".structured-reader__canvas:visible, .structured-reader__fallback:visible").first()).toBeVisible();
     }));
   }
   report("source switching + reader", readerSamples);

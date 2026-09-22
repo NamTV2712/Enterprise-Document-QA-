@@ -8,9 +8,10 @@ import {
 describe("useNavigationLayout", () => {
   beforeEach(() => {
     localStorage.clear();
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 });
   });
 
-  test("defaults to expanded and persists only the allowed raw values", () => {
+  test("defaults to expanded on an inline desktop and persists explicit values", () => {
     const { result } = renderHook(() => useNavigationLayout());
 
     expect(result.current.layout).toBe("expanded");
@@ -21,6 +22,13 @@ describe("useNavigationLayout", () => {
     act(() => result.current.toggleLayout());
     expect(result.current.layout).toBe("expanded");
     expect(localStorage.getItem(NAVIGATION_LAYOUT_STORAGE_KEY)).toBe("expanded");
+  });
+
+  test("defaults to compact below the inline navigation breakpoint", () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
+    const { result } = renderHook(() => useNavigationLayout());
+
+    expect(result.current.layout).toBe("compact");
   });
 
   test("ignores malformed stored and cross-tab values", () => {

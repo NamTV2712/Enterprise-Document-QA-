@@ -3583,3 +3583,345 @@ but it follows `UI-008` in the ordering and is not the next entry.
 Collections feature; gate: save/export/reopen/stale). Do not implement it, and
 do not begin `API-006`, `UI-009`, `DATA-004`, `DATA-005`, or any later task
 without explicit authorization.
+
+
+## UI-008-A Checkpoint (recovery, contract, reference measured, decisions)
+
+UI-008 — Collections. Status: ACTIVE (A complete; implementation ahead). Started
+2026-09-22 on branch `codex/bilingual-research-workspace`, HEAD `ffc5955` with
+140 dirty paths (historical rebuild work, preserved untouched).
+
+### Recovery Evidence
+
+- `git log --oneline -3` → `ffc5955`, `d0ffd91` (DATA-003), `2d75091`.
+- `git status --porcelain | wc -l` → 140 dirty paths (the same untracked/mixed
+  rebuild surface DATA-003 disclosed; this recovery created none).
+- No partial UI-008 work exists: `/collections` still renders the pre-rebuild
+  `CollectionsConsole`, and no frontend module touches the DATA-003 routes.
+
+### Exact UI-008 Contract (from the master plan, not inferred)
+
+Master plan §21 row: `UI-008 Collections, dependencies UI-002 / DATA-003 /
+UI-004, area "Collections feature", gate "Save/export/reopen/stale"`. All three
+dependencies are complete, so UI-008 is dependency-ready.
+
+§9 Collections page plan: "Visual: list/cards and contents/notes/activity/
+settings details. Reuse: snapshots, export and source verification. Frontend:
+CRUD, mixed typed items, tags/favorites, notes/private settings. Backend/API:
+SQLite repository; browser repository in public mode. Persistence: documents/
+evidence/answers/notes and actual activity. Risks: import loss, duplicates,
+conflicts and stale references. Tests: idempotency, failed writes, conflicts,
+tombstones, missing sources. Done: lossless round trip with honest
+stale/source-gone state."
+
+Appendix A (`docs/UI_REFERENCE_GAP_MATRIX.md`) rows owned here: cards/list/
+search/sort (P1), description/tags/favorite as persistent fields (P1), mixed
+typed items document/answer/note (P1), notes/activity with actual events (P1),
+add/remove/export as real CRUD (P1), and **shared visibility deferred to P3**
+(sharing is out of scope, never faked). The Documents row "Add to collection |
+Picker | Document item" and the Search row "save actions | Collection
+persistence" are the picker/save work this task is expected to provide.
+
+§11 (persistence): "No silent dual writes"; "public mode keeps browser
+persistence". §9's backend line allows a browser repository in public mode.
+
+### Authoritative Reference Measured
+
+`docs/ui-references/collections-ui-reference-dark-v1.png` — 1586 × 992, the
+same shell as Documents/Search/Retrieval. Measured on the real PNG with
+PIL/numpy edge scans (column and row transitions), not estimated:
+
+- Navigation 0–209, top bar 0–56 (shell), content padding ≈ 15 px.
+- Main column x ≈ 224–974 (≈ 750 px); right rail x ≈ 987–1570 (≈ 583 px);
+  right margin ≈ 16 px; column gap ≈ 13 px.
+- Page header band ≈ y 75–145: icon tile + "Collections" (≈ 26 px semibold) +
+  subtitle, with a toolbar on the same band (search field ≈ 22.5 rem wide,
+  "Last updated" select, a two-button grid/list toggle, primary "New
+  Collection").
+- Tab row ≈ y 160–196: "All Collections" with a count badge (active: white
+  text, blue underline, blue badge), "Shared with Me", "Favorites".
+- Collection cards: four at y 213–372, 385–548, 561–722, 734–895 — height
+  ≈ 160 px, gap ≈ 13 px, radius ≈ 14 px, 1 px border, the selected card
+  brighter. Anatomy: 48 px coloured icon tile, name + star, two-line
+  description, tag-chip row with "+N", a right-aligned meta block ("12 items",
+  "Updated 2 hours ago / by Nguyen"), and an action row ("Open →", "Share",
+  "Export", "+ Add Documents").
+- Rail: header card (56 px icon tile, name + star, description, "…" and "×"),
+  a three-cell stat strip (items, updated, "Private / Only you"), the tab row
+  (Contents, Notes, Activity, Share, Settings), "Evidence Items (12)" with an
+  "+ Add Documents" button, ≈ 52 px item rows (badge tile, title, "SEC Filing ·
+  p. 12-24" subtitle, right-aligned date, "…"), a centred "View all 12
+  items →", then a two-column bottom area (Insights & Notes | Recent Activity
+  timeline).
+
+### Current Collections Implementation Mapped
+
+- `frontend/src/app/routes.ts`: `/collections` and `/collections/:collectionId`
+  exist (UI-002), both mapping to the `library` workspace view; the navigation
+  item is `available`.
+- `frontend/src/App.tsx` renders `CollectionsConsole` for `activeView ===
+  "library"` with a `librarySlot` (the `ConversationLibrary` element) and the
+  Ctrl/Cmd+K conversation-search handoff.
+- `frontend/src/components/CollectionsConsole.tsx` (390 lines) is the
+  pre-rebuild page: browser collections (`lib/evidenceCollections`), favourites
+  in `lib/collectionFavorites`, and no detail tabs, notes, activity, settings or
+  typed items.
+- `lib/evidenceCollections.ts`, `lib/workspaceRepository.ts`,
+  `lib/workspaceBackup.ts`, `components/EvidenceCollectionsPanel.tsx` and
+  `components/ConversationLibrary.tsx` are the DATA-002 legacy browser
+  repository/adapter surface and stay in place.
+- `frontend/src/lib/api.ts` has no collections client and `types.ts` no
+  collections types: the rebuild never talked to the protected routes.
+- Impacted existing specs: `components/CollectionsConsole.test.tsx` (Ctrl/Cmd+K
+  handoff), `e2e/ui-routing.spec.ts` (route resolution),
+  `e2e/regression.spec.ts` (empty browser collections), and the untracked
+  nine-reference receipt `e2e/reconciliation-reference.spec.ts`, whose r4
+  surface drives Search → "Save evidence" → Collections → "Open" and asserts
+  `#collections-title` plus `.console-rowlist__row`.
+
+### DATA-003 HTTP Contract Mapped (the only collection truth)
+
+From `src/api/routers/collections.py` and `src/workspace/collections.py`:
+
+- `GET /collections?search&tags&favorite&sort&direction&page&page_size` →
+  `{items:[{collection_id,name,description,tags,favorite,private,revision,
+  created_at,updated_at,item_count}],total,page,page_size}`; `sort` is one of
+  name, updated_at, created_at, item_count; `page_size` is capped at 100.
+- `POST /collections` `{name (1-200), description (≤2000), tags (≤20), favorite,
+  private, collection_id?}` → the committed collection at revision 1.
+- `GET /collections/{id}`; `PATCH /collections/{id}` `{revision (≥1), name?,
+  description?, tags?, favorite?, private?}` (stale revision → 409);
+  `DELETE /collections/{id}?revision=` → receipt
+  `{operation,entity_type,entity_id,revision,deleted_at}`.
+- `GET /collections/{id}/items?kind&page&page_size` → items
+  `{item_id,collection_id,item_kind,citation,excerpt,reference,revision,
+  created_at,updated_at,snapshot?}`; `POST …/items` `{item_kind,
+  citation (≤500), excerpt (≤10000), reference?, snapshot?, item_id?}`;
+  `DELETE …/items/{item_id}?revision=`.
+- Notes: `GET/POST /collections/{id}/notes` `{text (1-10000), evidence_ref?,
+  note_id?}`; `PATCH/DELETE …/notes/{note_id}` (PATCH carries `revision`); note
+  payloads hold `note_id,collection_id,text,revision,created_at,updated_at,
+  evidence_ref?`.
+- `GET /collections/{id}/activity` → `{activity_id,collection_id,entity_type,
+  entity_id,event_type,occurred_at}` newest first, bounded at 500 per
+  collection; events are collection_created|collection_updated|
+  collection_deleted|item_added|item_removed|note_added|note_updated|
+  note_removed.
+- `GET /collections/{id}/export?format=json|markdown` → the JSON document or
+  `{format:"markdown",content}`; a read, so it mutates nothing.
+- Membership is typed: `document` needs `reference.document_id`; `answer` needs
+  one of conversation_id|message_id|answer_id; `evidence` needs at least one of
+  document_id|chunk_id|source_document_id|conversation_id|message_id plus
+  string-typed provenance fields; `note` may be unbound. Identifiers must match
+  the domain's identifier pattern; the collection's own id is
+  `stable_legacy_id("collection", legacy_id)`.
+- Statuses: 404 unknown (and every route in public mode), 410 tombstoned, 409
+  revision conflict, 422 bounds/kind/membership/validation; 401 without the
+  local bearer token, 403 off-loopback or a denied Host/Origin (API-001).
+
+### Decisions With Rationale
+
+1. **No browser-side collections repository in this task.** The plan mentions one
+   for public mode, but the goal forbids duplicating collection business logic in
+   React and DATA-003 is the single writer. A non-local context therefore renders
+   a truthful unavailable state derived from the real response (404 unavailable
+   in this mode, 401 token required, 403 not this machine) — never a fake empty
+   list.
+2. **Conversations are preserved, not deleted.** `ConversationLibrary` (with the
+   on-device evidence panel and backup) moves behind a "Conversations" tab on the
+   same route and keeps the Ctrl/Cmd+K handoff and the `?tab=conversations` deep
+   link, because the shell sidebar is the only other surface and this task may not
+   regress a working capability.
+3. **"Shared with Me", "Share" and the per-card "by Nguyen" owner are omitted.**
+   Sharing is explicitly deferred (P3) and a local single-user workspace has no
+   owner; cards and the rail show real fields instead (item count, updated time,
+   tags, privacy flag).
+4. **The evidence-save action is repointed to DATA-003.** Documents/Search/
+   Retrieval/Reranker already offer "Add to Collection" / "Save evidence" against
+   the browser store; once this page shows workspace collections those controls
+   would be lying. The App-level `handleSaveRetrievedEvidence` gets an explicit
+   target dialog (existing collections plus create-new) that POSTs a real
+   `evidence` item, while the conversation-surface call sites keep their
+   on-device behaviour (their panel is still visible in the Conversations tab).
+   No dual writes.
+5. **`returnView` gains `"library"`.** UI-004's document handoff type is a
+   three-value union; opening a document member from Collections is a real fourth
+   origin, added additively so the App's `returnView !== activeView` guard keeps
+   working.
+6. **Activity and notes come from the API only.** No synthesised events, and a
+   note renders as its text plus real timestamps (the model has no title field,
+   so none is invented).
+
+### Stitch Strategy
+
+One bounded Stitch generation will be requested for the Collections composition
+(card list plus the rail with its tabs and stat strip). The local screenshot
+remains authority #1 and wins over any Stitch output; a timeout is recorded
+honestly and the work continues from the reference, exactly as UI-006 recorded.
+No Stitch demo data enters the repository.
+
+### Planned Files
+
+- New: `src/lib/collectionModel.ts` (+ test) for the typed client model, status
+  mapping, kind labels, relative time and card/rail derivations; `src/lib/api.ts`
+  and `src/types.ts` additions for the DATA-003 endpoints;
+  `src/components/collections/` (`CollectionsWorkspace.tsx`,
+  `CollectionsToolbar.tsx`, `CollectionCard.tsx`, `CollectionDetail.tsx`,
+  `CollectionContents.tsx`, `CollectionNotes.tsx`, `CollectionActivity.tsx`,
+  `CollectionSettings.tsx`, `CollectionTypeBadge.tsx`, `AddItemsDialog.tsx`,
+  `CollectionTargetDialog.tsx`); `src/styles/collections.css`;
+  `e2e/ui-008-collections.spec.ts`; component tests beside the new components.
+- Replaced: `src/components/CollectionsConsole.tsx` and its test by
+  `CollectionsWorkspace`; `App.tsx` wiring and the repointed save handler.
+- Touched additively: `src/types.ts` (`returnView: "library"`),
+  `src/lib/i18n.tsx` (new keys in both locales).
+
+### Exact Next Action
+
+UI-008-B: add the typed DATA-003 client surface, build the Collections
+list/rail composition, and capture the first reference-native screenshot.
+
+## UI-008-B/C/D/E Checkpoint (client, composition, behavior, responsive/a11y)
+
+UI-008 — Collections. Status: B–E complete; F–H in progress.
+
+### Completed Work
+
+**Client surface (B).** `frontend/src/lib/api.ts` gained the typed DATA-003
+surface (`listCollections`, `getCollection`, `createCollection`,
+`updateCollection`, `deleteCollection`, `listCollectionItems`,
+`addCollectionItem`, `deleteCollectionItem`, `listCollectionNotes`,
+`addCollectionNote`, `updateCollectionNote`, `deleteCollectionNote`,
+`listCollectionActivity`, `exportCollection`) over the existing `apiFetch` /
+`throwApiError` pair, so a status and the server's bounded detail survive to the
+page. `frontend/src/types.ts` gained the collection/item/note/activity/receipt
+and request types plus `returnView: "library"` on `CatalogWorkspaceTarget`.
+`frontend/src/lib/collectionModel.ts` (+ 25 unit tests) owns the derivations:
+status→state mapping, kind/activity labels, relative time with an honest null,
+member counts, tag overflow, privacy wording, the per-kind reference builders,
+and `itemOpenTarget` (document/evidence/answer/unavailable).
+
+**Composition (B/E).** `frontend/src/components/collections/`:
+`CollectionsWorkspace` (page: tab row, list, dialogs, selection route, request
+epochs), `CollectionsToolbar`, `CollectionCard`, `CollectionDetail` (rail),
+`CollectionContents`, `CollectionNotes`, `CollectionActivity`,
+`CollectionSettings`, `CollectionTypeBadge`, `CollectionActionMenu`,
+`AddItemsDialog`, `CollectionTargetDialog`, `CollectionFormDialog`,
+`ExportDialog`; page-owned `frontend/src/styles/collections.css` reuses the
+console primitives (buttons, inputs, chips, alerts, empties, underline tabs) so
+no second design system appears. `App.tsx` renders the workspace, owns the
+`/collections/:collectionId` selection route (`handleSelectCollectionRoute`),
+the `?tab=conversations` initial tab, and the repointed save flow. The old
+`CollectionsConsole` and its test were deleted.
+
+**Behavior (C/D).** Typed list + rail with Contents/Notes/Activity/Settings,
+per-kind filter through the API, member open handoff (documents → catalogue
+reader with the new `library` origin, evidence → the stored snapshot through the
+existing evidence reader, answers → their conversation message, notes → the
+Notes tab, otherwise a stated reason), create/rename/settings/favourite/delete,
+member removal, notes CRUD, activity, JSON/Markdown export, conflict (409),
+tombstone (410), unavailable (404/401/403) and refused-member (422) states,
+per-resource request epochs, and no write from browsing.
+
+**Responsive/a11y (E).** Receipts at 1586x992 (reference-native), 1440x900,
+1280x856, 1024x768, 390x844 and 1440x700 with zero body/root horizontal
+overflow; axe scan (color-contrast, label, button-name, link-name,
+aria-input-field-name) clean at the reference viewport; modal dialogs with
+focus trapping and Escape; keyboard tab/tablist operation. Two dark-theme
+contrast defects this page exposed were fixed in `collections.css`: primary
+buttons now use the button token (white on `--primary` measured 3.38:1) and the
+selected card's description uses the stronger text tone (measured 4.16:1).
+
+### Visual Comparison (reference loop)
+
+`docs/ui-references/collections-ui-reference-dark-v1.png` (1586x992) was
+measured with PIL/numpy edge scans, then the rendered page was captured at the
+same viewport and compared: iteration 1 showed a two-column card grid and a
+light-theme, half-painted capture (entry animation), iteration 2 fixed the
+default density to the reference's single-column rows, added the items glyph to
+the card meta, stopped repeating a member's citation as its own provenance line,
+widened the rail to the measured 583 px and added stat-strip glyphs. Remaining
+deltas are capability-driven and deliberate: no Share tab or "Shared with Me",
+no owner line, no storage/plan chrome, and the tabs/labels of the rail use this
+product's wording.
+
+### Tests Actually Run
+
+- `bunx vitest run src/lib/collectionModel.test.ts` — 25 pass.
+- `bunx vitest run src/components/collections/CollectionsWorkspace.test.tsx` — 11 pass.
+- `bunx vitest run` (full unit suite) — 75 files / 495 tests pass, `tsc --noEmit` clean.
+- `bunx playwright test e2e/ui-008-collections.spec.ts` — 15/15 Chromium, 15/15
+  Firefox (16 tests × 2 engines reported as 32 passed).
+
+### Remaining Work
+
+UI-008-F (build), G (focused engine gates), H (controlled full gates, reference
+receipt, artifact audit, documentation, commits).
+
+### Exact Next Action
+
+Run the controlled full browser gates and the reference receipt, then finish the
+artifacts and commits.
+
+## UI-008-F/G/H Checkpoint (gates, audits, commits)
+
+UI-008 — Collections. Status: F–H complete.
+
+### Gate Results (controlled worker count 4 for full runs, 2–3 focused)
+
+- Full unit suite: 75 files / 495 tests pass (baseline 74 / 460, +1 file / +35
+  tests), `tsc --noEmit` clean, production build green (the browser gates build
+  the bundle through `webServer`).
+- Focused spec: `e2e/ui-008-collections.spec.ts` 15 tests × 2 engines, all pass.
+- Controlled full Chromium: 165 passed, 2 skipped, 1 failed —
+  `regression.spec.ts:1039` (the documented load-sensitive performance budget;
+  isolated rerun passes at p95=46.4 ms against a 100 ms budget).
+- Controlled full Firefox: 163 passed, 2 skipped, 3 failed —
+  `regression.spec.ts:65`, `regression.spec.ts:656`,
+  `workspace-performance.spec.ts:176`. All three pass in isolation (verified
+  in this task), and `:65`/`:176` are the recorded load-sensitive class from
+  UI-006/UI-007. None of them touches the collections surfaces.
+- Reference receipt (`e2e/reconciliation-reference.spec.ts`, both engines):
+  30/30, with the r4 library surface now driving the real save flow
+  (Search → Save evidence → create the collection in the target dialog →
+  Collections → open → member row) instead of the removed browser-store console.
+- Receipts captured under the git-ignored `frontend/test-results/ui-008/`:
+  six viewports × two engines plus the reference-native comparison image.
+
+### Artifact Audit
+
+No Playwright traces, videos, reports, debug dumps, runtime databases or
+WAL/SHM files were added to the source tree; `frontend/test-results/` and
+`frontend/playwright-report/` are git-ignored. No credentials or bearer tokens
+exist in the frontend (the local workspace token is deliberately not held by the
+browser build). The only new stylesheet is page-owned; the shared
+`frontend/src/styles/console.css` was not modified. `git diff --check` is clean
+for every staged file.
+
+### Files
+
+Created: `frontend/src/lib/collectionModel.ts` (+ test),
+`frontend/src/components/collections/` (13 components + the workspace test),
+`frontend/src/styles/collections.css`, `frontend/e2e/ui-008-collections.spec.ts`.
+Modified: `frontend/src/types.ts`, `frontend/src/lib/api.ts`,
+`frontend/src/App.tsx`, `frontend/src/index.css`,
+`frontend/src/components/workbench/RouteDocumentContext.tsx`,
+`frontend/src/components/DocumentWorkspace.tsx` (the additive `library` origin),
+`frontend/e2e/fixtures.ts` (the collections fixture), plus the two untracked
+specs the flow changed (`e2e/reconciliation-reference.spec.ts`,
+`e2e/v5-07-handoffs.spec.ts`).
+
+Removed: `frontend/src/components/CollectionsConsole.tsx` and its test.
+
+### Disclosure
+
+`e2e/reconciliation-reference.spec.ts` and `e2e/v5-07-handoffs.spec.ts` stay
+untracked, as UI-007 disclosed them; their UI-008 edits ride in the working tree
+and are exercised by the receipt and handoff gates. Unrelated pre-existing
+dirt (`components/DocumentWorkspace.test.tsx`, `components/EvidenceCollectionsPanel.tsx`,
+`tests/fixtures/workspace_transfer_roundtrip.json`) was left untouched.
+
+### Exact Next Action
+
+Commits are recorded below; then read the master plan and set the next task
+without implementing it.

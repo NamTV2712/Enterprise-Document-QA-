@@ -1,5 +1,75 @@
 # Project State
 
+## UI-008 Collections workspace (2026-09-22)
+
+UI-008 is complete. `/collections` and `/collections/:collectionId` are rebuilt
+against `docs/ui-references/collections-ui-reference-dark-v1.png` (1586x992) as
+the typed workspace collections UI over the DATA-003 API; the previous
+browser-store Collections console is gone.
+
+Composition: measured on the reference (nav ≈209, content padding ≈15, main
+column ≈750, rail ≈583 at the reference width, cards ≈160 tall with a ≈13 gap).
+The page header band carries the title, subtitle, a real search field, a sort
+select backed by the API's own sort fields, a list/grid density switch, and the
+"New Collection" action; the tab row carries All Collections and Favorites with
+live API counts plus the preserved Conversations tab; the rail carries the
+selected collection's header, a three-cell stat strip (items, updated, privacy),
+the Contents/Notes/Activity/Settings tabs, the member list and the footnote
+naming the revision. Nothing from the reference that has no capability is
+rendered: no Share tab, no "Shared with Me", no owner, storage meter, plan
+upsell, avatars or processing states.
+
+Typed behavior: members show the kind DATA-003 stored (`document`, `evidence`,
+`answer`, `note`), the Contents tab filters by that kind through the API, and a
+member opens by its stored identity — documents through the catalogue reader
+with a new `returnView: "library"` origin (the reader's back control says "Back
+to Collections"), evidence through the existing evidence reader with its
+captured snapshot and no retrieval re-run, answers through their originating
+conversation message, notes in the Notes tab. A member with no openable identity
+states why instead of opening something nearby. Every member read, note read and
+activity read is a plain GET: browsing, searching, sorting, switching tabs and
+selecting a collection write nothing.
+
+Writes: create (POST), rename and settings (PATCH with the revision the page last
+read), favourite toggle, delete (DELETE with revision, confirmed in Settings),
+member removal (per-member revision), notes (POST/PATCH/DELETE) and the
+attributes/tags edit form. Each refusal keeps its own state — 401 local token
+required, 403 not this machine, 404 capability unavailable in this deployment
+mode (rendered as an unavailable panel, never an empty list), 410 tombstoned and
+not recreatable, 409 stale revision with a reload action, 422 a refused bound,
+kind or reference. Requests are guarded per resource (epoch + AbortController),
+so a slower response can never repaint a newer selection, and every mutation is
+an explicit user action.
+
+Save flow: "Save evidence" / "Add to Collection" from Documents, Search,
+Retrieval and Reranker now opens the collection target dialog (choose an existing
+collection or create one) and writes one typed `evidence` member with the
+source's own identities; the conversation surfaces keep their on-device library,
+so there is no dual write. "+ Add Documents" on the page picks real catalogue
+documents (API-003) and writes `document` members with the canonical
+`document_id`. Export writes the workspace's own JSON or Markdown document and
+mutates nothing.
+
+Accessibility and responsiveness: the page passes an axe scan
+(color-contrast/label/button-name/link-name/aria-input-field-name) at the
+reference viewport, its dialogs are real modal dialogs with focus trapping and
+Escape handling, and the receipts assert zero body/root horizontal overflow at
+1586x992, 1440x900, 1280x856, 1024x768, 390x844 and 1440x700. Two dark-theme
+contrast defects this page exposed were fixed in its own stylesheet: primary
+buttons now use the button token (white on `--primary` was 3.38:1) and the
+selected card's description uses the stronger text tone (4.16:1 before).
+
+Validation: the new UI-008 spec has 15 tests and passes 15/15 on Chromium and
+Firefox; the unit suite grew to 75 files / 495 tests (from 74/460) with `tsc`
+clean and the production build green; the controlled full browser gates at four
+workers ran 165 passed / 2 skipped / 1 failed on Chromium and 163 passed / 2
+skipped / 3 failed on Firefox, where every failure is the documented
+load-sensitive class (`regression.spec.ts:65`, `:656`, `:1039`,
+`workspace-performance.spec.ts:176`) and each one passes in isolation; the
+nine-reference receipt harness stays at 30/30 with the library receipt driving
+the new save-to-collection flow. The backend is untouched: 1018 passed / 0
+failed / 188 warnings.
+
 ## DATA-003 typed collections (2026-09-22)
 
 DATA-003 is complete. The local workspace now has a typed collection domain,

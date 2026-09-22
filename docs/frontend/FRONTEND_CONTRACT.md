@@ -69,6 +69,41 @@ storage-failure states are explicit, and raw IDs/revisions remain behind a
 provenance disclosure. Recent items are bounded and continuation fills a draft
 without submitting a query.
 
+Those on-device surfaces now live on the Collections page's Conversations tab
+(UI-008), which is also the Ctrl/Cmd+K target and the `?tab=conversations`
+deep link; the tab's evidence panel keeps its browser-local status wording.
+
+## Collections workspace acceptance (UI-008)
+
+`/collections` renders the typed workspace collections that DATA-003 serves,
+with `/collections/:collectionId` as the selected collection, so Back/Forward
+and deep links behave like every other destination. The list is a real query
+(`search`, `favorite`, `sort`, `direction`, `page`); every count shown is a
+count the API returned, and a member's kind is the kind DATA-003 stored.
+
+Selection, search, sorting, tab switching and reading notes/activity are reads
+and must never write. Each write is an explicit action carrying the revision
+the page last read, and each refusal keeps its own state: 401 names the missing
+local token, 403 the loopback/host boundary, 404 that the capability is
+unavailable in this deployment mode, 410 that the collection is tombstoned and
+cannot be recreated, 409 that the collection changed elsewhere, and 422 that a
+bound, kind or reference was refused. An unavailable capability renders that
+state, never an empty list, and never opens a private database.
+
+Members open by their stored identity: documents through the catalogue reader
+with `returnView: "library"` (the reader's back control names Collections),
+evidence through the existing evidence reader with its captured snapshot and no
+retrieval re-run, answers through their originating conversation message, and
+notes in the collection's own Notes tab. A member with no openable identity
+says so instead of opening something nearby.
+
+"Save evidence" / "Add to Collection" from Documents, Search, Retrieval and
+Reranker asks which typed collection receives the member (or creates one) and
+then writes a single `evidence` item with the source's own identities; there is
+no silent dual write, and the conversation surfaces keep their on-device
+library. Sharing, ownership, storage quotas and processing states have no
+capability here and are not displayed.
+
 ## V5 current workbench architecture and closure
 
 V5-08 is the current frontend baseline. `App.tsx` is the route and identity
@@ -190,4 +225,3 @@ submitted twice while a run is open, while an edited one may be committed
 immediately, in which case the earlier request is aborted and its late response
 is ignored. The Reranker view compares the fusion and cross-encoder orders of
 one same-pool trace and never reranks a second time.
-

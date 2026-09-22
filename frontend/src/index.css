@@ -4,5 +4,9 @@
    global browser rules, and motion policy each have one source of truth. */
 @import "./styles/tokens.css";
 @import "./styles/components.css";
+@import "./styles/workbench.css";
+@import "./styles/console.css";
+@import "./styles/primitives.css";
+@import "./styles/search.css";
 @import "./styles/base.css";
 @import "./styles/motion.css";

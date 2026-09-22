@@ -19,6 +19,8 @@ import {
   DocumentStatsResponse,
   DocumentChunkListResponse,
   DocumentChunkDetail,
+  DiscoverySearchRequest,
+  DiscoverySnapshotResponse,
   OriginalContent,
   OriginalManifest,
   ReaderManifest,
@@ -251,6 +253,48 @@ export async function getDocumentStats(signal?: AbortSignal): Promise<DocumentSt
   if (!response.ok) {
     throw new ApiError(`Failed to fetch document stats: ${response.status}`, response.status);
   }
+  return response.json();
+}
+
+/**
+ * Run one provider-free discovery search and return its stored snapshot.
+ *
+ * This is the only call that creates a snapshot: a new query, a newly
+ * committed filter scope, or an explicit grouping change. Paging must use
+ * `getDiscoverySnapshot` so the result set cannot change under a reader.
+ */
+export async function createDiscoverySearch(
+  body: DiscoverySearchRequest,
+  signal?: AbortSignal,
+): Promise<DiscoverySnapshotResponse> {
+  const response = await apiFetch(`${getApiBaseUrl()}/search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    cache: "no-store",
+    signal,
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) await throwApiError(response, `Search failed: ${response.status}`);
+  return response.json();
+}
+
+/** Read one page of an existing snapshot without re-running the search. */
+export async function getDiscoverySnapshot(
+  searchId: string,
+  params: { page?: number; page_size?: number } = {},
+  signal?: AbortSignal,
+): Promise<DiscoverySnapshotResponse> {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null) query.set(key, String(value));
+  }
+  const response = await apiFetch(`${getApiBaseUrl()}/search/${encodeURIComponent(searchId)}?${query.toString()}`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok) await throwApiError(response, `Failed to read the search snapshot: ${response.status}`);
   return response.json();
 }
 

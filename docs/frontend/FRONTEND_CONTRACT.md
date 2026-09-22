@@ -143,3 +143,28 @@ selection, detail tabs, and reader handoffs issue only reads; a document action
 with no submitted question keeps its own grammatical context and never uses
 answer-scoped wording. Selection carries exact document identity into the
 reader handoff, and the deep link and return focus are unchanged.
+
+## Discovery Search acceptance
+
+Search is a snapshot view over API-004. One submitted search creates exactly one
+`POST /search` snapshot; paging and the page-size control read that snapshot
+through `GET /search/{search_id}` and never re-run the search. Opening a result,
+saving evidence, and every visual-only change issue no further search. A newly
+committed query, filter scope, or grouping is a new snapshot, and the page
+always renders the snapshot's own submitted query and scope, so unsubmitted
+typing can never relabel the results on screen. Snapshots stay runtime-only: a
+reload returns to the initial state instead of silently re-running the query.
+
+Counts are bounded discovery counts. When the API reports `limited_by_ceiling`
+the page says discovery ranked the first N candidates and never presents that
+total as a corpus total. Scores are raw BM25 ranking signals labelled as such:
+never confidence, accuracy, probability, or a percentage. Highlights are the
+API's character ranges rendered as React nodes; returned text is never
+interpreted as HTML. An expired snapshot (410) is distinct from an unknown one
+(404) and from a legitimate no-match, and each states what happened and what to
+do next.
+
+Filter and mode controls exist only for axes the API supports. The form type has
+no dimension in this corpus, so no form-type filter or facet is offered; there
+is no sort selector because the ranking engine owns the order; and recent
+searches are the browser-local list the app already owns, labelled as such.

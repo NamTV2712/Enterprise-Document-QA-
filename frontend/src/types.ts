@@ -344,6 +344,105 @@ export interface DocumentChunkListResponse {
   page_size: number;
 }
 
+/** The only discovery mode API-004 defines; there is no semantic mode. */
+export type DiscoveryMode = "keyword";
+
+/** API-004 groups a snapshot by filing or by excerpt. */
+export type DiscoveryGrouping = "document" | "chunk";
+
+/**
+ * A bounded real-text excerpt. `ranges` are character offsets into `text`, so
+ * the client highlights by slicing and never renders returned text as HTML.
+ */
+export interface DiscoverySnippet {
+  text: string;
+  ranges: Array<[number, number]>;
+  truncated: boolean;
+}
+
+/** One ranked excerpt with its canonical chunk and document identity. */
+export interface DiscoveryHit {
+  chunk_id: string;
+  document_id: string;
+  ticker: string | null;
+  section: string | null;
+  filing_date: string | null;
+  report_date: string | null;
+  chunk_index: number | null;
+  /** Raw BM25 lexical score; a ranking signal, never a confidence. */
+  score: number;
+  snippet: DiscoverySnippet;
+}
+
+/** One grouped result (a filing) with its best-matching excerpts. */
+export interface DiscoveryGroup {
+  document_id: string;
+  ticker: string | null;
+  filing_date: string | null;
+  report_date: string | null;
+  sections: string[];
+  best_score: number;
+  hit_count: number;
+  hits: DiscoveryHit[];
+}
+
+/** The ranking engine identity and its explicit definition. */
+export interface DiscoveryEngine {
+  key: string;
+  version: string;
+  definition: string;
+}
+
+/**
+ * Truthful count metadata. `count_scope` states that the reported total is
+ * bounded by `candidate_ceiling`, so a client must never present it as a
+ * whole-corpus total.
+ */
+export interface DiscoveryScopeMetadata {
+  ticker: string | null;
+  section: string | null;
+  year: number | null;
+  filing_date: string | null;
+  documents: number;
+  count_scope: "bounded_candidates" | "no_matches";
+  candidate_ceiling: number;
+  limited_by_ceiling: boolean;
+  matched_documents: number;
+  matched_chunks: number;
+}
+
+/** One discovery snapshot page: a stable ranked result set plus its scope. */
+export interface DiscoverySnapshotResponse {
+  search_id: string;
+  query: { text: string; normalized: string; mode: DiscoveryMode };
+  grouping: { group_by: DiscoveryGrouping; group_count: number; hit_count: number };
+  engine: DiscoveryEngine;
+  scope: DiscoveryScopeMetadata;
+  items: DiscoveryGroup[] | DiscoveryHit[];
+  /** The pageable length of the bounded set, in the snapshot's grouping unit. */
+  total: number;
+  page: number;
+  page_size: number;
+  /** API-003 facets for the same scope: they count documents, not matches. */
+  facets: CatalogFacet[];
+  created_at: string;
+  expires_at: string;
+  ttl_seconds: number;
+}
+
+/** One provider-free discovery request; every filter is a real API-004 axis. */
+export interface DiscoverySearchRequest {
+  query: string;
+  mode?: DiscoveryMode;
+  group_by?: DiscoveryGrouping;
+  ticker?: string | null;
+  section?: string | null;
+  year?: number | null;
+  filing_date?: string | null;
+  page?: number;
+  page_size?: number;
+}
+
 export interface SystemInfoResponse {
   api_version: string;
   corpus: Record<string, unknown>;

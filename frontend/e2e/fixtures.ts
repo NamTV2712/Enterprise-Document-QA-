@@ -25,6 +25,291 @@ export interface HistoryFixture {
   };
 }
 
+/**
+ * Deterministic discovery corpus for the Search workspace.
+ *
+ * The excerpts, sections, filing dates and score magnitudes mirror the real
+ * corpus shapes recorded by `scripts/diagnostics/ui006_discovery_probe.py`
+ * (BM25 scores around 9-13, snippets bounded with leading/trailing ellipses and
+ * character ranges, 200-candidate ceiling). Nothing here calls a model, a
+ * provider, SEC, or a backend.
+ */
+export interface SearchFixtureHit {
+  chunk_id: string;
+  document_id: string;
+  ticker: string;
+  section: string;
+  filing_date: string;
+  report_date: string;
+  chunk_index: number;
+  score: number;
+  text: string;
+}
+
+/**
+ * The best-ranked fixture excerpt belongs to the fixture catalog document the
+ * rest of the suite already knows (`AAPL:fixture`, served by the reader and
+ * chunk routes), so a Search result handoff lands on a real fixture chunk
+ * instead of an identity the reader cannot resolve.
+ */
+function searchPrimaryHit(): SearchFixtureHit {
+  return {
+    chunk_id: "AAPL_fixture_revenue_0",
+    document_id: FIXTURE_DOCUMENT_ID,
+    ticker: "AAPL",
+    section: "financial_statements",
+    filing_date: "2025-10-31",
+    report_date: "2025-09-27",
+    chunk_index: 2,
+    score: 11.472913,
+    text: "Total revenue was reported in fiscal 2024.",
+  };
+}
+
+const SEARCH_FIXTURE_REAL_SHAPED_HITS: SearchFixtureHit[] = [
+  {
+    chunk_id: "MSFT_000095017025100235_mdna_0005",
+    document_id: "MSFT:0000950170-25-100235",
+    ticker: "MSFT",
+    section: "mdna",
+    filing_date: "2025-07-30",
+    report_date: "2025-06-30",
+    chunk_index: 5,
+    score: 10.703384,
+    text: "…Microsoft Cloud gross margin percentage Gross margin percentage for our Microsoft Cloud business grew as cloud revenue increased across every customer segment…",
+  },
+  {
+    chunk_id: "MSFT_000095017025100235_mdna_0004",
+    document_id: "MSFT:0000950170-25-100235",
+    ticker: "MSFT",
+    section: "mdna",
+    filing_date: "2025-07-30",
+    report_date: "2025-06-30",
+    chunk_index: 4,
+    score: 10.413538,
+    text: "…icrosoft 365 Commercial cloud revenue growth metric. Other changes include combining Windows OEM and Devices into a single revenue growth metric…",
+  },
+  {
+    chunk_id: "ORCL_000119312526277521_mdna_0076",
+    document_id: "ORCL:0001193125-26-277521",
+    ticker: "ORCL",
+    section: "mdna",
+    filing_date: "2026-06-22",
+    report_date: "2026-05-31",
+    chunk_index: 76,
+    score: 9.230227,
+    text: "Our cloud and software business, which represented 87% of our total revenues, delivers infrastructure technologies through our cloud revenue segments…",
+  },
+  {
+    chunk_id: "INTC_000005086326000011_risk_factors_0024",
+    document_id: "INTC:0000050863-26-000011",
+    ticker: "INTC",
+    section: "risk_factors",
+    filing_date: "2026-01-23",
+    report_date: "2025-12-27",
+    chunk_index: 24,
+    score: 10.32074,
+    text: "…y upon a complex global supply chain. We have a highly complex global supply chain composed of thousands of suppliers…",
+  },
+  {
+    chunk_id: "HD_000162828026019436_risk_factors_0030",
+    document_id: "HD:0001628280-26-019436",
+    ticker: "HD",
+    section: "risk_factors",
+    filing_date: "2026-03-18",
+    report_date: "2026-02-01",
+    chunk_index: 30,
+    score: 10.06444,
+    text: "Disruptions in our supply chain and other factors affecting the availability and distribution of our merchandise could adversely impact our business and reputation…",
+  },
+];
+
+export const SEARCH_FIXTURE_SECTIONS = ["business", "financial_statements", "financial_table", "mdna", "risk_factors"] as const;
+
+/**
+ * The remaining ranked excerpts. They keep the fixture snapshot larger than one
+ * page so pagination is exercised through the real API-004 paging path, and
+ * their text still contains the fixture query words so highlights stay real.
+ */
+const SEARCH_FIXTURE_EXTRA_ROWS: Array<[string, string, string, number, string]> = [
+  ["AAPL", "risk_factors", "2025-10-31", 9.812004, "…our supply chain and cloud revenue depend on suppliers and partners…"],
+  ["AMZN", "mdna", "2026-02-07", 9.640112, "…aws cloud revenue and the supply chain of our retail operations…"],
+  ["GOOGL", "business", "2026-01-31", 9.511877, "…cloud revenue growth and supply chain constraints for hardware…"],
+  ["NVDA", "risk_factors", "2026-02-26", 9.402318, "…our supply chain and cloud revenue from data center customers…"],
+  ["TSLA", "mdna", "2026-01-26", 9.208845, "…supply chain pressures and cloud revenue for energy services…"],
+  ["BRK-B", "business", "2026-02-24", 9.077411, "…cloud revenue exposure and supply chain disruption in insurance…"],
+  ["JPM", "risk_factors", "2026-02-16", 8.930512, "…technology supply chain and cloud revenue dependencies…"],
+  ["GS", "business", "2026-02-25", 8.812007, "…cloud revenue platforms and supply chain of market data…"],
+  ["MS", "risk_factors", "2026-02-19", 8.701244, "…cloud revenue and supply chain resilience expectations…"],
+  ["XOM", "mdna", "2026-02-21", 8.640913, "…supply chain logistics and cloud revenue for digital services…"],
+  ["CVX", "business", "2026-02-20", 8.512770, "…supply chain investments and cloud revenue reporting…"],
+  ["PFE", "risk_factors", "2026-02-27", 8.402881, "…clinical supply chain and cloud revenue analytics…"],
+  ["UNH", "mdna", "2026-02-13", 8.311004, "…supply chain of care services and cloud revenue systems…"],
+  ["HD", "business", "2026-03-18", 8.220645, "…supply chain network and cloud revenue for online sales…"],
+  ["LOW", "mdna", "2026-03-20", 8.110338, "…supply chain costs and cloud revenue channels…"],
+  ["TGT", "risk_factors", "2026-03-11", 7.980221, "…supply chain disruption and cloud revenue dependencies…"],
+  ["COST", "business", "2026-03-05", 7.845902, "…supply chain scale and cloud revenue reporting…"],
+];
+
+export interface SearchFixtureHit {
+  chunk_id: string;
+  document_id: string;
+  ticker: string;
+  section: string;
+  filing_date: string;
+  report_date: string;
+  chunk_index: number;
+  score: number;
+  text: string;
+}
+
+export const SEARCH_FIXTURE_EXTRA_HITS: SearchFixtureHit[] = SEARCH_FIXTURE_EXTRA_ROWS.map(
+  ([ticker, section, filingDate, score, text]) => ({
+    chunk_id: `${ticker}_fixture_${section}_0002`,
+    document_id: `${ticker}:0000${ticker.replace("-", "")}26-000002`,
+    ticker,
+    section,
+    filing_date: filingDate,
+    report_date: filingDate,
+    chunk_index: 2,
+    score,
+    text,
+  }),
+);
+
+export function searchFixtureHits(): SearchFixtureHit[] {
+  return [searchPrimaryHit(), ...SEARCH_FIXTURE_REAL_SHAPED_HITS, ...SEARCH_FIXTURE_EXTRA_HITS];
+}
+
+/**
+ * Match ranges for a fixture excerpt, derived the same way `build_snippet`
+ * derives real ones: every occurrence of a literal query word, capped at the
+ * API's eight-range bound.
+ */
+function fixtureRanges(text: string, terms: string[] = ["cloud", "revenue", "supply", "chain"]): Array<[number, number]> {
+  const lower = text.toLowerCase();
+  const ranges: Array<[number, number]> = [];
+  for (const term of terms) {
+    let cursor = 0;
+    while (ranges.length < 8) {
+      const at = lower.indexOf(term, cursor);
+      if (at === -1) break;
+      ranges.push([at, at + term.length]);
+      cursor = at + term.length;
+    }
+  }
+  return ranges.sort((left, right) => left[0] - right[0]);
+}
+
+function searchFixtureSnapshot(
+  body: Record<string, unknown>,
+  options: { ceiling: "bounded" | "complete" },
+  page: number,
+  pageSize: number,
+): Record<string, unknown> {
+  const query = String(body.query ?? "");
+  const groupBy = body.group_by === "chunk" ? "chunk" : "document";
+  const ticker = typeof body.ticker === "string" && body.ticker ? body.ticker : null;
+  const section = typeof body.section === "string" && body.section ? body.section : null;
+  const year = typeof body.year === "number" ? body.year : null;
+
+  const matching = searchFixtureHits().filter((hit) => {
+    if (ticker && hit.ticker !== ticker) return false;
+    if (section && hit.section !== section) return false;
+    if (year && Number(hit.filing_date.slice(0, 4)) !== year) return false;
+    return true;
+  });
+
+  const hits = matching.map((hit) => ({
+    chunk_id: hit.chunk_id,
+    document_id: hit.document_id,
+    ticker: hit.ticker,
+    section: hit.section,
+    filing_date: hit.filing_date,
+    report_date: hit.report_date,
+    chunk_index: hit.chunk_index,
+    score: hit.score,
+    // Ranges are derived from the returned text, exactly like the API does.
+    snippet: { text: hit.text, ranges: fixtureRanges(hit.text), truncated: true },
+  }));
+
+  const groups = [...new Set(hits.map((hit) => hit.document_id))].map((documentId) => {
+    const documentHits = hits.filter((hit) => hit.document_id === documentId);
+    return {
+      document_id: documentId,
+      ticker: documentHits[0].ticker,
+      filing_date: documentHits[0].filing_date,
+      report_date: documentHits[0].report_date,
+      sections: [...new Set(documentHits.map((hit) => hit.section))],
+      best_score: Math.max(...documentHits.map((hit) => hit.score)),
+      hit_count: documentHits.length,
+      hits: documentHits,
+    };
+  });
+
+  const items = groupBy === "document" ? groups : hits;
+  const start = (page - 1) * pageSize;
+  const documentCount = new Set(hits.map((hit) => hit.document_id)).size;
+  // `ceiling` keeps both the bounded and the complete wording reachable. The
+  // reported ceiling is this fixture's own ranked size, so the bounded copy
+  // stays internally consistent with the counts beside it.
+  const bounded = options.ceiling === "bounded" && items.length > 0;
+  const scopeSections = [...new Set(matching.map((hit) => hit.section))].sort();
+  const scopeYears = [...new Set(matching.map((hit) => Number(hit.filing_date.slice(0, 4))))].sort((left, right) => right - left);
+  const scopeCompanies = [...new Set(matching.map((hit) => hit.ticker))].sort();
+
+  return {
+    search_id: `search-${String(options.ceiling === "bounded" ? "0123456789abcdef" : "fedcba9876543210")}`,
+    query: { text: query, normalized: query.toLowerCase(), mode: "keyword" },
+    grouping: { group_by: groupBy, group_count: groups.length, hit_count: hits.length },
+    engine: {
+      key: "bm25_lexical",
+      version: "v1",
+      definition:
+        "Chunks that contain at least one query term match; BM25 lexical score over indexed chunk text orders them. The score is a ranking signal for keyword matching, not a confidence, accuracy, or probability, and a zero score means the term occurs without being discriminative.",
+    },
+    scope: {
+      ticker,
+      section,
+      year,
+      filing_date: null,
+      documents: documentCount,
+      count_scope: items.length > 0 ? "bounded_candidates" : "no_matches",
+      candidate_ceiling: hits.length,
+      limited_by_ceiling: bounded,
+      matched_documents: documentCount,
+      matched_chunks: hits.length,
+    },
+    items: items.slice(start, start + pageSize),
+    total: items.length,
+    page,
+    page_size: pageSize,
+    facets: [
+      {
+        dimension: "company",
+        availability: "recorded",
+        reason: null,
+        values: scopeCompanies.map((value) => ({ value, count: matching.filter((hit) => hit.ticker === value).length })),
+      },
+      {
+        dimension: "year",
+        availability: "recorded",
+        reason: null,
+        values: scopeYears.map((value) => ({ value, count: matching.filter((hit) => Number(hit.filing_date.slice(0, 4)) === value).length })),
+      },
+      {
+        dimension: "section",
+        availability: "recorded",
+        reason: null,
+        values: scopeSections.map((value) => ({ value, count: matching.filter((hit) => hit.section === value).length })),
+      },
+    ],
+    created_at: "2026-09-22T00:00:00Z",
+    expires_at: "2026-09-22T00:15:00Z",
+    ttl_seconds: 900,
+  };
+}
+
 const CORS_HEADERS = {
   "access-control-allow-origin": "*",
   "access-control-allow-headers": "Content-Type",
@@ -342,6 +627,12 @@ export async function installApiFixtures(
     streamSources?: Array<typeof SAMPLE_SOURCES>;
     pdf?: boolean;
     catalog?: boolean;
+    /** Discovery ceiling state the mocked `/search` snapshot reports. */
+    searchCeiling?: "bounded" | "complete";
+    /** Answer `GET /search/{id}` with 410 so the expired state is reachable. */
+    searchExpired?: boolean;
+    /** Answer `GET /search/{id}` with 404 so the unknown-id state is reachable. */
+    searchMissing?: boolean;
   } = {},
 ): Promise<void> {
   const history: HistoryFixture = options.history ?? {
@@ -350,6 +641,8 @@ export async function installApiFixtures(
     context: { status: "missing", retained_turns: 0, ttl_remaining_seconds: 0 },
   };
   let streamRequestIndex = 0;
+  /** Snapshots created by this test's POSTs, so a GET pages the same scope. */
+  const searchSnapshots = new Map<string, Record<string, unknown>>();
 
   // Playwright matches routes in reverse registration order, so the
   // catch-all guard must be registered FIRST and the specific API mock
@@ -415,6 +708,59 @@ export async function installApiFixtures(
     }
 
     const decodedPath = decodeURIComponent(path);
+
+    // Discovery search (API-004). The snapshot is created once per POST and
+    // paged from memory afterwards, so a browser test can prove that paging
+    // never re-runs the search.
+    if (decodedPath === "/search" && method === "POST") {
+      const body = (request.postDataJSON() ?? {}) as Record<string, unknown>;
+      const query = String(body.query ?? "").trim();
+      if (query.length < 2 || query.length > 200) {
+        await route.fulfill({
+          status: 422,
+          headers: { ...CORS_HEADERS, "content-type": "application/json" },
+          body: JSON.stringify({ detail: "Query must be between 2 and 200 characters" }),
+        });
+        return;
+      }
+      const pageSize = typeof body.page_size === "number" ? body.page_size : 20;
+      const snapshot = searchFixtureSnapshot(body, { ceiling: options.searchCeiling ?? "bounded" }, 1, pageSize);
+      searchSnapshots.set(String(snapshot.search_id), body);
+      await route.fulfill({ status: 200, headers: { ...CORS_HEADERS, "content-type": "application/json" }, body: JSON.stringify(snapshot) });
+      return;
+    }
+
+    if (decodedPath.startsWith("/search/") && method === "GET") {
+      if (options.searchExpired) {
+        await route.fulfill({
+          status: 410,
+          headers: { ...CORS_HEADERS, "content-type": "application/json" },
+          body: JSON.stringify({ detail: "Discovery snapshot expired; run the search again" }),
+        });
+        return;
+      }
+      const searchId = decodeURIComponent(decodedPath.slice("/search/".length));
+      const stored = options.searchMissing ? undefined : searchSnapshots.get(searchId);
+      if (!stored) {
+        await route.fulfill({
+          status: 404,
+          headers: { ...CORS_HEADERS, "content-type": "application/json" },
+          body: JSON.stringify({ detail: "Discovery snapshot not found" }),
+        });
+        return;
+      }
+      // Page the stored snapshot: the same scope and grouping, a new page.
+      const page = Math.max(1, Number(url.searchParams.get("page") ?? 1));
+      const pageSize = Math.max(1, Number(url.searchParams.get("page_size") ?? stored.page_size ?? 20));
+      const snapshot = searchFixtureSnapshot(
+        { ...stored, page_size: pageSize },
+        { ceiling: options.searchCeiling ?? "bounded" },
+        page,
+        pageSize,
+      );
+      await route.fulfill({ status: 200, headers: { ...CORS_HEADERS, "content-type": "application/json" }, body: JSON.stringify(snapshot) });
+      return;
+    }
 
     // The API-003 routes answer for every journey; only the richer multi-row
     // dataset is opt-in.

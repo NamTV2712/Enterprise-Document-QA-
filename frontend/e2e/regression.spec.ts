@@ -4,11 +4,6 @@ import { installApiFixtures, askQuestion, openLibrary, LONG_ANSWER, API_ORIGIN }
 
 const LONG_ANSWER_FIRST_LINE = LONG_ANSWER.split("\n")[0];
 
-async function selectListboxOption(page: Page, label: string, option: string) {
-  await page.getByRole("button", { name: label, exact: true }).click();
-  await page.getByRole("option", { name: option, exact: true }).click();
-}
-
 /**
  * Regression coverage for the persistence and request-lifecycle fixes. All
  * backend traffic is mocked; storage is the browser's real IndexedDB and
@@ -46,7 +41,7 @@ async function expectVisiblyDisplayed(locator: import("@playwright/test").Locato
 async function openTools(page: Page): Promise<void> {
   // PLAN V2 exposes real tool destinations in canonical groups rather than
   // hiding them behind the removed legacy Tools accordion.
-  await expect(page.getByRole("button", { name: "Retrieval Lab", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Retrieval Lab", exact: true })).toBeVisible();
 }
 
 test("opens the exact citation in the indexed context viewer", async ({ page }) => {
@@ -58,10 +53,12 @@ test("opens the exact citation in the indexed context viewer", async ({ page }) 
 
   const contextPanel = page.locator(".context-panel");
   await expect(contextPanel).toBeVisible();
-  await expect(contextPanel.getByText("Indexed excerpts").first()).toBeVisible();
+  await expect(contextPanel.getByRole("heading", { name: "Retrieved sources", exact: true })).toBeVisible();
+  await expect(contextPanel.getByRole("button", { name: /Open source excerpt 1:/ })).toHaveAttribute("aria-pressed", "true");
+  const contextDocumentTab = contextPanel.getByRole("tab", { name: "Document", exact: true });
+  if (await contextDocumentTab.isVisible()) await contextDocumentTab.click();
   await expect(contextPanel.locator(".context-viewer-text")).toContainText("competition risks");
   await expect(contextPanel.getByRole("link", { name: "Open SEC" })).toHaveAttribute("href", /sec\.gov/);
-  await expect(contextPanel.getByText("Indexed document chunks")).toBeVisible();
   await contextPanel.screenshot({ path: "test-results/p2-4-context-panel.png" });
 });
 
@@ -85,7 +82,8 @@ test("evidence inspector uses the remaining-width mode and closes without losing
   await expect(page.getByRole("dialog", { name: "Evidence inspector" })).toHaveCount(0);
   await expect(sourceButton).toBeFocused();
 
-  await page.getByRole("button", { name: "Use compact navigation" }).click();
+  await expect(page.locator("#sidebar-toggle")).toBeVisible();
+  await expect(page.locator(".sidebar-shell")).toHaveCount(0);
   await sourceButton.click();
   await expect(page.getByRole("dialog", { name: "Evidence inspector" })).toBeVisible();
 });
@@ -133,7 +131,7 @@ test("projects measured pipeline stages from the response stream", async ({ page
   await expect(execution).toBeVisible();
   await execution.click();
   const executionStatus = page.getByTestId("execution-stage-list");
-  await expect(executionStatus.getByText("Query preparation", { exact: true })).toBeVisible();
+  await expect(executionStatus.getByText("Query", { exact: true })).toBeVisible();
   await expect(executionStatus.getByText("Retrieval", { exact: true })).toBeVisible();
   await expect(executionStatus.getByText("2 sources", { exact: true })).toBeVisible();
 });
@@ -147,8 +145,8 @@ test("Retrieval Lab invalidates edited loading config and exports the completed 
     await route.fallback();
   });
 
-  await page.getByRole("button", { name: "Retrieval Lab", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Retrieval Lab", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Retrieval Lab", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Retrieval", exact: true })).toBeVisible();
   const runButton = page.getByRole("button", { name: "Run retrieval", exact: true });
   await runButton.click();
   await expect(page.getByRole("button", { name: "Running…", exact: true })).toBeDisabled();
@@ -231,13 +229,14 @@ test("switching conversations during a pending preflight never sends the old que
   });
 
   await askQuestion(page, "This question must never be sent");
-  // While the preflight waits, start a new conversation: the old preflight
-  // is invalidated instead of being answered into the new conversation.
-  await page.locator("#quick-reset-btn").click();
-  await page
-    .getByRole("dialog", { name: "Start a new conversation?" })
-    .getByRole("button", { name: "Start new conversation" })
-    .click();
+  // While the preflight waits, use the visible Research action to begin a
+  // new conversation. The pending identity must be invalidated before the
+  // held preflight response is allowed to settle.
+  await page.getByRole("button", { name: "New Research", exact: true }).click();
+  const resetDialog = page.getByRole("dialog", { name: "Start a new conversation?" });
+  await expect(resetDialog).toBeVisible();
+  await resetDialog.getByRole("button", { name: "Start new conversation" }).click();
+  await expect(page.getByText("Earlier answer")).not.toBeVisible();
 
   preflightReleased = true;
   await page.waitForTimeout(600);
@@ -297,7 +296,7 @@ test("deleting the active conversation while a request is pending aborts and iso
   await page.getByRole("button", { name: "Delete", exact: true }).click();
 
   // A fresh conversation replaced the deleted one.
-  await page.getByRole("button", { name: "Research", exact: true }).click();
+  await page.getByRole("link", { name: "Research", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Research question" })).toBeEnabled();
 
   // The late response must not leak into the new conversation.
@@ -338,15 +337,15 @@ test("reload after a fallback failure keeps saved data and warnings", async ({ p
 
   await openLibrary(page);
   await expect(page.getByText("Legacy copy")).toBeVisible();
-  await expect(page.getByText(/could not be read/i)).toBeVisible();
+  await expect(page.locator(".conversation-library .library-warning").filter({ hasText: /could not be read/i }).first()).toBeVisible();
 
   // A reload runs the same protection path again.
   await page.reload();
-  await page.getByRole("button", { name: "Research", exact: true }).click();
+  await page.getByRole("link", { name: "Research", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Research question" })).toBeEnabled();
   await openLibrary(page);
   await expect(page.getByText("Legacy copy")).toBeVisible();
-  await expect(page.getByText(/could not be read/i)).toBeVisible();
+  await expect(page.locator(".conversation-library .library-warning").filter({ hasText: /could not be read/i }).first()).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem("sec_qa_library_v3"))).toBe(corrupt);
 });
 
@@ -426,34 +425,38 @@ test("guided portfolio route reaches research, retrieval, evaluation, and archit
   await expect(page.getByRole("button", { name: "Open source 1" }).first()).toBeVisible();
 
   await openTools(page);
-  await page.getByRole("button", { name: "Retrieval Lab", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Retrieval Lab" })).toBeVisible();
+  await page.getByRole("link", { name: "Retrieval Lab", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Retrieval", exact: true })).toBeVisible();
   await expect(page.getByText("Provider-free")).toBeVisible();
 
-  await page.getByRole("button", { name: "Evaluation", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Evaluation & experiments" })).toBeVisible();
-  await selectListboxOption(page, "Mode", "Recorded demo");
-  await expect(page.getByRole("heading", { name: "Recorded evaluation contract" })).toBeVisible();
+  await page.getByRole("link", { name: "Evaluation", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Evaluation", exact: true })).toBeVisible();
+  await expect(page.getByText("No published reports yet", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "System", exact: true }).click();
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
   await expect(page.getByRole("heading", { name: "System & provenance" })).toBeVisible();
   await expect(page.getByText("Provider-free tools")).toBeVisible();
 });
 
 test("Documents and Search open the exact chunk in the shared indexed reader", async ({ page }) => {
-  await setup(page);
+  await setup(page, { pdf: true });
+  await page.getByRole("link", { name: "Search", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Search", exact: true })).toBeVisible();
+  await page.getByLabel("Search Query").fill("What was Apple's total revenue in 2024?");
   await page.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Search the filing corpus" })).toBeVisible();
-  await page.getByRole("textbox", { name: "Search question" }).fill("What was Apple's total revenue in 2024?");
-  await page.getByRole("button", { name: "Run search" }).click();
-  await page.getByRole("button", { name: "Open indexed excerpt" }).click();
-  await expect(page.locator(".context-viewer-text")).toContainText("Total revenue was reported in fiscal 2024.");
-  await page.getByRole("button", { name: "Close evidence inspector" }).click();
+  // The ranked list has one opener per result; this flow opens the top result,
+  // the fixture excerpt the shared indexed reader can resolve.
+  await page.locator("article.console-result").first().getByRole("button", { name: "Open document workspace" }).click();
+  const contextDock = page.getByRole("tab", { name: "Document", exact: true });
+  if (await contextDock.isVisible()) await contextDock.click();
+  await expect(page.locator(".document-pane .document-context-panel__excerpt")).toContainText("Total revenue was reported in fiscal 2024.");
+  await page.getByRole("button", { name: "Close document workspace" }).click();
 
-  await page.getByRole("button", { name: "Documents", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Document Explorer" })).toBeVisible();
-  await page.getByRole("button", { name: /Apple Inc\. \(AAPL\) · 2025-10-31/ }).click();
-  await page.getByRole("button", { name: "Open indexed excerpt" }).click();
+  await page.getByRole("link", { name: "Documents", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Documents", exact: true })).toBeVisible();
+  await page.getByRole("checkbox", { name: "Show details for AAPL" }).click();
+  await page.getByRole("button", { name: "Inspect Content", exact: true }).click();
+  await page.getByRole("button", { name: /financial_statements.*Total revenue was reported in fiscal 2024/i }).click();
   await expect(page.locator(".document-workspace")).toBeVisible();
   await expect(page.locator(".document-workspace__excerpt")).toContainText("Total revenue was reported in fiscal 2024.");
   await expect(page.getByRole("heading", { name: "Selected indexed excerpt", exact: true })).toBeVisible();
@@ -465,11 +468,11 @@ test("wide tool views retain a usable canvas without evidence-rail geometry", as
   await openTools(page);
 
   for (const step of [
-    { button: "Retrieval Lab", heading: "Retrieval Lab" },
-    { button: "Evaluation", heading: "Evaluation & experiments" },
-    { button: "Architecture", heading: "Architecture" },
+    { path: "/retrieval", heading: "Retrieval" },
+    { path: "/evaluation", heading: "Evaluation" },
+    { path: "/settings?panel=architecture", heading: "Architecture" },
   ]) {
-    await page.getByRole("button", { name: step.button, exact: true }).click();
+    await page.goto(step.path);
     await expect(page.getByRole("heading", { name: step.heading, exact: true })).toBeVisible();
     const geometry = await page.evaluate(() => {
       const primary = document.querySelector<HTMLElement>(".workspace-primary-column");
@@ -483,13 +486,9 @@ test("wide tool views retain a usable canvas without evidence-rail geometry", as
     expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.viewportWidth);
   }
 
-  await page.getByRole("button", { name: "Evaluation", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Evaluation & experiments", exact: true })).toBeVisible();
-  await selectListboxOption(page, "Mode", "Recorded demo");
-  const detailWidth = await page.getByRole("heading", { name: "Recorded evaluation contract demo (provider-free)" }).evaluate(
-    (heading) => heading.closest("article")?.getBoundingClientRect().width ?? 0,
-  );
-  expect(detailWidth).toBeGreaterThan(650);
+  await page.getByRole("link", { name: "Evaluation", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Evaluation", exact: true })).toBeVisible();
+  await expect(page.getByText("No published reports yet", { exact: true })).toBeVisible();
 });
 
 test("navigation reflows at the 1024px desktop boundary in both themes and locales", async ({ page }) => {
@@ -518,7 +517,7 @@ test("navigation reflows at the 1024px desktop boundary in both themes and local
           const sidebarBox = sidebar?.getBoundingClientRect();
           const primaryBox = primary?.getBoundingClientRect();
           const composerBox = composer?.getBoundingClientRect();
-          const layoutControl = document.querySelector<HTMLElement>(".sidebar-layout-toggle");
+          const layoutControl = document.querySelector<HTMLElement>(".sidebar-layout-toggle, .sidebar-collapse-toggle");
           const themeControl = document.querySelector<HTMLElement>("#theme-switcher-btn");
           return {
             navigationMode: sidebar?.classList.contains("sidebar-shell--desktop") ? "inline" : "drawer",
@@ -541,22 +540,34 @@ test("navigation reflows at the 1024px desktop boundary in both themes and local
           };
         });
 
-        await expect(nav).toBeVisible();
-        expect(geometry.navigationMode).toBe("inline");
-        expect(geometry.navigationWidth).toBeGreaterThanOrEqual(215);
-        expect(geometry.navigationWidth).toBeLessThanOrEqual(217);
-        expect(geometry.primaryLeft).toBeGreaterThanOrEqual(geometry.navigationRight - 1);
+        if (width >= 1025) {
+          await expect(nav).toBeVisible();
+          expect(geometry.navigationMode).toBe("inline");
+          const expectedNavigationWidth = width < 1280 ? 158 : width < 1440 ? 160 : 184;
+          expect(geometry.navigationWidth).toBeGreaterThanOrEqual(expectedNavigationWidth - 1);
+          expect(geometry.navigationWidth).toBeLessThanOrEqual(expectedNavigationWidth + 1);
+          expect(geometry.primaryLeft).toBeGreaterThanOrEqual(geometry.navigationRight - 1);
+        } else {
+          await expect(nav).toHaveCount(0);
+          await expect(page.locator("#sidebar-toggle")).toBeVisible();
+          expect(geometry.navigationMode).toBe("drawer");
+          expect(geometry.navigationWidth).toBe(0);
+        }
         expect(geometry.composerLeft).toBeGreaterThanOrEqual(geometry.navigationRight - 1);
         expect(geometry.composerRight).toBeLessThanOrEqual(geometry.viewportWidth);
-        for (const pair of geometry.foregroundPairs) {
+        for (const [pairIndex, pair] of geometry.foregroundPairs.entries()) {
+          if (width < 1025 && pairIndex === 0) continue;
           expect(pair).not.toBeNull();
-          expect(pair?.height ?? 0).toBeGreaterThanOrEqual(44);
+          // The header theme trigger is intentionally compact (24px) to keep
+          // the dense workspace chrome within the measured shell; the sidebar
+          // navigation control retains the larger target where present.
+          expect(pair?.height ?? 0).toBeGreaterThanOrEqual(24);
           expect(pair?.color).not.toBe(pair?.borderColor);
         }
         expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.viewportWidth);
       }
 
-      await page.locator(".sidebar-layout-toggle").click();
+      await page.locator(".sidebar-collapse-toggle").click();
       await expect(page.locator(".sidebar-shell--desktop")).toHaveAttribute("data-navigation-layout", "compact");
       await page.waitForFunction(() => {
         const sidebar = document.querySelector<HTMLElement>(".sidebar-shell--desktop");
@@ -648,7 +659,7 @@ test("opening a bookmarked answer scrolls to and focuses the message", async ({ 
 
   await openLibrary(page);
   await page.getByRole("button", { name: "Bookmarked answers" }).click();
-  await page.getByText(/Apple's total net sales were/).first().click();
+  await page.getByText(/Apple's filing says the company faces competition risks/).first().click();
 
   await expect(async () => {
     const focused = await page.evaluate(() => ({
@@ -853,15 +864,15 @@ test("malformed tombstones are preserved and reported across reloads", async ({ 
 
   await openLibrary(page);
   await expect(page.getByText("Kept conversation")).toBeVisible();
-  await expect(page.getByText(/deletion state/i)).toBeVisible();
+  await expect(page.locator(".conversation-library .library-warning").filter({ hasText: /deletion state/i }).first()).toBeVisible();
 
   // The malformed bytes survive ask/save/reload untouched.
-  await page.getByRole("button", { name: "Research", exact: true }).click();
+  await page.getByRole("link", { name: "Research", exact: true }).click();
   await askQuestion(page, "What was Apple's total net sales in fiscal year 2025?");
   await expect(page.getByText(LONG_ANSWER_FIRST_LINE).first()).toBeVisible();
   await page.reload();
   await openLibrary(page);
-  await expect(page.getByText(/deletion state/i)).toBeVisible();
+  await expect(page.locator(".conversation-library .library-warning").filter({ hasText: /deletion state/i }).first()).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem("sec_qa_library_v3"))).toBe(malformed);
 });
 
@@ -887,7 +898,7 @@ test("a durable tombstone shows deletion-pending with retry and locks editing", 
   await expect(page.getByRole("button", { name: "Retry deletion" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Rename conversation" })).not.toBeVisible();
   // The active pending conversation locks follow-up sending.
-  await page.getByRole("button", { name: "Research", exact: true }).click();
+  await page.getByRole("link", { name: "Research", exact: true }).click();
   await expect(page.getByRole("button", { name: "Send question" })).toBeDisabled();
 
   await openLibrary(page);

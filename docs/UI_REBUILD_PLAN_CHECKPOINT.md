@@ -2304,3 +2304,478 @@ both of its dependencies are complete (`UI-002` router/shell, `API-004`
 discovery snapshots). `UI-007` (Retrieval/Reranker, needs `API-005`, complete)
 and `DATA-003` (Typed collections, needs `DATA-001`/`DATA-002`, complete) are
 also dependency-ready. Do not begin any of them without a new instruction.
+
+## UI-006-A Quota-Safe Checkpoint (recovery, contract, reference, real-data probe)
+
+### Active Task
+
+UI-006 — Search. Status: ACTIVE (A complete; implementation starting).
+
+### Recovery Verified
+
+- HEAD `a4c76ea` (UI-005) on `codex/bilingual-research-workspace`; dirty tree 148
+  paths. UI-001…UI-005, API-001…API-005, DATA-001/DATA-002, TEST-001 complete.
+- No partial UI-006 work exists: the only UI-006 text in the repository before
+  this run was the UI-005 "Exact Next Action" line.
+- Master-plan row: `| UI-006 | Search | UI-002, API-004 | Search feature |
+  Group/facet/expiry/handoff | Collections backend |`. Both dependencies are
+  complete, so UI-006 is the correct Exact Next Action.
+- The current Search page is the **old diagnostic substitute**: the existing
+  page calls `POST /retrieval/inspect` (API-005) with hybrid/dense/BM25 presets
+  and renders a trace, not discovery search. The gap matrix records exactly this
+  gap (`| Search | Keyword/natural language | Yes | Diagnostic substitute |
+  Inspection | Primitives | Discovery | Discovery service | P1 |`). It is
+  replaced, not preserved.
+
+### Master-Plan UI-006 Scope (read, not inferred)
+
+- Visual: ranked highlighted cards and metrics/facets/recent rail.
+- Reuse: safe highlights, source presentation, reader/handoffs.
+- Frontend: keyword/hybrid discovery, grouping/pagination; remove engineering
+  presets from the primary flow.
+- Backend/API: bounded snapshots, prefilters, scoped facets, expiry.
+- Persistence: browser recent queries, explicit saves, temporary snapshots.
+- Risks: bounded candidate counts represented as whole corpus totals.
+- Tests: prefilters, expiry, empty pages and research/open/save handoffs.
+- Done: scoped counts and stable snapshot navigation.
+- Gap-matrix rows owned here: discovery query (P1), collection/type/date filters
+  (P1), grouping (P1), highlights (P1), count/latency/score scope (P0), facets
+  rail (P1), recent/saved (P2), research/open/save actions (P1), pagination (P1).
+
+### API-004 Contract (verified in source, not assumed)
+
+`POST /search` (`src/api/routers/search.py`, rate limit `30/minute`) and
+`GET /search/{search_id}`.
+
+- Request: `query` (2..200 chars), `mode` (`Literal["keyword"]`), `group_by`
+  (`"document" | "chunk"`), `ticker`, `section`, `year`, `filing_date`, `page`,
+  `page_size` (1..50).
+- Response: `search_id`, `query{text,normalized,mode}`, `grouping{group_by,
+  group_count,hit_count}`, `engine{key,version,definition}`, `scope{ticker,
+  section,year,filing_date,documents,count_scope,candidate_ceiling,
+  limited_by_ceiling,matched_documents,matched_chunks}`, `items` (groups or
+  hits), `total`, `page`, `page_size`, `facets` (API-003 `CatalogFacet`s for the
+  scope), `created_at`, `expires_at`, `ttl_seconds`.
+- Hit: `chunk_id`, `document_id`, `ticker`, `section`, `filing_date`,
+  `report_date`, `chunk_index`, `score`, `snippet{text,ranges,truncated}`.
+- Group: `document_id`, `ticker`, `filing_date`, `report_date`, `sections`,
+  `best_score`, `hit_count`, `hits`.
+- Bounds: `CANDIDATE_CEILING = 200`, `SNIPPET_MAX_LENGTH = 240`,
+  `SNIPPET_MAX_RANGES = 8`, `SNAPSHOT_TTL_SECONDS = 900`, `MAX_SNAPSHOTS = 50`,
+  `DEFAULT_PAGE_SIZE = 20`, `MAX_PAGE_SIZE = 50`.
+- Count semantics: `total` is the pageable length of the **bounded** set;
+  `count_scope` is `bounded_candidates` or `no_matches`; `limited_by_ceiling`
+  says discovery stopped at the ceiling. `matched_documents`/`matched_chunks`
+  are the bounded set's own totals.
+- Ranking: BM25 lexical only (`engine.key = bm25_lexical`, v1). The engine
+  definition states the score is a ranking signal, explicitly **not** confidence,
+  accuracy, or probability.
+- Facets: API-003 aggregation for the same scope, so a facet counts **documents
+  in scope** under `all_filters_except_own_dimension`, never matches.
+- Errors: 422 validation, 404 unknown snapshot, 410 expired snapshot, 429 rate
+  limit. No sort parameter exists; order is the engine's deterministic
+  score-then-id order.
+
+### Search Reference Measured
+
+`docs/ui-references/search-ui-reference-dark-v1.png` — 1586x992, the same shell
+as the Documents reference: 220px navigation, 56px top bar, then approximately
+390px of right rail and ~980px of main column.
+
+- Main header: search icon tile + "Search" + subtitle, with three page actions
+  ("Search Examples", "Saved Searches", overflow) that have no capability here.
+- "Search Query" card: label, a tall query field with a clear control, a
+  "Search in" chip row of collections/filing types, a filter row (Company, Date
+  Range, Document Type, Section), an "Advanced Filters" button, and a prominent
+  "Search" submit button.
+- Results toolbar: "Showing 1-10 of 248 results (0.8s)", "Sort by Relevance",
+  a "Group by document" toggle, and "10 per page".
+- Result cards: left rank box, score pill, meta chips (company, filing, section,
+  page), a heading line, a two-line snippet with inline highlight marks, then
+  "Use in Research", "Open Document", "Save as Evidence" and an overflow.
+- Right rail: "Search Overview" 2x2 metric tiles (companies searched, results
+  found, search latency with engine name, top result score with a qualitative
+  label), "Refine Search" (quick-filter chips with counts, a companies select,
+  filing-type checkboxes, a date-range select), "Recent Searches" (query text,
+  relative time, result count, "View all").
+
+Truthful deltas recorded before coding: no page actions (no examples, saved
+searches, or overflow capability), no "Search in" collection/type chip row
+(collections are DATA-003 and no filing-type dimension exists), no Document Type
+filter, no "Advanced Filters" button (every real filter is already in the row),
+no sort select (API-004 has no sort parameter — order is the engine's), no
+latency tile (latency is not exposed), no qualitative "High relevance" label,
+no filing-type checkboxes, no "View all" for recents, and no page ("p. 12")
+metadata (the corpus has no page numbers). The reference's per-document cards
+correspond to API-004's chunk ordering; our grouped card is one filing with its
+`hit_count`, and the ungrouped card is one chunk.
+
+### Real-Corpus Probe (provider-free, read-only)
+
+`scripts/diagnostics/ui006_discovery_probe.py` (new, this task) loads the real
+embedded chunks and builds the same BM25 index the retriever builds at startup,
+then runs the real `DiscoveryService`. Real results:
+
+- 10,053 chunks, 50 documents, 50 tickers, 5 sections (business 50,
+  risk_factors 50, mdna 46, financial_statements 46, financial_table), filing
+  years 2026 (42 documents) and 2025 (8).
+- `"cloud revenue"` → 15 grouped filings, 200 bounded hits,
+  `limited_by_ceiling: true`, top group MSFT with `best_score` 10.703384 and
+  `hit_count` 43; snippets carry a leading "…" and ranges that index into the
+  returned text.
+- `"supply chain"` chunk mode → 200 hits across 33 documents, page 2 returns a
+  different deterministic page.
+- `"zzqqxx nonexistentterm"` → `count_scope: no_matches`, `total: 0`.
+- `query="cloud revenue", ticker=AAPL, year=2026` → `scope.documents: 0`, so
+  zero matches: the date filter is a real, observable axis because AAPL's filing
+  in this corpus is a 2025 filing.
+
+Consequence for the UI: `limited_by_ceiling` is true for ordinary queries, so
+the count label must always read as a bounded discovery count plus the ceiling
+note, and the rail's facet counts must be labelled as scope documents.
+
+### Existing Implementation Mapped
+
+- The old `SearchWorkspace` component + test — the diagnostic page being
+  replaced and deleted.
+- `frontend/src/lib/api.ts` — no discovery client exists yet; it already owns
+  `ApiError` (status/code/retryAfterSeconds) and `apiFetch`, so the new client
+  functions reuse them and no new dependency is needed.
+- `frontend/src/types.ts` — no discovery types yet.
+- `frontend/src/App.tsx` — mounts the page at `/search` with `onUseQuestion`,
+  `onOpenDocument` (document workspace), `onOpenSource` (standalone evidence
+  reader), `onSaveEvidence`, `onScopeChange`.
+- Preserved contracts: `article.console-result` per result, visible labels "Use
+  in Research" / "Open Document" / "Save as Evidence", focus ids
+  `search-document-workspace-<chunk>`, `[data-workbench-route-origin='search']`,
+  and "Back to Search" focus restoration.
+- `frontend/e2e/fixtures.ts` — mocks only `/retrieval/inspect` for Search today;
+  it gains hermetic `POST /search` and `GET /search/{id}` handlers built from
+  the real shapes recorded above (no provider, no corpus).
+
+### Shared-File Ownership
+
+`frontend/src/types.ts`, `frontend/src/lib/api.ts`, `frontend/e2e/fixtures.ts`
+already carry earlier validated rebuild work that cannot be split by hunk; new
+UI-006 additions go into them and will be disclosed. The shared untracked
+`frontend/src/styles/console.css` (1751 lines) is **not** claimed by UI-006:
+new Search styles go into a new UI-006-owned `frontend/src/styles/search.css`,
+while existing `console-*` primitives are reused rather than re-implemented.
+
+### Stitch Strategy
+
+One Stitch generation for the Search composition (query card, filter row,
+result cards, metrics/refine/recent rail) as a structural second opinion, then
+reconcile against the reference screenshot, which wins. Demo data from Stitch
+is discarded; nothing renders from it. Result recorded in UI-006-B.
+
+### Planned Files
+
+- New: the new `frontend/src/components/search/` page set (page, query card,
+  result card, snippet renderer, rail), `frontend/src/lib/searchModel.ts`,
+  `frontend/src/styles/search.css`, `frontend/e2e/ui-006-search.spec.ts`.
+- Modified: `frontend/src/lib/api.ts`, `frontend/src/types.ts`,
+  `frontend/src/App.tsx` (mount the new page), `frontend/src/index.css` (import
+  the new stylesheet), `frontend/e2e/fixtures.ts`, the three e2e specs that
+  drive the old Search selectors, checkpoint/PROJECT_STATE/FRONTEND_CONTRACT.
+- Deleted: the old `SearchWorkspace` component and its test (replaced).
+- Backend: none planned; API-004 already exposes every field the reference needs.
+
+### Exact Next Action
+
+UI-006-B: add the typed API-004 client and types, build the reference Search
+page (query card, filters, results, rail) on the snapshot lifecycle, keep the
+preserved identity/handoff contracts, and capture the first receipt.
+
+## UI-006-B/C/D/E Checkpoint (page, snapshot lifecycle, results, handoffs)
+
+### Active Task
+
+UI-006 — Search. Status: B, C, D, E complete; F/G/H remain.
+
+### Files Created
+
+- `frontend/src/lib/searchModel.ts` — pure Search helpers (page ranges in the
+  snapshot's own unit, ceiling note, score formatting, range-based snippet
+  segmentation, scope summary, recent-search storage, error classification).
+- `frontend/src/components/search/DiscoverySearchPage.tsx` — the page and its
+  snapshot lifecycle.
+- `frontend/src/components/search/SearchQueryCard.tsx` — query field, real
+  filter axes, submit.
+- `frontend/src/components/search/SearchResultCard.tsx` — one ranked result.
+- `frontend/src/components/search/SearchResultSnippet.tsx` — safe range
+  highlighting.
+- `frontend/src/components/search/SearchRail.tsx` — overview, refine, recent.
+- `frontend/src/styles/search.css` — UI-006-owned Search styles.
+- `frontend/src/lib/searchModel.test.ts` (15 tests),
+  `frontend/src/components/search/DiscoverySearchPage.test.tsx` (15 tests),
+  `frontend/e2e/ui-006-search.spec.ts` (9 tests).
+- `scripts/diagnostics/ui006_discovery_probe.py` — real-corpus probe (kept: it
+  is the evidence source for the fixture shapes and it is provider-free).
+
+### Files Modified
+
+- `frontend/src/types.ts` — discovery types (client-owned, mixed-history file).
+- `frontend/src/lib/api.ts` — `createDiscoverySearch` (POST, the only snapshot
+  write) and `getDiscoverySnapshot` (GET, paging without re-searching).
+- `frontend/src/App.tsx` — mounts the new page; the old page's global-scope
+  callback was removed with it.
+- `frontend/src/index.css` — imports the new stylesheet.
+- `frontend/e2e/fixtures.ts` — hermetic `POST /search` + `GET /search/{id}`
+  handlers (per-test snapshot store, 404/410 options, derived facets).
+- `frontend/e2e/v5-07-handoffs.spec.ts`, `frontend/e2e/regression.spec.ts`,
+  `frontend/e2e/reconciliation-reference.spec.ts` — Search selectors and the
+  saved-evidence label updated for the rebuilt page.
+
+### Files Deleted
+
+- `frontend/src/components/SearchWorkspace.tsx` and its test — the replacement
+  is the new page set above.
+
+### Snapshot Lifecycle (implemented, tested)
+
+- Typing only edits a draft: no request at all, proven by unit and browser
+  tests (`calls.posts` stays empty while the field changes).
+- One submit creates exactly one snapshot (`POST /search`); the page renders the
+  snapshot's own `query.text` and `scope`, so unsubmitted typing can never
+  relabel the results on screen.
+- Paging and page-size changes call `GET /search/{search_id}` on the same
+  snapshot (`page_size` is a GET parameter), never a second POST.
+- Opening a result, saving evidence, switching detail state, and rerendering
+  issue no POST.
+- A newly committed query, filter scope, or grouping is a new snapshot: the
+  grouping switch is part of the stored snapshot, so it POSTs again with the
+  same submitted query and scope.
+- Draft filters are instantly visible but only apply on the next submit; the
+  page says so ("New filters apply on the next search").
+- Stale responses cannot win: request-id guards plus `AbortController` per
+  request, covered by a test that resolves an older submission after a newer
+  one.
+- Reload does not silently re-run the query: snapshots stay runtime-only, and
+  the page honestly returns to its initial state.
+
+### Results, Counts, Score Semantics
+
+- Every card comes from API-004: real `chunk_id`, `document_id`, ticker,
+  section, filing date, `hit_count`, `score`, and the snippet with its ranges.
+- Highlights are the API's ranges sliced into React nodes; no HTML from the
+  response is interpreted, and Unicode/Vietnamese text survives intact.
+- Counts are bounded and labelled as bounded: the toolbar and footer show
+  "Showing 1–20 of 22 filings", and when `limited_by_ceiling` is true the card
+  states that discovery ranked the first N candidates rather than claiming a
+  corpus total. No fabricated total appears anywhere.
+- Scores are shown as raw BM25 numbers labelled `BM25`; there is no percentage,
+  no confidence, and no qualitative relevance label. The engine's own
+  definition is reachable in the rail.
+- The rail's metric tiles read the snapshot's real scope: companies in scope,
+  result filings (with the other unit's matching count), matching excerpts with
+  the ceiling state, and the top BM25 score with the engine identity.
+- The rail's section chips are API-003 scope counts, labelled "Sections in
+  scope (N filings)"; zero-count sections are not offered.
+- No-match snapshots render the submitted query, the real scope, and a
+  no-sample-result empty state.
+
+### Error And Expiry States
+
+`410` renders an expired-snapshot message with an explicit "Run the search
+again" action and keeps the previous results visible; `404` renders the unknown
+snapshot state; `429` reports the rate limit once and never retries in a loop;
+`422` shows the API's own validation message. None of them collapses into an
+empty result list.
+
+### Handoffs And Routes Preserved
+
+- `article.console-result` stays the result container, with the visible labels
+  "Use in Research", "Open Document", "Save as Evidence" and the accessible
+  names `Open document workspace` / `Save evidence`.
+- Focus ids stay `search-document-workspace-<chunk>`, the workbench still marks
+  `[data-workbench-route-origin='search']`, and "Back to Search" restores focus
+  to the opener (verified by the existing V5-07 spec, which now drives the new
+  page).
+- "Open Document" hands the reader the exact `chunk_id`/`document_id` and the
+  URL stays `/search`, so no second identity scheme was invented.
+- The page issues no conversation, workspace, or provider write: the only write
+  is the explicit Save evidence action, asserted by a request listener.
+
+### Tests Actually Run
+
+- `bunx vitest run src/lib/searchModel.test.ts src/components/search/DiscoverySearchPage.test.tsx`
+  — 30/30 pass (2 files).
+- `bunx vitest run` — 71 files / 422 tests pass.
+- `bun run lint` (tsc) — clean after every edit.
+- `bunx playwright test e2e/ui-006-search.spec.ts` — 9 tests, pass on Chromium
+  and Firefox (18/18).
+- `bunx playwright test e2e/v5-07-handoffs.spec.ts` — 4/4 pass.
+- `bunx playwright test e2e/regression.spec.ts:441` — pass.
+- `bunx playwright test e2e/reconciliation-reference.spec.ts --project=chromium`
+  — 15/15 pass, so the nine-reference receipt still holds with the rebuilt
+  Search page (r3-search and r4-library included).
+
+### Real Defects Found By The Tests
+
+- The V5-07 and regression handoff specs addressed `Save evidence` /
+  `Open document workspace` without scoping; with a ranked list of results those
+  names are legitimately ambiguous. The specs now scope to the card they open,
+  which is what those flows always meant.
+- The Search fixture initially returned excerpts whose chunk identities the
+  reader fixtures cannot resolve. The best-ranked fixture excerpt is now the
+  fixture catalog chunk (`AAPL_fixture_revenue_0`), so a result handoff lands on
+  a real fixture chunk.
+- `searchModel` time formatting compares the reader's local calendar day; the
+  first test used fixed UTC instants and was wrong on this UTC+7 machine. The
+  test now builds local dates.
+
+### Stitch Result (recorded honestly)
+
+One generation was requested for the Search composition in the existing
+high-fidelity project. The MCP client timed out at its 30s limit, no new screen
+was created (the project still lists the same screens as before this run), and
+the asset download reported success without writing to any path reachable on
+this host. Stitch therefore contributed no structure to this page; the
+reference screenshot remained the only visual authority, which is also the
+documented precedence. The two pre-existing Search screens in that project
+predate this run and were not used as design input.
+
+### Remaining Work
+
+UI-006-F (responsive/a11y pass and the visual comparison loop), UI-006-G
+(tsc/lint/full Vitest/build), UI-006-H (controlled Chromium/Firefox gates,
+nine-reference receipt, artifact/diff audit, docs, commit).
+
+### Exact Next Action
+
+Run the visual comparison loop against
+`docs/ui-references/search-ui-reference-dark-v1.png` at the reference viewport,
+list the largest remaining deltas, fix what is fixable truthfully, then run the
+UI-006-G/H gates.
+
+## UI-006-F/G/H Final Checkpoint (visual loop, gates, audits, UI-006 COMPLETE)
+
+### Task Status
+
+UI-006 COMPLETE.
+
+### Visual Comparison Loop Result
+
+Compared `frontend/test-results/ui-006/search-1586x992-chromium.png` against
+`docs/ui-references/search-ui-reference-dark-v1.png` (1586x992) across two
+iterations. Matched: page header identity (icon tile, title, subtitle), the
+query card with its label, tall field, clear affordance, filter row and primary
+Search button with the trailing arrow, the results toolbar (count line, engine
+chip, grouping switch, rows-per-page select), the ranked cards (rank box, meta
+chips, bold heading, highlighted excerpt, three actions, right-aligned score
+pill), and the right rail's three-card composition (overview tiles, refine
+filters, recent searches).
+
+Deltas closed this round: a duplicated section chip that repeated the card's own
+heading, a zero-count section chip the reference never shows, and the rail
+metric tiles' surface (which also fixed a contrast finding).
+
+Deltas that stay, each recorded as a truthful deviation rather than copied:
+no page-level actions (no examples, saved searches, or overflow capability); no
+collection/type chip row or Document Type filter; no Advanced Filters button;
+no sort selector because the engine owns the order; the engine chip replaces the
+reference's "Sort by Relevance"; the cards' heading is the excerpt's section
+because API-004 exposes no document heading; the score pill shows a raw BM25
+number instead of the reference's 0-1 relevance value; the rail's fourth tile
+reports the top BM25 score with the engine identity instead of a fabricated
+latency; the bounded-count strip is an explicit caveat the reference does not
+have; and the query field starts empty with a placeholder example instead of the
+reference's prefilled question, so nothing on first load looks submitted.
+
+### Responsive And Accessibility Result
+
+Receipts at 1586x992, 1440x900, 1280x856, 1024x768, 390x844 and 1440x700 pass
+with body/root horizontal overflow at 0 at every width. At 390px the query card
+stacks, the filters stay full-width, the toolbar wraps, and the cards remain
+readable; the rail moves below the results. Accessibility: the query field is a
+real labelled control inside a real form, Enter submits it (asserted), filters
+keep their own labels, the result actions keep accessible names, and an
+`axe-core` scan over `main` for contrast, label, button-name, link-name and
+input-field-name rules reports no serious or critical violations. Scanning
+mid-animation measured blended colors, so the scan disables motion first — the
+same trap the receipt capture guards against.
+
+### Gates (UI-006-H)
+
+- `bun run lint` (tsc) — PASS.
+- `bunx vitest run` — PASS: 71 files / 422 tests (403 baseline; the replaced
+  Search test file left, 30 new Search tests arrived).
+- `bun run build` — PASS.
+- `bunx playwright test e2e/ui-006-search.spec.ts` — PASS: 9 tests, 18/18 with
+  both engines.
+- Controlled full gate, 4 workers — `bunx playwright test --config
+  playwright.config.ts --workers=4`: **281 passed, 4 skipped, 5 failed**. All
+  five failures were re-run in isolation and passed (7/7 focused reruns):
+  `workspace-performance.spec.ts:176` (chromium + firefox synthetic baselines),
+  `regression.spec.ts:65` (firefox evidence inspector),
+  `app.spec.ts:153` (firefox template apply),
+  `ui-004-source-document.spec.ts:63` (firefox composition receipt). None of
+  them touches Search, and all belong to the documented load-sensitive class.
+- Nine-reference receipt — PASS: all 15 surfaces on both engines (30/30),
+  including `r3-search` and `r4-library`, which now drive the rebuilt page.
+- UI-006's own 20 engine-runs inside the gate — all pass.
+
+### Browser Worker Counts Recorded
+
+UI-006 spec runs at the default worker count; the full gate ran at 4 workers
+(12 workers is not a correctness baseline in this repository, per the recorded
+policy). Focused isolation reruns used 1–2 workers.
+
+### Artifact / Diff / Dependency Audit
+
+- Dependency audit: UI-006 added **no** dependency. `frontend/package.json` and
+  `bun.lock` show only the pre-existing rebuild entries (`pdfjs-dist`,
+  `react-router-dom`), untouched by this task. No search, table, state, or
+  highlight package was introduced.
+- Artifact audit: no Playwright traces, videos, dumps, or scratch specs are
+  staged; `frontend/test-results/` is git-ignored. The temporary contrast
+  diagnostic spec used during the a11y pass was deleted. The Stitch download
+  wrote no file into the repository.
+- Secret audit: no credentials or keys in any new or modified file.
+- `git diff --check` — clean.
+
+### Commit Scope And Mixed Ownership
+
+UI-006-owned paths: the new `frontend/src/components/search/` set,
+`frontend/src/lib/searchModel.ts` (+ test), `frontend/src/styles/search.css`,
+`frontend/e2e/ui-006-search.spec.ts`,
+`scripts/diagnostics/ui006_discovery_probe.py`, the deletion of the replaced
+`SearchWorkspace` component and its test, plus the UI-006 hunks in
+`frontend/src/types.ts`, `frontend/src/lib/api.ts`, `frontend/src/App.tsx`,
+`frontend/src/index.css`, `frontend/e2e/fixtures.ts`,
+`frontend/e2e/regression.spec.ts`, `PROJECT_STATE.md`,
+`docs/frontend/FRONTEND_CONTRACT.md` and this checkpoint.
+
+Mixed ownership disclosed:
+- `frontend/src/types.ts`, `frontend/src/lib/api.ts`, `frontend/e2e/fixtures.ts`
+  and `frontend/e2e/regression.spec.ts` already carried earlier validated
+  rebuild work that cannot be split by hunk.
+- `frontend/e2e/v5-07-handoffs.spec.ts` and
+  `frontend/e2e/reconciliation-reference.spec.ts` are still-untracked specs
+  from earlier tasks; UI-006 re-pointed their Search selectors and the saved
+  evidence label, and those edits stay with those files rather than being
+  claimed here.
+- The shared untracked `frontend/src/styles/console.css` was **not** modified by
+  UI-006: the new Search styles live in the UI-006-owned
+  `frontend/src/styles/search.css`.
+
+### Known/Pre-existing Issues
+
+- The load-sensitive browser class above (five specs), unchanged by UI-006.
+- The six frozen frontend integration expectation failures recorded before
+  UI-004 (excluded from the default gate).
+- `frontend/src/styles/console.css` remains a large shared untracked stylesheet
+  that the committed application depends on.
+
+### New Regressions
+
+None. Every gate failure was reproduced as a load-sensitive flake in isolation,
+and the rebuilt page's own suites are green on both engines.
+
+### Exact Next Action
+
+The master-plan table orders `UI-007 — Retrieval/Reranker` (dependencies
+`UI-002` and `API-005`, both complete) directly after `UI-006`, with
+`DATA-003 — Typed collections` (`DATA-001`/`DATA-002`, complete) also
+dependency-ready. Do not begin either without a new instruction.

@@ -1,5 +1,63 @@
 # Project State
 
+## UI-006 discovery Search (2026-09-22)
+
+UI-006 is complete. The Search page is the reference composition
+(`docs/ui-references/search-ui-reference-dark-v1.png`, 1586x992) built on
+API-004 discovery snapshots. It replaces the previous diagnostic substitute,
+which called `POST /retrieval/inspect` with hybrid/dense/BM25 presets and
+rendered a retrieval trace instead of discovery search.
+
+Snapshot lifecycle (the core of this task): typing only edits a draft and
+issues no request; one submit creates exactly one `POST /search` snapshot;
+paging and the page-size control read that same snapshot through
+`GET /search/{search_id}`; opening a result, saving evidence, and every purely
+visual change issue no further search. A newly committed query, filter scope,
+or grouping is a new snapshot (grouping is stored in the snapshot, so switching
+it POSTs again with the same query and scope). Request-id guards plus an
+`AbortController` per request keep a late response from replacing a newer
+submission, and a reload does not silently re-run the query because snapshots
+stay runtime-only. Draft filters are visible immediately but say so: the
+results toolbar states that new filters apply on the next search, and the
+results always show the snapshot's own submitted query.
+
+Truthfulness: every card comes from API-004 — real `chunk_id`, `document_id`,
+ticker, section, filing date, `hit_count`, BM25 score, and the snippet with its
+character ranges. Highlights are the API's ranges sliced into React nodes, so no
+returned text is ever interpreted as HTML. Counts are bounded and labelled as
+bounded: with `limited_by_ceiling` the list states that discovery ranked the
+first 200 candidates rather than claiming a corpus total, and no fabricated
+total appears. Scores stay raw BM25 numbers labelled `BM25`; there is no
+percentage, confidence, or "high relevance" wording, and the engine's own
+definition is reachable in the rail. A `410` snapshot expires into an explicit
+expired state with a rerun action (never an empty result list), `404` reports an
+unknown snapshot, `429` reports the rate limit once without retrying, and `422`
+shows the API's validation message. Reference controls with no capability behind
+them stay absent: saved searches, search examples, the collection/filing-type
+chip row, advanced filters, a sort selector, a latency tile, and filing-type
+checkboxes.
+
+Validation: `searchModel` has 15 unit tests, `DiscoverySearchPage` has 15
+(including snapshot reuse, stale-response protection, draft-vs-submitted
+queries, grouping, bounded counts, and the expired/unknown/rate-limited
+states), and the hermetic spec `frontend/e2e/ui-006-search.spec.ts` has 9 tests
+covering the reference composition, real results and highlights, the
+no-second-POST guarantees, filters/grouping/zero results, expiry and unknown
+snapshots, keyboard submission with an axe contrast/label scan, read-only
+browsing, and route/reload honesty. Receipts cover 1586x992, 1440x900,
+1280x856, 1024x768, 390x844 and a 1440x700 short viewport on both browsers. The
+e2e fixtures gained hermetic `POST /search` and `GET /search/{id}` handlers whose
+shapes come from a real provider-free corpus probe
+(`scripts/diagnostics/ui006_discovery_probe.py`), and three existing specs
+(V5-07 handoffs, the regression reader handoff, and the reference receipts) were
+re-pointed at the rebuilt page.
+
+Two real defects the tests found: scanning the page for contrast while the
+console entry animation was mid-flight measured blended colors (the scan now
+disables motion first), and the rail's metric tiles put 12px hint text on a
+muted surface, which measured 4.42:1 — the tiles now use the card surface and
+the scan is clean.
+
 ## UI-005 Documents workspace (2026-09-22)
 
 UI-005 is complete. The Documents page now renders the reference composition

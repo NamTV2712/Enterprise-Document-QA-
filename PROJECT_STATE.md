@@ -1,5 +1,56 @@
 # Project State
 
+## UI-005 Documents workspace (2026-09-22)
+
+UI-005 is complete. The Documents page now renders the reference composition
+(`docs/ui-references/documents-ui-reference-dark-v1.png`, 1586x992) while
+taking every count and filter value from API-003 instead of computing them
+locally.
+
+Catalog truth: the four metric cards read `/documents/stats` (documents,
+companies, chunks, filing-year range) and the filter options read
+`/documents/facets`, so each option carries API-003's count under its
+documented basis `all_filters_except_own_dimension`. A dimension with no
+recorded values is not rendered as a control: the year select only appears once
+the facet reports that dimension as recorded. When statistics are unavailable
+the cards fall back to the health-provided counts and label the state instead
+of showing a fabricated zero.
+
+No form type is named anywhere on the page. The stored artifacts record no
+per-filing form type and API-003 publishes the dimension as `unknown` with a
+reason, so the reference's "Filing Type" column and filter are omitted, and the
+one remaining form-type surface (the metric card and the detail-rail Metadata
+row) reports `Unknown` with that reason. The list request gained `year`, `sort`,
+`direction`, and `page_size`, with a sort control (filing date newest/oldest,
+ticker A-Z, chunks most) and a rows-per-page control (10/20/50) in the card
+header; the document request cache key covers them. `Clear filters` resets
+search, company, section, year, and page at once.
+
+Reference elements with no capability behind them stay absent rather than
+becoming dead controls: Import Documents, Manage Sources, the header overflow
+menu, the ownership toggle, the processing-success metric, and the sidebar
+storage meter.
+
+Validation: `DocumentExplorerPanel` now has 10 focused tests (5 new) covering
+API-003 statistics, the unknown form type, facet counts, sorting, page size,
+filter clearing, and the unavailable-statistics fallback, and the new hermetic
+spec `frontend/e2e/ui-005-documents.spec.ts` (5 tests) asserts the catalog
+facts, facet-count-to-result consistency, query-level sorting and paging, and
+that browsing issues no mutating request (a request listener records every
+non-GET while the page is searched, filtered, sorted, paged, and its detail
+tabs opened). Twelve receipts cover six viewports on both browsers, including
+the reference-native 1586x992 and a 1440x700 short viewport; the receipt test
+asserts the panel is painted before capturing, because the console entry
+animation starts at opacity 0.
+
+Two real defects were found by the new tests and fixed: a blank first receipt
+that raced that entry animation, and `Unknown` breaking mid-word in the
+narrowest stat card (`.console-stat__value--status`). The e2e fixture now
+answers `/documents/stats` and `/documents/facets` for the default corpus,
+which it did not before, so journeys that mount the Documents route no longer
+fail on an unexpected API request; the richer 12-row dataset stays behind
+`catalog: true`.
+
 ## UI-004 source/document composition (2026-09-21)
 
 UI-004 is complete. The source/evidence rail and the document pane now compose

@@ -14,6 +14,9 @@ import {
   RetrievalInspectResponse,
   RetrievalPreset,
   DocumentListResponse,
+  DocumentSortField,
+  DocumentFacetsResponse,
+  DocumentStatsResponse,
   DocumentChunkListResponse,
   DocumentChunkDetail,
   OriginalContent,
@@ -25,6 +28,9 @@ import {
   StructuredSearchResponse,
   OriginalSearchResponse,
   OriginalLocation,
+  PdfMappingManifest,
+  PdfEvidenceLocation,
+  PdfRepresentationManifest,
   SystemInfoResponse,
   EvaluationRun,
   EvaluationRunListResponse,
@@ -181,7 +187,11 @@ export async function getDocuments(
   params: {
     ticker?: string | null;
     section?: string | null;
+    filing_date?: string | null;
+    year?: number | null;
     search?: string;
+    sort?: DocumentSortField;
+    direction?: "asc" | "desc";
     page?: number;
     page_size?: number;
   } = {},
@@ -200,6 +210,46 @@ export async function getDocuments(
   });
   if (!response.ok) {
     throw new ApiError(`Failed to fetch documents: ${response.status}`, response.status);
+  }
+  return response.json();
+}
+
+export async function getDocumentFacets(
+  params: {
+    ticker?: string | null;
+    section?: string | null;
+    filing_date?: string | null;
+    year?: number | null;
+    search?: string;
+  } = {},
+  signal?: AbortSignal,
+): Promise<DocumentFacetsResponse> {
+  const baseUrl = getApiBaseUrl();
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
+  }
+  const response = await apiFetch(`${baseUrl}/documents/facets?${query.toString()}`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok) {
+    throw new ApiError(`Failed to fetch document facets: ${response.status}`, response.status);
+  }
+  return response.json();
+}
+
+export async function getDocumentStats(signal?: AbortSignal): Promise<DocumentStatsResponse> {
+  const response = await apiFetch(`${getApiBaseUrl()}/documents/stats`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok) {
+    throw new ApiError(`Failed to fetch document stats: ${response.status}`, response.status);
   }
   return response.json();
 }
@@ -255,6 +305,53 @@ export async function getReaderManifest(documentId: string, signal?: AbortSignal
     method: "GET", headers: { Accept: "application/json" }, cache: "no-store", signal,
   });
   if (!response.ok) await throwApiError(response, `Failed to fetch reader manifest: ${response.status}`);
+  return response.json();
+}
+
+export async function getPdfManifest(documentId: string, signal?: AbortSignal): Promise<PdfRepresentationManifest> {
+  const response = await apiFetch(`${getApiBaseUrl()}/documents/${encodeURIComponent(documentId)}/pdf`, {
+    method: "GET", headers: { Accept: "application/json" }, cache: "no-store", signal,
+  });
+  if (!response.ok) await throwApiError(response, `Failed to fetch PDF representation: ${response.status}`);
+  return response.json();
+}
+
+export async function generatePdfRepresentation(documentId: string, signal?: AbortSignal): Promise<PdfRepresentationManifest> {
+  const response = await apiFetch(`${getApiBaseUrl()}/documents/${encodeURIComponent(documentId)}/pdf`, {
+    method: "POST", headers: { Accept: "application/json" }, cache: "no-store", signal,
+  });
+  if (!response.ok) await throwApiError(response, `Failed to generate PDF representation: ${response.status}`);
+  return response.json();
+}
+
+export function getPdfContentUrl(documentId: string): string {
+  return `${getApiBaseUrl()}/documents/${encodeURIComponent(documentId)}/pdf/content`;
+}
+
+export async function getPdfMapping(documentId: string, signal?: AbortSignal): Promise<PdfMappingManifest> {
+  const response = await apiFetch(`${getApiBaseUrl()}/documents/${encodeURIComponent(documentId)}/pdf/mapping`, {
+    method: "GET", headers: { Accept: "application/json" }, cache: "no-store", signal,
+  });
+  if (!response.ok) await throwApiError(response, `Failed to fetch PDF evidence mapping: ${response.status}`);
+  return response.json();
+}
+
+export async function getPdfEvidenceLocation(
+  documentId: string,
+  params: {
+    chunk_id: string;
+    chunk_text_hash: string;
+    source_document_id: string;
+    source_set_revision: string;
+    document_revision: string;
+  },
+  signal?: AbortSignal,
+): Promise<PdfEvidenceLocation> {
+  const query = new URLSearchParams(params);
+  const response = await apiFetch(`${getApiBaseUrl()}/documents/${encodeURIComponent(documentId)}/pdf/mapping/location?${query.toString()}`, {
+    method: "GET", headers: { Accept: "application/json" }, cache: "no-store", signal,
+  });
+  if (!response.ok) await throwApiError(response, `Failed to locate PDF evidence: ${response.status}`);
   return response.json();
 }
 

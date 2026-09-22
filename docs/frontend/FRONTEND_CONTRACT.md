@@ -121,3 +121,25 @@ Generated pages are labeled as generated representation pages and are never
 presented as official SEC pagination. The PDF metadata panel exposes the
 representation type, page semantics, renderer, revisions, page count, and
 advanced artifact identity.
+
+## Documents catalog acceptance
+
+The Documents page reads the catalog API as its only source of counts and
+filter values. `/documents/stats` owns the metric cards and the filing-date
+range, and `/documents/facets` owns the filter option labels, whose counts
+follow the documented `all_filters_except_own_dimension` basis. No total,
+facet count, or availability state is computed from the loaded page of rows.
+
+A filter control exists only for a dimension the catalog reports as recorded,
+so a dimension with no values is omitted rather than rendered as an empty
+select. The form type is one of those dimensions: stored artifacts record none,
+so the page never names a form type and never offers a form-type filter or
+column, reporting `Unknown` with the API's reason wherever a form type would
+have appeared. Unavailable statistics degrade to labeled unavailable values and
+never to a fabricated zero.
+
+Browsing the catalog is read-only. Search, filter, sort, page-size, paging, row
+selection, detail tabs, and reader handoffs issue only reads; a document action
+with no submitted question keeps its own grammatical context and never uses
+answer-scoped wording. Selection carries exact document identity into the
+reader handoff, and the deep link and return focus are unchanged.

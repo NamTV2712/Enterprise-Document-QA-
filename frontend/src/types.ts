@@ -155,7 +155,15 @@ export interface RetrievalTrace {
     reranker?: string | null;
     rrf_k?: number;
   };
-  stages: Array<{ name: string; elapsed_ms: number; skipped?: boolean }>;
+  stages: Array<{
+    name: string;
+    /** Null for a stage that did not run, so a duration is never implied. */
+    elapsed_ms: number | null;
+    skipped?: boolean;
+    /** API-005 stage availability: executed, skipped, or not_executed. */
+    status?: "executed" | "skipped" | "not_executed";
+    reason?: string | null;
+  }>;
   candidates: RetrievalCandidate[];
   selected_chunk_ids: string[];
   candidate_count?: number;
@@ -209,8 +217,18 @@ export interface SearchWorkspaceTarget {
   returnFocusId: string;
 }
 
-export type DocumentWorkspaceTarget = CatalogWorkspaceTarget | SearchWorkspaceTarget;
-export type WorkspaceTarget = AnswerWorkspaceTarget | CatalogWorkspaceTarget | SearchWorkspaceTarget;
+export interface RetrievalWorkspaceTarget {
+  kind: "retrieval";
+  documentId: string;
+  title?: string;
+  selectedSource?: Source;
+  initialTab?: "document" | "excerpt" | "metadata";
+  returnView: "retrieval";
+  returnFocusId: string;
+}
+
+export type DocumentWorkspaceTarget = CatalogWorkspaceTarget | SearchWorkspaceTarget | RetrievalWorkspaceTarget;
+export type WorkspaceTarget = AnswerWorkspaceTarget | CatalogWorkspaceTarget | SearchWorkspaceTarget | RetrievalWorkspaceTarget;
 
 export interface DocumentChunk {
   chunk_id: string | null;
@@ -240,6 +258,83 @@ export interface DocumentListResponse {
   total: number;
   page: number;
   page_size: number;
+  /** Echoed by API-003 so the client never guesses the applied order. */
+  sort?: DocumentSortField;
+  direction?: "asc" | "desc";
+}
+
+/** Sort keys the catalog actually supports (API-003). */
+export type DocumentSortField = "ticker" | "filing_date" | "chunk_count" | "document_id";
+
+/** One recorded facet value with its truthful document count. */
+export interface CatalogFacetValue {
+  value: string | number;
+  count: number;
+}
+
+/**
+ * One facet dimension. `availability` distinguishes a recorded dimension from
+ * one the stored metadata never carries; an unknown dimension must not be read
+ * as a real zero.
+ */
+export interface CatalogFacet {
+  dimension: "company" | "year" | "section";
+  availability: "recorded" | "unknown";
+  reason: string | null;
+  documents_without_value?: number | null;
+  values: CatalogFacetValue[];
+}
+
+export interface DocumentFacetsResponse {
+  generated_at: string;
+  /**
+   * Every facet counts the applied filters except its own dimension, so a
+   * facet reports what selecting one of its values would leave.
+   */
+  count_basis: "all_filters_except_own_dimension";
+  scope: {
+    ticker: string | null;
+    section: string | null;
+    year: number | null;
+    filing_date: string | null;
+    search: string | null;
+    documents: number;
+  };
+  facets: CatalogFacet[];
+}
+
+export interface DocumentStatsResponse {
+  generated_at: string;
+  documents: number;
+  companies: number;
+  chunks: number;
+  configured_companies: number;
+  configured_companies_without_documents: string[];
+  configured_companies_with_documents: string[];
+  filing_dates: {
+    availability: "recorded" | "unknown";
+    reason: string | null;
+    earliest: number | null;
+    latest: number | null;
+    documents_without_value: number;
+  };
+  report_dates: {
+    availability: "recorded" | "unknown";
+    reason: string | null;
+    documents_with_value: number;
+  };
+  sections: {
+    availability: "recorded" | "unknown";
+    reason: string | null;
+    documents_without_value: number;
+    values: CatalogFacetValue[];
+  };
+  /** No stored artifact records a per-filing form type, so this stays unknown. */
+  filing_type: {
+    availability: "recorded" | "unknown";
+    reason: string | null;
+    value: string | null;
+  };
 }
 
 export interface DocumentChunkListResponse {
@@ -302,19 +397,136 @@ export interface ReaderFilingIdentity {
 
 export type ReaderCoverageStatus = "complete" | "partial" | "unknown";
 
+export type ReaderRepresentationStatus =
+  | "available"
+  | "partial"
+  | "unavailable"
+  | "supported"
+  | "generating"
+  | "failed"
+  | "stale"
+  | "unsupported";
+
+export type PdfArtifactStatus = Exclude<ReaderRepresentationStatus, "partial">;
+export type PdfMappingStatus = "exact" | "ambiguous" | "unavailable" | "stale";
+export type PdfPageSemantics = "official_pdf_pages" | "generated_representation_pages";
+
 export interface ReaderAvailability {
   kind: "normalized_text" | "structured" | "pdf";
-  status: "available" | "partial" | "unavailable";
+  status: ReaderRepresentationStatus;
   reason_code:
     | "available"
     | "identity_unverified"
     | "source_unavailable"
     | "structured_representation_unavailable"
-    | "pdf_representation_unavailable";
+    | "pdf_representation_unavailable"
+    | "pdf_available"
+    | "pdf_supported"
+    | "pdf_generating"
+    | "pdf_generation_failed"
+    | "pdf_stale";
   reason: string | null;
   coverage_status?: ReaderCoverageStatus;
   coverage_reason?: string | null;
   coverage_reason_code?: string | null;
+  representation_id?: string | null;
+  representation_type?: "OFFICIAL_PDF" | "DERIVED_PDF" | null;
+  page_semantics?: PdfPageSemantics | null;
+  artifact_key?: string | null;
+  artifact_hash?: string | null;
+  source_content_hash?: string | null;
+  page_count?: number | null;
+  mapping_status?: PdfMappingStatus | null;
+}
+
+export interface PdfRendererProfile {
+  renderer: string;
+  renderer_version: string;
+  template_version: string;
+  page_size: string;
+  orientation: "portrait" | "landscape" | string;
+  margins_pt: Record<string, number>;
+  print_background: boolean;
+  locale: string;
+  font_family: string;
+}
+
+export interface PdfRepresentationManifest {
+  schema_version: "sec-pdf-manifest-v2";
+  representation_id: string;
+  representation_type: "OFFICIAL_PDF" | "DERIVED_PDF";
+  page_semantics: PdfPageSemantics;
+  artifact_status: PdfArtifactStatus;
+  document_id: string;
+  source_document_id: string | null;
+  source_set_revision: string | null;
+  document_revision: string | null;
+  source_content_hash: string | null;
+  artifact_key: string | null;
+  artifact_hash: string | null;
+  artifact_size_bytes: number | null;
+  page_count: number | null;
+  renderer: PdfRendererProfile;
+  generated_at: string | null;
+  mapping_manifest_id: string | null;
+  mapping_status: PdfMappingStatus;
+  mapping_entry_count: number;
+  reason: string | null;
+}
+
+export interface PdfMappingRect {
+  page: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface PdfMappingEntry {
+  block_id: string;
+  block_index: number;
+  block_kind: "heading" | "paragraph" | "table";
+  char_start: number;
+  char_end: number;
+  text_preview: string;
+  status: PdfMappingStatus;
+  reason: string | null;
+  rects: PdfMappingRect[];
+}
+
+export interface PdfMappingManifest {
+  schema_version: "sec-pdf-mapping-v2";
+  mapping_manifest_id: string | null;
+  representation_id: string;
+  document_id: string;
+  source_document_id: string;
+  source_content_hash: string;
+  artifact_key: string;
+  artifact_hash: string;
+  source_set_revision: string;
+  document_revision: string;
+  entries: PdfMappingEntry[];
+}
+
+export interface PdfEvidenceLocation {
+  schema_version: "sec-pdf-evidence-location-v1";
+  document_id: string;
+  source_document_id: string;
+  source_set_revision: string;
+  document_revision: string;
+  source_content_hash: string;
+  representation_id: string;
+  artifact_key: string;
+  artifact_hash: string;
+  mapping_manifest_id: string | null;
+  chunk_id: string;
+  chunk_text_hash: string;
+  status: PdfMappingStatus;
+  reason: string | null;
+  match_count: number;
+  match_count_capped: boolean;
+  entry_ids: string[];
+  rects: PdfMappingRect[];
 }
 
 export interface CanonicalSource {
@@ -563,6 +775,12 @@ export interface EvaluationRunListResponse {
 export type ThemePreference = "system" | "light" | "dark";
 export type AnswerLanguage = "en" | "vi";
 export type MessageStatus = "streaming" | "stopped" | "completed" | "error";
+/**
+ * Presentation mode a conversation was started in. "chat" is the direct
+ * question/answer flow; "research" adds the organized research composition
+ * (follow-up tiles, insights). The mode never changes retrieval semantics.
+ */
+export type ConversationMode = "chat" | "research";
 
 export interface RequestSnapshot {
   ticker: string | null;
@@ -570,6 +788,8 @@ export interface RequestSnapshot {
   topK: number;
   enableComparative: boolean;
   answerLanguage: AnswerLanguage;
+  /** Presentation mode captured from the route family at send time. */
+  mode?: ConversationMode;
 }
 
 export interface ConversationNote {

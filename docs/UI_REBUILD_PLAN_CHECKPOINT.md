@@ -2100,3 +2100,207 @@ Run the full frontend unit suite and production build (checkpoint recorded befor
 ### Exact Next Action
 
 Run the full Chromium suite (checkpoint recorded before this long command), then Firefox and the nine-reference receipt.
+
+## UI-004-E/F/G Final Checkpoint (gates, audits, UI-004 COMPLETE)
+
+### Task Status
+
+UI-004 COMPLETE.
+
+### Gates
+
+- `bun run lint` (tsc) — PASS.
+- `bun run test` — PASS: 70 files / 398 tests (397 baseline + 1 net new after the contract updates).
+- `bun run build` — PASS.
+- Chromium full suite — PASS: 128 passed, 2 intentional skips, 0 failed (baseline 125/2; +3 is the new UI-004 spec).
+- Firefox full suite — PASS: 128 passed, 2 intentional skips, 0 failed.
+- Nine-reference non-regression receipt — PASS: 15/15, unchanged.
+- `git diff --check` — clean; artifact audit — no stray screenshot, dump, or runtime file from UI-004 (the pre-existing `.audit-runtime/` pdf-viewer captures belong to an earlier audit and were left untouched and uncommitted).
+- Backend untouched, so its 969 / 0 / 188 baseline stands.
+
+### Commit
+
+- `64cf364` — `feat(ui): compose the reference four-pane source and document workbench` — 26 files, 3493 insertions. Scope verified: frontend and documentation only; no `src/`, `data/`, `scripts/`, or tool-scratch path is included. The body discloses the mixed ownership: the workbench shell files were uncommitted from the earlier validated rebuild and cannot be split from this change because the app cannot build without them.
+
+### Dirty-Tree Result
+
+- 165 → 153 dirty paths. UI-004-owned work is committed; unrelated prior rebuild work (other feature components, hooks, libs, styles) is preserved.
+
+### Known/Pre-existing Issues
+
+- Six frozen frontend integration expectation failures; timing-sensitive Firefox class (not observed in this run).
+- Cosmetic limitation with no reference target: at 390px the evidence sheet's content can scroll horizontally inside the panel; body/root overflow is asserted zero.
+
+### New Regressions
+
+None.
+
+### Exact Next Action
+
+UI-005 — Documents (dependencies UI-002 and API-003 are satisfied; it is the earliest undone dependency-ready row in the master-plan table). Do not start UI-005 without explicit user authorization.
+
+## UI-005-A Quota-Safe Checkpoint (recovery, scope, reference measured, ownership mapped)
+
+### Active Task
+
+UI-005 — Documents. Status: ACTIVE (A complete; implementation started).
+
+### Verified Current State
+
+- UI-004 COMPLETE (`64cf364`); backend 969 / 0 / 188; frontend 70 files / 398 tests; Chromium and Firefox 128 passed / 2 skipped; nine-reference receipt 15/15. Dirty tree ≈154 paths.
+- Master-plan row: `| UI-005 | Documents | UI-002, API-003 | Documents feature | Filter/select/read/save | API-004 |` — dependencies satisfied, so UI-005 is the correct Exact Next Action.
+- `frontend/src/types.ts` still holds the previously disclosed mixed uncommitted work (UI-003/API-005 hunks); this task adds catalog types to it and will follow the same disclosure rule.
+
+### Master-Plan Scope (read, not inferred)
+
+- Visual: "filters/statistics/table/detail rail with four tabs".
+- Frontend: "type/year/sort/page-size/selection/collection picker".
+- Done: "real counts and exact document identity across actions".
+- Gap-matrix rows owned here: company/content search, type/year/section filters, counts (metric cards), sort/page-size/pagination, selectable table, detail tabs (P1), summary as an **honest label** with no LLM invention (P2), representation/preview (P0), "Add to collection" partial (no server document collection yet), "Import/My documents" (P3 → hide).
+- The `type` filter is explicitly out of reach: API-003 established that no stored artifact records a per-filing form type, and this goal repeats that it must not be hardcoded.
+
+### Documents Reference Measured
+
+`docs/ui-references/documents-ui-reference-dark-v1.png` — 1586x992, roughly 215 navigation | 960 main | 410 detail rail:
+
+- Main header: icon tile + "Documents" + subtitle, with page actions at the right.
+- Search row: full-width input plus Clear/Search controls.
+- Filter row: four selects (Company/Ticker, Filing Type, Year, Section) plus an ownership toggle.
+- Stats row: four metric cards (totals, companies, chunks, and a success percentage).
+- Table card: "Documents (N)" + subtitle, "Sort by [Filing Date (Newest)]" and "[20 per page]" at the right; columns checkbox, Company (logo + name), Ticker, Filing Type, Filing Date (sorted), Sections, Chunks, Actions (open, inspect, bookmark); dense rows with a selected/hover treatment; footer "Showing 1-10 of N" plus numbered pagination.
+- Detail rail: "Document Details" header with identity (company, AAPL, date) and an external-link action; tabs Overview / Sections (N) / Representations / Metadata; Overview holds a summary block, a metadata grid, a Representations block with Available/Unavailable cards, a white Document Preview, and three actions.
+
+Truthful deltas to implement (recorded before coding): no Import/Manage actions (no upload or ownership capability), no ownership toggle, no Filing Type filter or column, no processing-success metric (no contract measures it), no brand logos (a ticker-derived letter avatar instead), no per-row bookmark (no server-side document collection yet), the summary becomes an honest factual label rather than generated prose, and "Fiscal Year End"/"Total Pages" are replaced by the recorded report date.
+
+### Existing Ownership Mapped
+
+- `frontend/src/components/DocumentExplorerPanel.tsx` (758 lines) already renders the page header, search, ticker/section filters, a table with pagination, and a detail rail whose four tabs (Overview / Sections / Representations / Metadata) already match the reference. It also owns loading/error/retry, focus helpers, chunk browsing and the reader manifest.
+- `frontend/src/lib/api.ts` already exposes the catalog list, chunks, original/reader/PDF routes; it did not yet expose API-003's `/documents/facets`, `/documents/stats`, or the `year`/`sort`/`direction` parameters, which this task added.
+- The reader/document workspace composition from UI-004 is reused rather than rebuilt (the panel's "Open document workspace" action and the `/documents/:documentId` route hand off to it).
+
+### Planned Files
+
+- Modified: `frontend/src/lib/api.ts` (catalog client), `frontend/src/types.ts` (catalog types), `frontend/src/components/DocumentExplorerPanel.tsx` (header density, stats, filters, sort/page size, table columns), `frontend/src/styles/console.css` (reference density/chips), plus focused tests and a new `frontend/e2e/ui-005-documents.spec.ts`.
+- Backend: none expected; API-003 already exposes every field the truthful composition needs.
+
+### Exact Next Action
+
+Implement the api client + types (done), then the panel's stats row, filter row (year + facet counts + clear), sort and page-size controls, and the table columns.
+
+## UI-005-F/G Final Checkpoint (gates, audits, UI-005 COMPLETE)
+
+### Task Status
+
+UI-005 COMPLETE.
+
+### Delivered Composition
+
+The Documents page now reads API-003 as its catalog truth instead of computing
+anything from the loaded page of rows:
+
+- `getDocumentStats` feeds the four metric cards (documents, companies, chunks,
+  form type) and the filing-year range hint. The form-type card reports
+  `Unknown` with API-003's own reason, because no stored artifact records one.
+- `getDocumentFacets` feeds the filter options, so each option carries API-003's
+  count under its documented basis `all_filters_except_own_dimension`. The year
+  select only exists once the facet reports the dimension as recorded; a filter
+  with no recorded values is not rendered as a dead control.
+- The list request gained `year`, `sort`, `direction`, and `page_size`; sorting
+  and page size are real query parameters (sort by filing date newest/oldest,
+  ticker A-Z, chunks most; 10/20/50 rows), and the request cache key covers them.
+- The table lost its Type column, the detail rail lost its form-type badge, the
+  Overview summary is a factual label, and the Metadata tab reports the
+  unavailable form type with its reason. Nothing on the page names a form type.
+- `Clear filters` resets search, company, section, year, and page in one action.
+- Reference elements with no capability behind them stay absent: Import
+  Documents, Manage Sources, the header overflow menu, the ownership toggle, the
+  processing-success metric, and the sidebar storage meter.
+
+### Gates
+
+- `bun run lint` (tsc) — PASS.
+- `bunx vitest run` — PASS: 70 files / 403 tests (398 baseline + 5 new panel tests).
+- `bun run build` — PASS.
+- `frontend/e2e/ui-005-documents.spec.ts` — PASS on Chromium and Firefox: 10/10.
+- Full hermetic browser gate at 4 workers — PASS: 262 passed, 4 skipped, 4 failed.
+  All four failures are the frozen load-sensitive timing class
+  (`regression.spec.ts:65` evidence inspector, `regression.spec.ts:1033`
+  composer p95 budget, `workspace-performance.spec.ts:176` synthetic baselines);
+  each passes when re-run in isolation on both browsers (6/6), and none touches
+  the Documents page.
+- The same full gate at 12 workers produced 25 failures; every one was
+  re-verified. The only systematic cause was the fixture gap below, now fixed;
+  the rest are the same timing class under full-machine load.
+- `bun run lint` after the fixture change — PASS.
+
+### Fixture Gap Found And Closed
+
+The default `/documents` fixture did not answer `GET /documents/stats` or
+`GET /documents/facets`, so every existing journey that mounts the Documents
+route failed loudly with `Unexpected API request in test`. The fixture now
+answers both routes for the default single-document corpus and keeps the richer
+12-row dataset behind `catalog: true`, so the other journeys' exact
+expectations are unchanged.
+
+### Receipts
+
+`frontend/test-results/ui-005/` — 12 PNG receipts (six viewports x two
+browsers): 1586x992 (reference-native), 1440x900, 1280x856, 1024x768, 390x844,
+and 1440x700 (short). The receipt test asserts the panel is actually painted
+(computed opacity > 0.99) before capturing, because the console view-entry
+animation starts at opacity 0 and would otherwise yield a blank receipt; the
+screenshots are taken with `animations: "disabled"` for the same reason. At
+1280px and wider the test also asserts the detail rail sits beside the table
+rather than below it, matching the reference.
+
+### Real Defects Found By The New Tests
+
+- A blank 1586x992 chromium receipt: the first capture raced the
+  `console-fade-up` entry animation. Fixed in the receipt procedure, not by
+  weakening the assertion.
+- `Unknown` broke mid-word in the narrowest stat card. Added
+  `.console-stat__value--status` (1rem) in `console.css`; a Tailwind
+  `text-base` cannot win here because unlayered component CSS beats Tailwind's
+  utility layer in this build.
+- The filter row order now follows the reference (Company, Year, Section).
+
+### Commit Scope And Mixed Ownership
+
+UI-005-owned paths: `frontend/src/components/DocumentExplorerPanel.tsx`,
+`frontend/src/components/DocumentExplorerPanel.test.tsx`,
+`frontend/src/lib/api.ts`, `frontend/src/types.ts`,
+`frontend/e2e/fixtures.ts`, `frontend/e2e/ui-005-documents.spec.ts`,
+`docs/UI_REBUILD_PLAN_CHECKPOINT.md`, `PROJECT_STATE.md`,
+`docs/frontend/FRONTEND_CONTRACT.md`.
+
+`frontend/src/types.ts`, `frontend/e2e/fixtures.ts`, and
+`DocumentExplorerPanel.tsx` also carry earlier validated rebuild work that
+cannot be split by hunk, and it is disclosed in the commit body. The two UI-005
+rules in `frontend/src/styles/console.css` remain uncommitted with that shared
+rebuild stylesheet (1751 lines, never tracked, imported by the dirty
+`index.css`); they are `.console-header-select` and
+`.console-stat__value--status`, and they travel with the stylesheet when it is
+committed.
+
+### Known/Pre-existing Issues
+
+- The frozen load-sensitive timing class above, and the six frozen frontend
+  integration expectation failures recorded before UI-004.
+- Under full-machine load the same specs fail more often; isolation is the
+  documented way to tell them apart from a real regression.
+- `PipelineConsole.tsx` passes `text-base` alongside `console-stat__value` for
+  its readiness word; that override cannot win for the same layering reason.
+  Left untouched as outside UI-005 scope.
+
+### New Regressions
+
+None found. Every failure in the full gate was reproduced as a load-sensitive
+timing flake or was the fixture gap, which is fixed.
+
+### Exact Next Action
+
+UI-006 — Search. The master-plan table orders it immediately after UI-005 and
+both of its dependencies are complete (`UI-002` router/shell, `API-004`
+discovery snapshots). `UI-007` (Retrieval/Reranker, needs `API-005`, complete)
+and `DATA-003` (Typed collections, needs `DATA-001`/`DATA-002`, complete) are
+also dependency-ready. Do not begin any of them without a new instruction.

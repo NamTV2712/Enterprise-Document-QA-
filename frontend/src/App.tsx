@@ -142,6 +142,9 @@ const CollectionsWorkspace = lazy(() =>
 const ModelsConsole = lazy(() =>
   import("./components/ModelsConsole").then(({ ModelsConsole }) => ({ default: ModelsConsole })),
 );
+const DatasetsWorkspace = lazy(() =>
+  import("./components/DatasetsWorkspace").then(({ DatasetsWorkspace }) => ({ default: DatasetsWorkspace })),
+);
 const PipelineConsole = lazy(() =>
   import("./components/PipelineConsole").then(({ PipelineConsole }) => ({ default: PipelineConsole })),
 );
@@ -1874,7 +1877,7 @@ function AppWorkspace() {
     setStandaloneReaderSource(null);
     setDocumentWorkspaceTarget(null);
     if (view === "library") setActiveSidebarPanel("library");
-    if (view === "overview" || view === "conversation" || view === "search" || view === "documents" || view === "retrieval" || view === "architecture" || view === "models" || view === "pipeline") {
+    if (view === "overview" || view === "conversation" || view === "search" || view === "documents" || view === "retrieval" || view === "architecture" || view === "models" || view === "pipeline" || view === "datasets") {
       setActiveSidebarPanel("research");
     }
   }, [cancelActiveRequest, isLoading, navigateWorkspaceRoute]);
@@ -2142,7 +2145,7 @@ function AppWorkspace() {
   const showContextBanner =
     activeView === "conversation" && hasExchanges &&
     (sessionContext === "checking" || isReadOnly);
-  const showComposer = !["retrieval", "documents", "library", "search", "architecture", "evaluation", "analytics", "system", "models", "pipeline"].includes(activeView);
+  const showComposer = !["retrieval", "documents", "library", "search", "architecture", "evaluation", "analytics", "system", "models", "pipeline", "datasets"].includes(activeView);
   const composer = showComposer ? (
     <div className="composer-shell flex-shrink-0 z-10">
       <ChatInput
@@ -2538,6 +2541,8 @@ function AppWorkspace() {
               />
                 ) : activeView === "models" ? (
               <ModelsConsole />
+                ) : activeView === "datasets" ? (
+              <DatasetsWorkspace />
                 ) : activeView === "pipeline" ? (
               <PipelineConsole healthData={healthData} />
                 ) : activeView === "system" ? (

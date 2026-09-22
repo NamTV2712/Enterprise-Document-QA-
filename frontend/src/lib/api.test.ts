@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { getOriginalLocation, getPdfEvidenceLocation, getPdfManifest, getReaderLocation } from "./api";
+import {
+  getDataset,
+  getDatasets,
+  getModels,
+  getOriginalLocation,
+  getPdfEvidenceLocation,
+  getPdfManifest,
+  getReaderLocation,
+  testModelRuntimeIdentity,
+} from "./api";
 
 describe("reader location API clients", () => {
   beforeEach(() => {
@@ -84,5 +93,60 @@ describe("reader location API clients", () => {
     expect(requestUrl.searchParams.get("source_document_id")).toBe("source/1");
     expect(requestUrl.searchParams.get("source_set_revision")).toBe("set/1");
     expect(requestUrl.searchParams.get("document_revision")).toBe("revision/1");
+  });
+});
+
+describe("API-006 registry clients", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response(JSON.stringify({ items: [], total: 0 }), { status: 200 })));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  test("uses the exact model routes and optional role filter", async () => {
+    const controller = new AbortController();
+    await getModels(undefined, controller.signal);
+    await getModels("embedding");
+
+    expect(new URL(String(vi.mocked(fetch).mock.calls[0]?.[0])).pathname).toBe("/models");
+    const filtered = new URL(String(vi.mocked(fetch).mock.calls[1]?.[0]));
+    expect(filtered.pathname).toBe("/models");
+    expect(filtered.searchParams.get("role")).toBe("embedding");
+    expect(vi.mocked(fetch).mock.calls[0]?.[1]).toMatchObject({ method: "GET", cache: "no-store", signal: controller.signal });
+  });
+
+  test("posts only the bounded runtime identity test and forwards AbortSignal", async () => {
+    const controller = new AbortController();
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({
+      model_id: "generator",
+      test_type: "runtime_identity",
+      result: "passed",
+      provider_executed: false,
+      checks: [],
+    }), { status: 200 }));
+
+    await testModelRuntimeIdentity("generator", controller.signal);
+
+    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    expect(new URL(String(url)).pathname).toBe("/models/generator/tests");
+    expect(init).toMatchObject({ method: "POST", signal: controller.signal });
+    expect(JSON.parse(String(init?.body))).toEqual({ test_type: "runtime_identity" });
+  });
+
+  test("uses dataset list filters and encodes the canonical detail identity", async () => {
+    await getDatasets();
+    await getDatasets("evaluation");
+    await getDataset("serving-corpus");
+
+    const unfiltered = new URL(String(vi.mocked(fetch).mock.calls[0]?.[0]));
+    expect(unfiltered.pathname).toBe("/datasets");
+    expect(unfiltered.search).toBe("");
+    const list = new URL(String(vi.mocked(fetch).mock.calls[1]?.[0]));
+    expect(list.pathname).toBe("/datasets");
+    expect(list.searchParams.get("kind")).toBe("evaluation");
+    expect(new URL(String(vi.mocked(fetch).mock.calls[2]?.[0])).pathname).toBe("/datasets/serving-corpus");
+    expect(vi.mocked(fetch).mock.calls[2]?.[1]).toMatchObject({ method: "GET", cache: "no-store" });
   });
 });

@@ -9,6 +9,153 @@ import { Page, Route, expect } from "@playwright/test";
 
 export const API_ORIGIN = "http://127.0.0.1:8000";
 
+export const MODEL_REGISTRY_FIXTURE = [
+  {
+    id: "generator",
+    role: "generator",
+    provider: "groq",
+    configured_model_id: "openai/gpt-oss-120b",
+    configured_revision: null,
+    runtime_model_id: null,
+    runtime_revision: null,
+    configuration_status: "configured",
+    load_status: "unknown",
+    availability_status: "unknown",
+    availability_reason: "Provider reachability is not probed while browsing the registry.",
+    credential_status: "configured",
+    test_capabilities: ["runtime_identity"],
+  },
+  {
+    id: "embedding",
+    role: "embedding",
+    provider: "hugging_face",
+    configured_model_id: "nomic-ai/nomic-embed-text-v1.5",
+    configured_revision: "main",
+    runtime_model_id: "nomic-ai/nomic-embed-text-v1.5",
+    runtime_revision: "main",
+    configuration_status: "configured",
+    load_status: "loaded",
+    availability_status: "available",
+    availability_reason: null,
+    credential_status: "not_required",
+    test_capabilities: ["runtime_identity"],
+  },
+  {
+    id: "reranker",
+    role: "reranker",
+    provider: "hugging_face",
+    configured_model_id: "cross-encoder/ms-marco-MiniLM-L-6-v2",
+    configured_revision: "main",
+    runtime_model_id: null,
+    runtime_revision: null,
+    configuration_status: "configured",
+    load_status: "not_loaded",
+    availability_status: "unknown",
+    availability_reason: "The reranker has not been loaded in this process.",
+    credential_status: "not_required",
+    test_capabilities: ["runtime_identity"],
+  },
+] as const;
+
+export const DATASET_REGISTRY_FIXTURE = [
+  {
+    id: "serving-corpus",
+    kind: "corpus",
+    name: "Serving SEC filing corpus",
+    description: "The SEC filing corpus currently bound to retrieval.",
+    availability: "degraded",
+    reason_code: "configured_company_gap",
+    reason: "Two configured companies do not yet have searchable filings.",
+    version: "index-build-2026-09-18",
+    revision: "corpus-revision-8f3a",
+    record_count: 48,
+    record_unit: "documents",
+  },
+  {
+    id: "evaluation-test-set",
+    kind: "evaluation",
+    name: "Built-in evaluation test set",
+    description: "The repository-owned SEC QA evaluation cases.",
+    availability: "available",
+    reason_code: null,
+    reason: null,
+    version: "evaluation-test-set-v1",
+    revision: "eval-revision-2026-09",
+    record_count: 30,
+    record_unit: "cases",
+  },
+] as const;
+
+export const DATASET_DETAIL_FIXTURES: Record<string, Record<string, unknown>> = {
+  "serving-corpus": {
+    ...DATASET_REGISTRY_FIXTURE[0],
+    coverage: {
+      kind: "corpus",
+      documents: 48,
+      companies: 8,
+      chunks: 10053,
+      configured_companies: 10,
+      configured_companies_with_documents: ["AAPL", "AMZN", "GOOGL", "HD", "MSFT", "NVDA", "ORCL", "TSLA"],
+      configured_companies_without_documents: ["BRK-B", "JPM"],
+      filing_years: { availability: "recorded", earliest: 2023, latest: 2026, documents_without_value: 0, reason: null },
+      sections: [
+        { key: "business", count: 48 },
+        { key: "risk_factors", count: 47 },
+        { key: "mdna", count: 45 },
+        { key: "financial_statements", count: 42 },
+        { key: "financial_table", count: 39 },
+      ],
+    },
+    provenance: {
+      authority: "qdrant_index_manifest",
+      status: "consistent",
+      reason_code: null,
+      reason: null,
+      schema_version: 1,
+      revision: "corpus-revision-8f3a",
+      build_version: "index-build-2026-09-18",
+      collection_name: "sec_filings",
+      point_count: 10053,
+      embedding_model_id: "nomic-ai/nomic-embed-text-v1.5",
+      embedding_model_revision: "main",
+      vector_dimension: 768,
+      distance_metric: "Cosine",
+      snapshot_id: "snapshot-ui009",
+      embedding_generation_id: "embedding-generation-ui009",
+      embedding_generation_fingerprint: "fixture-fingerprint",
+    },
+  },
+  "evaluation-test-set": {
+    ...DATASET_REGISTRY_FIXTURE[1],
+    coverage: {
+      kind: "evaluation",
+      cases: 30,
+      categories: [{ key: "fact_lookup", count: 12 }, { key: "comparison", count: 10 }, { key: "synthesis", count: 8 }],
+      priorities: [{ key: "1", count: 10 }, { key: "2", count: 20 }],
+      tickers: ["AAPL", "AMZN", "GOOGL", "MSFT", "NVDA"],
+      sections: ["business", "financial_statements", "mdna", "risk_factors"],
+    },
+    provenance: {
+      authority: "built_in_evaluation_test_set",
+      status: "recorded",
+      reason_code: null,
+      reason: null,
+      schema_version: 1,
+      revision: "eval-revision-2026-09",
+      build_version: "evaluation-test-set-v1",
+      collection_name: null,
+      point_count: null,
+      embedding_model_id: null,
+      embedding_model_revision: null,
+      vector_dimension: null,
+      distance_metric: null,
+      snapshot_id: null,
+      embedding_generation_id: null,
+      embedding_generation_fingerprint: null,
+    },
+  },
+};
+
 export interface HistoryTurnFixture {
   user: string;
   assistant: string;
@@ -925,9 +1072,76 @@ export async function installApiFixtures(
     const url = new URL(request.url());
     const path = url.pathname;
     const method = request.method();
+    const decodedPath = decodeURIComponent(path);
 
     if (method === "OPTIONS") {
       await route.fulfill({ status: 204, headers: CORS_HEADERS });
+      return;
+    }
+
+    if (decodedPath === "/models" && method === "GET") {
+      const role = url.searchParams.get("role");
+      const items = role
+        ? MODEL_REGISTRY_FIXTURE.filter((item) => item.role === role)
+        : MODEL_REGISTRY_FIXTURE;
+      await route.fulfill({
+        status: 200,
+        headers: { ...CORS_HEADERS, "content-type": "application/json" },
+        body: JSON.stringify({ items, total: items.length }),
+      });
+      return;
+    }
+
+    const modelTestMatch = decodedPath.match(/^\/models\/(generator|embedding|reranker)\/tests$/);
+    if (modelTestMatch && method === "POST") {
+      const modelId = modelTestMatch[1];
+      const body = (request.postDataJSON() ?? {}) as Record<string, unknown>;
+      if (body.test_type !== "runtime_identity") {
+        await route.fulfill({
+          status: 422,
+          headers: { ...CORS_HEADERS, "content-type": "application/json" },
+          body: JSON.stringify({ detail: "Only runtime_identity is supported" }),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        headers: { ...CORS_HEADERS, "content-type": "application/json" },
+        body: JSON.stringify({
+          model_id: modelId,
+          test_type: "runtime_identity",
+          result: "passed",
+          provider_executed: false,
+          checks: [
+            { id: "configured_identity", status: "passed", reason: null },
+            { id: "runtime_identity", status: "passed", reason: null },
+          ],
+        }),
+      });
+      return;
+    }
+
+    if (decodedPath === "/datasets" && method === "GET") {
+      const kind = url.searchParams.get("kind");
+      const items = kind
+        ? DATASET_REGISTRY_FIXTURE.filter((item) => item.kind === kind)
+        : DATASET_REGISTRY_FIXTURE;
+      await route.fulfill({
+        status: 200,
+        headers: { ...CORS_HEADERS, "content-type": "application/json" },
+        body: JSON.stringify({ items, total: items.length }),
+      });
+      return;
+    }
+
+    const datasetDetailMatch = decodedPath.match(/^\/datasets\/([^/]+)$/);
+    if (datasetDetailMatch && method === "GET") {
+      const detail = DATASET_DETAIL_FIXTURES[datasetDetailMatch[1]];
+      await route.fulfill({
+        status: detail ? 200 : 404,
+        headers: { ...CORS_HEADERS, "content-type": "application/json" },
+        body: JSON.stringify(detail ?? { detail: "Dataset registry entry not found" }),
+      });
       return;
     }
 
@@ -969,8 +1183,6 @@ export async function installApiFixtures(
       });
       return;
     }
-
-    const decodedPath = decodeURIComponent(path);
 
     // Discovery search (API-004). The snapshot is created once per POST and
     // paged from memory afterwards, so a browser test can prove that paging

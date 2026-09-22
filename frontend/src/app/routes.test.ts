@@ -39,7 +39,7 @@ describe("UI-002 route contract", () => {
   });
 
   test("marks deferred and unknown routes truthfully", () => {
-    expect(resolveAppRoute("/datasets").isDeferred).toBe(true);
+    expect(resolveAppRoute("/datasets")).toMatchObject({ isDeferred: false, workspaceView: "datasets" });
     expect(resolveAppRoute("/logs").isDeferred).toBe(true);
     expect(resolveAppRoute("/does-not-exist")).toMatchObject({ id: "not-found", isKnown: false, isDeferred: true });
   });

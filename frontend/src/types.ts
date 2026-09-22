@@ -549,6 +549,130 @@ export interface SystemInfoResponse {
   };
 }
 
+export type ModelRole = "generator" | "embedding" | "reranker";
+export type ConfigurationStatus = "configured" | "not_configured";
+export type ModelLoadStatus = "loaded" | "not_loaded" | "unknown";
+export type ModelAvailabilityStatus = "available" | "unavailable" | "unknown";
+
+export interface ModelRegistryEntry {
+  id: ModelRole;
+  role: ModelRole;
+  provider: "groq" | "hugging_face";
+  configured_model_id: string | null;
+  configured_revision: string | null;
+  runtime_model_id: string | null;
+  runtime_revision: string | null;
+  configuration_status: ConfigurationStatus;
+  load_status: ModelLoadStatus;
+  availability_status: ModelAvailabilityStatus;
+  availability_reason: string | null;
+  credential_status: "configured" | "not_configured" | "not_required";
+  test_capabilities: Array<"runtime_identity">;
+}
+
+export interface ModelRegistryResponse {
+  items: ModelRegistryEntry[];
+  total: number;
+}
+
+export interface ModelTestCheck {
+  id: "configured_identity" | "runtime_loaded" | "runtime_identity" | "runtime_revision";
+  status: "passed" | "failed" | "unavailable";
+  reason: string | null;
+}
+
+export interface ModelTestResponse {
+  model_id: ModelRole;
+  test_type: "runtime_identity";
+  result: "passed" | "failed" | "unavailable";
+  provider_executed: false;
+  checks: ModelTestCheck[];
+}
+
+export type DatasetKind = "corpus" | "evaluation";
+export type DatasetAvailability = "available" | "degraded" | "unavailable";
+export type DatasetRegistryId = "serving-corpus" | "evaluation-test-set";
+export type DatasetProvenanceStatus = "consistent" | "recorded" | "missing" | "invalid" | "mismatch";
+
+export interface DatasetSummary {
+  id: DatasetRegistryId;
+  kind: DatasetKind;
+  name: string;
+  description: string;
+  availability: DatasetAvailability;
+  reason_code: string | null;
+  reason: string | null;
+  version: string | null;
+  revision: string | null;
+  record_count: number | null;
+  record_unit: "documents" | "cases";
+}
+
+export interface DatasetRegistryResponse {
+  items: DatasetSummary[];
+  total: number;
+}
+
+export interface DatasetCount {
+  key: string;
+  count: number;
+}
+
+export interface FilingYearCoverage {
+  availability: "recorded" | "unknown";
+  earliest: number | null;
+  latest: number | null;
+  documents_without_value: number;
+  reason: string | null;
+}
+
+export interface CorpusDatasetCoverage {
+  kind: "corpus";
+  documents: number;
+  companies: number;
+  chunks: number;
+  configured_companies: number;
+  configured_companies_with_documents: string[];
+  configured_companies_without_documents: string[];
+  filing_years: FilingYearCoverage;
+  sections: DatasetCount[];
+}
+
+export interface EvaluationDatasetCoverage {
+  kind: "evaluation";
+  cases: number;
+  categories: DatasetCount[];
+  priorities: DatasetCount[];
+  tickers: string[];
+  sections: string[];
+}
+
+export type DatasetCoverage = CorpusDatasetCoverage | EvaluationDatasetCoverage;
+
+export interface DatasetProvenance {
+  authority: "qdrant_index_manifest" | "built_in_evaluation_test_set";
+  status: DatasetProvenanceStatus;
+  reason_code: string | null;
+  reason: string | null;
+  schema_version: number | null;
+  revision: string | null;
+  build_version: string | null;
+  collection_name: string | null;
+  point_count: number | null;
+  embedding_model_id: string | null;
+  embedding_model_revision: string | null;
+  vector_dimension: number | null;
+  distance_metric: string | null;
+  snapshot_id: string | null;
+  embedding_generation_id: string | null;
+  embedding_generation_fingerprint: string | null;
+}
+
+export interface DatasetDetail extends DatasetSummary {
+  coverage: DatasetCoverage | null;
+  provenance: DatasetProvenance;
+}
+
 export interface OriginalManifestSource {
   source_document_id: string;
   role: "primary_filing" | "annual_report_companion";

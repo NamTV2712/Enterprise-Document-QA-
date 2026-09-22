@@ -63,7 +63,7 @@ export const APP_ROUTE_DEFINITIONS: readonly AppRouteDefinition[] = [
   { id: "evaluation-run", path: "/evaluation/runs/:runId", workspaceView: "evaluation" },
   { id: "evaluation", path: "/evaluation", workspaceView: "evaluation" },
   { id: "analytics", path: "/analytics", workspaceView: "analytics" },
-  { id: "datasets", path: "/datasets", workspaceView: "evaluation" },
+  { id: "datasets", path: "/datasets", workspaceView: "datasets" },
   { id: "settings", path: "/settings", workspaceView: "system" },
   { id: "logs", path: "/logs", workspaceView: "system" },
 ] as const;
@@ -90,7 +90,7 @@ export const SHELL_NAVIGATION_SECTIONS: readonly ShellNavigationSection[] = [
     id: "evaluate", labelKey: "nav.groupEvaluate", items: [
       { routeId: "evaluation", path: "/evaluation", labelKey: "nav.evaluation", descriptionKey: "nav.evaluationDescription", icon: "evaluation", accentFamily: "evaluation", availability: "available" },
       { routeId: "analytics", path: "/analytics", labelKey: "nav.analytics", descriptionKey: "nav.analyticsDescription", icon: "analytics", accentFamily: "analytics", availability: "available" },
-      { routeId: "datasets", path: "/datasets", labelKey: "nav.datasets", descriptionKey: "nav.datasetsDescription", icon: "documents", accentFamily: "evaluation", availability: "deferred" },
+      { routeId: "datasets", path: "/datasets", labelKey: "nav.datasets", descriptionKey: "nav.datasetsDescription", icon: "documents", accentFamily: "evaluation", availability: "available" },
     ],
   },
   {
@@ -105,9 +105,10 @@ const LEGACY_VIEW_TO_ROUTE: Readonly<Record<WorkspaceView, ShellRouteId>> = {
   overview: "research", conversation: "research", search: "search", documents: "documents",
   library: "collections", retrieval: "retrieval", architecture: "settings", evaluation: "evaluation",
   analytics: "analytics", system: "settings", models: "models", pipeline: "pipeline",
+  datasets: "datasets",
 };
 
-const DEFERRED_ROUTE_IDS = new Set<AppRouteId>(["datasets", "logs"]);
+const DEFERRED_ROUTE_IDS = new Set<AppRouteId>(["logs"]);
 
 function safeDecode(value: string): string {
   try { return decodeURIComponent(value); } catch { return value; }

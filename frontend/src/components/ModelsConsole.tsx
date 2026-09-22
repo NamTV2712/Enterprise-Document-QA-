@@ -1,240 +1,297 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowUpDown,
-  Boxes,
+  Activity,
+  ArrowRight,
+  CheckCircle2,
+  CircleSlash2,
   Cpu,
   Database,
-  Layers,
+  LoaderCircle,
   MessageSquare,
   RefreshCw,
+  RotateCcw,
   ShieldCheck,
-  Workflow,
+  TriangleAlert,
 } from "lucide-react";
-import { getSystemInfo } from "../lib/api";
-import type { RetrievalPreset, SystemInfoResponse } from "../types";
+
+import { ApiError, getModels, testModelRuntimeIdentity } from "../lib/api";
 import { useLocale } from "../lib/i18n";
 import { describeRequestError } from "../lib/requestError";
+import type {
+  ModelAvailabilityStatus,
+  ModelRegistryEntry,
+  ModelRole,
+  ModelTestResponse,
+} from "../types";
 
-type ModelTab = "embedding" | "generative" | "reranker";
+type RoleFilter = "all" | ModelRole;
 
-const MODEL_TABS: Array<{ id: ModelTab; label: string; vi: string; icon: typeof Database }> = [
-  { id: "embedding", label: "Embedding", vi: "Embedding", icon: Database },
-  { id: "generative", label: "Generative", vi: "Sinh", icon: MessageSquare },
-  { id: "reranker", label: "Reranker", vi: "Reranker", icon: ArrowUpDown },
-];
+const ROLE_ORDER: ModelRole[] = ["generator", "embedding", "reranker"];
 
-function reportedText(value: string | null | undefined, vi: boolean): string {
-  return value?.trim() ? value : (vi ? "Chưa có dữ liệu" : "Not reported");
+const ROLE_ICON = {
+  generator: MessageSquare,
+  embedding: Database,
+  reranker: Activity,
+} as const;
+
+function roleLabel(role: ModelRole, vi: boolean): string {
+  if (role === "generator") return vi ? "Mô hình sinh" : "Generator";
+  if (role === "embedding") return vi ? "Mô hình embedding" : "Embedding";
+  return vi ? "Mô hình reranker" : "Reranker";
 }
 
-function modelValue(info: SystemInfoResponse | null, tab: ModelTab): string | null {
-  if (!info) return null;
-  if (tab === "embedding") return info.retrieval.embedding_model ?? null;
-  if (tab === "reranker") return info.retrieval.reranker_model ?? null;
-  // The current backend intentionally does not expose a generative model
-  // identity through /system/info. Keep this neutral until it does.
-  return info.build.llm_model ?? null;
+function reported(value: string | null | undefined, vi: boolean): string {
+  return value?.trim() ? value : vi ? "Không được ghi nhận" : "Not recorded";
 }
 
-function buildValue(info: SystemInfoResponse | null, ...keys: string[]): string | null {
-  for (const key of keys) {
-    const value = info?.build[key];
-    if (value?.trim()) return value;
+function availabilityLabel(status: ModelAvailabilityStatus, vi: boolean): string {
+  if (status === "available") return vi ? "Khả dụng" : "Available";
+  if (status === "unavailable") return vi ? "Không khả dụng" : "Unavailable";
+  return vi ? "Chưa xác định" : "Unknown";
+}
+
+function ModelStatePill({ status, vi }: { status: ModelAvailabilityStatus; vi: boolean }) {
+  const Icon = status === "available" ? CheckCircle2 : status === "unavailable" ? CircleSlash2 : TriangleAlert;
+  return (
+    <span className={`registry-state registry-state--${status}`}>
+      <Icon aria-hidden="true" />
+      {availabilityLabel(status, vi)}
+    </span>
+  );
+}
+
+function modelTestFailure(error: unknown, vi: boolean): string {
+  if (error instanceof ApiError) {
+    if (error.status === 401) return vi ? "Cần quyền truy cập workspace cục bộ để chạy kiểm tra này." : "Local workspace access is required to run this check.";
+    if (error.status === 403) return vi ? "Kiểm tra thực thi bị tắt hoặc yêu cầu không đến từ workspace cục bộ." : "Execution checks are disabled or this request is outside the local workspace.";
+    if (error.status === 404) return vi ? "Kiểm tra này không khả dụng trong chế độ triển khai hiện tại." : "This check is unavailable in the current deployment mode.";
+    if (error.status === 422) return vi ? "Backend đã từ chối loại kiểm tra này." : "The backend rejected this test type.";
   }
-  return null;
-}
-
-function capabilityLabel(value: boolean | undefined, vi: boolean): string {
-  if (value === true) return vi ? "Có báo cáo" : "Reported available";
-  if (value === false) return vi ? "Được báo cáo là không có" : "Reported unavailable";
-  return vi ? "Chưa có dữ liệu" : "Not reported";
+  return describeRequestError(
+    error,
+    vi ? "Không thể chạy kiểm tra danh tính runtime." : "Could not run the runtime identity check.",
+    vi ? "vi" : "en",
+  ).message;
 }
 
 export function ModelsConsole() {
   const { locale } = useLocale();
   const vi = locale === "vi";
-  const [systemInfo, setSystemInfo] = useState<SystemInfoResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
+  const [items, setItems] = useState<ModelRegistryEntry[]>([]);
+  const [selectedId, setSelectedId] = useState<ModelRole | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<ModelTab>("embedding");
-  const requestId = useRef(0);
-
-  const load = () => {
-    const id = ++requestId.current;
-    const controller = new AbortController();
-    setIsLoading(true);
-    setError(null);
-    void getSystemInfo(controller.signal)
-      .then((info) => {
-        if (id !== requestId.current) return;
-        setSystemInfo(info);
-      })
-      .catch((reason) => {
-        if (id !== requestId.current || (reason instanceof DOMException && reason.name === "AbortError")) return;
-        setSystemInfo(null);
-        setError(describeRequestError(reason, vi ? "Không thể tải thông tin cấu hình retrieval." : "Could not load retrieval configuration.", vi ? "vi" : "en").message);
-      })
-      .finally(() => {
-        if (id === requestId.current) setIsLoading(false);
-      });
-    return () => controller.abort();
-  };
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const [testPending, setTestPending] = useState(false);
+  const [testResult, setTestResult] = useState<ModelTestResponse | null>(null);
+  const [testError, setTestError] = useState<string | null>(null);
+  const listLifetime = useRef(0);
+  const testLifetime = useRef(0);
+  const testController = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    const cleanup = load();
-    return typeof cleanup === "function" ? cleanup : undefined;
-    // Locale changes only change the error copy; reloading also refreshes the
-    // authoritative snapshot shown by this read-only surface.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vi]);
+    const lifetime = ++listLifetime.current;
+    const controller = new AbortController();
+    setLoading(true);
+    setError(null);
+    void getModels(roleFilter === "all" ? null : roleFilter, controller.signal)
+      .then((response) => {
+        if (controller.signal.aborted || lifetime !== listLifetime.current) return;
+        const ordered = [...response.items].sort((left, right) => ROLE_ORDER.indexOf(left.role) - ROLE_ORDER.indexOf(right.role));
+        setItems(ordered);
+        setSelectedId((current) => ordered.some((item) => item.id === current) ? current : ordered[0]?.id ?? null);
+      })
+      .catch((reason: unknown) => {
+        if (controller.signal.aborted || lifetime !== listLifetime.current) return;
+        setItems([]);
+        setSelectedId(null);
+        setError(describeRequestError(reason, vi ? "Không thể tải registry mô hình." : "Could not load the model registry.", vi ? "vi" : "en").message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted && lifetime === listLifetime.current) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [refreshVersion, roleFilter, vi]);
 
   useEffect(() => () => {
-    requestId.current += 1;
+    listLifetime.current += 1;
+    testLifetime.current += 1;
+    testController.current?.abort();
   }, []);
 
-  const embeddingModel = modelValue(systemInfo, "embedding");
-  const generativeModel = modelValue(systemInfo, "generative");
-  const rerankerModel = modelValue(systemInfo, "reranker");
-  const activeTab = MODEL_TABS.find((candidate) => candidate.id === tab) ?? MODEL_TABS[0];
-  const ActiveIcon = activeTab.icon;
-  const activeModel = modelValue(systemInfo, tab);
-  const presets = systemInfo?.retrieval.presets ?? [];
-  const defaultPreset = systemInfo?.retrieval.default;
-  const buildRevision = buildValue(systemInfo, "GIT_REVISION", "git_revision", "revision");
-  const buildVersion = buildValue(systemInfo, "BUILD_VERSION", "build_version", "version");
+  const selected = useMemo(
+    () => items.find((item) => item.id === selectedId) ?? null,
+    [items, selectedId],
+  );
 
-  const componentRows = [
-    { id: "embedding", label: vi ? "Mô hình embedding" : "Embedding model", value: embeddingModel, field: "retrieval.embedding_model", icon: Database },
-    { id: "generative", label: vi ? "Mô hình sinh" : "Generative model", value: generativeModel, field: "build.llm_model", icon: MessageSquare },
-    { id: "reranker", label: vi ? "Mô hình reranker" : "Reranker model", value: rerankerModel, field: "retrieval.reranker_model", icon: ArrowUpDown },
-  ];
+  const selectModel = useCallback((modelId: ModelRole) => {
+    testController.current?.abort();
+    testLifetime.current += 1;
+    setSelectedId(modelId);
+    setTestPending(false);
+    setTestResult(null);
+    setTestError(null);
+  }, []);
+
+  const runIdentityTest = useCallback(() => {
+    if (!selected || testPending || !selected.test_capabilities.includes("runtime_identity")) return;
+    const modelId = selected.id;
+    const lifetime = ++testLifetime.current;
+    const controller = new AbortController();
+    testController.current?.abort();
+    testController.current = controller;
+    setTestPending(true);
+    setTestResult(null);
+    setTestError(null);
+    void testModelRuntimeIdentity(modelId, controller.signal)
+      .then((response) => {
+        if (controller.signal.aborted || lifetime !== testLifetime.current || response.model_id !== modelId) return;
+        setTestResult(response);
+      })
+      .catch((reason: unknown) => {
+        if (controller.signal.aborted || lifetime !== testLifetime.current) return;
+        setTestError(modelTestFailure(reason, vi));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted && lifetime === testLifetime.current) setTestPending(false);
+      });
+  }, [selected, testPending, vi]);
+
+  const configuredCount = items.filter((item) => item.configuration_status === "configured").length;
+  const loadedCount = items.filter((item) => item.load_status === "loaded").length;
+  const unknownCount = items.filter((item) => item.availability_status === "unknown").length;
 
   return (
-    <section className="workspace-page workspace-page--wide console-view-enter" aria-labelledby="models-title">
-      <div className="console-page-header">
+    <section className="workspace-page workspace-page--wide registry-workspace console-view-enter" aria-labelledby="models-title">
+      <header className="console-page-header registry-page-header">
         <div className="console-page-header__identity">
           <div className="console-page-header__icon"><Cpu aria-hidden="true" /></div>
           <div className="min-w-0">
             <h1 id="models-title" className="console-page-header__title">{vi ? "Mô hình" : "Models"}</h1>
             <p className="console-page-header__subtitle">
-              {vi
-                ? "Cấu hình retrieval được backend báo cáo; chỉ đọc và không suy đoán provider hay thông số chưa công bố."
-                : "Backend-reported retrieval configuration, read-only and neutral about fields it does not expose."}
+              {vi ? "Danh tính cấu hình và runtime được backend ghi nhận — không suy đoán sức khoẻ provider." : "Backend-reported configuration and runtime identity—without guessing provider health."}
             </p>
           </div>
         </div>
         <div className="console-page-header__actions">
-          <span className="console-chip"><ShieldCheck aria-hidden="true" />{vi ? "Chỉ đọc" : "Read-only"}</span>
-          <button type="button" className="console-btn" onClick={load} disabled={isLoading}>
-            <RefreshCw className={isLoading ? "animate-spin" : ""} aria-hidden="true" />
+          <span className="console-chip"><ShieldCheck aria-hidden="true" />{vi ? "Duyệt không gọi provider" : "Provider-free browsing"}</span>
+          <button type="button" className="console-btn" onClick={() => setRefreshVersion((value) => value + 1)} disabled={loading}>
+            <RefreshCw className={loading ? "animate-spin" : ""} aria-hidden="true" />
             {vi ? "Làm mới" : "Refresh"}
           </button>
         </div>
+      </header>
+
+      <div className="registry-summary" aria-label={vi ? "Tóm tắt registry mô hình" : "Model registry summary"}>
+        <div><strong>{items.length}</strong><span>{vi ? "vai trò hiển thị" : "roles shown"}</span></div>
+        <div><strong>{configuredCount}</strong><span>{vi ? "đã cấu hình" : "configured"}</span></div>
+        <div><strong>{loadedCount}</strong><span>{vi ? "đã tải" : "loaded"}</span></div>
+        <div><strong>{unknownCount}</strong><span>{vi ? "khả dụng chưa rõ" : "availability unknown"}</span></div>
       </div>
 
-      {error && <div className="workspace-alert workspace-alert--error" role="alert">{error}</div>}
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-        <div className="console-card">
-          <div className="console-card__header">
-            <div className="min-w-0">
-              <h2 className="console-card__title">{vi ? "Cấu hình retrieval" : "Retrieval configuration"}</h2>
-              <p className="console-card__subtitle">{vi ? "Các trường lấy trực tiếp từ /system/info." : "Fields read directly from /system/info."}</p>
-            </div>
-            <Workflow className="h-4 w-4 text-[var(--accent-text)]" aria-hidden="true" />
-          </div>
-          <div className="console-card__body space-y-3">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3">
-                <div className="console-field__label">{vi ? "Preset mặc định" : "Default preset"}</div>
-                <div className="mt-1 font-mono text-sm font-semibold text-[var(--text-primary)]">{reportedText(defaultPreset, vi)}</div>
-              </div>
-              <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3">
-                <div className="console-field__label">{vi ? "Preset được báo cáo" : "Reported presets"}</div>
-                <div className="mt-1 flex flex-wrap gap-1.5">
-                  {presets.length > 0 ? presets.map((preset: RetrievalPreset) => <span className="console-chip" key={preset}>{preset}</span>) : <span className="text-sm text-[var(--text-muted)]">{vi ? "Chưa có dữ liệu" : "Not reported"}</span>}
-                </div>
-              </div>
-            </div>
-            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3 text-xs text-[var(--text-muted)]">
-              <div className="flex items-start gap-2">
-                <Layers className="mt-0.5 h-4 w-4 flex-shrink-0 text-[var(--accent-text)]" aria-hidden="true" />
-                <span>{vi ? "Provider, context length, dimensions, cost, latency, routing và A/B state không được endpoint hiện tại báo cáo." : "Provider, context length, dimensions, cost, latency, routing, and A/B state are not reported by the current endpoint."}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="console-card">
-          <div className="console-card__header">
-            <div className="min-w-0">
-              <h2 className="console-card__title">{vi ? "Metadata runtime" : "Runtime metadata"}</h2>
-              <p className="console-card__subtitle">{vi ? "Chỉ hiển thị các capability và revision được allowlist." : "Only allowlisted capabilities and revisions are shown."}</p>
-            </div>
-            <Boxes className="h-4 w-4 text-[var(--accent-text)]" aria-hidden="true" />
-          </div>
-          <dl className="console-card__body console-meta-grid">
-            <div><dt>API version</dt><dd className="font-mono text-xs">{reportedText(systemInfo?.api_version, vi)}</dd></div>
-            <div><dt>{vi ? "Build revision" : "Build revision"}</dt><dd className="break-all font-mono text-xs">{reportedText(buildRevision, vi)}</dd></div>
-            <div><dt>{vi ? "Build version" : "Build version"}</dt><dd className="font-mono text-xs">{reportedText(buildVersion, vi)}</dd></div>
-            <div><dt>{vi ? "Stage events" : "Stage events"}</dt><dd>{capabilityLabel(systemInfo?.capabilities?.stage_events, vi)}</dd></div>
-            <div><dt>{vi ? "Indexed viewer" : "Indexed viewer"}</dt><dd>{capabilityLabel(systemInfo?.capabilities?.document_indexed_viewer, vi)}</dd></div>
-            <div><dt>{vi ? "Original viewer" : "Original viewer"}</dt><dd>{capabilityLabel(systemInfo?.capabilities?.original_document_viewer?.enabled, vi)}</dd></div>
-          </dl>
-        </div>
+      <div className="registry-filter-bar" role="tablist" aria-label={vi ? "Lọc theo vai trò mô hình" : "Filter by model role"}>
+        {(["all", ...ROLE_ORDER] as RoleFilter[]).map((role) => (
+          <button key={role} type="button" role="tab" aria-selected={roleFilter === role} className={`registry-filter ${roleFilter === role ? "is-active" : ""}`} onClick={() => setRoleFilter(role)}>
+            {role === "all" ? (vi ? "Tất cả vai trò" : "All roles") : roleLabel(role, vi)}
+          </button>
+        ))}
       </div>
 
-      <div className="console-card">
-        <div className="console-tabs m-3" role="tablist" aria-label={vi ? "Nhóm thành phần retrieval" : "Retrieval component groups"}>
-          {MODEL_TABS.map((candidate) => {
-            const Icon = candidate.icon;
-            return (
-              <button key={candidate.id} type="button" role="tab" aria-selected={tab === candidate.id} className={`console-tab ${tab === candidate.id ? "is-active" : ""}`} onClick={() => setTab(candidate.id)}>
-                <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                {vi ? candidate.vi : candidate.label}
-              </button>
-            );
-          })}
+      {error && (
+        <div className="workspace-alert workspace-alert--error registry-alert" role="alert">
+          <span>{error}</span>
+          <button type="button" className="console-btn" onClick={() => setRefreshVersion((value) => value + 1)}><RotateCcw aria-hidden="true" />{vi ? "Thử lại" : "Retry"}</button>
         </div>
-        <div className="console-card__body">
-          <div className="mb-3 flex items-start gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3">
-            <span className="console-stat__icon"><ActiveIcon aria-hidden="true" /></span>
-            <div className="min-w-0">
-              <div className="console-field__label">{vi ? activeTab.vi : activeTab.label}</div>
-              <div className="break-all font-mono text-sm font-semibold text-[var(--text-primary)]">{reportedText(activeModel, vi)}</div>
+      )}
+
+      <div className="registry-layout">
+        <section className="console-card registry-list" aria-labelledby="model-registry-heading" aria-busy={loading}>
+          <div className="console-card__header">
+            <div>
+              <h2 id="model-registry-heading" className="console-card__title">{vi ? "Registry runtime" : "Runtime registry"}</h2>
+              <p className="console-card__subtitle">{vi ? "Chọn một model để xem các trạng thái riêng biệt." : "Select a model to inspect each state independently."}</p>
             </div>
+            {loading && <span className="console-loading" role="status"><span className="console-loading__spinner" />{vi ? "Đang tải…" : "Loading…"}</span>}
           </div>
-          <div className="console-table-wrap">
-            <table className="console-table">
-              <thead>
-                <tr>
-                  <th scope="col">{vi ? "Vai trò" : "Role"}</th>
-                  <th scope="col">{vi ? "Giá trị được báo cáo" : "Reported value"}</th>
-                  <th scope="col">{vi ? "Trường nguồn" : "Source field"}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {componentRows.map((row) => {
-                  const Icon = row.icon;
+
+          {!loading && !error && items.length === 0 ? (
+            <div className="console-empty" role="status"><CircleSlash2 aria-hidden="true" /><strong>{vi ? "Không có model nào" : "No models reported"}</strong><p>{vi ? "Registry đã tải thành công nhưng không trả về entry nào cho bộ lọc này." : "The registry loaded successfully but returned no entries for this filter."}</p></div>
+          ) : (
+            <>
+              <div className="registry-table-wrap">
+                <table className="registry-table">
+                  <thead><tr><th>{vi ? "Vai trò" : "Role"}</th><th>{vi ? "Danh tính cấu hình" : "Configured identity"}</th><th>{vi ? "Tải" : "Load"}</th><th>{vi ? "Khả dụng" : "Availability"}</th><th><span className="sr-only">{vi ? "Chi tiết" : "Details"}</span></th></tr></thead>
+                  <tbody>
+                    {items.map((item) => {
+                      const Icon = ROLE_ICON[item.role];
+                      return (
+                        <tr key={item.id} className={selectedId === item.id ? "is-selected" : ""} aria-selected={selectedId === item.id}>
+                          <td><span className="registry-role"><span className="registry-role__icon"><Icon aria-hidden="true" /></span><span><strong>{roleLabel(item.role, vi)}</strong><small>{item.provider === "groq" ? "Groq" : "Hugging Face"}</small></span></span></td>
+                          <td><strong className="registry-identity">{reported(item.configured_model_id, vi)}</strong><small className="registry-secondary">{reported(item.configured_revision, vi)}</small></td>
+                          <td><span className={`registry-state registry-state--${item.load_status}`}>{item.load_status === "loaded" ? (vi ? "Đã tải" : "Loaded") : item.load_status === "not_loaded" ? (vi ? "Chưa tải" : "Not loaded") : (vi ? "Chưa rõ" : "Unknown")}</span></td>
+                          <td><ModelStatePill status={item.availability_status} vi={vi} /></td>
+                          <td><button type="button" className="registry-row-action" aria-label={`${vi ? "Kiểm tra" : "Inspect"} ${roleLabel(item.role, vi)}`} onClick={() => selectModel(item.id)}><ArrowRight aria-hidden="true" /></button></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="registry-mobile-list">
+                {items.map((item) => {
+                  const Icon = ROLE_ICON[item.role];
                   return (
-                    <tr key={row.id} className={row.id === tab ? "is-selected" : undefined} aria-selected={row.id === tab}>
-                      <td><span className="flex items-center gap-2.5"><span className="console-stat__icon"><Icon aria-hidden="true" /></span><span className="console-table__primary">{row.label}</span></span></td>
-                      <td className="break-all font-mono text-[13px]">{reportedText(row.value, vi)}</td>
-                      <td className="console-table__secondary font-mono text-xs">/system/info · {row.field}</td>
-                    </tr>
+                    <button key={item.id} type="button" className={`registry-mobile-card ${selectedId === item.id ? "is-selected" : ""}`} aria-pressed={selectedId === item.id} onClick={() => selectModel(item.id)}>
+                      <span className="registry-role"><span className="registry-role__icon"><Icon aria-hidden="true" /></span><span><strong>{roleLabel(item.role, vi)}</strong><small>{reported(item.configured_model_id, vi)}</small></span></span>
+                      <ModelStatePill status={item.availability_status} vi={vi} />
+                    </button>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div className="console-card__footer">
-          <span className="text-xs text-[var(--text-muted)]">
-            {vi
-              ? "Không có trường báo cáo thì giữ nguyên trạng thái chưa có dữ liệu; UI không suy đoán danh tính model."
-              : "Missing fields remain unavailable; the UI does not infer model identity from a mockup."}
-          </span>
-        </div>
+              </div>
+            </>
+          )}
+        </section>
+
+        <aside className="console-card registry-detail" aria-label={selected ? `${roleLabel(selected.role, vi)} ${vi ? "chi tiết" : "details"}` : (vi ? "Chi tiết model" : "Model details")}>
+          {!selected ? (
+            <div className="console-empty"><Cpu aria-hidden="true" /><strong>{vi ? "Chọn một model" : "Select a model"}</strong><p>{vi ? "Chi tiết cấu hình và runtime sẽ xuất hiện ở đây." : "Configuration and runtime details will appear here."}</p></div>
+          ) : (
+            <>
+              <div className="console-card__header registry-detail__header">
+                <div><p className="registry-eyebrow">{roleLabel(selected.role, vi)}</p><h2 className="console-card__title registry-detail__identity">{reported(selected.configured_model_id, vi)}</h2></div>
+                <ModelStatePill status={selected.availability_status} vi={vi} />
+              </div>
+              <div className="console-card__body registry-detail__body">
+                {selected.availability_reason && <p className="registry-explanation"><TriangleAlert aria-hidden="true" />{selected.availability_reason}</p>}
+                <dl className="registry-facts">
+                  <div><dt>{vi ? "Trạng thái cấu hình" : "Configuration"}</dt><dd>{selected.configuration_status === "configured" ? (vi ? "Đã cấu hình" : "Configured") : (vi ? "Chưa cấu hình" : "Not configured")}</dd></div>
+                  <div><dt>{vi ? "Trạng thái tải" : "Load state"}</dt><dd>{selected.load_status === "loaded" ? (vi ? "Đã tải" : "Loaded") : selected.load_status === "not_loaded" ? (vi ? "Chưa tải" : "Not loaded") : (vi ? "Chưa xác định" : "Unknown")}</dd></div>
+                  <div><dt>{vi ? "Danh tính runtime" : "Runtime identity"}</dt><dd className="registry-identity">{reported(selected.runtime_model_id, vi)}</dd></div>
+                  <div><dt>{vi ? "Revision cấu hình" : "Configured revision"}</dt><dd className="registry-identity">{reported(selected.configured_revision, vi)}</dd></div>
+                  <div><dt>{vi ? "Revision runtime" : "Runtime revision"}</dt><dd className="registry-identity">{reported(selected.runtime_revision, vi)}</dd></div>
+                  <div><dt>{vi ? "Credential provider" : "Provider credential"}</dt><dd>{selected.credential_status === "configured" ? (vi ? "Đã cấu hình" : "Configured") : selected.credential_status === "not_configured" ? (vi ? "Chưa cấu hình" : "Not configured") : (vi ? "Không yêu cầu" : "Not required")}</dd></div>
+                </dl>
+
+                <div className="registry-test">
+                  <div><h3>{vi ? "Kiểm tra danh tính runtime" : "Runtime identity check"}</h3><p>{vi ? "So sánh metadata đã tải; không gọi provider và không chạy inference." : "Compares loaded metadata; it does not call the provider or run inference."}</p></div>
+                  <button type="button" className="console-btn console-btn--accent" onClick={runIdentityTest} disabled={testPending || !selected.test_capabilities.includes("runtime_identity")}>
+                    {testPending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <Activity aria-hidden="true" />}
+                    {testPending ? (vi ? "Đang kiểm tra…" : "Checking…") : (vi ? "Chạy kiểm tra" : "Run identity check")}
+                  </button>
+                </div>
+
+                {testError && <div className="workspace-alert workspace-alert--error registry-test-result" role="alert">{testError}</div>}
+                {testResult && (
+                  <div className={`registry-test-result registry-test-result--${testResult.result}`} role="status" aria-live="polite">
+                    <div className="registry-test-result__head"><strong>{testResult.result === "passed" ? (vi ? "Đã qua" : "Passed") : testResult.result === "failed" ? (vi ? "Không khớp" : "Failed") : (vi ? "Không thể xác định" : "Unavailable")}</strong><span>{vi ? "Provider đã gọi:" : "Provider executed:"} {testResult.provider_executed ? (vi ? "Có" : "Yes") : (vi ? "Không" : "No")}</span></div>
+                    <ul>{testResult.checks.map((check) => <li key={check.id}><span>{check.id.replaceAll("_", " ")}</span><strong>{check.status}</strong>{check.reason && <small>{check.reason}</small>}</li>)}</ul>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </aside>
       </div>
     </section>
   );

@@ -56,6 +56,13 @@ import {
   CollectionSortDirection,
   CollectionSortField,
   CollectionUpdateRequest,
+  DatasetDetail,
+  DatasetKind,
+  DatasetRegistryId,
+  DatasetRegistryResponse,
+  ModelRegistryResponse,
+  ModelRole,
+  ModelTestResponse,
 } from "../types";
 
 export class ApiError extends Error {
@@ -530,6 +537,68 @@ export async function getSystemInfo(signal?: AbortSignal): Promise<SystemInfoRes
     throw new ApiError(`Failed to fetch system info: ${response.status}`, response.status);
   }
   return response.json();
+}
+
+function registryQuery(key: "role" | "kind", value?: string | null): string {
+  if (!value) return "";
+  const query = new URLSearchParams({ [key]: value });
+  return `?${query.toString()}`;
+}
+
+export async function getModels(
+  role?: ModelRole | null,
+  signal?: AbortSignal,
+): Promise<ModelRegistryResponse> {
+  const response = await apiFetch(`${getApiBaseUrl()}/models${registryQuery("role", role)}`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok) await throwApiError(response, `Failed to fetch model registry: ${response.status}`);
+  return response.json() as Promise<ModelRegistryResponse>;
+}
+
+export async function testModelRuntimeIdentity(
+  modelId: ModelRole,
+  signal?: AbortSignal,
+): Promise<ModelTestResponse> {
+  const response = await apiFetch(`${getApiBaseUrl()}/models/${encodeURIComponent(modelId)}/tests`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ test_type: "runtime_identity" }),
+    signal,
+  });
+  if (!response.ok) await throwApiError(response, `Failed to test model runtime identity: ${response.status}`);
+  return response.json() as Promise<ModelTestResponse>;
+}
+
+export async function getDatasets(
+  kind?: DatasetKind | null,
+  signal?: AbortSignal,
+): Promise<DatasetRegistryResponse> {
+  const response = await apiFetch(`${getApiBaseUrl()}/datasets${registryQuery("kind", kind)}`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok) await throwApiError(response, `Failed to fetch dataset registry: ${response.status}`);
+  return response.json() as Promise<DatasetRegistryResponse>;
+}
+
+export async function getDataset(
+  datasetId: DatasetRegistryId,
+  signal?: AbortSignal,
+): Promise<DatasetDetail> {
+  const response = await apiFetch(`${getApiBaseUrl()}/datasets/${encodeURIComponent(datasetId)}`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok) await throwApiError(response, `Failed to fetch dataset detail: ${response.status}`);
+  return response.json() as Promise<DatasetDetail>;
 }
 
 export async function getEvaluationRuns(

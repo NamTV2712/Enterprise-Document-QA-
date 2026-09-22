@@ -13,7 +13,8 @@ export type WorkspaceView =
   | "analytics"
   | "system"
   | "models"
-  | "pipeline";
+  | "pipeline"
+  | "datasets";
 
 export type WorkspaceIcon = Extract<SemanticIconKey,
   | "research"
@@ -98,6 +99,7 @@ export const WORKSPACE_NAV_SECTIONS: readonly WorkspaceNavSection[] = [
     items: [
       { view: "evaluation", labelKey: "nav.evaluation", descriptionKey: "nav.evaluationDescription", icon: "evaluation", accentFamily: "evaluation", keywords: ["eval", "experiments"] },
       { view: "analytics", labelKey: "nav.analytics", descriptionKey: "nav.analyticsDescription", icon: "analytics", accentFamily: "analytics", keywords: ["metrics", "usage"] },
+      { view: "datasets", labelKey: "nav.datasets", descriptionKey: "nav.datasetsDescription", icon: "documents", accentFamily: "evaluation", keywords: ["corpus", "provenance"] },
     ],
   },
   {

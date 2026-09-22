@@ -80,8 +80,10 @@ from src.api.routers.evaluations import create_evaluation_router
 from src.api.routers.health import create_health_router
 from src.api.routers.sessions import create_session_router
 from src.api.routers.system import create_system_router
+from src.api.routers.registries import create_registry_router
 from src.api.routers.collections import create_collections_router
 from src.api.routers.workspace_transfer import create_workspace_transfer_router
+from src.api.registry import RegistryService
 from src.api.schemas import (
     DecomposedQueryResponse,
     QueryInterpretation,
@@ -307,6 +309,13 @@ def _catalog_rows_or_unavailable() -> list[dict[str, Any]]:
     """Return catalog rows, or refuse instead of reporting an empty corpus."""
     if _state.get("pipeline") is None:
         raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    return _document_catalog()
+
+
+def _registry_catalog_rows() -> list[dict[str, Any]] | None:
+    """Return the loaded catalog or an explicit unavailable registry source."""
+    if _state.get("pipeline") is None:
+        return None
     return _document_catalog()
 
 
@@ -1844,6 +1853,18 @@ app.include_router(
         _get_pipeline,
         lambda: _state,
         lambda: app.version,
+    )
+)
+app.include_router(
+    create_registry_router(
+        RegistryService(
+            settings=settings,
+            get_state=lambda: _state,
+            get_catalog_rows=_registry_catalog_rows,
+            get_chunks=lambda: _loaded_retrieval_chunks()
+            if _state.get("pipeline") is not None
+            else None,
+        )
     )
 )
 app.include_router(create_evaluation_router())

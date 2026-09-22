@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 GROQ_MAX_RETRIES = 4
 GROQ_DEFAULT_RETRY_DELAY_SECONDS = 2.0
+DEFAULT_GENERATOR_MODEL_ID = "openai/gpt-oss-120b"
 
 SYSTEM_PROMPT = f"""You are a financial analyst assistant. Your job is to answer questions
 about SEC 10-K filings accurately and concisely.
@@ -183,7 +184,7 @@ class Generator:
         self._client_cursor = 0
         self._client_cooldowns = [0.0] * len(self.clients)
         self._client_lock = Lock()
-        self.model = model or "openai/gpt-oss-120b"
+        self.model = model or DEFAULT_GENERATOR_MODEL_ID
 
     @staticmethod
     def _groq_retry_delay(error: Exception) -> float | None:

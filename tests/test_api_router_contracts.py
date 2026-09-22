@@ -71,6 +71,10 @@ EXPECTED_ROUTE_ORDER = [
     ("POST", "/search"),
     ("GET", "/search/{search_id}"),
     ("GET", "/system/info"),
+    ("GET", "/models"),
+    ("POST", "/models/{model_id}/tests"),
+    ("GET", "/datasets"),
+    ("GET", "/datasets/{dataset_id}"),
     ("GET", "/evaluation/runs"),
     ("GET", "/evaluation/runs/{run_id}"),
     ("POST", "/retrieval/inspect"),
@@ -153,6 +157,18 @@ def test_api004_discovery_routes_have_coherent_transport_owners() -> None:
     # The router is built over an application-owned service callback, so the
     # module never constructs a retriever, model, or store itself.
     assert app_module._discovery_service.__module__ == "src.api.app"
+
+
+def test_api006_registry_routes_have_coherent_transport_owners() -> None:
+    routes = {route.path: route for route in _application_routes()}
+
+    for path in (
+        "/models",
+        "/models/{model_id}/tests",
+        "/datasets",
+        "/datasets/{dataset_id}",
+    ):
+        assert routes[path].endpoint.__module__ == "src.api.routers.registries"
 
 
 def test_moved_openapi_operations_match_the_pre_extraction_contract() -> None:

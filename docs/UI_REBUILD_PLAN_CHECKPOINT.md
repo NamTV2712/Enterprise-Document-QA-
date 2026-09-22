@@ -3964,3 +3964,23 @@ saved priority order.
 services", gate "Actual config/manifests"). Do not implement it, and do not
 begin `UI-009`, `DATA-004`, `API-007`, `UI-010` or any later task without
 explicit authorization.
+
+### Post-Commit Security Audit (UI-008)
+
+Mimosa deep scan (job `scan-job-muc7shvg-90001b3d74ff2ee8`, scan
+`scan-2026-09-22T05-09-48.249Z-a4092b62c778`, seal
+`sha256:9746254a4d9ffc15cc698b25c1a3d54d58e8442f5c90fa6d2754e17bca4fd1e2`,
+static-only, verdict effect none): 307 findings repo-wide, of which 303 are
+inside generated bundles that are scanned as source (`frontend/dist-local`,
+`frontend/dist-integration`, `frontend/playwright-report/trace`). The four
+source findings are identical to the pre-UI-008 baseline recorded with DATA-003:
+three medium cross-file taint hypotheses on `frontend/src/App.tsx` that point at
+a minified code-mirror bundle, and one high SQL-injection finding on
+`src/workspace/database.py`'s `PRAGMA busy_timeout` (interpolates an int clamped
+to 100..30000 from operator configuration, not reachable from a request).
+
+No UI-008 file — page, rail, dialogs, model, client, stylesheet, spec or fixture
+— carries a finding. The staged UI-008 changes were inspected for secrets: the
+browser build holds no bearer token, no credential and no workspace path, and no
+fixture contains a real credential. This is not a repo-wide clean bill: the
+generated-bundle noise and the four pre-existing source findings remain.

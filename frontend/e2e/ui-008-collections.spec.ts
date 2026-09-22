@@ -208,6 +208,34 @@ test.describe("UI-008 collections", () => {
     expect(writeRequests(state)).toEqual([]);
   });
 
+  test("the list delete menu confirms and Cancel or Escape never writes", async ({ page }) => {
+    const state = populatedWorkspace();
+    await installApiFixtures(page, { collections: state });
+    await openCollections(page);
+
+    const card = page.locator("#collection-card-col-risk");
+    const trigger = card.getByRole("button", { name: "Actions for Risk Analysis" });
+    await trigger.click();
+    await page.getByRole("menuitem", { name: "Delete collection" }).click();
+
+    let dialog = page.getByRole("dialog", { name: "Delete collection?" });
+    await expect(dialog).toContainText("Risk Analysis");
+    await expect(dialog).toContainText("every member and note");
+    await expect(dialog.getByRole("button", { name: "Cancel" })).toBeFocused();
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+
+    await trigger.click();
+    await page.getByRole("menuitem", { name: "Delete collection" }).click();
+    dialog = page.getByRole("dialog", { name: "Delete collection?" });
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+
+    expect(state.requests.filter((entry) => entry.method === "DELETE")).toEqual([]);
+  });
+
   test("selecting a collection is a route, so back and forward work", async ({ page }) => {
     await installApiFixtures(page, { collections: populatedWorkspace() });
     await openCollections(page);
@@ -294,6 +322,30 @@ test.describe("UI-008 collections", () => {
     await expect(rail.getByRole("heading", { name: /Risk Analysis/ })).toBeVisible();
   });
 
+  test("the detail delete menu keeps a single 409 conflict visible without retrying", async ({ page }) => {
+    const state = populatedWorkspace();
+    state.mutationStatus = { delete: 409 };
+    state.detail = "Collection revision is stale";
+    await installApiFixtures(page, { collections: state });
+    await openCollections(page, "/collections/col-risk");
+
+    const rail = page.getByRole("complementary", { name: /Risk Analysis/ });
+    await rail.getByRole("button", { name: "Collection actions" }).click();
+    await rail.getByRole("menuitem", { name: "Delete collection" }).click();
+    const dialog = page.getByRole("dialog", { name: "Delete collection?" });
+    await expect(dialog).toContainText("Risk Analysis");
+    await dialog.getByRole("button", { name: "Delete permanently" }).click();
+
+    await expect(dialog.getByRole("alert")).toContainText("changed elsewhere");
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page).toHaveURL(/\/collections\/col-risk$/);
+    await expect(rail).toBeVisible();
+    const deletes = state.requests.filter((entry) => entry.method === "DELETE");
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0].path).toBe("/collections/col-risk?revision=4");
+  });
+
   test("a tombstoned collection reports that it is gone, not missing", async ({ page }) => {
     const state = populatedWorkspace();
     const tombstoned = state.collections.find((entry) => entry.collection_id === "col-risk");
@@ -369,7 +421,9 @@ test.describe("UI-008 collections", () => {
     await page.getByRole("button", { name: "Delete permanently" }).click();
     await expect(page).toHaveURL(/\/collections$/);
     await expect(page.getByRole("heading", { name: "Governance" })).toHaveCount(0);
-    expect(writeRequests(state).some((entry) => entry.method === "DELETE")).toBe(true);
+    const deletes = writeRequests(state).filter((entry) => entry.method === "DELETE");
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0].path).toMatch(/^\/collections\/col-4\?revision=\d+$/);
   });
 
   test("export downloads the workspace's own document and mutates nothing", async ({ page }) => {

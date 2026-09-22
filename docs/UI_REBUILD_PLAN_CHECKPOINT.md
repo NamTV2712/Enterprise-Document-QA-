@@ -3925,3 +3925,42 @@ dirt (`components/DocumentWorkspace.test.tsx`, `components/EvidenceCollectionsPa
 
 Commits are recorded below; then read the master plan and set the next task
 without implementing it.
+
+### UI-008 Closure (commits, gates, next task)
+
+Commits: `493513e feat(ui): rebuild collections on the typed workspace API`,
+`8357e44 test(ui): cover the collections workspace with fixtures and browser
+gates`, `431f351 docs: record the UI-008 collections workspace closure`. The
+dirty-path count moved from 140 to 136; every remaining path is the historical
+predecessor work this task preserved, including the two untracked specs it
+updated (`e2e/reconciliation-reference.spec.ts`, `e2e/v5-07-handoffs.spec.ts`)
+and the unrelated `components/DocumentWorkspace.test.tsx`,
+`components/EvidenceCollectionsPanel.tsx` and
+`tests/fixtures/workspace_transfer_roundtrip.json` dirt it did not touch.
+
+Final numbers: unit suite 75 files / 495 tests (from 74 / 460), `tsc` clean,
+build green; UI-008 spec 15 tests × 2 engines all passing; controlled full
+Chromium 165 passed / 2 skipped / 1 failed (`regression.spec.ts:1039`, isolated
+rerun p95 = 46.4 ms against a 100 ms budget) and controlled full Firefox 163
+passed / 2 skipped / 3 failed (`regression.spec.ts:65`, `:656`,
+`workspace-performance.spec.ts:176`, each passing in isolation); reference
+receipt 30/30; backend untouched at 1018 / 0 / 188.
+
+### Next Task Selection (from the master plan)
+
+`docs/UI_REBUILD_MASTER_PLAN.md` §21 orders the graph and its task table. With
+UI-008 complete, the next entries are `API-006 Model/dataset registries`
+(dependency API-002, complete; parallel opportunity UI-008, now finished) and
+then `UI-009 Models/Datasets` (dependencies UI-002 and API-006). Repository
+evidence confirms no registry service exists yet: the API has no registry
+router, `src/api/routers/system.py` exposes only the configured embedding and
+reranker identity, and the Models page is still the pre-rebuild
+`ModelsConsole`. API-006 is therefore the next dependency-ready task in the
+saved priority order.
+
+### Exact Next Action
+
+**API-006 — Model/dataset registries** (dependency `API-002`, area "Registry
+services", gate "Actual config/manifests"). Do not implement it, and do not
+begin `UI-009`, `DATA-004`, `API-007`, `UI-010` or any later task without
+explicit authorization.

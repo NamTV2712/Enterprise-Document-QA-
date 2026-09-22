@@ -4473,7 +4473,9 @@ exist only in redaction tests. All 12 pre-existing excluded untracked
 artifact/diagnostic entries remain untracked and preserved. Ordinary registry
 reads made no network, SEC, Groq, Hugging Face, Qdrant Cloud, inference,
 download, or cache-mutating call. The implementation commit is `de907a7`
-(`feat(api): add truthful model and dataset registries`).
+(`feat(api): add truthful model and dataset registries`); the public contract,
+architecture, project-state, and validation record is `4fd5577`
+(`docs(api): record registry contracts and validation`).
 
 API-006 is complete without model/dataset mutation or frontend work. The master
 dependency graph at `docs/UI_REBUILD_MASTER_PLAN.md` places `UI-009 —

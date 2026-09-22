@@ -53,6 +53,9 @@ the preserved local git-ignored artifacts. Compile/import checks pass and the
 application reports the four expected registry routes. No network, SEC, Groq,
 Hugging Face, or Qdrant Cloud call was made.
 
+Public contract, architecture, validation, and checkpoint records are commit
+`4fd5577` (`docs(api): record registry contracts and validation`).
+
 Known limitations: generator reachability is intentionally unknown without an
 explicit provider test; model health, latency, and quality are not fabricated;
 the serving dataset is degraded when its manifest cannot be reconciled; the

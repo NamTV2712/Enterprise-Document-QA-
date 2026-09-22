@@ -4650,3 +4650,159 @@ artifact/diagnostic entries remain untracked and preserved.
 UI-009 is complete. The dependency/priority graph places `DATA-004 — Durable
 jobs` immediately after UI-009 and before API-007. That is the exact next
 action; DATA-004 has not started.
+
+## DATA-004 — Durable jobs
+
+### DATA-004-A — Exact contract and persistence map
+
+Status: ACTIVE. Starting HEAD is `9a2bf66` on
+`codex/bilingual-research-workspace`; tracked and staged state are clean and the
+same 12 deliberately excluded artifact/diagnostic entries remain untracked.
+
+The saved master contract and DATA-001 migration v3 define three durable job
+namespaces: `pipeline`, `evaluation`, and `model_test`. DATA-004 does not define
+the future registered pipeline/evaluation job-type vocabulary, so `job_type`
+remains a bounded opaque type owned by later consumers. It does define these
+job states exactly: `queued`, `running`, `cancelling`, `cancelled`, `succeeded`,
+`failed`, and `interrupted`. Ordered step states are `pending`, `running`,
+`cancelled`, `succeeded`, `failed`, `skipped`, and `interrupted`. Terminal job
+states are cancelled/succeeded/failed/interrupted and never transition again.
+
+Legal job transitions are queued→running, running→succeeded/failed/interrupted,
+running→cancelling on a cancellation request, cancelling→cancelled when a
+worker acknowledges the stop, and cancelling→interrupted during restart
+reconciliation. A queued cancellation is immediately cancelled because no
+work has started. A running job cannot become cancelled without the distinct
+cancelling acknowledgement boundary. No retry/requeue transition exists; a
+retry is a new job request and identity. The contract defines no lease,
+heartbeat, worker identity, distributed claim, deletion, retention cleanup, or
+background scheduler, so DATA-004 adds none. Atomic queued→running plus expected
+revision is the only claim-like primitive and two contenders cannot both win.
+
+Creation accepts a caller idempotency key but stores only its SHA-256 digest.
+Within a namespace, the same key and canonical request returns the same stable
+opaque persisted job ID; reuse for a different type/configuration/payload/
+artifacts/ordered-step definition is a deterministic conflict. Job IDs are
+random opaque UUID-based IDs and are distinct from idempotency/correlation
+identity. Every job or step mutation requires an expected revision and advances
+the job revision; stale writers fail rather than overwrite.
+
+Progress is stage plus an optional current/total pair. Both counts are absent
+when unknown; when present total is positive and `0 <= current <= total`. No
+percentage is persisted or inferred. Results are finite canonical JSON objects;
+failure is a bounded allowlisted code and sanitized message. Payloads, results,
+failure text, stage/type names, step definitions, and artifact references are
+bounded. Credential-like keys/values, configured secrets, control characters,
+and machine-specific absolute paths are rejected. Pickle/executable formats are
+forbidden.
+
+DATA-001 already supplies the one authoritative SQLite database, foreign keys,
+WAL, busy timeout, process serialization, `BEGIN IMMEDIATE`, UTC timestamps,
+checksum-tracked migrations, and fail-closed schema validation. Migration v3
+created `jobs`, `job_steps`, and `job_events`, but it lacks idempotency, request
+payload, current progress, result, sanitized failure message, and multiple
+logical artifact references. DATA-004 therefore requires a new additive v4
+migration. New columns are nullable for upgrade safety; new DATA-004 records
+carry an explicit record schema version, while any pre-existing ambiguous v3
+row fails closed instead of being discarded or silently reinterpreted. No
+historical migration is changed.
+
+Restart policy is explicit reconciliation, not repository-open side effects:
+queued work remains queued; running or cancelling jobs become interrupted in
+one transaction, their running steps become interrupted, pending steps remain
+pending, and one ordered event records the recovery. This method is for the
+single future coordinator startup boundary; merely opening another repository
+cannot interrupt live work. Creation, transitions, progress, step updates,
+cancellation, and recovery each update state/revisions/timestamps plus their
+event in one transaction. Deterministic injected failures must roll the whole
+logical operation back.
+
+Jobs and job artifacts remain local/private until explicit cleanup. DATA-004
+adds no HTTP route and does not construct the workspace in public mode. Jobs
+remain excluded from the DATA-002 portable backup: that envelope contains
+research records, not private execution history or run artifacts. There is no
+browser writer, JSON file, second database, worker loop, provider invocation,
+pipeline/evaluation execution, or frontend work.
+
+Planned files: additive migration v4, a typed/testable durable-job domain and
+SQLite repository exported from `src.workspace`, focused state/persistence/
+rollback/restart/concurrency/migration/authority/transfer tests, then current
+README/project/checkpoint records. API-007 and every execution adapter remain
+out of scope.
+
+### DATA-004-B — Migration and durable repository
+
+Status: COMPLETE. Additive migration v4 extends the existing v3 job tables; no
+historical migration was edited. It adds the DATA-004 record marker,
+idempotency digest, canonical payload/result, logical artifact references,
+stage/current/total progress, sanitized failure message, cancellation time,
+event progress stage, and deterministic idempotency/listing indexes. A v3→v4
+test preserves an existing legacy row, verifies every new column/index, and
+proves the repository refuses to reinterpret that ambiguous row.
+
+`src/workspace/jobs.py` provides the typed domain, pure transition validators,
+and `SQLiteJobRepository`. Creation, state mutation, progress, step mutation,
+cancellation/acknowledgement, recovery, and event pagination all share the
+authoritative `WorkspaceDatabase` transaction boundary. Public settings still
+cannot construct storage. Implementation is commit `986aca8` (`feat(data): add
+durable job persistence`).
+
+### DATA-004-C — Concurrency, ordering, and interruption
+
+Status: COMPLETE. Every mutation requires the caller's expected revision and
+advances the job revision. Step mutation also checks its own revision. SQLite
+`BEGIN IMMEDIATE`, the existing bounded busy timeout/process lock, revision
+predicates, and unique namespace/idempotency digest prevent split ownership.
+The deterministic two-contender test produces exactly one start and one
+conflict without sleeps. Job listing is created-time/job-ID stable; steps use
+ordinal/job-ID order; events use monotonic per-job sequence and support bounded
+after-sequence pagination.
+
+Opening a repository has no recovery side effect. Explicit recovery leaves
+queued work alone and atomically interrupts only running/cancelling jobs plus
+running steps; pending steps remain pending. A second recovery is empty.
+Deterministic injected failures after each mutation point prove that job, step,
+revision, timestamp, and event changes roll back together.
+
+### DATA-004-D — Safety, privacy, and compatibility
+
+Status: COMPLETE. Payload/result/failure/progress/type/step/artifact/list bounds
+are enforced before write. Canonical JSON rejects non-finite or executable
+object data; recursive guards reject credential-shaped keys, configured secret
+values, credential text, control characters, and absolute Windows/POSIX paths.
+Only SHA-256 idempotency digests are stored. Artifact references are portable
+opaque logical identifiers, never paths.
+
+DATA-002 export reads only its allowlisted research-record domains. An explicit
+test creates a durable job, exports the workspace, proves no jobs/events enter
+the envelope, and proves the job is unchanged. Public mode creates no `.local`
+state. No route, provider call, worker, browser persistence, deletion, retry,
+lease, heartbeat, cleanup, or frontend surface exists.
+
+### DATA-004-E — Validation gates
+
+Status: COMPLETE. Focused durability plus persistence/transfer/collection/
+access/matrix regressions pass `151/151` with one existing dependency warning.
+The full hermetic backend suite passes `1077/1077` with `188` warnings, matching
+the starting warning count while adding 27 passing DATA-004 tests to the
+1050-test baseline. Compile/import checks pass; the exported repository imports
+from `src.workspace`; the FastAPI application remains at 67 routes; and
+`git diff --check` passes. Ruff is not installed, so no Ruff pass is claimed.
+No network, SEC, Groq, Hugging Face, Qdrant Cloud, pipeline, evaluation, or
+provider operation ran.
+
+### DATA-004-F — Audit and closure
+
+Status: COMPLETE. Runtime/test implementation is commit `986aca8`. Tracked
+changes are limited to the additive migration, durable-job domain/repository,
+workspace exports, focused tests, and current README/project/checkpoint records.
+No generated database, run artifact, cache, report, screenshot, trace, build
+output, secret, local path, canonical `data/` artifact, or frontend file is
+included. The same 12 pre-existing excluded artifact/diagnostic entries remain
+untracked and preserved.
+
+Known limitations are the task boundary: concrete job-type registries belong to
+their future consumers; a future coordinator must call restart recovery once;
+and no retention/deletion policy exists because the saved contract does not
+define one. DATA-004 is complete. The dependency/priority graph identifies the
+exact next action as `API-007 — Pipeline staging`; it has not started.

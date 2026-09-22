@@ -1,5 +1,58 @@
 # Project State
 
+## DATA-004 durable jobs (2026-09-22)
+
+DATA-004 is complete at implementation commit `986aca8` (`feat(data): add
+durable job persistence`). The one authoritative DATA-001 SQLite database now
+owns durable `pipeline`, `evaluation`, and `model_test` jobs through additive
+schema migration v4 and the typed `SQLiteJobRepository`. The backend route
+count remains 67; no API route, coordinator, worker, provider call, pipeline or
+evaluation execution, frontend file, browser writer, second database, or
+canonical-data mutation was added.
+
+The persisted contract has opaque stable job/step/event IDs; SHA-256-only
+idempotency-key storage; canonical request matching; configuration
+fingerprints; ordered step and event histories; optimistic job/step revisions;
+bounded stage plus optional current/total progress; bounded safe result JSON;
+sanitized failure code/message; logical artifact references; and UTC lifecycle
+timestamps. Credential-like fields/values, configured secret values, absolute
+machine paths, control characters, non-finite JSON, oversized records, and
+path-shaped artifact references fail before persistence. New rows carry an
+explicit record schema version. Ambiguous pre-DATA-004 v3 job rows are retained
+but fail closed when read.
+
+State transitions are deliberately narrow: queued work starts or cancels;
+running work succeeds, fails, is interrupted, or enters cancelling; cancelling
+work becomes cancelled only on acknowledgement or interrupted on restart.
+Terminal states do not restart. There is no retry/requeue, lease, heartbeat,
+worker identity, deletion, retention cleanup, or background scheduler contract.
+Atomic queued-to-running plus expected revision is the claim boundary, and a
+two-contender test proves only one stale-revision writer can win.
+
+Restart reconciliation is explicit rather than an open-time side effect.
+Queued jobs remain queued; running/cancelling jobs and their running steps are
+atomically marked interrupted, while pending steps remain pending. Creation,
+state/progress/step updates, cancellation, acknowledgement, and recovery each
+write their event in the same transaction. Deterministic failure injection
+proves rollback for every logical mutation. Job state and job artifacts remain
+private/local and are excluded from DATA-002 portable backups.
+
+Validation is hermetic and provider-free. The focused durability plus existing
+persistence/transfer/collection/access/matrix regressions pass 151/151 with one
+existing dependency warning. The full backend suite passes 1077/1077 with the
+same 188 warnings as the 1050-test starting baseline, so DATA-004 contributes
+27 passing tests and no new failure or warning. Compile/import checks pass,
+`git diff --check` passes, and the application still reports 67 routes. Ruff is
+not installed in the repository environment, so no Ruff result is claimed.
+
+Known limitations are intentional boundaries: DATA-004 persists and validates
+state but does not execute work or expose it over HTTP; job types remain bounded
+consumer-owned identifiers until their later adapters register concrete
+vocabularies; recovery must be invoked once by the future coordinator startup;
+and retention/deletion policy is deferred because the saved contract does not
+define one. The exact next dependency/priority action is `API-007 — Pipeline
+staging`. It has not started.
+
 ## UI-009 Models/Datasets workspace (2026-09-22)
 
 UI-009 is complete. `/models` and `/datasets` are now available product routes

@@ -1256,9 +1256,18 @@ Relative paths must remain under `.local/`, which is git-ignored and isolated
 from canonical `data/`, evaluation, PDF, embedding, and Qdrant storage. The
 database uses explicit ordered migrations, foreign keys, WAL where supported,
 a bounded busy timeout, and short serialized writes. Public mode does not open
-or create the database, and DATA-001 does not connect browser storage or expose
-new persistence endpoints. Browser import, collection workflows, and durable
-job orchestration remain separate later tasks.
+or create the database. Browser import and collection workflows use the same
+authority; there is no browser-side persistence writer.
+
+Durable pipeline, evaluation, and model-test job state also lives in that one
+SQLite database. Jobs have opaque IDs, idempotent creation, optimistic
+revisions, ordered steps/events, bounded progress and result data, explicit
+cancellation acknowledgement, and restart reconciliation that marks only
+active work interrupted. Raw idempotency keys, credentials, absolute machine
+paths, and executable payload formats are not persisted. Job history and
+artifact references remain private/local and are excluded from portable
+workspace backups. This persistence layer does not expose job HTTP routes or
+run pipeline/evaluation work; API-007 supplies the next adapter boundary.
 
 `PDF_GENERATION_ENABLED` controls the optional provenance-bound PDF
 representation. Its artifacts remain under the git-ignored `data/` tree;

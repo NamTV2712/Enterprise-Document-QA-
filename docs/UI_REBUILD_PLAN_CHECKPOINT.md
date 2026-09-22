@@ -3984,3 +3984,18 @@ No UI-008 file — page, rail, dialogs, model, client, stylesheet, spec or fixtu
 browser build holds no bearer token, no credential and no workspace path, and no
 fixture contains a real credential. This is not a repo-wide clean bill: the
 generated-bundle noise and the four pre-existing source findings remain.
+
+### Stitch Result (recorded honestly)
+
+After the implementation had already been measured and iterated against the
+authoritative screenshot, one bounded Stitch generation was requested in the
+existing high-fidelity reconstruction project
+(`projects/3773610233677432915`, design system "Enterprise Document QA —
+High-Fidelity Screenshot Reconstruction") for the Collections composition, with
+the measured geometry (220 nav / ~750 main / ~583 rail), the card and rail
+anatomy, and the explicit omissions (no sharing, owner, storage meter or plan
+controls). The generation completed and described exactly that composition, so
+it independently corroborates the structure — but per the documented precedence
+the local screenshot remains authority #1 and no Stitch output, markup or demo
+content was imported into the repository. The page was built from the measured
+reference, the UI-001 tokens and the console primitives.

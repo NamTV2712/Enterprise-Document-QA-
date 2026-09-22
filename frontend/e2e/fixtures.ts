@@ -5,7 +5,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { Page, expect } from "@playwright/test";
+import { Page, Route, expect } from "@playwright/test";
 
 export const API_ORIGIN = "http://127.0.0.1:8000";
 
@@ -889,6 +889,8 @@ export async function installApiFixtures(
     searchExpired?: boolean;
     /** Answer `GET /search/{id}` with 404 so the unknown-id state is reachable. */
     searchMissing?: boolean;
+    /** A mutable DATA-003 collections workspace for the UI-008 surfaces. */
+    collections?: CollectionsFixtureState;
   } = {},
 ): Promise<void> {
   const history: HistoryFixture = options.history ?? {
@@ -926,6 +928,11 @@ export async function installApiFixtures(
 
     if (method === "OPTIONS") {
       await route.fulfill({ status: 204, headers: CORS_HEADERS });
+      return;
+    }
+
+    if (path.startsWith("/collections")) {
+      await handleCollectionsFixture(route, method, path, url, options.collections);
       return;
     }
 
@@ -1743,4 +1750,449 @@ export async function openLibrary(page: Page): Promise<void> {
   // its real Conversations tab rather than assuming both surfaces mount.
   await page.getByRole("tab", { name: /Conversations/i }).click();
   await expect(page.getByRole("searchbox", { name: "Search saved conversations" })).toBeVisible();
+}
+
+/* ====================================================================== *
+ * DATA-003 collections fixture
+ *
+ * A small in-memory implementation of the protected collections API. It
+ * enforces the same membership rules, revision preconditions and tombstone
+ * semantics the real router does, so a UI test proves the page against the
+ * contract rather than against a permissive stub. Every request is recorded
+ * so a test can assert that browsing wrote nothing.
+ * ====================================================================== */
+
+export type CollectionsFixtureItemKind = "document" | "evidence" | "answer" | "note";
+
+export interface CollectionsFixtureItem {
+  item_id: string;
+  collection_id: string;
+  item_kind: CollectionsFixtureItemKind;
+  citation: string;
+  excerpt: string;
+  reference: Record<string, unknown>;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+  snapshot?: Record<string, unknown>;
+}
+
+export interface CollectionsFixtureNote {
+  note_id: string;
+  collection_id: string;
+  text: string;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+  evidence_ref?: Record<string, unknown>;
+}
+
+export interface CollectionsFixtureActivity {
+  activity_id: string;
+  collection_id: string;
+  entity_type: string;
+  entity_id: string;
+  event_type: string;
+  occurred_at: string;
+}
+
+export interface CollectionsFixtureCollection {
+  collection_id: string;
+  name: string;
+  description: string;
+  tags: string[];
+  favorite: boolean;
+  private: boolean;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+  items: CollectionsFixtureItem[];
+  notes: CollectionsFixtureNote[];
+  activity: CollectionsFixtureActivity[];
+  /** Tombstoned collections answer 410 exactly like the real repository. */
+  deleted?: boolean;
+}
+
+export interface CollectionsFixtureState {
+  collections: CollectionsFixtureCollection[];
+  /** Force a status for `GET /collections` (404 unavailable, 401, 403, 500). */
+  listStatus?: number;
+  /** Force one mutation's status, keyed by operation. */
+  mutationStatus?: Partial<Record<
+    "create" | "update" | "delete" | "add-item" | "delete-item" | "add-note" | "update-note" | "delete-note",
+    number
+  >>;
+  /** Every request the page made, in order, with its decoded body. */
+  requests: Array<{ method: string; path: string; body: unknown }>;
+  /** Details the forced-status responses report. */
+  detail?: string;
+}
+
+export function createCollectionsFixtureState(
+  collections: Array<Partial<CollectionsFixtureCollection> & { collection_id: string; name: string }> = [],
+): CollectionsFixtureState {
+  return {
+    collections: collections.map((entry) => ({
+      description: "",
+      tags: [],
+      favorite: false,
+      private: true,
+      revision: 1,
+      created_at: "2026-09-20T08:00:00Z",
+      updated_at: "2026-09-22T10:00:00Z",
+      items: [],
+      notes: [],
+      activity: [],
+      ...entry,
+    })),
+    requests: [],
+    detail: "Local workspace capability is unavailable",
+  };
+}
+
+function collectionsPayload(entry: CollectionsFixtureCollection) {
+  return {
+    collection_id: entry.collection_id,
+    name: entry.name,
+    description: entry.description,
+    tags: entry.tags,
+    favorite: entry.favorite,
+    private: entry.private,
+    revision: entry.revision,
+    created_at: entry.created_at,
+    updated_at: entry.updated_at,
+    item_count: entry.items.length,
+  };
+}
+
+function collectionsReferenceIsValid(kind: CollectionsFixtureItemKind, reference: Record<string, unknown>): boolean {
+  const has = (keys: string[]) => keys.some((key) => typeof reference[key] === "string" && (reference[key] as string).length > 0);
+  if (kind === "document") return has(["document_id"]);
+  if (kind === "answer") return has(["conversation_id", "message_id", "answer_id"]);
+  if (kind === "note") return true;
+  return has(["document_id", "chunk_id", "source_document_id", "conversation_id", "message_id"]);
+}
+
+async function handleCollectionsFixture(
+  route: Route,
+  method: string,
+  path: string,
+  url: URL,
+  state: CollectionsFixtureState | undefined,
+): Promise<void> {
+  const json = (body: unknown, status = 200) =>
+    route.fulfill({ status, headers: { ...CORS_HEADERS, "content-type": "application/json" }, body: JSON.stringify(body) });
+
+  if (!state) {
+    await json({ detail: "The local workspace is not configured for this fixture." }, 404);
+    return;
+  }
+
+  const body = method === "GET" || method === "DELETE" ? null : route.request().postDataJSON();
+  state.requests.push({ method, path: `${path}${url.search}`, body });
+  const refused = async (operation: keyof NonNullable<CollectionsFixtureState["mutationStatus"]>): Promise<boolean> => {
+    const status = state.mutationStatus?.[operation];
+    if (!status) return false;
+    await json({ detail: state.detail ?? "Fixture refusal" }, status);
+    return true;
+  };
+  const find = (collectionId: string) => state.collections.find((entry) => entry.collection_id === collectionId);
+  const stamp = "2026-09-22T12:00:00Z";
+
+  // GET /collections
+  if (path === "/collections" && method === "GET") {
+    if (state.listStatus) {
+      await json({ detail: state.detail ?? "Fixture refusal" }, state.listStatus);
+      return;
+    }
+    const search = (url.searchParams.get("search") ?? "").toLowerCase();
+    const favorite = url.searchParams.get("favorite");
+    const sort = url.searchParams.get("sort") ?? "updated_at";
+    const direction = url.searchParams.get("direction") ?? "desc";
+    const page = Number(url.searchParams.get("page") ?? "1");
+    const pageSize = Number(url.searchParams.get("page_size") ?? "25");
+    let items = state.collections.filter((entry) => !entry.deleted);
+    if (favorite !== null) items = items.filter((entry) => entry.favorite === (favorite === "true"));
+    if (search) {
+      items = items.filter((entry) =>
+        [entry.name, entry.description, ...entry.tags].join(" ").toLowerCase().includes(search),
+      );
+    }
+    const directionFactor = direction === "asc" ? 1 : -1;
+    items = [...items].sort((left, right) => {
+      if (sort === "name") return left.name.localeCompare(right.name) * directionFactor;
+      if (sort === "created_at") return left.created_at.localeCompare(right.created_at) * directionFactor;
+      if (sort === "item_count") return (left.items.length - right.items.length) * directionFactor;
+      return left.updated_at.localeCompare(right.updated_at) * directionFactor;
+    });
+    const total = items.length;
+    const start = (page - 1) * pageSize;
+    await json({
+      items: items.slice(start, start + pageSize).map(collectionsPayload),
+      total,
+      page,
+      page_size: pageSize,
+    });
+    return;
+  }
+
+  // POST /collections
+  if (path === "/collections" && method === "POST") {
+    if (await refused("create")) return;
+    const payload = (body ?? {}) as Record<string, unknown>;
+    const created: CollectionsFixtureCollection = {
+      collection_id: `col-${state.collections.length + 1}`,
+      name: String(payload.name ?? "Untitled"),
+      description: String(payload.description ?? ""),
+      tags: Array.isArray(payload.tags) ? (payload.tags as string[]) : [],
+      favorite: Boolean(payload.favorite ?? false),
+      private: payload.private === undefined ? true : Boolean(payload.private),
+      revision: 1,
+      created_at: stamp,
+      updated_at: stamp,
+      items: [],
+      notes: [],
+      activity: [
+        { activity_id: `act-${state.collections.length + 1}-1`, collection_id: `col-${state.collections.length + 1}`, entity_type: "collection", entity_id: `col-${state.collections.length + 1}`, event_type: "collection_created", occurred_at: stamp },
+      ],
+    };
+    state.collections.push(created);
+    await json(collectionsPayload(created));
+    return;
+  }
+
+  const detailMatch = path.match(/^\/collections\/([^/]+)$/);
+  if (detailMatch) {
+    const collectionId = decodeURIComponent(detailMatch[1]);
+    const entry = find(collectionId);
+    if (method === "GET") {
+      if (!entry) {
+        await json({ detail: "Collection not found" }, 404);
+        return;
+      }
+      if (entry.deleted) {
+        await json({ detail: "Collection is deleted" }, 410);
+        return;
+      }
+      await json(collectionsPayload(entry));
+      return;
+    }
+    if (method === "PATCH") {
+      if (await refused("update")) return;
+      if (!entry || entry.deleted) {
+        await json({ detail: "Collection not found" }, entry?.deleted ? 410 : 404);
+        return;
+      }
+      const payload = (body ?? {}) as Record<string, unknown>;
+      if (payload.revision !== entry.revision) {
+        await json({ detail: "Collection revision is stale" }, 409);
+        return;
+      }
+      if (typeof payload.name === "string") entry.name = payload.name;
+      if (typeof payload.description === "string") entry.description = payload.description;
+      if (Array.isArray(payload.tags)) entry.tags = payload.tags as string[];
+      if (typeof payload.favorite === "boolean") entry.favorite = payload.favorite;
+      if (typeof payload.private === "boolean") entry.private = payload.private;
+      entry.revision += 1;
+      entry.updated_at = stamp;
+      entry.activity.push({ activity_id: `act-${collectionId}-${entry.activity.length + 1}`, collection_id: collectionId, entity_type: "collection", entity_id: collectionId, event_type: "collection_updated", occurred_at: stamp });
+      await json(collectionsPayload(entry));
+      return;
+    }
+    if (method === "DELETE") {
+      if (await refused("delete")) return;
+      if (!entry) {
+        await json({ detail: "Collection not found" }, 404);
+        return;
+      }
+      if (entry.deleted) {
+        await json({ detail: "Collection is already deleted" }, 410);
+        return;
+      }
+      if (Number(url.searchParams.get("revision")) !== entry.revision) {
+        await json({ detail: "Collection revision is stale" }, 409);
+        return;
+      }
+      entry.deleted = true;
+      entry.revision += 1;
+      await json({ operation: "delete", entity_type: "collection", entity_id: collectionId, revision: entry.revision, deleted_at: stamp });
+      return;
+    }
+  }
+
+  const itemsMatch = path.match(/^\/collections\/([^/]+)\/items$/);
+  if (itemsMatch) {
+    const collectionId = decodeURIComponent(itemsMatch[1]);
+    const entry = find(collectionId);
+    if (!entry || entry.deleted) {
+      await json({ detail: "Collection not found" }, entry?.deleted ? 410 : 404);
+      return;
+    }
+    if (method === "GET") {
+      const kind = url.searchParams.get("kind");
+      const kindFiltered = kind ? entry.items.filter((member) => member.item_kind === kind) : entry.items;
+      await json({ items: kindFiltered, total: kindFiltered.length, page: 1, page_size: 100 });
+      return;
+    }
+    if (method === "POST") {
+      if (await refused("add-item")) return;
+      const payload = (body ?? {}) as Record<string, unknown>;
+      const kind = String(payload.item_kind ?? "") as CollectionsFixtureItemKind;
+      const reference = (payload.reference ?? {}) as Record<string, unknown>;
+      if (!collectionsReferenceIsValid(kind, reference)) {
+        await json({ detail: `a ${kind} item must carry its required identity` }, 422);
+        return;
+      }
+      const created: CollectionsFixtureItem = {
+        item_id: `itm-${entry.items.length + 1}`,
+        collection_id: collectionId,
+        item_kind: kind,
+        citation: String(payload.citation ?? ""),
+        excerpt: String(payload.excerpt ?? ""),
+        reference,
+        revision: 1,
+        created_at: stamp,
+        updated_at: stamp,
+        ...(payload.snapshot ? { snapshot: payload.snapshot as Record<string, unknown> } : {}),
+      };
+      entry.items.push(created);
+      entry.updated_at = stamp;
+      entry.activity.push({ activity_id: `act-${collectionId}-${entry.activity.length + 1}`, collection_id: collectionId, entity_type: "item", entity_id: created.item_id, event_type: "item_added", occurred_at: stamp });
+      await json(created);
+      return;
+    }
+  }
+
+  const itemMatch = path.match(/^\/collections\/([^/]+)\/items\/([^/]+)$/);
+  if (itemMatch && method === "DELETE") {
+    if (await refused("delete-item")) return;
+    const entry = find(decodeURIComponent(itemMatch[1]));
+    const itemId = decodeURIComponent(itemMatch[2]);
+    const member = entry?.items.find((candidate) => candidate.item_id === itemId);
+    if (!entry || !member) {
+      await json({ detail: "Item not found" }, 404);
+      return;
+    }
+    if (Number(url.searchParams.get("revision")) !== member.revision) {
+      await json({ detail: "Item revision is stale" }, 409);
+      return;
+    }
+    entry.items = entry.items.filter((candidate) => candidate.item_id !== itemId);
+    entry.updated_at = stamp;
+    entry.activity.push({ activity_id: `act-${entry.collection_id}-${entry.activity.length + 1}`, collection_id: entry.collection_id, entity_type: "item", entity_id: itemId, event_type: "item_removed", occurred_at: stamp });
+    await json({ operation: "delete", entity_type: "collection_item", entity_id: itemId, revision: 2, deleted_at: stamp });
+    return;
+  }
+
+  const notesMatch = path.match(/^\/collections\/([^/]+)\/notes$/);
+  if (notesMatch) {
+    const collectionId = decodeURIComponent(notesMatch[1]);
+    const entry = find(collectionId);
+    if (!entry || entry.deleted) {
+      await json({ detail: "Collection not found" }, entry?.deleted ? 410 : 404);
+      return;
+    }
+    if (method === "GET") {
+      await json({ items: entry.notes, total: entry.notes.length, page: 1, page_size: 100 });
+      return;
+    }
+    if (method === "POST") {
+      if (await refused("add-note")) return;
+      const payload = (body ?? {}) as Record<string, unknown>;
+      const text = String(payload.text ?? "");
+      if (text.length === 0) {
+        await json({ detail: "a note must carry text" }, 422);
+        return;
+      }
+      const created: CollectionsFixtureNote = {
+        note_id: `note-${entry.notes.length + 1}`,
+        collection_id: collectionId,
+        text,
+        revision: 1,
+        created_at: stamp,
+        updated_at: stamp,
+        ...(payload.evidence_ref ? { evidence_ref: payload.evidence_ref as Record<string, unknown> } : {}),
+      };
+      entry.notes.push(created);
+      entry.activity.push({ activity_id: `act-${collectionId}-${entry.activity.length + 1}`, collection_id: collectionId, entity_type: "note", entity_id: created.note_id, event_type: "note_added", occurred_at: stamp });
+      await json(created);
+      return;
+    }
+  }
+
+  const noteMatch = path.match(/^\/collections\/([^/]+)\/notes\/([^/]+)$/);
+  if (noteMatch) {
+    const entry = find(decodeURIComponent(noteMatch[1]));
+    const noteId = decodeURIComponent(noteMatch[2]);
+    const note = entry?.notes.find((candidate) => candidate.note_id === noteId);
+    if (!entry || !note) {
+      await json({ detail: "Note not found" }, 404);
+      return;
+    }
+    if (method === "PATCH") {
+      if (await refused("update-note")) return;
+      const payload = (body ?? {}) as Record<string, unknown>;
+      if (payload.revision !== note.revision) {
+        await json({ detail: "Note revision is stale" }, 409);
+        return;
+      }
+      note.text = String(payload.text ?? note.text);
+      note.revision += 1;
+      note.updated_at = stamp;
+      entry.activity.push({ activity_id: `act-${entry.collection_id}-${entry.activity.length + 1}`, collection_id: entry.collection_id, entity_type: "note", entity_id: noteId, event_type: "note_updated", occurred_at: stamp });
+      await json(note);
+      return;
+    }
+    if (method === "DELETE") {
+      if (await refused("delete-note")) return;
+      if (Number(url.searchParams.get("revision")) !== note.revision) {
+        await json({ detail: "Note revision is stale" }, 409);
+        return;
+      }
+      entry.notes = entry.notes.filter((candidate) => candidate.note_id !== noteId);
+      entry.activity.push({ activity_id: `act-${entry.collection_id}-${entry.activity.length + 1}`, collection_id: entry.collection_id, entity_type: "note", entity_id: noteId, event_type: "note_removed", occurred_at: stamp });
+      await json({ operation: "delete", entity_type: "note", entity_id: noteId, revision: 2, deleted_at: stamp });
+      return;
+    }
+  }
+
+  const activityMatch = path.match(/^\/collections\/([^/]+)\/activity$/);
+  if (activityMatch && method === "GET") {
+    const entry = find(decodeURIComponent(activityMatch[1]));
+    if (!entry || entry.deleted) {
+      await json({ detail: "Collection not found" }, entry?.deleted ? 410 : 404);
+      return;
+    }
+    await json({ items: [...entry.activity].reverse(), total: entry.activity.length, page: 1, page_size: 100 });
+    return;
+  }
+
+  const exportMatch = path.match(/^\/collections\/([^/]+)\/export$/);
+  if (exportMatch && method === "GET") {
+    const entry = find(decodeURIComponent(exportMatch[1]));
+    if (!entry || entry.deleted) {
+      await json({ detail: "Collection not found" }, entry?.deleted ? 410 : 404);
+      return;
+    }
+    if (url.searchParams.get("format") === "markdown") {
+      await json({ format: "markdown", content: `# ${entry.name}\n\n${entry.description}\n` });
+      return;
+    }
+    await json({
+      id: entry.collection_id,
+      name: entry.name,
+      description: entry.description,
+      tags: entry.tags,
+      favorite: entry.favorite,
+      private: entry.private,
+      revision: entry.revision,
+      created_at: entry.created_at,
+      updated_at: entry.updated_at,
+      items: entry.items,
+      notes: entry.notes,
+    });
+    return;
+  }
+
+  await json({ detail: "Unsupported collections fixture route" }, 404);
 }

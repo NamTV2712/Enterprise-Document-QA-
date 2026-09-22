@@ -3125,3 +3125,109 @@ task and stop.
 
 Read the controlled gate results, classify any failure (isolate before calling
 it a regression), then finish the audits, docs and commits.
+
+## UI-007-I Final Checkpoint (gates, audits, commits, UI-007 COMPLETE)
+
+### Task Status
+
+UI-007 COMPLETE.
+
+### Visual Comparison Result
+
+Retrieval was compared against
+`docs/ui-references/retrieval-ui-reference-dark-v1.png` (1586x992) at the
+reference viewport: the page header, the "Retrieval Query" card with its label,
+query field, filter row and primary "Run Retrieval →" button, the four metric
+cards, the ranked results table with its score column, and the right-rail
+evidence preview all sit where the reference puts them. Deltas that stay, each
+recorded as a truthful deviation: five real filter controls plus the inline pool
+bounds replace the reference's three controls and its dead "Advanced Filters"
+button; the query card carries the submitted-configuration strip with the
+existing export; the metric hints report real stage durations instead of a
+fabricated split; the score column is headed with the score family in use and
+there is no page column because the corpus records no page numbers; and two
+truth surfaces the reference does not have (the stage list and the score/parity
+disclosures) follow the results card.
+
+Reranker has no reference screenshot, so it was reviewed against the master-plan
+bullets on the same shell: the comparison table names the fusion rank, the
+reranker score, and the rank movement, the stage card reports status, duration
+and the model only when the stage ran, and a preset without the cross-encoder
+shows the skipped state with the API's reason.
+
+### Gates (UI-007-I)
+
+- `bun run lint` (tsc) — PASS.
+- `bunx vitest run` — PASS: 74 files / 460 tests (422 baseline + 49 new − 11
+  from the replaced panel's suite).
+- `bun run build` — PASS.
+- `bunx playwright test e2e/ui-007-retrieval.spec.ts --workers=4` — PASS: 14/14
+  (both engines). The same spec at the default worker count times out every
+  Chromium test, which is the documented load-sensitive class.
+- Controlled full gate, 4 workers:
+  `bunx playwright test --config playwright.config.ts --workers=4` →
+  **296 passed, 4 skipped, 4 failed**. Failures:
+  `regression.spec.ts:971` (chromium Library search p95),
+  `regression.spec.ts:1039` (chromium composer p95),
+  `regression.spec.ts:65` (firefox evidence inspector),
+  `workspace-performance.spec.ts:176` (firefox synthetic baselines). All four
+  pass in isolation (6/6 across both engines), none touches Retrieval or
+  Reranker, and all belong to the documented load-sensitive class.
+- Nine-reference receipt — PASS 30/30 (15 surfaces on both engines), including
+  `r5-retrieval`, which now drives the rebuilt page.
+- Earlier in the same gate run the r5 receipt failed because the receipt
+  asserted a single "Save evidence" control; the rebuilt table has one per row.
+  The receipt now targets the first row, which is what it always meant.
+
+### Commit
+
+- `cb6a6ea` — `feat(ui): rebuild retrieval and add the reranker comparison view`
+  — 25 files, 4944 insertions, 767 deletions. Scope verified: frontend sources,
+  tests and specs plus documentation only; no backend, `data/`, dependency, or
+  tool-scratch path is included, and no dependency was added (the
+  `package.json`/`bun.lock` diff is the pre-existing rebuild entries).
+- Ownership: the one-line reranker navigation-availability change stays in the
+  still-untracked `frontend/src/app/routes.ts`, and the UI-007 edits in the
+  still-untracked `e2e/v5-07-handoffs.spec.ts` and
+  `e2e/reconciliation-reference.spec.ts` ride with those files; all three are
+  disclosed in the commit body. The commit was rebuilt to exclude `routes.ts`
+  after it was initially staged, so no file's ownership is claimed wholesale.
+- Dirty tree: 143 → 141 paths.
+
+### Artifact / Dependency Audit
+
+- No Playwright traces, videos, dumps, or scratch specs are staged;
+  `frontend/test-results/` is git-ignored and holds the receipts.
+- No new dependency; no secrets in any new or modified file.
+- `git diff --check` — clean (one trailing blank line in the contract document
+  was removed before committing).
+
+### Security Scan
+
+The pre-commit Mimosa scan could not complete (`scanner_enobufs`). The scan was
+re-run after committing: it sealed with 202 findings, all inside generated
+minified bundles under `frontend/dist-integration/` and `frontend/dist-local/`,
+and **zero** name any UI-007 file. This is not a repository-wide clean security
+bill.
+
+### Known/Pre-existing Issues
+
+- The load-sensitive browser class above (four specs), unchanged by UI-007.
+- The six frozen frontend integration expectation failures recorded before
+  UI-004 (that config is excluded from the default gate).
+- The shared untracked `frontend/src/styles/console.css` and
+  `frontend/src/app/routes.ts` remain uncommitted dependencies of the committed
+  application.
+
+### New Regressions
+
+None. Every gate failure was reproduced as a load-sensitive flake in isolation,
+and the rebuilt pages' own suites are green on both engines.
+
+### Exact Next Action
+
+The master-plan table orders `DATA-003 — Typed collections` (`DATA-001` and
+`DATA-002`, both complete) next for the Collections surface, with
+`API-006 — Model/dataset registries` (`API-002`, complete) and
+`UI-008 — Collections` (needs `DATA-003` and `UI-004`) also on the graph. Do not
+begin any of them without a new instruction.

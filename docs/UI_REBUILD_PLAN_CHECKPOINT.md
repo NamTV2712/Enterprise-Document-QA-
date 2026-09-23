@@ -4806,3 +4806,200 @@ their future consumers; a future coordinator must call restart recovery once;
 and no retention/deletion policy exists because the saved contract does not
 define one. DATA-004 is complete. The dependency/priority graph identifies the
 exact next action as `API-007 — Pipeline staging`; it has not started.
+
+## API-007 — Pipeline staging
+
+### API-007-A — Contract and domain map
+
+Status: COMPLETE. API-007-A records the contract and domain map before
+implementation. Its starting HEAD was `3df8323` (`docs(data): close durable
+jobs milestone`) on `codex/bilingual-research-workspace`; tracked/staged state
+was clean when A began, and the same 12 top-level excluded
+artifact/diagnostic entries remained preserved. At that point the untracked
+`src/api/pipeline_models.py` and `src/api/pipeline.py` drafts had no router, app
+wiring, registered route, or focused API test. Those statements record A's
+starting state and are superseded by the completed B-F implementation below.
+
+The API-007-B..F continuation began from actual checkout HEAD
+`c44a5a85a3eaa3c18cee2d0fc76c753f44b17098`, after preserving
+`195e79b fix(api): bound workspace import request reads` and
+`c44a5a8 fix(security): enforce configured workspace host ports`. The working
+checkpoint and API-007 drafts were preserved; no unrelated excluded paths
+were staged or changed.
+
+The master API table owns these six operations, in this order and with these
+access classes: `GET /pipeline` (P: static definition/capabilities),
+`GET /pipeline/runs` (L: filtered/pageable private history),
+`POST /pipeline/runs` (J: stage a durable run with no canonical writes),
+`GET /pipeline/runs/{id}` (L: durable run/step/artifact/status detail),
+`POST /pipeline/runs/{id}/cancel` (J: truthful DATA-004 cancellation state),
+and `GET /pipeline/runs/{id}/events` (L: ordered resumable SSE using
+`Last-Event-ID`). These are the full API-007 Pipeline surface needed by
+UI-010; no other Pipeline route is specified. P means public/provider-free; L
+means API-001 local workspace access; J means L plus the existing execution
+capability. Therefore run creation/cancellation require the existing
+`require_execution_access` grant even though creation itself performs no
+execution. Private reads require `require_local_workspace_access`.
+
+The canonical pipeline definition is `sec_10k_ingestion`, deliberately
+separate from the serving `RAGPipeline`. There is one registered definition,
+one staging profile named `isolated` (the sole isolation mode stated by the
+plan), and registered input IDs are ticker symbols from `configs.tickers.TICKERS`.
+The post-download document identity remains the existing
+`ticker:accession_number`; it is not conflated with a ticker input, job ID,
+step ID, or request identity. The request carries only a non-empty, unique list
+of registered ticker IDs and the required `isolated` staging profile. It has no
+client-supplied pipeline type, arbitrary stage subset, filesystem path,
+document body, model override, or execution option because none is specified
+by API-007.
+
+The deterministic durable step order comes from the real ingestion scripts
+and the master plan's required table enrichment before embedding/indexing:
+`download_filings` (SEC acquisition plus section extraction),
+`chunk_filings`, `add_table_chunks`, `embed_chunks`, `index_chunks`. These are
+build stages, not the serving query's retrieval/fusion/reranking/generation
+stages. The current scripts target canonical `data/` locations, so API-007
+will not import or invoke them. The future isolated worker adapter is not
+implemented here. Staging persists the safe request through DATA-004, creates
+one `pipeline` job with job type `sec_10k_ingestion`, state `queued`, and all
+five steps `pending`; it reports no result, artifact, count, percentage, or
+progress until such facts exist. Initial artifact references are empty.
+
+The master says job creation is idempotent but defines no HTTP idempotency
+header or request field, and the task explicitly forbids inventing one. Exact
+canonical request content (definition, profile, configured input order, and
+server-computed configuration fingerprint) will therefore supply the internal
+DATA-004 idempotency identity: replaying the same request returns the same
+durable job; a different valid request has a different request identity. No
+raw request key is received or stored. Configuration fingerprinting covers the
+registered pipeline/stage order and configured embedding identity/revision;
+no environment dump or credential enters the job. The durable job ID is the
+run resource ID, step IDs are the persisted DATA-004 step IDs, and the
+idempotency digest is not exposed as any of those identities.
+
+Run list responses use the master `Page<T>` shape (`items`, `total`, `page`,
+`page_size`) and bounded status/page filters. Detail is an explicit allowlist
+projection of the durable job, steps, artifact references, progress, and
+sanitized failure fields; it does not expose raw JSON, arbitrary result data,
+paths, or settings. Unknown/unregistered input and unknown run IDs return 404;
+invalid request fields return 422; stale revision, idempotency, or state
+conflicts return 409. Cancellation uses the master revision-precondition rule
+via `If-Match`; queued cancellation becomes cancelled immediately, while an
+already-running job reports `cancelling` until acknowledged. Events replay in
+per-job sequence after the sequence conveyed in `Last-Event-ID`, then close so
+the client can reconnect and resume from persisted DATA-004 history.
+
+Ordinary definition/read/staging operations invoke no ingestion script, SEC,
+Groq, embedding, reranker, Qdrant, filesystem acquisition, or canonical index
+mutation. Public mode returns the existing local-workspace 404 before storage
+construction; local reads use API-001 bearer/Host/Origin/loopback checks; the J
+routes also fail when execution is disabled. No database migration is
+required: DATA-004 v4 contains every initial job, step, event, payload, revision
+and cancellation field needed. UI-010/frontend files are out of scope.
+
+The planned implementation files were the typed pipeline service and models,
+`src/api/routers/pipeline.py`, minimal app wiring, exact route-contract
+inventory, hermetic tests, README, PROJECT_STATE, and this checkpoint. The
+six-route, stage-only, privacy, persistence, access, and full-backend gates are
+recorded in API-007-B..F. The master graph names `UI-010 — Pipeline` as the
+expected successor; it is re-verified at closure and is not started here.
+
+### API-007-B — Typed staging domain and DATA-004 projection
+
+Status: COMPLETE. The preserved drafts are now the typed provider-free
+`sec_10k_ingestion` service. Requests are strict and allow only a non-empty list
+of configured ticker IDs plus `staging_profile=isolated`; duplicate IDs are
+422 and an unknown but syntactically valid ticker is 404. Input validation is
+available as a pure function, so the HTTP handler can reject invalid requests
+before it constructs the private job repository.
+
+The service computes a SHA-256 configuration fingerprint from the registered
+pipeline revision, fixed stage order, table-enrichment ordering, and configured
+embedding identity/revision. It uses canonical request content plus that
+fingerprint as DATA-004's internal idempotency key; no client header, request
+key, or raw key storage was added. Creation persists a `pipeline` namespace,
+`sec_10k_ingestion` job in `queued` state with the five real ordered ingestion
+steps pending and no result, progress, or artifact references. Replays return
+the same DATA-004 job; a distinct request or configuration binding yields a
+distinct run identity.
+
+Run and event responses are explicit typed allowlists. Run projection checks
+the namespace, job type, payload shape, and exact ordered stage names, and
+turns unsafe/malformed persisted data into a safe workspace-unavailable
+response rather than a client-validation error. Arbitrary payload/result data,
+settings, absolute paths, and credentials are not projected.
+
+### API-007-C — Routes, access classes, and transport
+
+Status: COMPLETE. Six routes are registered after the API-006 registries and
+before evaluation routes, in master-plan order: `GET /pipeline` (P),
+`GET /pipeline/runs` (L), `POST /pipeline/runs` (J),
+`GET /pipeline/runs/{run_id}` (L), `POST /pipeline/runs/{run_id}/cancel` (J),
+and `GET /pipeline/runs/{run_id}/events` (L). The application-owned service
+factory opens/migrates DATA-004 only after the protected route's dependency
+has granted access. Definition reads remain static and provider-free.
+
+Job state filters use DATA-004's typed state vocabulary, history is bounded and
+uses the master `Page<T>` shape, run resources expose a quoted numeric `ETag`,
+and cancellation requires the current revision in `If-Match`. Stale revisions
+map to 409; queued cancellation immediately becomes cancelled, while running
+cancellation truthfully remains cancelling. Event responses are finite,
+ordered SSE batches capped at 100 records; each frame uses the per-run numeric
+sequence as its SSE ID, and `Last-Event-ID` resumes strictly after that
+sequence. `If-Match` and `Last-Event-ID` are explicitly allowed by CORS and
+`ETag` is exposed to browser clients; the origin and method policies are
+otherwise unchanged.
+
+### API-007-D — Isolation and runtime boundary
+
+Status: COMPLETE. The definition route requires only the public/provider-free
+grant; history/detail/events require API-001 local workspace access; create
+and cancel require local execution capability. The new factory remains lazy,
+and tests prove public mode returns 404 and disabled execution fails before
+private database construction or mutation. API-001 host-port, loopback,
+Origin, bearer-token, and forwarding-header protections are reused without
+weakening their boundary.
+
+No ingestion script is imported or called. No SEC request, file acquisition,
+embedding, reranking, Qdrant operation, canonical corpus/index write, worker,
+coordinator, scheduler, retry, or promotion path was added. DATA-004 v4 is
+sufficient; there is no migration. Frontend/UI-010, a browser-held credential
+owner, and evaluation work remain outside this task.
+
+### API-007-E — Contract and regression validation
+
+Status: COMPLETE. The focused API-007 plus DATA-004/API-001/API-006/access
+regression group passes `117/117` with one existing ReportLab warning. This
+includes strict request validation before repository construction, duplicate
+request reuse and an eight-contender same-request race, configured-fingerprint
+binding, allowlisted run projection, local/public/execution access, the full
+create/list/detail/cancel/reopen lifecycle, stale revision conflicts, both
+queued and running cancellation states, numeric SSE resume, the 100-event
+response bound, CORS preflight for `If-Match`/`Last-Event-ID`, and exposed
+`ETag`.
+
+The full hermetic backend suite passes `1100/1100` with `188` warnings, matching
+the existing full-suite warning count. Python compile checks pass. The route
+contract and runtime inventory report exactly `69` application routes, of
+which the six new Pipeline routes match the master-plan order. `git diff
+--check` passes. Ruff is unavailable in the repository environment, so no Ruff
+result is claimed. No provider/network operation, UI/frontend test, canonical
+data write, or new migration was run or introduced.
+
+### API-007-F — Audit and closure
+
+Status: COMPLETE. The implementation and README are commit `c9735f5`
+(`feat(api): expose isolated pipeline staging`). The final implementation
+staging was limited to the README, API service/models/router/app, route
+inventory, and focused tests; the checkpoint and PROJECT_STATE closure are
+separately recorded. No frontend file, canonical `data/` artifact, migration,
+worker/coordinator, generated database, cache, report, screenshot, or local
+runtime output is included. The same 12 unrelated excluded artifact/diagnostic
+entries remain untracked and preserved; nothing from them was staged.
+
+The master dependency/priority graph confirms `UI-010 — Pipeline` as the exact
+next product task after API-007; UI-010, auth-owner work, and EVAL were not
+started. The memory-only local connection/token owner remains staged
+architecture and is not a separate predecessor row in the master graph; it
+must be handled or explicitly scoped at the UI-010 boundary before browser
+local-workspace access can be claimed. API-007 is complete and stops here.

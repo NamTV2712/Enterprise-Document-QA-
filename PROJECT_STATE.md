@@ -1,5 +1,40 @@
 # Project State
 
+## API-007 pipeline staging (2026-09-23)
+
+API-007 is complete in implementation commit `c9735f5` (`feat(api): expose
+isolated pipeline staging`). The six routes from the master plan are registered
+in order: public/provider-free definition; local-only run history, detail, and
+events; and execution-gated staging and cancellation. The API uses the existing
+DATA-004 v4 SQLite jobs repository, adds no migration, and leaves jobs queued
+with the five ordered ingestion steps pending. Exact request/configuration
+replays reuse the durable job through DATA-004 idempotency; status, steps,
+revision, sanitized failure, and artifact references are projected through
+typed allowlists.
+
+Cancellation follows revision preconditions (`If-Match`/`ETag`) and preserves
+DATA-004 semantics: queued jobs become cancelled, running jobs become
+cancelling. Event reads return bounded ordered SSE batches resumable by numeric
+`Last-Event-ID`. CORS allows those request headers and exposes `ETag` to browser
+clients. Public workspace mode and disabled execution fail before opening or
+mutating the local job database.
+
+This is staging only: no ingestion script, SEC/provider request, worker,
+coordinator, scheduler, retry, canonical corpus/index write, automatic
+promotion, frontend/UI-010 change, or schema migration was added. The README
+and detailed API-007-B..F checkpoint record the request/response and access
+contract. The focused API-007 plus DATA-004/API-001/API-006/access regression
+group passes `117/117` with one existing warning; the full hermetic backend
+suite passes `1100/1100` with the existing `188` warnings. Python compile and
+diff checks pass. The application now has `69` routes, including the six
+planned Pipeline routes. Ruff is unavailable, so no Ruff pass is claimed.
+
+The master dependency/priority graph names `UI-010 — Pipeline` as the direct
+next product task. The memory-only local connection/token owner remains staged
+architecture and is not listed as a separate predecessor; its scope must be
+resolved at the UI-010 boundary before browser access to protected local routes
+is claimed. UI-010, auth-owner work, and EVAL were not started here.
+
 ## REPAIR-007 enforce configured workspace Host ports (2026-09-23)
 
 `LOCAL_WORKSPACE_ALLOWED_HOSTS` accepts optional ports, but API-001 parsed and

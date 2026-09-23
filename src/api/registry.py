@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +23,11 @@ from src.api.registry_models import (
     ModelTestCheck,
     ModelTestResponse,
 )
+from src.evaluation.dataset_binding import (
+    EVALUATION_DATASET_ID,
+    EVALUATION_DATASET_VERSION,
+    evaluation_dataset_revision,
+)
 from src.evaluation.test_set import TEST_SET, TestCase
 from src.generation.generator import DEFAULT_GENERATOR_MODEL_ID
 from src.generation.provider_policy import configured_groq_keys
@@ -33,8 +35,7 @@ from src.retrieval.index_manifest import compute_corpus_fingerprint, load_index_
 
 
 MODEL_ORDER: tuple[ModelRole, ...] = ("generator", "embedding", "reranker")
-DATASET_ORDER = ("serving-corpus", "evaluation-test-set")
-EVALUATION_DATASET_VERSION = "evaluation-test-set-v1"
+DATASET_ORDER = ("serving-corpus", EVALUATION_DATASET_ID)
 
 
 def _text(value: Any) -> str | None:
@@ -74,16 +75,6 @@ def _public_revision(value: Any) -> str | None:
     if _HEX_REVISION.fullmatch(text) or _SHA256_REVISION.fullmatch(text):
         return text
     return _public_identifier(text)
-
-
-def _evaluation_revision(cases: Sequence[TestCase]) -> str:
-    encoded = json.dumps(
-        [asdict(case) for case in cases],
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
 
 def _counts(values: Sequence[str]) -> list[DatasetCount]:
@@ -479,13 +470,13 @@ class RegistryService:
 
     def _evaluation_dataset(self) -> DatasetDetail:
         cases = self._evaluation_cases
-        revision = _evaluation_revision(cases)
+        revision = evaluation_dataset_revision(cases)
         categories = _counts([case.category for case in cases])
         priorities = _counts([str(case.priority) for case in cases])
         tickers = sorted({case.ticker for case in cases if case.ticker})
         sections = sorted({case.section for case in cases if case.section})
         return DatasetDetail(
-            id="evaluation-test-set",
+            id=EVALUATION_DATASET_ID,
             kind="evaluation",
             name="Built-in evaluation test set",
             description="The source-controlled cases used by the native evaluation workflow.",
@@ -513,7 +504,7 @@ class RegistryService:
     def _datasets(self) -> dict[str, DatasetDetail]:
         return {
             "serving-corpus": self._corpus_dataset(),
-            "evaluation-test-set": self._evaluation_dataset(),
+            EVALUATION_DATASET_ID: self._evaluation_dataset(),
         }
 
     def list_datasets(self, kind: DatasetKind | None = None) -> list[DatasetSummary]:

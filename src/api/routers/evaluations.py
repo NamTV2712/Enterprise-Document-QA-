@@ -1,15 +1,37 @@
 """Validated public evaluation report routes."""
 
+from dataclasses import asdict
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
 
 from configs.settings import settings
+from src.api.evaluation_models import EvaluationMetricsResponse
+from src.evaluation.native_protocol import (
+    METRIC_DEFINITIONS,
+    NATIVE_CAPABILITIES,
+    PROTOCOL_NAME,
+    PROTOCOL_VERSION,
+)
 from src.evaluation.public_report import get_public_report, list_public_reports
 
 
 def create_evaluation_router() -> APIRouter:
     router = APIRouter()
+
+    @router.get("/evaluation/metrics", response_model=EvaluationMetricsResponse)
+    async def evaluation_metrics() -> EvaluationMetricsResponse:
+        """Expose native identities and meanings without executing a provider."""
+        return EvaluationMetricsResponse(
+            protocol=PROTOCOL_NAME,
+            protocol_version=PROTOCOL_VERSION,
+            capabilities=asdict(NATIVE_CAPABILITIES),
+            items=[
+                asdict(definition) | {"required_inputs": list(definition.required_inputs)}
+                for definition in METRIC_DEFINITIONS
+            ],
+            total=len(METRIC_DEFINITIONS),
+        )
 
     @router.get("/evaluation/runs")
     async def evaluation_runs(

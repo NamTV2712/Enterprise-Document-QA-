@@ -82,6 +82,7 @@ EXPECTED_ROUTE_ORDER = [
     ("GET", "/pipeline/runs/{run_id}"),
     ("POST", "/pipeline/runs/{run_id}/cancel"),
     ("GET", "/pipeline/runs/{run_id}/events"),
+    ("GET", "/evaluation/metrics"),
     ("GET", "/evaluation/runs"),
     ("GET", "/evaluation/runs/{run_id}"),
     ("POST", "/retrieval/inspect"),

@@ -259,3 +259,29 @@ Desktop presents a registry/detail split, compact widths stack the regions,
 and Models uses cards at 800px and below instead of compressing its table.
 Both themes require non-color state labels, visible focus, reduced-motion
 support, reachable detail/actions, and zero body/root horizontal overflow.
+
+## Pipeline staging acceptance (UI-010)
+
+`/pipeline` reads the public API-007 definition; `/pipeline/runs/:runId` uses a
+canonical durable-job ID. The app-level local-workspace session owner verifies
+an explicitly entered bearer with protected configuration status and holds it
+in runtime memory only. Disconnect, provider unmount, or reload clears it.
+Private Pipeline requests alone receive Authorization. Public definition reads
+never receive it. No token is stored in browser storage, URL, or app logs.
+
+Private list/detail, staging, cancellation, and ordered finite SSE use only
+API-007 routes. Staging returns the server's queued ID/revision and five
+pending durable steps; it does not execute a worker, provider, or canonical
+corpus mutation. Absent progress, timings, and artifacts remain unreported.
+One selected-run lifetime owns its detail and event reads. Selection changes
+abort and invalidate earlier work, including A→B→A, and reconnect resumes from
+the last valid numeric event sequence. Stream closure/disconnection never
+implies job success or failure.
+
+Cancellation sends the selected revision with `If-Match`, prevents duplicate
+requests, and renders the API's response state. `cancelling` remains distinct
+from `cancelled`; a 409 conflict is visible and triggers a non-forcing detail
+reconciliation. Public mode, unauthorized, denied, unknown job, validation,
+network, and stream failures remain distinct. Desktop preserves the reference
+main/list and selected-run rail; compact/mobile layouts stack them without
+body/root horizontal overflow or squeezing the history table.

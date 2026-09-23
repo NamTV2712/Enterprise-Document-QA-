@@ -5003,3 +5003,205 @@ started. The memory-only local connection/token owner remains staged
 architecture and is not a separate predecessor row in the master graph; it
 must be handled or explicitly scoped at the UI-010 boundary before browser
 local-workspace access can be claimed. API-007 is complete and stops here.
+
+## UI-010 — Pipeline workspace
+
+### UI-010-A — Contract, ownership, and visual plan
+
+Status: RECORDED BEFORE IMPLEMENTATION. This continuation starts from
+`3eecebd` (`docs(api): close API-007 pipeline staging`) with a clean tracked
+worktree; the 12 pre-existing untracked diagnostic/reference entries remain
+user-owned and are out of scope. UI-010 is the next priority-graph task after
+API-007. EVAL-001 is its successor and is not in scope here.
+
+**Product and ownership boundary.** Replace the current serving-corpus snapshot
+in `frontend/src/components/PipelineConsole.tsx` with the provider-free staged
+ingestion workspace. Keep query/retrieval diagnostics in
+`PipelineExecution.tsx` untouched. The visible workflow is the API-defined
+`sec_10k_ingestion` pipeline, not the serving `RAGPipeline`. Stage requests
+only create an isolated `queued` DATA-004 record. The browser must never claim
+that a worker ran, that stages completed, or that staged output was promoted.
+No worker, provider call, canonical corpus write, script invocation, new
+persistence, migration, schedule, retry, or promotion control is authorized.
+
+**API contract.** Implement only API-007's six routes and access classes:
+public anonymous `GET /pipeline`; private `GET /pipeline/runs`;
+execution-gated `POST /pipeline/runs`; private `GET
+/pipeline/runs/{run_id}`; execution-gated revision-conditional `POST
+/pipeline/runs/{run_id}/cancel` (`If-Match`); and private ordered finite SSE
+`GET /pipeline/runs/{run_id}/events` (`Last-Event-ID`). Use the exact response
+DTOs and registered input IDs/staging profiles from the API. Render the five
+ordered steps exactly: `download_filings`, `chunk_filings`,
+`add_table_chunks`, `embed_chunks`, `index_chunks`. The screenshot's sixth
+`Validate` node and all sample run identities, metrics, durations, users,
+alerts, and completion claims are reference-only, not product data. Progress
+remains unknown unless the server provides it; stage creation starts with five
+pending steps and no artifacts.
+
+**Credential ownership.** UI-010 owns the missing app-level local-workspace
+session owner. Keep a single bearer only in React/app memory, acquire it only
+after explicit entry and successful authenticated `GET
+/system/configuration-status`, clear it on Disconnect/unmount/reload, and
+never use storage, URL, logs, analytics, or build-time configuration. The
+credential entry is password-masked and reset after connect/failure. Add
+Authorization only to explicitly private Pipeline requests; never attach it
+to `GET /pipeline` or unrelated public API calls. Distinguish 401 (token
+rejected), 403 (host/origin or execution access denied), 404 (capability/public
+mode or unknown run), 409 (stale state/revision), 422 (request refused), and
+network/503 unavailable. An invalid credential must not be described as an
+empty history. Do not weaken API-001 checks or attempt to exchange a token
+with a non-loopback/private service implicitly.
+
+**Visual receipt and component plan.** Authoritative visual input is
+`docs/ui-references/pipeline-ui-reference-dark-v1.png` (1586×992). Measured
+landmarks: shared app bar y=0–59; navigation rail x=0–207; content begins near
+x=223; Pipeline title/actions occupy y≈72–132; four reference metric cards
+occupy y≈148–243; flow panel y≈259–557; run history y≈573–978; detail rail
+x≈1227–1574 from y≈73. Preserve the reference's dark navy/blue surfaces,
+compact aligned cards, ordered connected stage nodes, dense but readable run
+history, and persistent selected-run detail at wide desktop. Keep the existing
+global V5 app shell/header/navigation; don't recreate the screenshot's
+fictional account, storage/upgrade controls, schedule/templates, unsupported
+tabs or row actions. Use four summary cards only for server-backed run totals
+and definition facts; mark unavailable values as unavailable instead of
+inventing success rates, throughput, processing counts, timing, or readiness.
+The page component owns list/detail/stream and transient selection UI; the
+canonical `/pipeline/runs/:runId` URL owns run selection. A shared
+`LocalWorkspaceSessionProvider` mounted above `App` owns the ephemeral token;
+`PipelineConsole` owns its explicit connect/disconnect form and obtains the
+ephemeral token through the shared owner for typed API calls. Keep Pipeline
+copy English/Vietnamese.
+
+**States and interactions.** Cover public definition loading/unavailable,
+private disconnected/connecting/unauthorized/denied, list loading/empty/error,
+unknown deep-linked run, selected queued/running/cancelling/cancelled/
+succeeded/failed/interrupted states, unknown/partial progress, staging pending
+/accepted/refused, cancel pending/accepted/conflict, SSE replay/connected
+finite-close/reconnecting/error, and retry. Use server detail as state truth;
+refresh it after each bounded event batch. Resume from the highest valid
+sequence. Abort/clean up detail and event fetches on route, selected ID, token,
+and unmount changes; guard responses with a selection-generation epoch so
+A→B→A cannot let stale A#1 overwrite A#2. Don't convert a clean finite SSE
+close into job failure. Cancellation sends the current run revision, disables
+duplicate requests while pending, preserves 409 as a conflict, and shows
+`cancelling` separately from `cancelled`.
+
+**Responsive and accessibility plan.** Keep the reference's two-column
+main/detail layout at wide desktop; at compact desktop stack the header and
+metrics, reduce stage-card width with safe wrapping/scrolling inside the stage
+flow only, and give details a bounded collapsible/drawer surface; on mobile use
+one column with details following the selected run and no page-level horizontal
+overflow. Preserve readable input/table labels, keyboard-reachable controls,
+visible focus, 44px interactive targets, semantic status text/icons, and
+reduced-motion behavior. Keep the table scroll region local, not the page.
+Connect dialog/input owns focus restoration; route changes announce selected
+run state without stealing focus.
+
+**Persistence and test plan.** The only intended persistence is the already
+existing backend durable DATA-004 staged job. The browser token, selected input
+draft, SSE cursor, and view/session state are not persisted. Add hermetic unit
+tests for memory-only auth and redaction, public/private header isolation,
+exact route/query/body/If-Match/SSE cursor behavior, event framing and
+reconnect, all server state/error mappings, duplicate-stage prevention,
+revision conflicts, route deep links/back-forward, cleanup and A→B→A stale
+response rejection. Add Playwright fixtures for direct `/pipeline` and
+`/pipeline/runs/:id`, public/unavailable/authenticated/stage/cancel/reconnect
+flows, memory reset on reload, keyboard semantics, and wide/compact/tablet/
+mobile/no-overflow visual checks in Chromium and Firefox. Gate in order:
+focused API/auth tests, focused component tests, TypeScript, full Vitest,
+production build, focused Chromium and Firefox, then route/shell regression and
+visual comparison. Keep browser artifacts outside Git.
+
+### UI-010-B — Shared local session and typed API
+
+Status: COMPLETE. `LocalWorkspaceSessionProvider` is mounted above `App` and
+owns the only runtime credential. Its `tokenRef` is not placed in React state,
+context values, browser storage, URLs, or logs; consumers receive a getter.
+Connect verifies a candidate with protected `GET /system/configuration-status`
+before accepting it, and Disconnect/invalidation/reload clear it. The typed
+Pipeline client covers the public definition, private list/detail, exact stage
+and revision-cancel POSTs, and bounded ordered SSE with numeric cursor resume.
+The public request never carries Authorization. Focused client 5/5 and session
+3/3 tests passed.
+
+### UI-010-C — Page and staging
+
+Status: COMPLETE. The former serving snapshot is replaced by the API-007
+five-stage definition, server-backed metric cards, durable run list with
+filter/pagination, canonical `/pipeline/runs/:runId` detail, and an explicit
+isolated staging dialog. Submission is ref-guarded against double click; only
+the returned server ID/revision/state enters the UI. A queued run shows five
+pending server steps and unknown progress as “Not reported.” No provider,
+worker, corpus, promotion, or artifact behavior was introduced.
+
+### UI-010-D — Lifecycle, SSE, cancellation, races
+
+Status: COMPLETE. A selection-generation epoch and AbortControllers own list,
+detail, event, stage, and cancel lifetimes. The selected run has one finite
+SSE owner; batches are ordered and resume from the last accepted sequence.
+Server detail is reconciled after events. Old A and old A#1 after A→B→A#2
+cannot repaint the current selection. Finite close is not completion. Cancel
+sends the current quoted revision and paints the API response: a running run
+remains `cancelling` until backend acknowledgement; queued cancellation may
+be immediately `cancelled`. A 409 is shown and refreshed, never force-retried.
+Focused Pipeline component tests passed 10/10.
+
+### UI-010-E — Visual, responsive, accessibility
+
+Status: COMPLETE. The 1586×992 captured populated receipt was compared with
+`pipeline-ui-reference-dark-v1.png`. The reference has a 207px sidebar, 59px
+topbar, metric cards y≈148–243, flow y≈259–557, history y≈574+, and right
+detail x≈1227/y≈73. The current shared shell uses a 184px sidebar; after a
+visual correction, the UI-010 detail begins at y≈72, with metrics y≈143–238,
+flow y≈252–575 and history y≈591. The smaller horizontal offset and stage
+height derive from the existing shell and truthful five-node copy. The sixth
+reference node, fake timings/metrics, schedule, and execution controls were
+not copied. Captures cover initial, queued, selected, cancelling, unavailable,
+1586×992, 1440×900, 1280×856, 1024×768, 768×900, 390×844, and 1440×700;
+the mobile selected detail was separately scrolled into view. Body/root
+horizontal overflow is zero in the tested widths. Scoped WCAG 2/2.1 A/AA
+axe scan reports zero Pipeline violations; controls retain text state, focus,
+44px targets, and reduced-motion support. Receipts remain ignored under
+`frontend/test-results/` and are not committed.
+
+### UI-010-F — Unit, type, build
+
+Status: COMPLETE. `bun run lint` (`tsc --noEmit`) passed. `bun run test`
+passed 80 files/539 tests, up from the UI-009 baseline 77/521. `bun run build`
+passed with only the existing >500kB chunk advisory. One parallelized Vitest
+attempt passed all 539 assertions but exited with two unrelated
+`DocumentExplorerPanel` teardown timer errors while browser workers also ran;
+the isolated rerun exited 0 with no uncaught errors.
+
+### UI-010-G — Browser and route/reference gates
+
+Status: COMPLETE. Dedicated hermetic UI-010 Playwright passed Chromium 8/8 and
+Firefox 8/8 with 2 workers across the final combined run. Coverage includes public
+read and private gate, public unavailable mode, connect/reload credential
+loss, execution-disabled read-only mode, exactly-one queued stage despite two rapid clicks, five pending steps,
+selected details, ordered SSE/reconnect, stale old-run event isolation,
+revision conflict, requested vs acknowledged cancellation, canonical routing,
+Back/Forward, visual widths, zero overflow, and Pipeline axe. Shared route and
+reference Chromium regression passed 18/18 with 2 workers after the old
+Pipeline snapshot fixture was updated to the API-007 contract.
+
+### UI-010-H — Scope, audit, and closure
+
+Status: COMPLETE. Implementation commit `c1318cd` (`feat(ui): build truthful
+pipeline staging workspace`); this documentation closure follows in the next
+commit. No backend code, `data/` contents, secrets, or provider execution changed. A
+source audit found no localStorage, sessionStorage, IndexedDB, cookie, URL,
+or console credential write path in the UI-010 owner, client, or page. Test
+tokens are synthetic; generated screenshots/traces, `dist`, diagnostics, and
+the 12 pre-existing unrelated untracked paths remain unstaged. Public mode
+never reports a fabricated empty private history. Known limitation: API-007
+only stages and replays durable records; it does not supply an execution
+worker, real progress/timings/artifacts, or promotion. The inherited shared
+header has a borderline contrast chip outside the Pipeline axe scope; no
+Pipeline-specific violation remains.
+
+### Exact Next Action
+
+The actual master-plan priority row after `UI-010 — Pipeline` is `EVAL-001 —
+Metrics/native protocol` (evaluation services). Do not begin EVAL-001 during
+UI-010 closure.

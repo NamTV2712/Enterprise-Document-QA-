@@ -57,7 +57,7 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 | Decomposition | Comparative and enumeration queries decomposed into focused sub-queries |
 | Evaluation | Fixed benchmark with faithfulness, relevancy, and context precision metrics |
 | Research workspace | Vite/React interface with searchable company and section controls, English/Vietnamese UI and answer selection, streaming answers, measured request-stage traces when the backend provides them, conservative source-bound financial metric cards when the retrieved evidence supports them, a first-class Sources pane and shared Document pane backed by indexed excerpts with exact chunk/hash/revision synchronization across Structured, Normalized text, and an optional provenance-bound PDF representation, canonical evidence deep links, accent-insensitive evidence inspection with per-panel search and copy, per-answer bookmarks, feedback, private notes, local evidence collections, a reliable conversation Library, JSON backup/restore, session context status, glossary/help, research templates, command palette, keyboard shortcuts, lazy tool panels, and responsive Light/Dark themes |
-| Research tools | Provider-free Retrieval Lab for BM25/dense/RRF/reranker trace inspection with preset comparison and JSON/CSV export, read-only Document Explorer with filing/chunk search, Search workspace, public-report-only Evaluation, truthful Models and Datasets registries over configured/runtime identity plus corpus/evaluation provenance, a read-only serving-corpus Pipeline snapshot, local Analytics, System & provenance metadata without filesystem paths or secrets, and three lazy-loaded Archify diagrams under Architecture |
+| Research tools | Provider-free Retrieval Lab for BM25/dense/RRF/reranker trace inspection with preset comparison and JSON/CSV export, read-only Document Explorer with filing/chunk search, Search workspace, public-report-only Evaluation, truthful Models and Datasets registries over configured/runtime identity plus corpus/evaluation provenance, an isolated Pipeline staging workspace, local Analytics, System & provenance metadata without filesystem paths or secrets, and three lazy-loaded Archify diagrams under Architecture |
 | Conversation UX | Separate Overview and Conversation views, responsive 216px wide/56px compact desktop navigation, mobile workspace navigation, bounded answer cards, contextual scope controls beside the composer, and interpreted-query metadata |
 
 The frontend's document reader caches indexed chunk details for five minutes
@@ -242,6 +242,18 @@ creation and cancellation additionally require workspace execution to be
 enabled. Cancellation uses the response `ETag` as `If-Match`, and event reads
 return a bounded replay that closes for reconnection from the last numeric
 event sequence.
+
+The frontend `/pipeline` page shows the public five-stage definition without a
+credential. To inspect or stage local runs, explicitly connect using the
+server-configured `LOCAL_WORKSPACE_TOKEN`; the browser verifies it against the
+protected configuration-status endpoint and holds it only in app memory.
+Disconnect or a full reload forgets it. The token is never placed in the URL
+or browser storage. Staging is available only when the backend advertises
+workspace execution (`ENABLE_WORKSPACE_EXECUTION=true`) and still creates a
+queued record, not a running ingestion. The selected durable run uses
+`/pipeline/runs/{run_id}`; the page reads its five server steps, bounded events,
+and revision before offering cancellation. Public deployments and denied
+local access show an unavailable state rather than an empty private history.
 
 The two non-streaming query endpoints enforce a 60-second request timeout and return HTTP `504` when exceeded. Timed-out synchronous workers are abandoned so they cannot hold the response open, but Python cannot safely kill a thread already running; that worker may finish in the background and its result is discarded.
 

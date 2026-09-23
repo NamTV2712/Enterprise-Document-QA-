@@ -1,5 +1,51 @@
 # Project State
 
+## UI-010 Pipeline workspace (2026-09-23)
+
+UI-010 implementation is commit `c1318cd` (`feat(ui): build truthful pipeline
+staging workspace`); this project-state update belongs to the following docs
+closure commit. UI-010 replaces the frontend's serving-corpus Pipeline
+snapshot with the real API-007 staging workspace. The page uses public `GET /pipeline` for the
+five-stage definition and, after an explicit local connection, protected
+list/detail/stage/cancel/events routes for durable DATA-004 runs. The canonical
+`/pipeline/runs/:runId` route and backend ID own selection. Stage submits only
+registered inputs with the `isolated` profile, accepts the returned queued
+ID/revision, and displays the five backend pending steps. Missing progress,
+timing, and artifacts remain unreported; no execution or promotion is implied.
+
+An app-level `LocalWorkspaceSessionProvider` verifies a manually entered token
+against protected configuration status and keeps it only in a runtime ref.
+Disconnect, invalidation, unmount, and full reload discard it. Only private
+Pipeline client calls receive Authorization; the public definition does not.
+No localStorage, IndexedDB, cookie, URL, or log persistence was added. The
+server still owns host/origin/auth/execution checks. Public/unavailable and
+unauthorized states do not masquerade as an empty run list.
+
+The selected run has one bounded SSE reader with numeric `Last-Event-ID`
+resume, server-detail reconciliation, AbortControllers, and selection epochs.
+Late A or A#1 after A→B→A#2 cannot repaint the current run. Clean stream
+closure/disconnection is not treated as job failure. Cancellation sends the
+current quoted revision, prevents duplicates, retains a 409 conflict without
+force overwrite, and distinguishes `cancelling` from acknowledged
+`cancelled`. Browsing and reconnecting perform no provider/worker action.
+
+Validation: focused API client 5/5, shared-session 3/3, Pipeline component
+10/10; TypeScript pass; full Vitest 80 files/539 tests pass; production build
+pass (existing large-chunk advisory); dedicated hermetic Chromium 8/8 and
+Firefox 8/8 pass; shared Chromium route/reference 18/18 pass. The 1586×992
+reference-native comparison and responsive captures at 1440, 1280, 1024,
+768, 390, and short-height desktop show zero body/root horizontal overflow;
+Pipeline-scoped WCAG 2/2.1 A/AA axe finds zero violations. An earlier
+parallelized full Vitest run passed assertions but exited with unrelated
+DocumentExplorer teardown-timer errors; the isolated rerun exited 0.
+
+No backend code or `data/` changed. API-007 remains staging-only: no worker,
+real execution progress/timing/artifacts, or automatic promotion exists. The
+shared header has a pre-existing borderline contrast chip outside this page's
+scope. Detailed UI-010-A..H receipts and file/commit audit are in
+`docs/UI_REBUILD_PLAN_CHECKPOINT.md`. The verified next master-plan task is
+`EVAL-001 — Metrics/native protocol`; it has not started.
+
 ## API-007 pipeline staging (2026-09-23)
 
 API-007 is complete in implementation commit `c9735f5` (`feat(api): expose

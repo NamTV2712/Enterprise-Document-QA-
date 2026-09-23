@@ -86,7 +86,8 @@ reader coverage, and representation availability; Search and Retrieval Lab
 render `/retrieval/inspect` traces without generation or confidence claims;
 Library renders browser-local conversations, evidence, and storage state;
 Models renders only `/system/info` retrieval fields; Pipeline renders the
-catalog/health/system serving snapshot; and Evaluation renders only public
+API-007 public definition and, after explicit local connection, staged durable
+job history/detail; and Evaluation renders only public
 evaluation reports. Missing fields use an explicit unavailable state rather
 than a mock value. These rules apply in both themes and at every responsive
 breakpoint.

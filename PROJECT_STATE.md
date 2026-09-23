@@ -1,5 +1,58 @@
 # Project State
 
+## EVAL-002 native comparison, trends, and failures (2026-09-23)
+
+EVAL-002 adds a provider-free public analytical layer over EVAL-001's
+`native-evaluation` protocol-v1 reports, implemented in commits `78b726e`
+(`feat(eval): add native report comparison and analysis`) and `40dd144`
+(`fix(eval): validate analytics sort and query selectors`). It neither
+recomputes nor renames any of the six version-1 native metrics. Explicit
+baseline/candidate comparison uses absolute `candidate_minus_baseline`
+deltas only when metric identity/version, dataset identity/revision, context
+binding, case universe, and per-metric computed case coverage are compatible.
+Judge metrics also require the same judge model/prompt definition. Both
+original aggregate denominators and unavailable/not-applicable counts remain
+visible. Computed zero and false are valid; missing values never become zero.
+Cases pair by ID, with unpaired sides and null deltas when only one report has
+a case. Incomplete or ineligible comparisons are not official results.
+
+Read-only native publication discovery uses bounded, digest-validated
+`*.native.json` envelopes in the existing configured public-report directory.
+The envelope supplies an explicit timezone-aware publication timestamp;
+there is no EVAL-002 publisher, job, or data store. The directory is currently
+absent, so the real native history remains empty. Trends group only reports
+with the same dataset, case universe, computed metric coverage, context
+binding, metric version, and judge definition where applicable. They order by
+publication timestamp/run ID/digest, one run per point, without interpolation
+or forecasting. Findings are limited to false fallback expectation, invalid
+citation indices, missing explicit keywords, and separately labelled
+unavailable prerequisites. There is no judge-score quality threshold,
+hallucination category, citation-support claim, Recall@K claim, significance
+test, or composite winner.
+
+Four public read/analysis routes were added: `GET /evaluation/runs/{id}/results`,
+`POST /evaluation/compare`, `GET /evaluation/metrics/trends`, and
+`GET /evaluation/failures`. The compare POST does not write. Native list/detail
+projections are version-discriminated, and native detail omits case arrays;
+case results/failures/comparisons/trends are paged. Historical
+public-report-v1 list/detail behavior remains, while legacy files are
+explicitly unsupported for native analytics. Native outputs contain stored
+safe IDs/hashes/results/provenance only, not question, answer, ground truth,
+evidence, prompt, credential, or private path. Details and bounds are in
+`docs/EVALUATION_ANALYTICS_PROTOCOL.md` and checkpoint EVAL-002-A..F.
+
+Validation: focused EVAL-002/EVAL-001/public-report/API-005/route regressions
+84/84 passed with one existing warning; full hermetic backend 1146/1146
+passed, zero failures, 188 warnings, compared with EVAL-001's 1127/1127 and
+188 warnings. Compile/import passed. The application has 74 routes, four more
+than EVAL-001. Frontend, dependencies, `data/`, evaluation workers/jobs,
+and Ragas were untouched. The 12 pre-existing unrelated untracked paths
+remain. Source and artifact audit found no committed runtime report, hidden
+case text, local dataset, credential, generated output, or private machine
+path. This journal update belongs to the documentation closure commit.
+The next verified graph task is `EVAL-003 — Frozen budgeted jobs`; it was not
+started.
+
 ## EVAL-001 native metrics/protocol (2026-09-23)
 
 EVAL-001 introduces the canonical provider-free native evaluation protocol,

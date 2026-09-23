@@ -5367,3 +5367,162 @@ staged.
 The actual master-plan dependency/priority row after EVAL-001 is
 `EVAL-002 — Compare/trends/failures`. Do not begin EVAL-002, EVAL-003,
 UI-011, or optional EVAL-004 during this closure.
+
+## EVAL-002 — Compare, trends, and failures
+
+### EVAL-002-A — Resolved contract before implementation
+
+Status: RECORDED BEFORE IMPLEMENTATION. Recovery found HEAD `716bb84`, a
+clean tracked tree, and the same 12 unrelated untracked paths. The master
+plan assigns EVAL-002 to **public reports**, after EVAL-001 and before
+EVAL-003. Its exact route rows are `GET /evaluation/runs/{id}/results`,
+`POST /evaluation/compare`, `GET /evaluation/metrics/trends`, and
+`GET /evaluation/failures`; all are public reads, even the compare POST. Existing
+public list/detail and metric-definition routes remain. EVAL-003 owns jobs,
+budgets, cancellation, and execution; UI-011 and Ragas remain out of scope.
+
+**Source and version boundary.** The existing fixed, allowlisted
+`data/public_evaluations` directory currently does not exist. Its `.json`
+files are historical public-report-v1, with a different metric schema and
+potential case text. They cannot be interpreted as native-evaluation/v1.
+EVAL-002 will read explicitly placed, immutable `*.native.json` publication
+envelopes from that same directory, never crawl `data/` or create a second
+database. An envelope supplies a timezone-aware `published_at` order key and
+one complete, digest-validated EVAL-001 report; EVAL-002 provides no
+publication writer or automatic promotion. Legacy list/detail behavior is
+preserved, while native list/detail and new analytics remain explicitly
+version-discriminated. Missing source yields empty lists, not invented runs.
+Invalid selected artifacts, unsupported versions, or digest mismatches fail
+closed; source report payloads are never changed.
+
+**Eligibility and comparison.** Baseline and candidate are explicit IDs;
+`delta = candidate - baseline` for computed higher-is-better aggregate or
+paired-case values. No relative percent, significance, winner, or overall
+score is produced. Metric identity/version, dataset ID/version/revision,
+case-ID universe, *computed case coverage for each metric*, and
+evidence-context binding must match for numeric aggregate deltas. Judge metrics
+additionally require the same judge model and prompt definition; opaque
+per-run generation/judge/retrieval bindings
+may differ because candidate changes are the point, but both sides retain
+their full provenance and denominators. A changed case universe is shown
+through baseline-only/candidate-only pairs and an ineligible aggregate delta,
+not a fabricated paired score. Unavailable and not-applicable stay null;
+incomplete reports are explicitly non-official even where individual
+computed values remain analytically comparable. The master plan does not
+define a statistical threshold or cross-metric weighting.
+
+**Trends and failures.** Trends use only published native envelopes, ordered
+by `published_at`, run ID, then digest; each stored report contributes at
+most one point. Compatibility groups include the dataset/version/revision,
+case universe, computed metric coverage, context binding, metric ID/version,
+and (for judge metrics) judge model/prompt. No interpolation, smoothing,
+forecast, or implied time
+from the native report itself. Failures are limited to directly observable
+native facts: computed false fallback expectation, computed citation-index
+fraction below 1, computed required-keyword fraction below 1, and a separate
+unavailable-prerequisite finding. There is no judge-score quality threshold
+or hallucination label. Detail exposes only stored safe case IDs/hashes,
+metric results, and bindings—never hidden case text. Results, findings, and
+trend points use bounded deterministic pagination; unknown filters/sorts
+are rejected. These conservative pagination/category/group rules fill gaps
+not numerically fixed by the master-plan rows and are documented as EVAL-002
+protocol choices, not pre-existing benchmark semantics.
+
+### EVAL-002-B — Comparison and compatibility
+
+Status: IMPLEMENTED, focused tests passing. `src/evaluation/native_analysis.py`
+consumes only digest-validated `NativeReport` values and EVAL-001 definitions;
+it defines no new metrics or thresholds. Explicit baseline/candidate
+comparison uses `candidate_minus_baseline` absolute deltas. It preserves both
+original aggregate records and denominators, pairs cases by ID, shows
+baseline-only/candidate-only cases, and exposes null deltas with stable
+reasons for unavailable, not-applicable, and incompatible values. Dataset
+identity/revision or context-binding mismatch is a conflict. Metric/judge
+definition, case-universe, or per-metric computed-coverage drift suppresses
+numeric aggregate deltas. Generator/retrieval and opaque judge run bindings
+remain visible, not falsely required equal. A complete-comparison
+eligibility flag is distinct from official promotion.
+
+### EVAL-002-C — Failures and case privacy
+
+Status: IMPLEMENTED, focused tests passing. Failure categories are only
+fallback expectation mismatch, invalid citation index, missing explicit
+required keyword, and separately `unavailable_prerequisite`. No arbitrary
+judge-score cutoff, hallucination label, claim-support assertion, Recall@K,
+or model-failure label for missing prerequisites was introduced. Findings
+sort by category/case/metric and contain only EVAL-001 case IDs, context
+hashes, metric IDs/statuses/values/reasons. Case comparison/results also
+remain text-free. Computed zero and false survive analysis and API schema
+validation. Missing cases are never paired by position.
+
+### EVAL-002-D — Published history and trends
+
+Status: IMPLEMENTED, focused tests passing. `src/evaluation/native_publication.py`
+recognizes only bounded `*.native.json` envelopes in the existing configured
+public directory. It adds timezone-aware publication ordering metadata to a
+complete EVAL-001 report, validates every digest and filename, rejects
+unsupported/corrupt/ambiguous input, and never writes or publishes artifacts.
+The historical public-report-v1 reader explicitly skips native filenames.
+Trend grouping fingerprints dataset, case universe, computed coverage,
+context binding, metric identity/version, and judge definition where needed.
+Points order by publication time/run ID/digest; one run yields one point,
+and an absent directory yields no points. No mtime ordering, interpolation,
+smoothing, forecast, or fabricated history.
+
+### EVAL-002-E — Public API, bounds, and provider-free gates
+
+Status: IMPLEMENTED, focused tests passing. The four master-plan public
+analytics routes have explicit Pydantic response models and thin handlers.
+Existing list/detail can expose version-discriminated native publications
+while preserving legacy report payloads; native detail omits the case array
+and the dedicated results route pages it. Duplicate native/legacy run IDs
+fail closed. Results, case comparisons, findings, and trend points paginate
+with 50 default/100 maximum. Report discovery is capped at 1,000 files and
+50 MB; each file is bounded near EVAL-001's 2 MB report limit. Category,
+metric, page, date-range, and binding-group filters validate explicitly.
+Selected corrupt reports yield conflict, unknown reports not-found, and
+invalid request parameters validation errors. Tests prove no Authorization
+dependency, no raw case text in responses, read-only source bytes, and no
+network/provider call in the domain. The API adds no evaluation execution,
+job coordinator, worker, frontend code, or Ragas.
+
+### EVAL-002-F — Validation and closure
+
+Status: COMPLETE pending the documentation closure commit. Implementation is
+`78b726e` (`feat(eval): add native report comparison and analysis`) plus
+`40dd144` (`fix(eval): validate analytics sort and query selectors`); this
+checkpoint, protocol guide, README, and project-state receipt form the next
+scoped documentation commit. The final EVAL-002/EVAL-001/public-report/API-005/
+route focus group passed **84/84**, with one existing dependency warning.
+The final hermetic backend suite passed **1146/1146, zero failures, 188
+warnings**, versus the EVAL-001 baseline 1127/1127 and 188 warnings. An
+earlier full run passed 1144/1144 before two final source/trend edge tests;
+the final count supersedes it. The full 1146-test suite was rerun after the
+sort/query validation change. Python compile/import passed, and the route
+inventory is **74** versus 70 before EVAL-002; only the four planned public
+read/analysis routes were added. Route name, method, response model, access,
+order, and collision regressions passed. `git diff --check` and the staged
+implementation diff check passed.
+
+The file audit found no frontend, dependency, DATA-004 job, execution,
+provider, retrieval, index, `data/`, Ragas, or legacy public-report schema
+change. The code commit includes only the domain/publication reader,
+evaluation API models/router, legacy-reader filename exclusion, and tests.
+Synthetic tests use temporary publications and keep source bytes unchanged;
+no real native report is currently published. No runtime evaluation result,
+secret, hidden dataset dump, question/answer/evidence text, absolute machine
+path, log, scanner state, cache, or screenshot was staged. The same 12
+pre-existing unrelated untracked entries remain user-owned. The new
+publication envelope's timestamp is explicit metadata, not a cryptographic
+claim about execution time; the native report digest remains unchanged.
+Legacy public-report-v1 has no adapter into native analytics. No new
+deterministic regression or warning growth was observed. The documentation
+closure stages exactly `PROJECT_STATE.md`, `README.md`, this checkpoint, and
+`docs/EVALUATION_ANALYTICS_PROTOCOL.md`; its staged diff check passed. The
+final tracked-tree audit is reported in the handoff after that commit.
+
+### Exact Next Action
+
+After EVAL-002 is complete, the master-plan dependency/priority row names
+`EVAL-003 — Frozen budgeted jobs`. Do not begin EVAL-003, UI-011, or optional
+Ragas during EVAL-002 closure.

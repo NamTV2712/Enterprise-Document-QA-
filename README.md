@@ -216,6 +216,10 @@ http://localhost:8000/docs
 | `GET` | `/evaluation/runs` | List validated public evaluation summaries with safe filters |
 | `GET` | `/evaluation/runs/{run_id}` | Read one validated public evaluation report |
 | `GET` | `/evaluation/metrics` | Read provider-free native metric definitions and protocol capabilities |
+| `GET` | `/evaluation/runs/{run_id}/results` | Read bounded, text-free native case results and denominators |
+| `POST` | `/evaluation/compare` | Read-only baseline/candidate native report comparison |
+| `GET` | `/evaluation/metrics/trends` | Read compatible published native observations without interpolation |
+| `GET` | `/evaluation/failures` | Read bounded native failure facts and unavailable prerequisites |
 | `GET` | `/cache/stats` | Semantic cache metrics |
 | `POST` | `/cache/clear` | Clear semantic cache when explicitly enabled |
 | `POST` | `/cache/test` | Rate-limited query embedding comparison |
@@ -363,6 +367,12 @@ records existing judge scores only when already computed under matching
 bindings; the protocol itself never calls a provider. Existing published
 public-report-v1 files and the official benchmark below retain their
 historical meanings and are not silently converted to native protocol v1.
+The [native analytics contract](docs/EVALUATION_ANALYTICS_PROTOCOL.md) adds
+public, provider-free comparison, trends, and failure reads over explicitly
+published native reports in the existing `data/public_evaluations/` directory.
+No native reports are published automatically; an absent directory yields an
+honest empty history. Legacy public-report-v1 files remain readable but are
+not compared or trended as native v1.
 
 Current official benchmark: the two-phase pipeline (offline Phase 1
 frozen retrieval artifact, then frozen-evidence generation and judging) now

@@ -6,10 +6,13 @@ import asyncio
 import json
 
 import httpx
+import pytest
+from fastapi import HTTPException
 from pydantic import SecretStr
 
 from src.api import access
 from src.api import app as app_module
+from src.api.routers import workspace_transfer as workspace_transfer_router
 from src.workspace.transfer import build_workspace_backup
 
 
@@ -190,3 +193,83 @@ def test_unpaired_surrogate_backup_fails_closed_with_400(monkeypatch, tmp_path) 
     assert preview.status_code == 400
     assert "surrogate" in preview.json()["detail"]
     assert imported.status_code == 400
+
+
+def test_oversized_import_stream_stops_at_the_first_chunk_over_limit(monkeypatch) -> None:
+    monkeypatch.setattr(workspace_transfer_router, "MAX_BACKUP_BYTES", 8)
+
+    class ChunkedRequest:
+        headers = {"content-length": "8"}  # Deliberately under-reports the stream.
+
+        def __init__(self) -> None:
+            self.chunks_read = 0
+
+        async def stream(self):
+            for chunk in (b"12345", b"6789", b"must-not-be-read"):
+                self.chunks_read += 1
+                yield chunk
+
+    request = ChunkedRequest()
+
+    with pytest.raises(HTTPException) as captured:
+        asyncio.run(workspace_transfer_router._read_bounded_body(request))
+
+    assert captured.value.status_code == 413
+    assert request.chunks_read == 2
+
+
+def test_oversized_content_length_is_rejected_without_reading_the_stream(monkeypatch) -> None:
+    monkeypatch.setattr(workspace_transfer_router, "MAX_BACKUP_BYTES", 8)
+
+    class ChunkedRequest:
+        headers = {"content-length": "9"}
+
+        async def stream(self):
+            raise AssertionError("oversized declared body should not be read")
+            yield b""  # Keep this an async generator.
+
+    with pytest.raises(HTTPException) as captured:
+        asyncio.run(workspace_transfer_router._read_bounded_body(ChunkedRequest()))
+
+    assert captured.value.status_code == 413
+
+
+def test_body_at_the_limit_is_accepted_across_chunks(monkeypatch) -> None:
+    monkeypatch.setattr(workspace_transfer_router, "MAX_BACKUP_BYTES", 8)
+
+    class ChunkedRequest:
+        headers = {"content-length": "8"}
+
+        async def stream(self):
+            yield b"12345"
+            yield b"678"
+
+    assert (
+        asyncio.run(workspace_transfer_router._read_bounded_body(ChunkedRequest()))
+        == b"12345678"
+    )
+
+
+def test_import_endpoints_reject_oversized_bodies_before_opening_workspace(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    _local(monkeypatch, tmp_path)
+    monkeypatch.setattr(workspace_transfer_router, "MAX_BACKUP_BYTES", 8)
+    headers = {**_headers(), "Content-Type": "application/json"}
+
+    preview = _call(
+        "POST",
+        "/workspace/imports/preview",
+        content="123456789",
+        headers=headers,
+    )
+    imported = _call(
+        "POST",
+        "/workspace/imports",
+        content="123456789",
+        headers=headers,
+    )
+
+    assert preview.status_code == imported.status_code == 413
+    assert not (tmp_path / "workspace.sqlite3").exists()

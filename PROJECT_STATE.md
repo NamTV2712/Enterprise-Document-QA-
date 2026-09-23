@@ -1,5 +1,33 @@
 # Project State
 
+## REPAIR-006 bounded workspace import request bodies (2026-09-23)
+
+The workspace import endpoints enforce a 25 MiB backup limit. Previously,
+both handlers called `Request.body()` before checking it, so an oversized
+request was fully buffered before the limit returned HTTP 413. They now reject
+an oversized `Content-Length` before reading and incrementally enforce the same
+byte limit while streaming, including when the header is missing or
+under-reports the body. The exact boundary remains accepted, and rejection
+happens before workspace database construction. API-001 authorization and the
+import format/digest contract are unchanged.
+
+Regression coverage proves early header rejection, bounded handling of a
+chunked under-reported body, exact-limit acceptance, and 413 responses from
+both import routes without creating SQLite state. The focused transfer and
+access group passes 81 tests with one existing ReportLab deprecation warning.
+No network/provider, canonical corpus, or frontend behavior was exercised or
+changed. The full backend suite was not rerun because this is a narrow HTTP body
+reader change; see the commit and session receipt for exact commands.
+
+Repository recovery at the start of this repair found actual HEAD `3df8323`
+(`docs(data): close durable jobs milestone`), not the stale `1858924` snapshot
+in the attached audit prompt. DATA-004, API-006, and UI-009 are complete in the
+current source/history. API-007 is now active but incomplete: its checkpoint
+contract map is an uncommitted working-tree change, and untracked
+`src/api/pipeline.py` / `src/api/pipeline_models.py` drafts are not wired to an
+HTTP router or application route. Preserve those drafts; finish API-007 as the
+next product task after this bounded repair.
+
 ## DATA-004 durable jobs (2026-09-22)
 
 DATA-004 is complete at implementation commit `986aca8` (`feat(data): add

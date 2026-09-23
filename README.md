@@ -215,6 +215,7 @@ http://localhost:8000/docs
 | `GET` | `/pipeline/runs/{run_id}/events` | Protected, ordered SSE event replay resumable with `Last-Event-ID` |
 | `GET` | `/evaluation/runs` | List validated public evaluation summaries with safe filters |
 | `GET` | `/evaluation/runs/{run_id}` | Read one validated public evaluation report |
+| `GET` | `/evaluation/metrics` | Read provider-free native metric definitions and protocol capabilities |
 | `GET` | `/cache/stats` | Semantic cache metrics |
 | `POST` | `/cache/clear` | Clear semantic cache when explicitly enabled |
 | `POST` | `/cache/test` | Rate-limited query embedding comparison |
@@ -354,6 +355,14 @@ LLM provider:
 | Groq | Only LLM provider; serves `openai/gpt-oss-120b` |
 
 ## Evaluation Results
+
+The [native evaluation protocol](docs/EVALUATION_NATIVE_PROTOCOL.md) defines
+six versioned, namespaced metrics, per-case status and denominator semantics,
+canonical report binding/digest rules, and explicit unavailable results. It
+records existing judge scores only when already computed under matching
+bindings; the protocol itself never calls a provider. Existing published
+public-report-v1 files and the official benchmark below retain their
+historical meanings and are not silently converted to native protocol v1.
 
 Current official benchmark: the two-phase pipeline (offline Phase 1
 frozen retrieval artifact, then frozen-evidence generation and judging) now

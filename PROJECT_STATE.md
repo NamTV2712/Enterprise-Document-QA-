@@ -1,5 +1,58 @@
 # Project State
 
+## EVAL-001 native metrics/protocol (2026-09-23)
+
+EVAL-001 introduces the canonical provider-free native evaluation protocol,
+`native-evaluation` version 1, without running an evaluation or changing the
+official benchmark. Six master-plan metric IDs each have explicit semantic
+version 1: `native.faithfulness`, `native.answer_relevancy`,
+`native.context_precision`, `native.citation_index_validity`,
+`native.keyword_recall_proxy`, and `native.fallback_correctness`. The first
+three record complete precomputed native-judge scores only; this layer never
+calls a provider. The other three reuse the existing citation-index,
+required-keyword, and fallback functions against the exact rendered context.
+Citation index validity is not claim support, and keyword recall proxy is
+not Recall@K. All metrics have `[0,1]` computed range and higher-is-better
+direction; fallback is boolean per case and a success rate in aggregate.
+There is no new overall score, threshold, or cross-metric weighting.
+
+The typed private report preserves metric definitions, per-case statuses and
+context hashes, aggregates with computed/unavailable/not-applicable counts,
+dataset/model/retrieval/context/judge provenance, and a canonical SHA-256
+digest. Zero and false remain computed values; missing ground truth, evidence,
+generation, or judge score is unavailable, while absent citations/keyword
+requirements/fallback expectations are not applicable. Only computed cases
+enter each denominator. Means use stable sorted summation and final
+four-decimal rounding; empty sets, duplicate IDs, malformed/non-finite values,
+mixed bindings, context-hash drift, unsafe provenance, unsupported versions,
+and inconsistent digests/aggregates fail closed. The report stores no
+question, answer, ground truth, or evidence text. A provider-free preflight
+reports bound and unjudged eligible cases without pricing or executing
+future judge work.
+
+API-006 and EVAL-001 now share the exact previous ordered-full-`TestCase`
+SHA-256 revision algorithm for `evaluation-test-set` version
+`evaluation-test-set-v1`; no second dataset identity was introduced. Public
+`GET /evaluation/metrics` exposes typed definitions and capability flags.
+Existing public-report-v1 and Phase 2 checkpoint/result formats are retained
+as historical contracts, not silently converted or republished. EVAL-002
+must define explicit publication/comparability adaptation; EVAL-003 owns
+workers, provider attempt budgets, and execution. No Ragas, frontend, job
+runner, or data artifact was added. The full protocol is documented in
+`docs/EVALUATION_NATIVE_PROTOCOL.md` and checkpoint EVAL-001-A..F.
+Implementation commit: `a20b77c` (`feat(eval): define native metric report
+protocol`); this project-state update belongs to the documentation closure
+commit.
+
+Validation: focused native/evaluation/API-005/API-006/route regressions
+151/151 passed; native protocol/API focused 27/27 passed; full hermetic
+backend 1127/1127 passed with the same
+188 warnings as the 1100-test baseline. Python compile/import passed, and
+the application route count is 70 (one new public read). `git diff --check`
+and commit/artifact audit are recorded in the checkpoint closure. The next
+verified dependency/priority task is `EVAL-002 — Compare/trends/failures`;
+it was not started.
+
 ## UI-010 Pipeline workspace (2026-09-23)
 
 UI-010 implementation is commit `c1318cd` (`feat(ui): build truthful pipeline

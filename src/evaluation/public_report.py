@@ -242,6 +242,8 @@ def list_public_reports(*, root: Path = PUBLIC_REPORTS_DIR) -> list[dict[str, An
         return []
     summaries: list[dict[str, Any]] = []
     for path in sorted(root.glob("*.json")):
+        if path.name.endswith(".native.json"):
+            continue  # EVAL-002 validates these through the native reader.
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
             report = normalize_public_report(payload)

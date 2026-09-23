@@ -82,7 +82,9 @@ from src.api.routers.sessions import create_session_router
 from src.api.routers.system import create_system_router
 from src.api.routers.registries import create_registry_router
 from src.api.routers.collections import create_collections_router
+from src.api.routers.pipeline import create_pipeline_router
 from src.api.routers.workspace_transfer import create_workspace_transfer_router
+from src.api.pipeline import PipelineService
 from src.api.registry import RegistryService
 from src.api.schemas import (
     DecomposedQueryResponse,
@@ -95,6 +97,7 @@ from src.api.schemas import (
 )
 from src.workspace.collections import SQLiteCollectionRepository
 from src.workspace.database import WorkspaceDatabase
+from src.workspace.jobs import SQLiteJobRepository
 from src.workspace.transfer import WorkspaceTransferService
 
 import json as json_lib
@@ -143,6 +146,11 @@ def _collections_repository() -> SQLiteCollectionRepository:
     database = WorkspaceDatabase.from_settings(settings)
     database.initialize()
     return SQLiteCollectionRepository(database)
+
+
+def _pipeline_service() -> PipelineService:
+    """Open the private job store only after a pipeline route authorizes access."""
+    return PipelineService(SQLiteJobRepository.from_settings(settings), settings)
 
 
 def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
@@ -661,7 +669,14 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins_list,
     allow_methods=["GET", "POST", "PATCH", "DELETE"],
-    allow_headers=["Authorization", "Content-Type", "ngrok-skip-browser-warning"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "If-Match",
+        "Last-Event-ID",
+        "ngrok-skip-browser-warning",
+    ],
+    expose_headers=["ETag"],
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -1867,6 +1882,7 @@ app.include_router(
         )
     )
 )
+app.include_router(create_pipeline_router(_pipeline_service))
 app.include_router(create_evaluation_router())
 
 @app.post("/retrieval/inspect")

@@ -75,6 +75,13 @@ EXPECTED_ROUTE_ORDER = [
     ("POST", "/models/{model_id}/tests"),
     ("GET", "/datasets"),
     ("GET", "/datasets/{dataset_id}"),
+    # API-007 exposes the provider-free definition before protected run views.
+    ("GET", "/pipeline"),
+    ("GET", "/pipeline/runs"),
+    ("POST", "/pipeline/runs"),
+    ("GET", "/pipeline/runs/{run_id}"),
+    ("POST", "/pipeline/runs/{run_id}/cancel"),
+    ("GET", "/pipeline/runs/{run_id}/events"),
     ("GET", "/evaluation/runs"),
     ("GET", "/evaluation/runs/{run_id}"),
     ("POST", "/retrieval/inspect"),
@@ -169,6 +176,23 @@ def test_api006_registry_routes_have_coherent_transport_owners() -> None:
         "/datasets/{dataset_id}",
     ):
         assert routes[path].endpoint.__module__ == "src.api.routers.registries"
+
+
+def test_api007_pipeline_routes_have_coherent_transport_owners() -> None:
+    expected = {
+        ("GET", "/pipeline"),
+        ("GET", "/pipeline/runs"),
+        ("POST", "/pipeline/runs"),
+        ("GET", "/pipeline/runs/{run_id}"),
+        ("POST", "/pipeline/runs/{run_id}/cancel"),
+        ("GET", "/pipeline/runs/{run_id}/events"),
+    }
+    owners = {
+        (next(iter(route.methods)), route.path): route.endpoint.__module__
+        for route in _application_routes()
+        if (next(iter(route.methods)), route.path) in expected
+    }
+    assert owners == {key: "src.api.routers.pipeline" for key in expected}
 
 
 def test_moved_openapi_operations_match_the_pre_extraction_contract() -> None:

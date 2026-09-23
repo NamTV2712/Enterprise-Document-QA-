@@ -207,6 +207,12 @@ http://localhost:8000/docs
 | `POST` | `/models/{model_id}/tests` | Local execution-gated runtime-identity check; never performs inference or a provider request |
 | `GET` | `/datasets` | Public, provider-free serving-corpus and evaluation-test-set summaries; optional `kind` filter |
 | `GET` | `/datasets/{dataset_id}` | Public dataset coverage and allowlisted provenance detail |
+| `GET` | `/pipeline` | Public, provider-free registered ingestion definition and staging capabilities |
+| `GET` | `/pipeline/runs` | Protected local-workspace history of staged ingestion runs |
+| `POST` | `/pipeline/runs` | Execution-gated creation of an isolated, queued staging record |
+| `GET` | `/pipeline/runs/{run_id}` | Protected local-workspace run, step, and artifact-reference detail |
+| `POST` | `/pipeline/runs/{run_id}/cancel` | Execution-gated cancellation request requiring the current `If-Match` revision |
+| `GET` | `/pipeline/runs/{run_id}/events` | Protected, ordered SSE event replay resumable with `Last-Event-ID` |
 | `GET` | `/evaluation/runs` | List validated public evaluation summaries with safe filters |
 | `GET` | `/evaluation/runs/{run_id}` | Read one validated public evaluation report |
 | `GET` | `/cache/stats` | Semantic cache metrics |
@@ -223,6 +229,19 @@ reported as degraded when its manifest is absent, invalid, or inconsistent.
 Only allowlisted identifiers and credential-presence state are returned—API
 keys, authorization values, cache/database paths, and developer paths are not
 part of these contracts.
+
+The current `/pipeline` definition is the provider-free `sec_10k_ingestion`
+capability. `POST /pipeline/runs` accepts only registered ticker IDs and the
+`isolated` staging profile; an exact request replay returns its existing
+durable run. Staging records a queued DATA-004 job and the ordered
+`download_filings`, `chunk_filings`, `add_table_chunks`, `embed_chunks`, and
+`index_chunks` steps as pending. API-007 does not run those scripts, write the
+canonical corpus or index, invoke providers, or promote a staged run to
+serving. Local run reads require the authenticated workspace capability;
+creation and cancellation additionally require workspace execution to be
+enabled. Cancellation uses the response `ETag` as `If-Match`, and event reads
+return a bounded replay that closes for reconnection from the last numeric
+event sequence.
 
 The two non-streaming query endpoints enforce a 60-second request timeout and return HTTP `504` when exceeded. Timed-out synchronous workers are abandoned so they cannot hold the response open, but Python cannot safely kill a thread already running; that worker may finish in the background and its result is discarded.
 

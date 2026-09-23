@@ -2544,7 +2544,11 @@ function AppWorkspace() {
                 ) : activeView === "datasets" ? (
               <DatasetsWorkspace />
                 ) : activeView === "pipeline" ? (
-              <PipelineConsole healthData={healthData} />
+              <PipelineConsole
+                selectedRunId={resolvedRoute.id === "pipeline-run" ? resolvedRoute.params.runId ?? null : null}
+                onSelectRun={(runId) => navigate(`/pipeline/runs/${encodeURIComponent(runId)}`)}
+                onClearSelectedRun={() => navigate("/pipeline")}
+              />
                 ) : activeView === "system" ? (
               <SystemInfoPanel
                 onOpenDocuments={() => handleSelectWorkspaceView("documents")}

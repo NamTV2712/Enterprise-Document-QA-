@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { installApiFixtures } from "./fixtures";
+import { installPipelineFixture } from "./pipeline-fixtures";
 
 const directRoutes = [
   ["/chat", "chat"],
@@ -27,7 +28,7 @@ const directRoutes = [
 
 test.describe("UI-002 routing and shell", () => {
   test("serves every explicit route directly from the production preview", async ({ page }) => {
-    await installApiFixtures(page);
+    await installPipelineFixture(page);
     for (const [path, routeId] of directRoutes) {
       await page.goto(path, { waitUntil: "domcontentloaded" });
       await expect(page.getByRole("main", { name: "Research workspace" })).toHaveAttribute("data-route-id", routeId);

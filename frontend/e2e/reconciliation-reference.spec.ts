@@ -8,6 +8,7 @@ import {
   RECONCILIATION_NET_SALES_ANSWER,
   RECONCILIATION_SOURCES,
 } from "./fixtures";
+import { installPipelineFixture, pipelineRun, PIPELINE_FIXTURE_TOKEN } from "./pipeline-fixtures";
 
 const phase = process.env.RECONCILIATION_CAPTURE_PHASE ?? "before";
 
@@ -20,7 +21,7 @@ const surfaces = [
   { id: "r4-library", reference: "collections-ui-reference-dark-v1.png", path: "/?view=library", width: 1586, height: 992, heading: "Collections", contentSelector: "#collections-title" },
   { id: "r5-retrieval", reference: "retrieval-ui-reference-dark-v1.png", path: "/?view=retrieval", width: 1586, height: 992, heading: "Retrieval", contentSelector: "#retrieval-lab-title" },
   { id: "r6-models", reference: "models-ui-reference-dark-v1.png", path: "/?view=models", width: 1586, height: 992, heading: "Models", contentSelector: ".workspace-primary-column h1" },
-  { id: "r7-pipeline", reference: "pipeline-ui-reference-dark-v1.png", path: "/?view=pipeline", width: 1586, height: 992, heading: "Pipeline", contentSelector: ".workspace-primary-column h1" },
+  { id: "r7-pipeline", reference: "pipeline-ui-reference-dark-v1.png", path: "/?view=pipeline", width: 1586, height: 992, heading: "Pipeline", contentSelector: ".pipeline-workspace h1" },
   { id: "r8-evaluation", reference: "evaluation-ui-reference-dark-v1.png", path: "/?view=evaluation", width: 1586, height: 992, heading: "Evaluation", contentSelector: ".workspace-primary-column h1" },
 ] as const;
 
@@ -65,6 +66,16 @@ async function assertReferenceContract(page: Page, surface: (typeof surfaces)[nu
  * request and selection flow a reader uses in the application.
  */
 async function preparePopulatedReceipt(page: Page, surface: (typeof surfaces)[number]) {
+  if (surface.id === "r7-pipeline") {
+    await page.getByRole("button", { name: "Connect", exact: true }).first().click();
+    const dialog = page.getByRole("dialog", { name: "Connect local workspace" });
+    await dialog.getByLabel("Local workspace token").fill(PIPELINE_FIXTURE_TOKEN);
+    await dialog.getByRole("button", { name: "Verify and connect" }).click();
+    await expect(dialog).toBeHidden();
+    await page.getByRole("button", { name: "Select a run run-reference-1" }).click();
+    await expect(page.getByTestId("pipeline-run-detail")).toContainText("run-reference-1");
+    return;
+  }
   if (surface.id === "r0-global-shell-conversation" || surface.id === "r1-research") {
     await askQuestion(page, "What were Apple's total net sales in fiscal year 2025?");
     await expect(page.getByText(RECONCILIATION_NET_SALES_ANSWER.split("\n")[0], { exact: false }).first()).toBeVisible();
@@ -319,7 +330,7 @@ test.describe("Truthful workbench reference receipts", () => {
     test(`${phase} ${surface.id} against ${surface.reference}`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width: surface.width, height: surface.height });
       await page.addInitScript(() => window.localStorage.setItem("theme", "dark"));
-      await installApiFixtures(page, {
+      const fixtureOptions = {
         pdf: true,
         // The library receipt drives the real save flow, which now targets a
         // typed workspace collection (DATA-003).
@@ -327,7 +338,12 @@ test.describe("Truthful workbench reference receipts", () => {
         ...(surface.id === "r0-global-shell-conversation" || surface.id === "r1-research"
           ? { streamAnswers: [RECONCILIATION_NET_SALES_ANSWER], streamSources: [RECONCILIATION_SOURCES] }
           : {}),
-      });
+      };
+      if (surface.id === "r7-pipeline") {
+        await installPipelineFixture(page, { initialRuns: [pipelineRun("run-reference-1", { state: "running", revision: 3 })] });
+      } else {
+        await installApiFixtures(page, fixtureOptions);
+      }
       await page.goto(surface.path, { waitUntil: "domcontentloaded" });
       await page.waitForTimeout(1800);
       await preparePopulatedReceipt(page, surface);

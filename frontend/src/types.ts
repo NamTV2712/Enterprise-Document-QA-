@@ -1445,3 +1445,118 @@ export interface CollectionExportMarkdown {
   format: "markdown";
   content: string;
 }
+
+export type PipelineRunState =
+  | "queued"
+  | "running"
+  | "cancelling"
+  | "cancelled"
+  | "succeeded"
+  | "failed"
+  | "interrupted";
+
+export type PipelineStepState =
+  | "pending"
+  | "running"
+  | "cancelled"
+  | "succeeded"
+  | "failed"
+  | "skipped"
+  | "interrupted";
+
+export type PipelineStageId =
+  | "download_filings"
+  | "chunk_filings"
+  | "add_table_chunks"
+  | "embed_chunks"
+  | "index_chunks";
+
+export interface PipelineStageDefinition {
+  stage_id: PipelineStageId;
+  order: number;
+  description: string;
+}
+
+export interface PipelineDefinition {
+  pipeline_id: "sec_10k_ingestion";
+  name: string;
+  input_kind: "ticker";
+  registered_input_ids: string[];
+  staging_profiles: Array<"isolated">;
+  stages: PipelineStageDefinition[];
+  capabilities: {
+    can_stage: true;
+    can_cancel: true;
+    event_transport: "sse";
+    executes_during_staging: false;
+    automatically_promotes_to_serving: false;
+  };
+}
+
+export interface PipelineProgress {
+  stage: PipelineStageId | null;
+  current: number | null;
+  total: number | null;
+}
+
+export interface PipelineStep {
+  step_id: string;
+  stage_id: PipelineStageId;
+  state: PipelineStepState;
+  revision: number;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface PipelineRun {
+  id: string;
+  pipeline_id: "sec_10k_ingestion";
+  state: PipelineRunState;
+  revision: number;
+  configuration_fingerprint: string;
+  input_ids: string[];
+  staging_profile: "isolated";
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  cancellation_requested_at: string | null;
+  progress: PipelineProgress;
+  steps: PipelineStep[];
+  artifact_references: string[];
+  failure: { code: string; message: string } | null;
+}
+
+export interface PipelineRunPage {
+  items: PipelineRun[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface PipelineRunEvent {
+  run_id: string;
+  event_id: string;
+  sequence: number;
+  event_type:
+    | "created"
+    | "state_changed"
+    | "progress"
+    | "step_changed"
+    | "cancellation_requested"
+    | "cancelled"
+    | "interrupted";
+  state: PipelineRunState | null;
+  reason_code: string | null;
+  progress: PipelineProgress;
+  occurred_at: string;
+}
+
+export interface LocalWorkspaceConfigurationStatus {
+  deployment_mode: string;
+  capabilities: {
+    public_provider_free: boolean;
+    local_workspace: boolean;
+    execution_jobs: boolean;
+  };
+}

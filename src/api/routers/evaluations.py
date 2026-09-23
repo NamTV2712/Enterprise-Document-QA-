@@ -5,7 +5,7 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from configs.settings import settings
 from src.api.evaluation_models import (
@@ -72,6 +72,11 @@ def _page(items: list[Any], page: int, page_size: int) -> list[Any]:
     return items[start:start + page_size]
 
 
+def _query_keys(request: Request, allowed: set[str]) -> None:
+    if set(request.query_params) - allowed:
+        raise HTTPException(status_code=422, detail="Unsupported evaluation query parameter")
+
+
 def create_evaluation_router() -> APIRouter:
     router = APIRouter()
 
@@ -91,13 +96,16 @@ def create_evaluation_router() -> APIRouter:
 
     @router.get("/evaluation/metrics/trends", response_model=NativeTrendsResponseModel)
     async def evaluation_metric_trends(
+        request: Request,
         metric_id: str = Query(max_length=80),
         binding_group: str | None = Query(default=None, pattern=r"^sha256:[0-9a-f]{64}$"),
         start_at: datetime | None = None,
         end_at: datetime | None = None,
+        sort: Literal["published_at_asc"] = "published_at_asc",
         page: int = Query(default=1, ge=1),
         page_size: int = Query(default=50, ge=1, le=100),
     ) -> NativeTrendsResponseModel:
+        _query_keys(request, {"metric_id", "binding_group", "start_at", "end_at", "sort", "page", "page_size"})
         if any(value is not None and (value.tzinfo is None or value.utcoffset() is None) for value in (start_at, end_at)):
             raise HTTPException(status_code=422, detail="Trend range needs timezone-aware timestamps")
         if start_at and end_at and start_at > end_at:
@@ -228,11 +236,14 @@ def create_evaluation_router() -> APIRouter:
 
     @router.get("/evaluation/runs/{run_id}/results", response_model=NativeResultsPageModel)
     async def evaluation_run_results(
+        request: Request,
         run_id: str,
         case_id: str | None = Query(default=None, max_length=128),
+        sort: Literal["case_id_asc"] = "case_id_asc",
         page: int = Query(default=1, ge=1),
         page_size: int = Query(default=50, ge=1, le=100),
     ) -> NativeResultsPageModel:
+        _query_keys(request, {"case_id", "sort", "page", "page_size"})
         report = _native(run_id).report
         cases = [item for item in report.cases if case_id is None or item.case_id == case_id]
         return NativeResultsPageModel.model_validate({
@@ -264,14 +275,17 @@ def create_evaluation_router() -> APIRouter:
 
     @router.get("/evaluation/failures", response_model=NativeFailuresResponseModel)
     async def evaluation_failures(
+        request: Request,
         run_id: str = Query(max_length=128),
         category: Literal[
             "fallback_expectation_mismatch", "invalid_citation_index",
             "missing_required_keyword", "unavailable_prerequisite",
         ] | None = None,
+        sort: Literal["category_case_metric_asc"] = "category_case_metric_asc",
         page: int = Query(default=1, ge=1),
         page_size: int = Query(default=50, ge=1, le=100),
     ) -> NativeFailuresResponseModel:
+        _query_keys(request, {"run_id", "category", "sort", "page", "page_size"})
         analysis = native_failures(_native(run_id).report)
         findings = [item for item in analysis.findings if category is None or item.category_id == category]
         return NativeFailuresResponseModel.model_validate({

@@ -142,6 +142,7 @@ class NativeCompareRequestModel(BaseModel):
     baseline_run_id: str = Field(min_length=1, max_length=128)
     candidate_run_id: str = Field(min_length=1, max_length=128)
     metric_ids: list[str] | None = Field(default=None, max_length=6)
+    sort: Literal["case_id_asc"] = "case_id_asc"
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=50, ge=1, le=100)
 

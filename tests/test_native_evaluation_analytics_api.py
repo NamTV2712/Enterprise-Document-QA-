@@ -133,6 +133,13 @@ def test_incompatible_corrupt_unknown_filters_and_pagination(client, tmp_path):
     assert client.get("/evaluation/failures", params={"run_id": "baseline", "category": "hallucination"}).status_code == 422
     assert client.get("/evaluation/runs/baseline/results", params={"page_size": 101}).status_code == 422
     assert client.get("/evaluation/runs/baseline/results", params={"page": 0}).status_code == 422
+    assert client.get("/evaluation/runs/baseline/results", params={"sort": "score_desc"}).status_code == 422
+    assert client.get("/evaluation/runs/baseline/results", params={"unknown_filter": "x"}).status_code == 422
+    assert client.get("/evaluation/failures", params={"run_id": "baseline", "sort": "score_desc"}).status_code == 422
+    assert client.get("/evaluation/metrics/trends", params={"metric_id": "native.faithfulness", "sort": "newest"}).status_code == 422
+    assert client.post("/evaluation/compare", json={
+        "baseline_run_id": "baseline", "candidate_run_id": "candidate", "sort": "score_desc",
+    }).status_code == 422
     assert client.get("/evaluation/metrics/trends", params={
         "metric_id": "native.faithfulness", "start_at": "2026-01-01T00:00:00",
     }).status_code == 422

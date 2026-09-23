@@ -1,5 +1,20 @@
 # Project State
 
+## REPAIR-007 enforce configured workspace Host ports (2026-09-23)
+
+`LOCAL_WORKSPACE_ALLOWED_HOSTS` accepts optional ports, but API-001 parsed and
+discarded the port before comparing the request Host. With the explicit
+allowlist `localhost:8000`, a request carrying `Host: localhost:9000` was
+incorrectly authorized when it also had the required loopback peer and valid
+bearer token. The access check now preserves an explicit configured port and
+requires it to match; host-only entries retain their existing behavior.
+Loopback, Origin, bearer-token, execution-grant, and forwarded-header rules are
+unchanged. A focused regression reproduced the mismatch before the fix.
+
+The combined API-001/access, transfer, route-contract, registry, and durable-job
+regression group passes 149 tests with one existing ReportLab deprecation
+warning. No public route behavior, provider flow, or canonical data changed.
+
 ## REPAIR-006 bounded workspace import request bodies (2026-09-23)
 
 The workspace import endpoints enforce a 25 MiB backup limit. Previously,

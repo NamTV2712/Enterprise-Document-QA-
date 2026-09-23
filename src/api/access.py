@@ -53,11 +53,11 @@ def _loopback_peer(request: Request) -> bool:
         return False
 
 
-def _host_name(value: str) -> str | None:
-    """Parse a Host-style value and reject credentials, paths and bad ports."""
+def _host_authority(value: str) -> tuple[str, int | None] | None:
+    """Parse a Host-style value, preserving an explicitly configured port."""
     try:
         parsed = urlsplit(f"//{value}")
-        _ = parsed.port
+        port = parsed.port
     except ValueError:
         return None
     if (
@@ -69,16 +69,24 @@ def _host_name(value: str) -> str | None:
         or parsed.password is not None
     ):
         return None
-    return parsed.hostname.casefold() if parsed.hostname else None
+    return (parsed.hostname.casefold(), port) if parsed.hostname else None
 
 
-def _allowed_host_names() -> frozenset[str]:
-    names = {
-        name
-        for entry in settings.local_workspace_allowed_hosts_list
-        if (name := _host_name(entry)) is not None
-    }
-    return frozenset(names)
+def _host_is_allowed(value: str) -> bool:
+    requested = _host_authority(value)
+    if requested is None:
+        return False
+    requested_name, requested_port = requested
+    for entry in settings.local_workspace_allowed_hosts_list:
+        allowed = _host_authority(entry)
+        if allowed is None:
+            continue
+        allowed_name, allowed_port = allowed
+        if allowed_name == requested_name and (
+            allowed_port is None or allowed_port == requested_port
+        ):
+            return True
+    return False
 
 
 def _valid_bearer_token(request: Request) -> bool:
@@ -106,8 +114,7 @@ def require_local_workspace_access(request: Request) -> AccessGrant:
     if not _loopback_peer(request):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_LOCAL_ONLY)
 
-    host = _host_name(request.headers.get("host", ""))
-    if host is None or host not in _allowed_host_names():
+    if not _host_is_allowed(request.headers.get("host", "")):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_HOST_DENIED)
 
     origin = request.headers.get("origin")

@@ -297,6 +297,24 @@ def test_non_exact_or_denied_host_is_rejected(monkeypatch, host: str) -> None:
     assert response.json() == {"detail": "Local workspace request host is not allowed"}
 
 
+def test_configured_host_port_is_enforced(monkeypatch) -> None:
+    _set_local_mode(monkeypatch)
+    monkeypatch.setattr(
+        access.settings,
+        "local_workspace_allowed_hosts",
+        "localhost:8000",
+    )
+
+    matching = _call("GET", "/private", headers=_headers(host="localhost:8000"))
+    mismatched = _call("GET", "/private", headers=_headers(host="localhost:9000"))
+
+    assert matching.status_code == 200
+    assert mismatched.status_code == 403
+    assert mismatched.json() == {
+        "detail": "Local workspace request host is not allowed"
+    }
+
+
 def test_execution_capability_is_separate_and_disabled_by_default(monkeypatch) -> None:
     _set_local_mode(monkeypatch, execution=False)
 

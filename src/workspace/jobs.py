@@ -509,6 +509,22 @@ class SQLiteJobRepository:
         with self.database.connection() as connection:
             return self._job_in(connection, job_id)
 
+    def find_idempotent_job(self, namespace: JobNamespace, idempotency_key: str) -> DurableJob | None:
+        """Read the existing DATA-004 identity before consulting mutable inputs."""
+        if namespace not in JOB_NAMESPACES:
+            raise ValueError("unsupported job namespace")
+        if (not isinstance(idempotency_key, str) or not idempotency_key.strip()
+                or len(idempotency_key) > 256
+                or any(ord(character) < 33 or ord(character) == 127 for character in idempotency_key)):
+            raise ValueError("idempotency key is invalid")
+        key_hash = hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()
+        with self.database.transaction() as connection:
+            row = connection.execute(
+                "SELECT * FROM jobs WHERE namespace = ? AND idempotency_key_hash = ?",
+                (namespace, key_hash),
+            ).fetchone()
+            return self._job_from_row(connection, row) if row is not None else None
+
     def list_jobs(
         self,
         *,

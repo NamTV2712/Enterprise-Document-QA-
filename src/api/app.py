@@ -77,6 +77,7 @@ from src.api.discovery import DiscoveryService
 from src.api.routers.search import create_search_router
 from src.api.routers.corpus import create_corpus_router
 from src.api.routers.evaluations import create_evaluation_router
+from src.api.routers.evaluation_jobs import create_evaluation_job_router
 from src.api.routers.health import create_health_router
 from src.api.routers.sessions import create_session_router
 from src.api.routers.system import create_system_router
@@ -85,6 +86,7 @@ from src.api.routers.collections import create_collections_router
 from src.api.routers.pipeline import create_pipeline_router
 from src.api.routers.workspace_transfer import create_workspace_transfer_router
 from src.api.pipeline import PipelineService
+from src.evaluation.job_service import EvaluationJobService
 from src.api.registry import RegistryService
 from src.api.schemas import (
     DecomposedQueryResponse,
@@ -151,6 +153,11 @@ def _collections_repository() -> SQLiteCollectionRepository:
 def _pipeline_service() -> PipelineService:
     """Open the private job store only after a pipeline route authorizes access."""
     return PipelineService(SQLiteJobRepository.from_settings(settings), settings)
+
+
+def _evaluation_job_service() -> EvaluationJobService:
+    """Open private frozen evaluation jobs only after API-001 authorization."""
+    return EvaluationJobService(SQLiteJobRepository.from_settings(settings))
 
 
 def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
@@ -653,6 +660,9 @@ async def lifespan(app: FastAPI):
     ]
 
     logger.info("Hybrid pipeline and decomposer ready after %.1f seconds", time.time() - t0)
+    if settings.workspace_mode == "local":
+        # DATA-004 recovery is terminal: never replay ambiguous provider calls.
+        SQLiteJobRepository.from_settings(settings).recover_interrupted_jobs()
     yield
     store.close()
     logger.info("VectorStore closed.")
@@ -1884,6 +1894,7 @@ app.include_router(
 )
 app.include_router(create_pipeline_router(_pipeline_service))
 app.include_router(create_evaluation_router())
+app.include_router(create_evaluation_job_router(_evaluation_job_service))
 
 @app.post("/retrieval/inspect")
 @limiter.limit("10/minute")

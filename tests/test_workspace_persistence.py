@@ -29,7 +29,7 @@ from src.workspace.repository import (
 @pytest.fixture
 def database(tmp_path: Path) -> WorkspaceDatabase:
     configured = WorkspaceDatabase(tmp_path / "workspace.sqlite3")
-    assert configured.initialize() == 4
+    assert configured.initialize() == 5
     return configured
 
 
@@ -49,7 +49,7 @@ def test_fresh_database_creation_builds_all_foundation_domains(tmp_path: Path) -
 
     version = database.initialize()
 
-    assert version == 4
+    assert version == 5
     assert path.is_file()
     assert {
         "schema_migrations",
@@ -66,6 +66,10 @@ def test_fresh_database_creation_builds_all_foundation_domains(tmp_path: Path) -
         "job_steps",
         "job_events",
         "telemetry_events",
+        "evaluation_artifacts",
+        "evaluation_attempts",
+        "evaluation_case_results",
+        "evaluation_reports",
     }.issubset(_tables(database))
 
 
@@ -79,7 +83,7 @@ def test_schema_version_receipts_match_deterministic_migration_order(
             )
         )
 
-    assert [row["version"] for row in rows] == [1, 2, 3, 4]
+    assert [row["version"] for row in rows] == [1, 2, 3, 4, 5]
     assert [row["name"] for row in rows] == [item.name for item in MIGRATIONS]
     assert [row["checksum"] for row in rows] == [item.checksum for item in MIGRATIONS]
 
@@ -93,7 +97,7 @@ def test_repeat_migration_is_idempotent(database: WorkspaceDatabase) -> None:
             )
         )
 
-    assert database.initialize() == 4
+    assert database.initialize() == 5
 
     with database.connection() as connection:
         after = list(
@@ -155,7 +159,7 @@ def test_future_schema_version_fails_closed(database: WorkspaceDatabase) -> None
     with database.transaction(write=True) as connection:
         connection.execute(
             "INSERT INTO schema_migrations(version, name, checksum, applied_at) "
-            "VALUES (5, 'future', 'future-checksum', '2026-01-01T00:00:00Z')"
+            "VALUES (6, 'future', 'future-checksum', '2026-01-01T00:00:00Z')"
         )
 
     with pytest.raises(WorkspaceDatabaseStateError, match="newer"):
@@ -321,7 +325,7 @@ def test_explicit_local_settings_construct_database_without_eager_write(
 
     assert database.path == path.resolve()
     assert not path.exists()
-    assert database.initialize() == 4
+    assert database.initialize() == 5
 
 
 def test_database_path_rejects_canonical_data_and_relative_escape(
@@ -361,7 +365,7 @@ def test_reopening_existing_database_preserves_records(tmp_path: Path) -> None:
     )
 
     reopened = WorkspaceDatabase(path)
-    assert reopened.initialize() == 4
+    assert reopened.initialize() == 5
 
     record = SQLiteVersionedRecordRepository(reopened).get(
         "conversation",

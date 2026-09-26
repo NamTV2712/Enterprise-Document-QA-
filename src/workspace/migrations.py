@@ -258,11 +258,59 @@ DURABLE_JOB_CONTRACT = Migration(
 )
 
 
+FROZEN_EVALUATION_JOBS = Migration(
+    version=5,
+    name="frozen_evaluation_jobs",
+    statements=(
+        """
+        CREATE TABLE evaluation_artifacts (
+            artifact_digest TEXT PRIMARY KEY,
+            content BLOB NOT NULL,
+            byte_count INTEGER NOT NULL CHECK (byte_count > 0 AND byte_count <= 16000000)
+        )
+        """,
+        """
+        CREATE TABLE evaluation_attempts (
+            job_id TEXT NOT NULL,
+            ordinal INTEGER NOT NULL CHECK (ordinal >= 1),
+            case_id TEXT NOT NULL,
+            phase TEXT NOT NULL CHECK (phase IN ('generation', 'correction', 'judging')),
+            attempted_at TEXT NOT NULL,
+            PRIMARY KEY (job_id, ordinal),
+            UNIQUE (job_id, case_id, phase),
+            FOREIGN KEY (job_id) REFERENCES jobs(job_id) ON DELETE CASCADE
+        )
+        """,
+        """
+        CREATE TABLE evaluation_case_results (
+            job_id TEXT NOT NULL,
+            ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
+            case_id TEXT NOT NULL,
+            result_json TEXT NOT NULL,
+            committed_at TEXT NOT NULL,
+            PRIMARY KEY (job_id, case_id),
+            UNIQUE (job_id, ordinal),
+            FOREIGN KEY (job_id) REFERENCES jobs(job_id) ON DELETE CASCADE
+        )
+        """,
+        """
+        CREATE TABLE evaluation_reports (
+            job_id TEXT PRIMARY KEY,
+            report_json BLOB NOT NULL,
+            committed_at TEXT NOT NULL,
+            FOREIGN KEY (job_id) REFERENCES jobs(job_id) ON DELETE CASCADE
+        )
+        """,
+    ),
+)
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     CORE_FOUNDATION,
     RESEARCH_DOMAINS,
     OPERATIONS_FOUNDATION,
     DURABLE_JOB_CONTRACT,
+    FROZEN_EVALUATION_JOBS,
 )
 
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
@@ -288,6 +336,7 @@ EXPECTED_TABLES_BY_VERSION: dict[int, frozenset[str]] = {
     ),
     3: frozenset({"jobs", "job_steps", "job_events", "telemetry_events"}),
     4: frozenset(),
+    5: frozenset({"evaluation_artifacts", "evaluation_attempts", "evaluation_case_results", "evaluation_reports"}),
 }
 
 

@@ -41,7 +41,7 @@ def _repository(
     failure_injector=None,
 ) -> SQLiteJobRepository:
     database = WorkspaceDatabase(tmp_path / name)
-    assert database.initialize() == 4
+    assert database.initialize() == 5
     return SQLiteJobRepository(
         database,
         clock=lambda: "2026-09-22T10:00:00.000000Z",
@@ -431,7 +431,7 @@ def test_v3_upgrade_is_additive_and_legacy_job_rows_fail_closed(tmp_path: Path) 
         )
 
     upgraded = WorkspaceDatabase(path)
-    assert upgraded.initialize() == 4
+    assert upgraded.initialize() == 5
     with upgraded.connection() as connection:
         columns = {row["name"] for row in connection.execute("PRAGMA table_info(jobs)")}
         event_columns = {row["name"] for row in connection.execute("PRAGMA table_info(job_events)")}

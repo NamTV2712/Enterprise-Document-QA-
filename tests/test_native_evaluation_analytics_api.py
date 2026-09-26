@@ -174,6 +174,37 @@ def test_native_and_legacy_same_id_fail_closed_even_when_filtered(client, tmp_pa
     assert client.get("/evaluation/runs/collision").status_code == 409
 
 
+@pytest.mark.parametrize("operation", ["results", "compare", "failures", "trends"])
+def test_native_analytics_reject_ambiguous_published_identity(client, tmp_path, operation):
+    _publish(tmp_path, "collision")
+    publish_public_report(example_report("collision"), root=tmp_path)
+    if operation == "results":
+        response = client.get("/evaluation/runs/collision/results")
+    elif operation == "compare":
+        response = client.post("/evaluation/compare", json={
+            "baseline_run_id": "collision", "candidate_run_id": "collision",
+        })
+    elif operation == "failures":
+        response = client.get("/evaluation/failures", params={"run_id": "collision"})
+    else:
+        response = client.get("/evaluation/metrics/trends", params={"metric_id": "native.faithfulness"})
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Ambiguous published run ID"
+
+
+def test_native_complete_status_filter_preserves_legacy_statuses(client, tmp_path):
+    _publish(tmp_path, "native-complete")
+    publish_public_report(example_report("legacy"), root=tmp_path)
+    response = client.get("/evaluation/runs", params={"status": "complete"})
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+    assert [item["run_id"] for item in response.json()["items"]] == ["native-complete"]
+    assert client.get("/evaluation/runs", params={"status": "historical"}).json()["total"] == 1
+    assert client.get("/evaluation/runs", params={"status": "official"}).json()["total"] == 0
+    assert client.get("/evaluation/runs", params={"status": "incomplete"}).json()["total"] == 0
+    assert client.get("/evaluation/runs", params={"status": "invented"}).status_code == 422
+
+
 def test_added_routes_are_public_reads_with_explicit_models_and_names():
     routes = {route.path: route for route in router_module.create_evaluation_router().routes if isinstance(route, APIRoute)}
     expected = {

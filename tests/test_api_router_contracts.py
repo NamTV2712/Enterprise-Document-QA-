@@ -212,6 +212,17 @@ def test_moved_openapi_operations_match_the_pre_extraction_contract() -> None:
         path: specification["paths"][path]
         for path in sorted(EXTRACTED_ROUTE_MODULES)
     }
+    # Native publications add a completeness filter, not a legacy promotion
+    # status. Verify that single additive change, then retain the frozen
+    # pre-extraction digest for every other operation field.
+    contracts = json.loads(json.dumps(contracts))
+    status_parameter = next(
+        parameter for parameter in contracts["/evaluation/runs"]["get"]["parameters"]
+        if parameter["name"] == "status"
+    )
+    status_enum = status_parameter["schema"]["anyOf"][0]["enum"]
+    assert status_enum == ["official", "candidate", "historical", "complete", "incomplete"]
+    status_enum.remove("complete")
     encoded = json.dumps(
         contracts, sort_keys=True, separators=(",", ":")
     ).encode("utf-8")

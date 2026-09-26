@@ -46,6 +46,11 @@ def _json(value: Any) -> Any:
     return json.loads(canonical_json_bytes(asdict(value)))
 
 
+def _reject_ambiguous_run_ids(native_ids: set[str], legacy_ids: set[str]) -> None:
+    if native_ids & legacy_ids:
+        raise HTTPException(status_code=409, detail="Ambiguous published run ID")
+
+
 def _native(run_id: str) -> PublishedNativeReport:
     try:
         published = get_published_native_report(run_id, root=settings.data_public_evaluations_dir)
@@ -54,17 +59,23 @@ def _native(run_id: str) -> PublishedNativeReport:
     except NativePublicationError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     if published is not None:
+        if get_public_report(run_id, root=settings.data_public_evaluations_dir) is not None:
+            _reject_ambiguous_run_ids({run_id}, {run_id})
         return published
     if get_public_report(run_id, root=settings.data_public_evaluations_dir) is not None:
         raise HTTPException(status_code=409, detail="Native evaluation report required")
     raise HTTPException(status_code=404, detail="Evaluation run not found")
 
 
-def _native_history() -> tuple[PublishedNativeReport, ...]:
+def _native_history(*, legacy_run_ids: set[str] | None = None) -> tuple[PublishedNativeReport, ...]:
     try:
-        return list_published_native_reports(root=settings.data_public_evaluations_dir)
+        history = list_published_native_reports(root=settings.data_public_evaluations_dir)
     except NativePublicationError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+    if legacy_run_ids is None:
+        legacy_run_ids = {item["run_id"] for item in list_public_reports(root=settings.data_public_evaluations_dir)}
+    _reject_ambiguous_run_ids({item.report.run_id for item in history}, legacy_run_ids)
+    return history
 
 
 def _page(items: list[Any], page: int, page_size: int) -> list[Any]:
@@ -135,7 +146,7 @@ def create_evaluation_router() -> APIRouter:
 
     @router.get("/evaluation/runs")
     async def evaluation_runs(
-        status: Literal["official", "candidate", "historical", "incomplete"] | None = None,
+        status: Literal["official", "candidate", "historical", "complete", "incomplete"] | None = None,
         language: Literal["en", "vi"] | None = None,
         intent: str | None = Query(default=None, max_length=80),
         ticker: str | None = Query(default=None, pattern=r"^[A-Z]{1,5}(-[A-Z])?$"),
@@ -145,9 +156,7 @@ def create_evaluation_router() -> APIRouter:
     ) -> dict:
         """List validated, explicitly published evaluation summaries only."""
         reports = list_public_reports(root=settings.data_public_evaluations_dir)
-        native_history = _native_history()
-        if {item["run_id"] for item in reports} & {item.report.run_id for item in native_history}:
-            raise HTTPException(status_code=409, detail="Ambiguous published run ID")
+        native_history = _native_history(legacy_run_ids={item["run_id"] for item in reports})
         filtered: list[dict[str, Any]] = []
         for summary in reports:
             if status is not None and summary["status"] != status:
@@ -214,7 +223,7 @@ def create_evaluation_router() -> APIRouter:
             raise HTTPException(status_code=409, detail=str(error)) from error
         if published is not None:
             if get_public_report(run_id, root=settings.data_public_evaluations_dir) is not None:
-                raise HTTPException(status_code=409, detail="Ambiguous published run ID")
+                _reject_ambiguous_run_ids({run_id}, {run_id})
             report = published.report
             return NativePublishedDetailModel.model_validate({
                 "schema_version": 1,

@@ -1,5 +1,91 @@
 # Project State
 
+## EVAL-003 frozen budgeted native jobs (2026-09-26)
+
+Implementation: `fb85da1` (`feat(eval): add frozen budgeted native evaluation
+jobs`). EVAL-003 adds exactly the six master-plan private job routes, not a
+generic scheduler, public publisher, Evaluation UI, or Ragas adapter. Reads
+are API-001 L; creation/cancellation are J with existing bearer, loopback,
+exact Host-port, Origin, and execution-capability checks. Creation requires
+an Idempotency-Key and registered artifact/engine/metrics/mode/budget. It
+freezes then queues/dispatches; no start/resume endpoint exists. Cancellation
+uses If-Match and events replay through Last-Event-ID. Typed private results
+include exact case inputs, native metrics, definitions, aggregates, and
+denominators. Public EVAL-002 analytics remain separate and unchanged.
+
+DATA-004 remains the sole job state/identity/revision/step/event/progress/
+idempotency/cancellation/recovery owner. Schema v5 adds linked immutable
+private artifact, attempted-slot, case-result, and report tables in that same
+workspace SQLite database. Original Phase 1 bytes are content-addressed and
+copied before execution. The canonical credential-free snapshot binds native
+protocol/engine v1, all six metric versions/definition digest, full API-006
+dataset revision, complete TestCase-derived IDs, frozen case order/content/
+rendered-evidence hashes, generator/judge identity, retrieval fingerprints,
+prompts, completion profile, runtime source semantics, and budget. Later
+dataset/artifact/configuration changes cannot silently change a run: case
+execution reads frozen data, semantic code drift fails closed, and equivalent
+idempotent creation returns the original snapshot before reading current
+inputs. Conflicting key reuse fails explicitly; raw keys are never persisted.
+
+Budget unit is `provider_attempt_slot`, not money or tokens. Preflight
+requires three slots per case for draft, at most one shared correction, and
+judge, with 200 cases/16 MB artifact/15,000 slots maximum. The atomic SQLite
+reservation reads the cap and case identity from the immutable job payload;
+it cannot be enlarged by a worker argument. A unique job/case/phase receipt
+prevents duplicate attempts. Every reservation is charged before transport;
+SDK/transport/case retries are disabled. A crash can consume a slot without
+proving that transport began, so this is a conservative call upper bound,
+not an exact monetary/transport-success measure. Exhaustion is explicit and
+cannot become success, provider failure, or a metric zero.
+
+Steps are `execute_cases` and `aggregate_report`. Frozen artifact order is
+deterministic. Shared Phase 2 evidence rendering, prompt/provider plumbing,
+answer completion, and judge policy (including KEY5-only configuration) are
+reused; EVAL-001 computes local metrics and creates/validates the unchanged
+native report. Generation, local metrics, and judging see the same rendered
+evidence. Zero/false stay computed and absent prerequisites never become
+zero. Failure categories distinguish snapshot, budget, provider, case, report
+validation, and infrastructure failures with fixed sanitized messages. Case
+results and valid private reports commit atomically and are not overwritten.
+
+Cancellation stops new reservations; an already-reserved/in-flight call can
+finish. Acknowledgement follows actual worker stop, including cancellation/
+terminal-failure revision races. Completed cases remain. Progress is the last
+durable DATA-004 receipt and may lag a just-committed case at a cancel/crash
+boundary; private result counts are authoritative. Startup recovery marks
+running/cancelling jobs terminal `interrupted`, preserving snapshot, consumed
+slots, completed cases, and any valid report already committed. No ambiguous
+provider call is automatically replayed. Queued jobs can be redispatched by
+equivalent creation. Local workspace startup recovery assumes one serving
+process; independent jobs can run concurrently, without a global quota
+scheduler. A provider success before result persistence remains an unknown
+crash outcome, not exactly-once external execution.
+
+Publication is not owned by the six EVAL-003 route rows. Reports remain
+private and digest-validated; no file is written to `data/public_evaluations`,
+no job becomes official, and native trends remain honestly empty. Parity is
+frozen Phase 2 evidence parity, not full live-serving request parity. Remote
+model identity is frozen, but the provider exposes no pinned weight revision.
+Unreferenced content-addressed artifacts can remain after a failed job commit;
+no automatic private-data garbage collection was introduced. Credential/path
+checks include escaped values and duplicate-key rejection; this does not
+claim immunity to indirect prompt injection in filing evidence.
+
+Final validation: **22/22 EVAL-003 tests**, **182/182 native/job/DATA-004/
+pipeline/API/access regressions**, and **64/64 API-006/shared Phase 2
+regressions** passed. The final full hermetic backend passed **1168/1168,
+zero failures, 188 warnings**, versus 1146/1146 and 188 warnings. Compile/
+import and diff checks passed; exact route inventory is **80** versus 74,
+with names/models/access/order/collision checks. A read-only preflight of the
+existing 30-case Phase 1 artifact passed; no live provider evaluation ran.
+The artifact audit staged no database/WAL/SHM, credential, runtime report,
+provider output, cache, trace, log, screenshot, or data artifact. Frontend and
+dependencies were unchanged, and all 12 unrelated untracked paths were
+preserved. Checkpoint EVAL-003-A..G and README carry the contract/closure
+receipt. No new deterministic regression or warning growth was found.
+Exact next graph task: `UI-011 — Evaluation`; it was not started. EVAL-004/
+Ragas remains outside this work.
+
 ## EVAL-002 native comparison, trends, and failures (2026-09-23)
 
 EVAL-002 adds a provider-free public analytical layer over EVAL-001's

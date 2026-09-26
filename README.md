@@ -220,6 +220,12 @@ http://localhost:8000/docs
 | `POST` | `/evaluation/compare` | Read-only baseline/candidate native report comparison |
 | `GET` | `/evaluation/metrics/trends` | Read compatible published native observations without interpolation |
 | `GET` | `/evaluation/failures` | Read bounded native failure facts and unavailable prerequisites |
+| `GET` | `/evaluation/jobs` | Protected local list of frozen native evaluation jobs |
+| `POST` | `/evaluation/jobs` | Execution-gated, idempotent creation and dispatch of a budgeted native job |
+| `GET` | `/evaluation/jobs/{job_id}` | Protected state, frozen binding, budget, steps, and private report reference |
+| `GET` | `/evaluation/jobs/{job_id}/results` | Protected private case inputs/results and native report aggregates |
+| `POST` | `/evaluation/jobs/{job_id}/cancel` | Execution-gated cancellation request requiring the current `If-Match` revision |
+| `GET` | `/evaluation/jobs/{job_id}/events` | Protected ordered SSE replay resumable with `Last-Event-ID` |
 | `GET` | `/cache/stats` | Semantic cache metrics |
 | `POST` | `/cache/clear` | Clear semantic cache when explicitly enabled |
 | `POST` | `/cache/test` | Rate-limited query embedding comparison |
@@ -373,6 +379,45 @@ published native reports in the existing `data/public_evaluations/` directory.
 No native reports are published automatically; an absent directory yields an
 honest empty history. Legacy public-report-v1 files remain readable but are
 not compared or trended as native v1.
+
+Frozen native jobs use the DATA-004 local workspace database. Their six routes
+require the configured loopback/Host/Origin/bearer boundary; creation and
+cancellation additionally require workspace execution capability. Create with
+an `Idempotency-Key` header and JSON containing a registered `artifact_id`
+(the basename of a validated Phase 1 `data/eval_artifacts/<id>.json` file),
+`engine: "native"`, the six `/evaluation/metrics` IDs (order-independent),
+`mode: "provider_backed"`, and an integer `budget`. The budget unit is a
+durable provider-attempt slot: one slot is consumed before each transport
+invocation, even when a crash leaves its external outcome unknown. Preflight
+requires at least three slots per frozen case (draft, at most one correction,
+and judge); no automatic provider retry is enabled. A job permits at most 200
+cases, a 16 MB artifact, and a budget no larger than 15,000 slots. The artifact
+is copied
+into private content-addressed SQLite storage at creation. The job freezes
+its canonical dataset/case identities, metric definitions, evidence hashes,
+model and retrieval provenance, prompt/code fingerprints, and budget without
+credentials. Later changes cannot silently alter the run: frozen case data
+is used, and incompatible runtime code fails closed.
+
+Creation queues and dispatches the job; there is no start/resume endpoint.
+DATA-004 records steps, revisions, progress receipts, cancellation, and SSE
+events. An in-flight provider call may finish after cancellation is requested;
+the worker acknowledges cancellation only after stopping. On process restart,
+running/cancelling jobs become terminal `interrupted` without replaying an
+ambiguous provider call; completed private cases and consumed slots remain.
+Queued jobs can be dispatched by an equivalent idempotent creation request.
+Completed jobs hold a digest-validated private EVAL-001 report. Jobs do not
+publish or promote reports into `data/public_evaluations/`; EVAL-002's public
+history remains a separate explicit-publication boundary. This runner shares
+the frozen-evidence Phase 2 rendering, prompts, answer completion, and judge
+plumbing, but does not claim full live-serving request parity or exactly-once
+external provider execution.
+
+Local workspace execution/recovery requires one serving process. Independent
+jobs may execute concurrently; this is not a global provider-quota scheduler.
+Progress is the last durable DATA-004 receipt and can lag a committed case
+at a cancellation/crash boundary; the private results count remains
+authoritative.
 
 Current official benchmark: the two-phase pipeline (offline Phase 1
 frozen retrieval artifact, then frozen-evidence generation and judging) now

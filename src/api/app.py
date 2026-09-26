@@ -683,6 +683,7 @@ app.add_middleware(
         "Authorization",
         "Content-Type",
         "If-Match",
+        "Idempotency-Key",
         "Last-Event-ID",
         "ngrok-skip-browser-warning",
     ],

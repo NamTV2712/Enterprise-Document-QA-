@@ -80,6 +80,9 @@ with `/collections/:collectionId` as the selected collection, so Back/Forward
 and deep links behave like every other destination. The list is a real query
 (`search`, `favorite`, `sort`, `direction`, `page`); every count shown is a
 count the API returned, and a member's kind is the kind DATA-003 stored.
+Previous/Next navigate one current API page and stop at its filtered total;
+Favorites paging never uses the All Collections tab count. Selection remains
+document/collection-ID bound across paging, not an index into the current list.
 
 Selection, search, sorting, tab switching and reading notes/activity are reads
 and must never write. Each write is an explicit action carrying the revision

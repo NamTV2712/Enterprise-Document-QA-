@@ -379,11 +379,17 @@ published native reports in the existing `data/public_evaluations/` directory.
 No native reports are published automatically; an absent directory yields an
 honest empty history. Legacy public-report-v1 files remain readable but are
 not compared or trended as native v1.
+`GET /evaluation/runs?status=complete` selects native completeness, not
+official promotion. Legacy status filters remain supported. A run ID shared
+by validated legacy and native publications is rejected with HTTP 409 by
+list/detail, results, comparison, failures, and trends instead of choosing a
+protocol silently.
 
 Frozen native jobs use the DATA-004 local workspace database. Their six routes
 require the configured loopback/Host/Origin/bearer boundary; creation and
 cancellation additionally require workspace execution capability. Create with
-an `Idempotency-Key` header and JSON containing a registered `artifact_id`
+an `Idempotency-Key` header (explicitly admitted by CORS for configured origins)
+and JSON containing a registered `artifact_id`
 (the basename of a validated Phase 1 `data/eval_artifacts/<id>.json` file),
 `engine: "native"`, the six `/evaluation/metrics` IDs (order-independent),
 `mode: "provider_backed"`, and an integer `budget`. The budget unit is a
@@ -1660,6 +1666,10 @@ Secrets are loaded from `.env` and should never be committed.
   a candidate passes all admission gates.
 - Hybrid retrieval improves source quality but adds CPU latency due to cross-encoder re-ranking.
 - Semantic cache and conversation memory are currently in-memory and are lost on process restart.
+- Typed Collections uses the protected local API; its normal client is not yet
+  connected to the memory-only bearer owner (currently scoped to Pipeline).
+  Unauthorized/public states remain explicit. Its Previous/Next navigation is
+  bounded by the active filtered count, independently of the all-collections count.
 - Multi-turn query rewriting adds one LLM call for follow-up questions.
 - Public API routes remain unauthenticated. CORS allowlisting, per-IP rate limits, input validation, and generic error messages mitigate abuse but are not access control; any client that knows the URL can call the public routes. Opt-in local workspace capabilities use the loopback-and-bearer boundary described above (see `ARCHITECTURE.md`).
 - Groq free tier can return `429 Too Many Requests`; SDK retries can recover but increase latency.

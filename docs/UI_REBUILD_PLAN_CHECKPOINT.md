@@ -1,7 +1,7 @@
 # Current Planning Status
 
 Implementation through EVAL-003 is COMPLETE. Historical receipts remain below;
-the latest EVAL-003-A..G receipt is at the end. The next dependency-ready task
+the latest EVAL-003-A..G and post-rebuild audit receipts are at the end. The next dependency-ready task
 per the master-plan graph is UI-011 — Evaluation (not started).
 
 ## Last Completed Checkpoint
@@ -5686,3 +5686,58 @@ UI-011 by the dependency graph; it is not started.
 
 `UI-011 — Evaluation` (requires UI-002, EVAL-002, EVAL-003). Stop after
 EVAL-003 closure; do not implement UI-011 or optional EVAL-004/Ragas here.
+
+## Post-rebuild engineering audit — COMPLETE (2026-09-26)
+
+This separate audit/repair pass started at `8dfdb3f`, with clean tracked source
+and 12 preserved unrelated untracked paths. The supplied UI-008/dirty-tree
+recovery receipt was historical: API-006 through EVAL-003 and the earlier
+clean-checkout source closure are already complete. No roadmap feature was
+started. Boundary inspection covered application/access composition, SQLite/
+transfer/collections/jobs, catalog/discovery/retrieval/generation/readers,
+registries/evaluation, frontend routing/state/persistence/private Pipeline auth,
+and test/CI ownership. It is not a per-line or exhaustive security audit.
+
+Verified and repaired:
+
+- AUD-04 / P1: browser preflight rejected evaluation creation's mandatory
+  `Idempotency-Key`. Commit `7a3e596` adds only that explicit CORS header; six
+  new tests retain forbidden-origin/header/method and authentication boundaries.
+- AUD-01 / P1: native results/comparison/failures/trends accepted ambiguous
+  legacy/native run IDs that list/detail rejected. Commit `05f87ce` applies
+  consistent HTTP 409 rejection to selected reads and history before filtering.
+- AUD-02 / P2: filtering the native `complete` status returned 422. The same
+  evaluation commit admits it without altering official/legacy/native semantics.
+  Four ambiguity cases and one completeness filter regression failed before
+  the fix. OpenAPI's original digest is retained after an explicit assertion
+  and normalization of the single additive enum value.
+- AUD-03 / P2: Collections paging replaced pages under "Show more", had no
+  return control or terminal bound, and confused all/Favorites totals. Commit
+  `d1519a3` introduces bounded bidirectional paging with active result counts,
+  preserves selected identity/epochs/storage, and reconciles a shrinking result
+  set. Two unit cases and four production browser cases protect the change.
+
+Final gates: **1179 backend tests passed / 188 existing warnings**; **80 Vitest
+files / 541 tests passed**; TypeScript/build/compile/import/diff checks passed;
+**80 API routes, no collisions**; focused backend groups **41/41** and **63/63**;
+Collections units **25/25**; neighboring Collections browsers **38/38** (19 per
+browser). Screenshots at 1440 dark/EN and 390 light/VI were inspected; paired
+WCAG-tagged rendered scans, keyboard and overflow checks passed after settled
+paint. A preliminary whole-page best-practice scan found an existing h1-to-h3
+card-heading warning, left as P3. Initial Vitest session-history timeout passed
+isolated and final-full reruns; no timeouts or existing assertions were weakened.
+No full browser/reference/zoom, live provider, Docker, or clean-checkout build
+was rerun. No canonical artifact, database, secret, cache, trace, log, screenshot,
+dependency, ranking/prompt semantics, or official benchmark was staged.
+
+The same 12 unrelated untracked paths remain preserved. Collections token
+integration remains explicitly staged by the UI-010 contract; API-001 was not
+weakened. Unicode snippet offset/casefold handling and card heading order remain
+P3 follow-ups. See [the audit report](ENGINEERING_AUDIT_2026-09-26.md) and the
+latest project-state section for evidence and exact validation commands.
+
+### Exact Next Action After Audit
+
+`UI-011 — Evaluation`, under a separate feature request. API-006 is already
+complete. No hygiene blocker was reproduced that should precede UI-011; retain
+the staged private-auth limitation and schedule the P3 follow-ups separately.

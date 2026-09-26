@@ -1,5 +1,70 @@
 # Project State
 
+## Post-rebuild correctness audit and repairs (2026-09-26)
+
+This pass started at `8dfdb3f`, not the historical UI-008 recovery baseline.
+Tracked source was clean; the same 12 unrelated untracked paths were preserved.
+API-006 through EVAL-003 are complete, and UI-011 remains the next product task.
+The old clean-checkout source-closure problem is already closed; required router,
+workspace, frontend route, and evaluation-job modules are tracked. No roadmap
+feature, canonical data mutation, provider run, dependency upgrade, or cleanup
+was performed.
+
+Four issues were reproduced before their corresponding production fixes:
+
+- **AUD-04 / P1:** the required EVAL-003 `Idempotency-Key` header failed browser
+  CORS preflight with HTTP 400. `7a3e596` (`fix(api): admit evaluation idempotency
+  preflights`) adds exactly that header, retaining explicit origin/method/header
+  allowlists and bearer/loopback/Host/execution checks. Six new hermetic tests
+  protect admission, denied preflights, and unauthorized creation without DB access.
+- **AUD-01 / P1:** list/detail rejected duplicate validated legacy/native run IDs,
+  while native results/compare/failures/trends silently selected native input.
+  `05f87ce` (`fix(eval): reject ambiguous publications across analytics`) applies
+  the same HTTP 409 boundary to all consumers, including trend history before
+  filters. Four adversarial API regressions failed with HTTP 200 before the fix.
+- **AUD-02 / P2:** native listings returned `status=complete`, but filtering by
+  that status failed with HTTP 422. The same evaluation repair adds the missing
+  literal without changing legacy promotion statuses or native report semantics.
+  A regression protects completeness/legacy filtering and invalid selectors.
+  The OpenAPI test asserts precisely this enum addition, then retains the original
+  frozen operation digest for every other field; it is not a blind hash refresh.
+- **AUD-03 / P2:** Collections' "Show more" replaced the page, offered no way
+  back, could advance beyond the last page, and used all-collection totals for
+  Favorites pagination. `d1519a3` (`fix(ui): bound collection paging to the active
+  result count`) adds bounded Previous/Next navigation, separates active/all
+  counts, and reconciles a page beyond a shrinking result set. Epoch guards,
+  collection selection, revisions, tombstones, and persistence remain unchanged.
+  Two unit regressions and paired desktop dark/EN + mobile light/VI browser
+  regressions cover the journey, keyboard access, filtered counts, and no writes.
+
+Final actual gates: backend **1179 passed, 0 failed, 188 warnings**; frontend
+**80 files / 541 tests passed**; TypeScript passed; production builds passed;
+Collections browser neighbors **38/38 passed** (19 Chromium + 19 Firefox),
+including the four new paired-browser cases. Dedicated evaluation analytics/
+legacy/OpenAPI focus passed **41/41**; CORS/jobs/collections/access focus passed
+**63/63**; Collections unit focus passed **25/25**. Compile checks, import,
+diff checks, and the **80-route** collision-free inventory passed. Production
+screenshots were inspected and remain ignored, not committed. The first full
+Vitest run had one 5-second session-history timeout (538 pass / 1 fail); its
+isolated rerun and final full run passed without timeout/assertion changes.
+Early browser-test failures exposed fixture locale setup and unsettled animation
+contrast; correct locale, reduced motion, and the existing settled-paint gate
+passed without CSS changes. A separate existing h1-to-h3 card-heading warning
+is a P3 follow-up, not a claim of full accessibility conformance.
+
+Remaining: Collections bearer integration is explicitly staged, not bypassed
+(UI-010 attaches the memory-only token only to private Pipeline calls). A P3
+Unicode discovery highlight defect was reproduced: casefold expansion in
+`Straße revenue` produces `[8,15]` and highlights `evenue`; backend code-point
+versus frontend UTF-16 indexing also needs an explicit contract. No ranked
+evidence/identity or stored data is changed by that display defect. Broad
+dependency/penetration, native browser zoom, full browser, Docker, clean-checkout
+rebuild, and live-provider gates were not rerun; do not infer them from these
+results. No P0 was verified, and this is not a whole-repository security guarantee.
+The authored [audit report](docs/ENGINEERING_AUDIT_2026-09-26.md) records boundary
+coverage, repair order, commands, limitations, and dirty-tree ownership.
+UI-011 remains next; API-006 must not be restarted.
+
 ## EVAL-003 frozen budgeted native jobs (2026-09-26)
 
 Implementation: `fb85da1` (`feat(eval): add frozen budgeted native evaluation

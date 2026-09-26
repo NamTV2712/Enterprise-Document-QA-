@@ -92,6 +92,7 @@ export function CollectionsWorkspace({
   const [collections, setCollections] = useState<CollectionRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [favoriteTotal, setFavoriteTotal] = useState(0);
+  const [allTotal, setAllTotal] = useState(0);
   const [listLoading, setListLoading] = useState(true);
   const [listFailure, setListFailure] = useState<CollectionFailure | null>(null);
 
@@ -158,7 +159,9 @@ export function CollectionsWorkspace({
       setCollections(active.items);
       setTotal(active.total);
       setFavoriteTotal(favorites.total);
-      if (all) setTotal(all.total);
+      setAllTotal(all?.total ?? active.total);
+      const lastPage = Math.max(1, Math.ceil(active.total / PAGE_SIZE));
+      if (page > lastPage) setPage(lastPage);
       setListFailure(null);
     } catch (error) {
       if (listEpoch.current !== epoch) return;
@@ -167,6 +170,7 @@ export function CollectionsWorkspace({
       setCollections([]);
       setTotal(0);
       setFavoriteTotal(0);
+      setAllTotal(0);
       // A 404 on the list route is the workspace boundary hiding the whole
       // capability in this deployment mode; it is not an empty workspace.
       setListFailure(described.status === 404 ? listUnavailableFailure(vi) : described);
@@ -447,7 +451,8 @@ export function CollectionsWorkspace({
   const availabilityFailure = listFailure && isWorkspaceAvailabilityFailure(listFailure) ? listFailure : null;
   const listError = listFailure && !availabilityFailure ? listFailure : null;
 
-  const collectionCount = useMemo(() => total, [total]);
+  const collectionCount = allTotal;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <section className="workspace-page workspace-page--standard console-view-enter collections-page" aria-labelledby="collections-title">
@@ -599,12 +604,16 @@ export function CollectionsWorkspace({
               </ul>
             )}
 
-            {total > collections.length && (
-              <div className="collections-page__more">
-                <button type="button" className="console-btn" onClick={() => setPage((current) => current + 1)} disabled={listLoading}>
-                  {vi ? `Hiển thị thêm (${collections.length}/${total})` : `Show more (${collections.length}/${total})`}
+            {(totalPages > 1 || page > 1) && (
+              <nav className="console-pager" aria-label={vi ? "Phân trang bộ sưu tập" : "Collection pagination"}>
+                <button type="button" className="console-btn" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={listLoading || page <= 1} aria-label={vi ? "Trang trước" : "Previous page"}>
+                  {vi ? "Trước" : "Previous"}
                 </button>
-              </div>
+                <span>{vi ? `Trang ${page} / ${totalPages}` : `Page ${page} of ${totalPages}`}</span>
+                <button type="button" className="console-btn" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={listLoading || page >= totalPages} aria-label={vi ? "Trang sau" : "Next page"}>
+                  {vi ? "Sau" : "Next"}
+                </button>
+              </nav>
             )}
           </div>
 

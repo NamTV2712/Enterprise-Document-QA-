@@ -172,6 +172,51 @@ async function resetScroll(page: Page) {
 }
 
 test.describe("UI-008 collections", () => {
+  for (const variant of [
+    { width: 1440, height: 900, theme: "dark", locale: "en" },
+    { width: 390, height: 844, theme: "light", locale: "vi" },
+  ] as const) {
+    test(`bounded collection pagination ${variant.width} ${variant.theme} ${variant.locale}`, async ({ page }, testInfo) => {
+      const state = createCollectionsFixtureState(Array.from({ length: 26 }, (_, index) => ({
+        collection_id: `col-page-${index}`,
+        name: `Audit collection ${String(index).padStart(2, "0")}`,
+        favorite: index === 0,
+      })));
+      await installApiFixtures(page, { collections: state });
+      await page.setViewportSize({ width: variant.width, height: variant.height });
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.addInitScript(({ theme, locale }) => {
+        localStorage.setItem("theme", theme);
+        localStorage.setItem("sec_qa_locale", locale);
+      }, variant);
+      await page.goto("/collections");
+      await waitForPaint(page, "pagination workspace");
+      const vi = variant.locale === "vi";
+      const pager = page.getByRole("navigation", { name: vi ? "Phân trang bộ sưu tập" : "Collection pagination" });
+      const next = pager.getByRole("button", { name: vi ? "Trang sau" : "Next page" });
+      const previous = pager.getByRole("button", { name: vi ? "Trang trước" : "Previous page" });
+      await expect(page.locator(".collection-card")).toHaveCount(25);
+      await expect(previous).toBeDisabled();
+      await next.click();
+      await expect(page.locator(".collection-card")).toHaveCount(1);
+      await expect(next).toBeDisabled();
+      await expect(previous).toBeEnabled();
+      await previous.focus();
+      await expect(previous).toBeFocused();
+      await page.screenshot({ path: testInfo.outputPath("collection-pagination.png"), fullPage: true });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      const accessibility = await new AxeBuilder({ page }).include(".collections-page")
+        .withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+      expect(accessibility.violations).toEqual([]);
+      await page.keyboard.press("Enter");
+      await expect(page.locator(".collection-card")).toHaveCount(25);
+      await page.getByRole("tab", { name: vi ? /Yêu thích/ : /Favorites/ }).click();
+      await expect(page.locator(".collection-card")).toHaveCount(1);
+      await expect(pager).toHaveCount(0);
+      expect(writeRequests(state)).toEqual([]);
+    });
+  }
+
   test("the route loads the collections workspace with real typed data", async ({ page }) => {
     await installApiFixtures(page, { collections: populatedWorkspace() });
     await openCollections(page);

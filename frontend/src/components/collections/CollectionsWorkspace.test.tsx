@@ -158,6 +158,39 @@ afterEach(() => {
 });
 
 describe("CollectionsWorkspace", () => {
+  test("pages forward and back without advancing beyond the last page", async () => {
+    listCollectionsMock.mockImplementation(async (params = {}) => {
+      if (params.page_size === 1) return listResponse([], 0);
+      const secondPage = params.page === 2;
+      return { ...listResponse([record({
+        collection_id: secondPage ? "col-last" : "col-first",
+        name: secondPage ? "Last collection" : "First collection",
+      })], 26), page: params.page ?? 1 };
+    });
+    renderWorkspace();
+    await screen.findByRole("heading", { name: "First collection" });
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    await screen.findByRole("heading", { name: "Last collection" });
+    expect(screen.queryByRole("heading", { name: "First collection" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Next page" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Previous page" }));
+    await screen.findByRole("heading", { name: "First collection" });
+    expect(listCollectionsMock.mock.calls.some(([params]) => (params?.page ?? 1) > 2)).toBe(false);
+  });
+
+  test("favorites pagination uses the filtered total, not the all-collections count", async () => {
+    listCollectionsMock.mockImplementation(async (params = {}) =>
+      listResponse([record()], params.favorite ? 1 : 60),
+    );
+    renderWorkspace();
+    await screen.findByRole("heading", { name: "Risk Analysis" });
+    fireEvent.click(screen.getByRole("tab", { name: /Favorites/ }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Next page" })).toBeNull());
+    expect(screen.queryByRole("button", { name: /Show more/ })).toBeNull();
+    expect(screen.getByRole("tab", { name: /All Collections/ })).toHaveTextContent("60");
+  });
+
   test("renders typed collections with their real fields only", async () => {
     listCollectionsMock.mockImplementation(async (params = {}) =>
       params.page_size === 1 ? listResponse([record()], params.favorite ? 1 : 1) : listResponse([record()]),

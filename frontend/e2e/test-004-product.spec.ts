@@ -110,22 +110,23 @@ test("A knowledge: catalog, real search snapshot and canonical reader", async ({
   await expect(page.getByText(/provider-free/i).first()).toBeVisible();
 });
 
-test("B question to actual SSE answer, cited excerpt and Research", async ({ page }) => {
-  await setup(page, "/chat");
-  for (const route of ["chat", "research"]) {
-    if (route === "research") await page.getByRole("link", { name: "Research", exact: true }).click();
-    const input = page.getByRole("textbox", { name: "Research question" });
-    await input.fill("What was Apple total revenue?");
-    await input.press("Enter");
-    await expect(page.getByText(/Harness answer with é/).first()).toBeVisible();
-    await page.getByRole("button", { name: "Open source 1", exact: true }).first().click();
-    await expect(page.getByText(/Harness indexed excerpt for AAPL/).first()).toBeVisible();
-    await audit(page, `B-${route}-cited-source`);
-    await page.getByRole("button", { name: /Open document for source 1/ }).click();
-    await expect(page.locator("[data-workbench-region='document']")).toBeVisible();
-    await expect(page.getByText(/Harness indexed excerpt for AAPL/).first()).toBeVisible();
-    await audit(page, `B-${route}-document-handoff`);
-  }
+for (const route of ["chat", "research"] as const) test(`B ${route} question to actual SSE answer, cited excerpt and reader`, async ({ page }) => {
+  await setup(page, `/${route}`);
+  const input = page.getByRole("textbox", { name: "Research question" });
+  await input.fill("What was Apple total revenue?");
+  await expect(input).toHaveValue("What was Apple total revenue?");
+  await expect(page.getByRole("button", { name: "Send question" })).toBeEnabled();
+  await input.press("Enter");
+  await expect(page).toHaveURL(new RegExp(`/${route}/`));
+  await expect(page.getByText(/Harness answer with é/).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Stop generating response" })).toBeHidden();
+  await page.getByRole("button", { name: "Open source 1", exact: true }).first().click();
+  await expect(page.getByText(/Harness indexed excerpt for AAPL/).first()).toBeVisible();
+  await audit(page, `B-${route}-cited-source`);
+  await page.getByRole("button", { name: /Open document for source 1/ }).click();
+  await expect(page.locator("[data-workbench-region='document']")).toBeVisible();
+  await expect(page.getByText(/Harness indexed excerpt for AAPL/).first()).toBeVisible();
+  await audit(page, `B-${route}-document-handoff`);
 });
 
 test("C protected SQLite collections lifecycle and honest browser refusal", async ({ page }) => {

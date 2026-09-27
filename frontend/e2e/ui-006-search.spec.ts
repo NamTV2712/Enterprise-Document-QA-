@@ -55,6 +55,57 @@ async function submit(page: Page, query: string) {
 }
 
 test.describe("UI-006 discovery search", () => {
+  for (const variant of [{ theme: "dark", locale: "en" }, { theme: "light", locale: "vi" }] as const) {
+    test(`new searches suspend old snapshot paging (${variant.theme}/${variant.locale})`, async ({ page, browserName }) => {
+      const vi = variant.locale === "vi";
+      await page.setViewportSize(vi ? { width: 390, height: 844 } : REFERENCE_VIEWPORT);
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.addInitScript(({ theme, locale }) => {
+        localStorage.setItem("theme", theme);
+        localStorage.setItem("sec_qa_locale", locale);
+      }, variant);
+      await installApiFixtures(page);
+      const calls = trackDiscovery(page);
+      let release!: () => void;
+      let waiting = false;
+      let posts = 0;
+      const gate = new Promise<void>(resolve => { release = resolve; });
+      await page.route("**/search", async route => {
+        if (route.request().method() === "POST" && ++posts === 2) {
+          waiting = true;
+          await gate;
+        }
+        await route.fallback();
+      });
+      await page.goto("/search");
+      if (variant.theme === "dark") await expect(page.locator("html")).toHaveClass(/dark/);
+      else await expect(page.locator("html")).not.toHaveClass(/dark/);
+      const query = page.getByLabel(vi ? "Truy vấn tìm kiếm" : "Search Query");
+      const searchButton = () => page.getByRole("button", { name: vi ? "Tìm kiếm" : "Search", exact: true });
+      await query.fill("cloud revenue");
+      await searchButton().click();
+      await expect(page.getByRole("heading", { name: vi ? 'Kết quả cho "cloud revenue"' : "Results for “cloud revenue”" })).toBeVisible();
+      await query.fill("supply chain");
+      await searchButton().click();
+      try {
+        await expect.poll(() => waiting).toBe(true);
+        await expect(page.getByRole("button", { name: vi ? "Trang sau" : "Next page" })).toBeDisabled();
+        await expect(page.getByRole("button", { name: vi ? "Số dòng mỗi trang" : "Rows per page" })).toBeDisabled();
+        expect(calls.gets).toHaveLength(0);
+        await page.screenshot({ path: `test-results/ui-006/search-pending-${variant.theme}-${variant.locale}-${browserName}.png`, animations: "disabled" });
+      } finally {
+        release();
+      }
+      await expect(page.getByRole("heading", { name: vi ? 'Kết quả cho "supply chain"' : "Results for “supply chain”" })).toBeVisible();
+      await expect(page.getByRole("button", { name: vi ? "Trang sau" : "Next page" })).toBeEnabled();
+      expect(calls.posts).toHaveLength(2);
+      await expect(page.getByRole("alert")).toHaveCount(0);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      expect(overflow).toBeLessThanOrEqual(0);
+      await page.screenshot({ path: `test-results/ui-006/search-recovered-${variant.theme}-${variant.locale}-${browserName}.png`, animations: "disabled" });
+    });
+  }
+
   test("starts from the reference composition without fake controls", async ({ page, browserName }) => {
     await page.setViewportSize(REFERENCE_VIEWPORT);
     await installApiFixtures(page);

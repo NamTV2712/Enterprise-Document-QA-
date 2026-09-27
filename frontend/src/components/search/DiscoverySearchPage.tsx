@@ -113,6 +113,7 @@ export function DiscoverySearchPage({
     const query = submittableQuery(rawQuery);
     if (query === null || isBackendConnected === false) return;
     const requestId = ++searchRequestId.current;
+    pageRequestId.current += 1;
     searchController.current?.abort();
     pageController.current?.abort();
     const controller = new AbortController();
@@ -148,7 +149,7 @@ export function DiscoverySearchPage({
   /** One read of an already stored snapshot: never re-runs the search. */
   const readPage = useCallback(async (nextPage: number, nextPageSize: number) => {
     const searchId = snapshot?.search_id;
-    if (!searchId) return;
+    if (!searchId || isSubmitting) return;
     const requestId = ++pageRequestId.current;
     pageController.current?.abort();
     const controller = new AbortController();
@@ -157,16 +158,16 @@ export function DiscoverySearchPage({
     setError(null);
     try {
       const response = await getDiscoverySnapshot(searchId, { page: nextPage, page_size: nextPageSize }, controller.signal);
-      if (requestId !== pageRequestId.current) return;
+      if (requestId !== pageRequestId.current || controller.signal.aborted) return;
       setSnapshot(response);
     } catch (reason) {
-      if (requestId !== pageRequestId.current) return;
+      if (requestId !== pageRequestId.current || controller.signal.aborted) return;
       if (reason instanceof DOMException && reason.name === "AbortError") return;
       setError(describeDiscoveryError(reason, vi));
     } finally {
       if (requestId === pageRequestId.current) setIsPaging(false);
     }
-  }, [snapshot?.search_id, vi]);
+  }, [snapshot?.search_id, isSubmitting, vi]);
 
   const submit = useCallback(() => {
     void runSearch(draft, filters, grouping);
@@ -326,6 +327,7 @@ export function DiscoverySearchPage({
                     className="console-header-select"
                     label={vi ? "Số dòng mỗi trang" : "Rows per page"}
                     value={String(pageSize)}
+                    disabled={isSubmitting}
                     options={PAGE_SIZE_OPTIONS.map((size) => ({ value: String(size), label: `${size} ${vi ? "/ trang" : "per page"}` }))}
                     onValueChange={(value) => void readPage(1, Number(value))}
                   />
@@ -397,7 +399,7 @@ export function DiscoverySearchPage({
                   <button
                     type="button"
                     className="console-pager__page"
-                    disabled={page <= 1 || isPaging}
+                    disabled={page <= 1 || isPaging || isSubmitting}
                     onClick={() => void readPage(page - 1, pageSize)}
                     aria-label={vi ? "Trang trước" : "Previous page"}
                   >
@@ -409,7 +411,7 @@ export function DiscoverySearchPage({
                   <button
                     type="button"
                     className="console-pager__page"
-                    disabled={page >= Math.max(1, Math.ceil(snapshot.total / pageSize)) || isPaging}
+                    disabled={page >= Math.max(1, Math.ceil(snapshot.total / pageSize)) || isPaging || isSubmitting}
                     onClick={() => void readPage(page + 1, pageSize)}
                     aria-label={vi ? "Trang sau" : "Next page"}
                   >

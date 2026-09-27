@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { DiscoverySearchPage } from "./DiscoverySearchPage";
@@ -253,6 +253,51 @@ describe("DiscoverySearchPage", () => {
     resolveFirst?.(snapshot({ search_id: "search-first000000000" }));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(screen.getByRole("heading", { name: "Results for “supply chain”" })).toBeInTheDocument();
+  });
+
+  test.each(["success", "error"])("a late old page %s cannot affect a new search", async (completion) => {
+    let resolvePage!: (value: DiscoverySnapshotResponse) => void;
+    let rejectPage!: (reason: unknown) => void;
+    readSnapshotMock.mockImplementationOnce(() => new Promise((resolve, reject) => {
+      resolvePage = resolve;
+      rejectPage = reject;
+    }));
+    renderPage();
+    await submitQuery();
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    await waitFor(() => expect(readSnapshotMock).toHaveBeenCalledTimes(1));
+    const pageSignal = readSnapshotMock.mock.calls[0][2];
+    createSearchMock.mockResolvedValueOnce(snapshot({
+      search_id: "search-fedcba9876543210",
+      query: { text: "supply chain", normalized: "supply chain", mode: "keyword" },
+    }));
+    fireEvent.change(screen.getByLabelText("Search Query"), { target: { value: "supply chain" } });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await screen.findByRole("heading", { name: "Results for “supply chain”" });
+    expect(pageSignal?.aborted).toBe(true);
+    await act(async () => {
+      if (completion === "success") resolvePage(snapshot({ page: 2 }));
+      else rejectPage(new ApiError("snapshot expired", 410));
+    });
+    expect(screen.getByRole("heading", { name: "Results for “supply chain”" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(createSearchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("old snapshot paging cannot start while a new search is pending", async () => {
+    renderPage();
+    await submitQuery();
+    let completeSearch!: (value: DiscoverySnapshotResponse) => void;
+    createSearchMock.mockImplementationOnce(() => new Promise(resolve => { completeSearch = resolve; }));
+    fireEvent.change(screen.getByLabelText("Search Query"), { target: { value: "supply chain" } });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(readSnapshotMock).not.toHaveBeenCalled();
+    await act(async () => completeSearch(snapshot({
+      search_id: "search-fedcba9876543210",
+      query: { text: "supply chain", normalized: "supply chain", mode: "keyword" },
+    })));
+    expect(screen.getByRole("button", { name: "Next page" })).toBeEnabled();
   });
 
   test("keeps real result identity, snippet highlights, and the honest score label", async () => {

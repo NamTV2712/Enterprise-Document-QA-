@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { X, ChevronDown } from "lucide-react";
 
 import { NumberRangeField } from "./NumberRangeField";
@@ -48,10 +48,10 @@ export function ScopeEditor({
   const vi = locale === "vi";
   const [open, setOpen] = useState(false);
   const isOpen = controlledOpen ?? open;
-  const setIsOpen = (next: boolean) => {
+  const setIsOpen = useCallback((next: boolean) => {
     onOpenChange?.(next);
     if (controlledOpen === undefined) setOpen(next);
-  };
+  }, [onOpenChange, controlledOpen]);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -80,7 +80,7 @@ export function ScopeEditor({
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Element | null;
       if (target?.closest(".select-field__menu")) return;
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!rootRef.current?.contains(event.target as Node)) setIsOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -90,7 +90,7 @@ export function ScopeEditor({
         || document.querySelector(".select-field__menu")
       ) return;
       event.preventDefault();
-      setOpen(false);
+      setIsOpen(false);
       triggerRef.current?.focus();
     };
     document.addEventListener("pointerdown", onPointerDown);
@@ -100,7 +100,7 @@ export function ScopeEditor({
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [isOpen]);
+  }, [isOpen, setIsOpen]);
 
   const close = () => {
     setIsOpen(false);

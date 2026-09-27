@@ -6,6 +6,17 @@ import { ScopeEditor } from "./ScopeEditor";
 afterEach(() => document.body.innerHTML = "");
 
 describe("ScopeEditor", () => {
+  test.each(["escape", "outside"])("notifies the controlled owner on %s dismissal", (action) => {
+    const onOpenChange = vi.fn();
+    render(<ScopeEditor open onOpenChange={onOpenChange} tickers={[]} sections={[]}
+      selectedTicker={null} onSelectTicker={vi.fn()} selectedSection={null}
+      onSelectSection={vi.fn()} topK={5} onChangeTopK={vi.fn()}
+      enableComparative={false} onToggleComparative={vi.fn()} />);
+    if (action === "escape") fireEvent.keyDown(document, { key: "Escape" });
+    else fireEvent.pointerDown(document.body);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
   test("opens details without expanding the composer flow and returns focus on Escape", () => {
     render(
       <ScopeEditor

@@ -315,8 +315,8 @@
   align-items: center;
   padding: 0.05rem 0.3rem;
   border-radius: 4px;
-  background: rgba(16, 185, 129, 0.12);
-  color: #34d399;
+  background: var(--state-success-surface);
+  color: var(--state-success-text);
   font-size: 0.7rem;
   font-weight: 700;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;

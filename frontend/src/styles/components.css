@@ -3202,6 +3202,12 @@ body,
   max-width: 100%;
 }
 
+/* Anchor scope to the full composer, not its narrow trigger, and let it extend
+   above the form. The loading track already owns its own clipping boundary. */
+.chat-input-island .composer-settings {
+  position: static;
+}
+
 .composer-settings__trigger {
   width: 100%;
   border: 1px solid var(--border-subtle);

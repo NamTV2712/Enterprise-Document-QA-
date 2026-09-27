@@ -215,7 +215,7 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
         <form
           aria-label="Ask a research question"
           onSubmit={handleSubmit}
-          className="chat-input-island relative flex flex-col p-2.5 px-3.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] shadow-md overflow-hidden"
+          className="chat-input-island relative flex flex-col p-2.5 px-3.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] shadow-md"
         >
           {/* Subtle loading shimmer bar along the top edge of the input area */}
           {isLoading && (

@@ -36,7 +36,9 @@
 .evaluation-report-list { min-width: 0; }
 .evaluation-report-list>button { display: grid; grid-template-columns: minmax(11rem,1.25fr) minmax(9rem,1fr) minmax(8rem,.8fr); align-items: center; width: 100%; gap: .7rem; border-top: 1px solid var(--border-subtle); padding: .65rem .85rem; text-align: left; }
 .evaluation-report-list>button:hover,.evaluation-report-list>button.is-selected { background: var(--accent-soft); }
-.evaluation-report-list>button.is-selected small { color: var(--text-secondary); }
+.evaluation-report-list>button.is-selected small,
+.evaluation-report-list>button:hover small,
+.evaluation-report-list>button:focus-visible small { color: var(--text-secondary); }
 .evaluation-report-list>button>span { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: .2rem; }
 .evaluation-report-list strong,.evaluation-report-list small { max-width: 100%; overflow-wrap: anywhere; }.evaluation-report-list strong { font-size: .78rem; }.evaluation-report-list small { color: var(--text-muted); font-size: .66rem; }
 .evaluation-state { display: inline-flex; width: fit-content; align-items: center; border: 1px solid var(--border-subtle); border-radius: 999px; padding: .16rem .45rem; background: var(--surface-muted); color: var(--text-muted); font-size: .64rem; font-weight: 800; text-transform: lowercase; }

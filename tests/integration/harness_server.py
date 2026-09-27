@@ -180,6 +180,7 @@ class FakeRetriever:
         section: str | None = None,
         candidate_pool: int = 10,
         preset: str = "hybrid_rerank",
+        chunk_filter: Callable[[dict[str, Any]], bool] | None = None,
     ) -> dict[str, Any]:
         """Return a deterministic provider-free trace with the production shape."""
         if preset not in {"bm25", "dense", "hybrid", "hybrid_rerank"}:
@@ -192,6 +193,7 @@ class FakeRetriever:
             chunk for chunk in self._all_chunks
             if (ticker is None or chunk["ticker"] == ticker)
             and (section is None or chunk["section"] == section)
+            and (chunk_filter is None or chunk_filter(chunk))
         ]
         scored = sorted(
             filtered,

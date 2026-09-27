@@ -95,6 +95,9 @@ EXPECTED_ROUTE_ORDER = [
     ("GET", "/evaluation/jobs/{job_id}/results"),
     ("POST", "/evaluation/jobs/{job_id}/cancel"),
     ("GET", "/evaluation/jobs/{job_id}/events"),
+    ("GET", "/analytics/summary"),
+    ("GET", "/analytics/timeseries"),
+    ("GET", "/logs"),
     ("POST", "/retrieval/inspect"),
     ("DELETE", "/session/{session_id}"),
     ("GET", "/session/{session_id}/history"),
@@ -204,6 +207,13 @@ def test_api007_pipeline_routes_have_coherent_transport_owners() -> None:
         if (next(iter(route.methods)), route.path) in expected
     }
     assert owners == {key: "src.api.routers.pipeline" for key in expected}
+
+
+def test_data005_telemetry_routes_have_coherent_transport_owners() -> None:
+    routes = {route.path: route for route in _application_routes()}
+
+    for path in ("/analytics/summary", "/analytics/timeseries", "/logs"):
+        assert routes[path].endpoint.__module__ == "src.api.routers.telemetry"
 
 
 def test_moved_openapi_operations_match_the_pre_extraction_contract() -> None:

@@ -305,12 +305,39 @@ FROZEN_EVALUATION_JOBS = Migration(
 )
 
 
+TERMINAL_TELEMETRY = Migration(
+    version=6,
+    name="terminal_telemetry_contract",
+    statements=(
+        "ALTER TABLE telemetry_events ADD COLUMN record_schema_version INTEGER NOT NULL DEFAULT 1 CHECK (record_schema_version = 1)",
+        "ALTER TABLE telemetry_events ADD COLUMN subsystem TEXT NOT NULL DEFAULT 'api' CHECK (subsystem IN ('api', 'query', 'search', 'retrieval'))",
+        "ALTER TABLE telemetry_events ADD COLUMN severity TEXT NOT NULL DEFAULT 'info' CHECK (severity IN ('info', 'warning', 'error'))",
+        "ALTER TABLE telemetry_events ADD COLUMN correlation_id TEXT",
+        "ALTER TABLE telemetry_events ADD COLUMN domain_id TEXT",
+        "ALTER TABLE telemetry_events ADD COLUMN error_code TEXT",
+        "ALTER TABLE telemetry_events ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'",
+        """
+        CREATE INDEX telemetry_query_idx
+        ON telemetry_events (occurred_at DESC, telemetry_id DESC)
+        """,
+        """
+        CREATE INDEX telemetry_filter_idx
+        ON telemetry_events (
+            subsystem, severity, event_name, status,
+            occurred_at DESC, telemetry_id DESC
+        )
+        """,
+    ),
+)
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     CORE_FOUNDATION,
     RESEARCH_DOMAINS,
     OPERATIONS_FOUNDATION,
     DURABLE_JOB_CONTRACT,
     FROZEN_EVALUATION_JOBS,
+    TERMINAL_TELEMETRY,
 )
 
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
@@ -337,6 +364,7 @@ EXPECTED_TABLES_BY_VERSION: dict[int, frozenset[str]] = {
     3: frozenset({"jobs", "job_steps", "job_events", "telemetry_events"}),
     4: frozenset(),
     5: frozenset({"evaluation_artifacts", "evaluation_attempts", "evaluation_case_results", "evaluation_reports"}),
+    6: frozenset(),
 }
 
 

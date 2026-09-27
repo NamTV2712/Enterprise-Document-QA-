@@ -5945,3 +5945,94 @@ closure commit recorded by the final task receipt.
 
 Exact Next Action: `DATA-005 — Terminal telemetry/logs`. EVAL-004 remains optional
 and was not started.
+
+## DATA-005-A — Terminal telemetry/log contract (2026-09-27)
+
+Status: RECORDED BEFORE IMPLEMENTATION. Recovery found HEAD `20cbc6f`, clean
+tracked/staged source, and the same 12 unrelated untracked paths. DATA-005 is
+the only authorized task; UI-012 and optional EVAL-004/Ragas remain out of
+scope.
+
+### Exact ownership and sources
+
+The master plan defines content-free, durable terminal events for later
+Analytics and bounded sanitized Logs, not a generic tracing platform. The
+persisted source set is the real terminal lifecycle of the allowlisted research
+operations `/query`, `/query/decomposed`, their two streaming variants,
+`/search`, and `/retrieval/inspect`. Header completion is not terminal for SSE;
+stream completion, safe error, timeout, disconnect/cancellation, or incomplete
+close owns that terminal boundary. Health/catalog/reader/operational read APIs
+are deliberately not noisy telemetry sources.
+
+DATA-004 remains the sole truth for Pipeline, Evaluation, and model-test jobs.
+DATA-005 projects terminal `jobs` rows at read time instead of double-writing a
+second terminal event. Thus `job_events` remain ordered lifecycle receipts,
+`activity_events` remain collection history, and `telemetry_events` contain
+only content-free request terminal facts. No frontend/browser telemetry,
+provider payload, prompt, document text, query text, session identity, stack
+trace, or free-form message enters the server store.
+
+### Record and truth semantics
+
+One immutable persisted record has a server telemetry ID, terminal UTC
+`occurred_at`, measured whole-operation `duration_ms` or null, event kind
+`request_terminal`, source subsystem, route template, capability,
+operational severity, domain outcome, safe correlation ID, optional safe error
+code, bounded allowlisted metadata, and 30-day `retention_until`. Stable job
+log identity derives from the canonical job ID/revision while the job ID stays
+a distinct domain/correlation field.
+
+Outcomes are `succeeded`, `rejected`, `failed`, `cancelled`, or `interrupted`.
+Severity is independent: success and client cancellation are informational;
+validation/rate-limit rejection and interruption are warnings; server/internal
+failure is error. A cancelled or interrupted job is not relabelled failed.
+`budget_exhausted` retains the stored failed job outcome but is warning severity
+rather than provider/model error. Unknown duration stays null; no cost, token,
+provider-health, confidence, resource, throughput, or quality value is inferred.
+
+Correlation accepts only a bounded opaque request ID; invalid client
+`X-Request-ID` values are replaced before persistence or response. Metadata is
+an allowlist of small typed operational fields, canonical JSON, and never an
+arbitrary text/blob sink. Absolute Windows/POSIX paths, credential-shaped keys
+or values, control/newline text, configured secrets, and oversized metadata
+fail before insert. Terminal insertion is immutable and idempotent by the
+server record ID. It is best-effort with respect to the completed request: a
+telemetry storage failure emits only a generic application warning and never
+rewrites the source outcome or fails the request. No exactly-once claim is made
+across process loss before that best-effort write.
+
+### Persistence, retention, query and access
+
+The existing v3 `telemetry_events` placeholder is the single persistence
+authority. A new deterministic transactional v6 migration will add the typed
+terminal columns and query indexes without rewriting historical migrations.
+Every repository read/write hides expired telemetry and prunes it at the next
+repository operation. Telemetry retention is fixed at 30 days; `/logs` is a
+7-day sanitized projection. Existing allowlisted settings remain future UI-012
+configuration facts, not mutable DATA-005 policy. Telemetry/job facts remain
+outside portable workspace export/import, matching existing job-event and
+activity exclusions.
+
+DATA-005 owns the master-plan read routes: protected `GET /analytics/summary`,
+`GET /analytics/timeseries`, and `GET /logs`. All reuse API-001 local bearer,
+loopback, exact Host/Origin checks. Public mode returns the existing fail-closed
+404 without creating/opening the private DB. Summary defines request outcome
+rates and duration percentile populations plus terminal job counts. Timeseries
+accepts only bounded range/interval/metric enums, returns deterministic UTC
+buckets, zero only for measured count populations, and null for a duration
+bucket with no samples. Logs accept only category/level/cursor/limit, merge
+terminal request rows with read-only terminal job projections, and order by
+`occurred_at DESC, record_id DESC` behind an opaque bounded cursor. No arbitrary
+sort/filter or unbounded history endpoint is added.
+
+### Planned files and gates
+
+Planned ownership: migration v6; `src/workspace/telemetry.py`; typed API models
+and a thin telemetry router; narrow application request/stream integration;
+route-contract updates; focused model/redaction/persistence/restart/query/access/
+projection tests; then DATA-001/002/004, Pipeline/Evaluation, full hermetic
+backend, import, 83-route, diff, artifact and secret gates. Frontend files and
+dependencies remain unchanged.
+
+Exact Next Action: DATA-005-B/C domain, sanitization, migration, repository and
+focused tests. Do not implement UI-012 or EVAL-004.

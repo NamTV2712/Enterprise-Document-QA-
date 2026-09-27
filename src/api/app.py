@@ -85,6 +85,7 @@ from src.api.routers.registries import create_registry_router
 from src.api.routers.collections import create_collections_router
 from src.api.routers.pipeline import create_pipeline_router
 from src.api.routers.workspace_transfer import create_workspace_transfer_router
+from src.api.routers.telemetry import create_telemetry_router
 from src.api.pipeline import PipelineService
 from src.evaluation.job_service import EvaluationJobService
 from src.api.registry import RegistryService
@@ -100,6 +101,12 @@ from src.api.schemas import (
 from src.workspace.collections import SQLiteCollectionRepository
 from src.workspace.database import WorkspaceDatabase
 from src.workspace.jobs import SQLiteJobRepository
+from src.workspace.telemetry import (
+    SQLiteTelemetryRepository,
+    TelemetryService,
+    safe_request_correlation_id,
+    telemetry_route_profile,
+)
 from src.workspace.transfer import WorkspaceTransferService
 
 import json as json_lib
@@ -158,6 +165,96 @@ def _pipeline_service() -> PipelineService:
 def _evaluation_job_service() -> EvaluationJobService:
     """Open private frozen evaluation jobs only after API-001 authorization."""
     return EvaluationJobService(SQLiteJobRepository.from_settings(settings))
+
+
+def _terminal_telemetry_service() -> TelemetryService:
+    """Open DATA-005 storage only after local access or a local terminal event."""
+    return TelemetryService(SQLiteTelemetryRepository.from_settings(settings))
+
+
+def _resolved_route_template(request: Request) -> str:
+    route = request.scope.get("route")
+    path = getattr(route, "path", None)
+    return path if isinstance(path, str) else "unmatched"
+
+
+def _terminal_http_semantics(status_code: int) -> tuple[str, str, str | None]:
+    if status_code < 400:
+        return "succeeded", "info", None
+    if status_code < 500:
+        return "rejected", "warning", f"http_{status_code}"
+    return "failed", "error", f"http_{status_code}"
+
+
+def _persist_terminal_request(
+    request: Request,
+    *,
+    route_template: str,
+    outcome: str,
+    severity: str,
+    error_code: str | None,
+    duration_ms: float | None,
+    status_code: int,
+    streaming: bool,
+) -> None:
+    """Best-effort immutable write; source request outcome never depends on it."""
+    profile = telemetry_route_profile(route_template)
+    if settings.workspace_mode != "local" or profile is None:
+        return
+    if getattr(request.state, "terminal_telemetry_recorded", False):
+        return
+    request.state.terminal_telemetry_recorded = True
+    subsystem, capability = profile
+    try:
+        _terminal_telemetry_service().repository.record_request_terminal(
+            telemetry_id=request.state.terminal_telemetry_id,
+            subsystem=subsystem,
+            route_template=route_template,
+            capability=capability,
+            severity=severity,
+            outcome=outcome,
+            correlation_id=request.state.request_id,
+            duration_ms=duration_ms,
+            error_code=error_code,
+            metadata={
+                "http_method": request.method,
+                "streaming": streaming,
+                "decomposed": route_template.startswith("/query/decomposed"),
+                "status_code": status_code,
+            },
+        )
+    except Exception:
+        # Never expose a persistence exception, configured path, or record value.
+        logger.warning("terminal_telemetry_write_failed")
+
+
+async def _persist_stream_terminal(
+    request: Request,
+    *,
+    route_template: str,
+    outcome: str,
+    severity: str,
+    error_code: str | None,
+) -> None:
+    started_at = getattr(request.state, "terminal_telemetry_started_at", None)
+    duration_ms = (
+        max(0.0, (time.perf_counter() - started_at) * 1000)
+        if isinstance(started_at, float)
+        else None
+    )
+    await run_in_threadpool(
+        functools.partial(
+            _persist_terminal_request,
+            request,
+            route_template=route_template,
+            outcome=outcome,
+            severity=severity,
+            error_code=error_code,
+            duration_ms=duration_ms,
+            status_code=200,
+            streaming=True,
+        )
+    )
 
 
 def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
@@ -696,28 +793,65 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 @app.middleware("http")
 async def record_request_telemetry(request: Request, call_next: Callable) -> Any:
     """Log request lifecycle metadata without recording question or session content."""
-    request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+    request_id = safe_request_correlation_id(
+        request.headers.get("x-request-id"),
+        settings,
+    )
     request.state.request_id = request_id
+    request.state.terminal_telemetry_id = f"tel_{uuid.uuid4().hex}"
+    request.state.terminal_telemetry_recorded = False
     started_at = time.perf_counter()
+    request.state.terminal_telemetry_started_at = started_at
     try:
         response = await call_next(request)
     except Exception:
         elapsed = time.perf_counter() - started_at
-        telemetry.record(request.url.path, 500, elapsed)
-        logger.exception(
+        route_template = _resolved_route_template(request)
+        telemetry.record(route_template, 500, elapsed)
+        await run_in_threadpool(
+            functools.partial(
+                _persist_terminal_request,
+                request,
+                route_template=route_template,
+                outcome="failed",
+                severity="error",
+                error_code="http_500",
+                duration_ms=elapsed * 1000,
+                status_code=500,
+                streaming=False,
+            )
+        )
+        logger.error(
             "request_failed request_id=%s route=%s elapsed_ms=%.2f",
             request_id,
-            request.url.path,
+            route_template,
             elapsed * 1000,
         )
         raise
     elapsed = time.perf_counter() - started_at
-    telemetry.record(request.url.path, response.status_code, elapsed)
+    route_template = _resolved_route_template(request)
+    telemetry.record(route_template, response.status_code, elapsed)
     response.headers["X-Request-ID"] = request_id
+    media_type = response.headers.get("content-type", "").partition(";")[0].strip().casefold()
+    if media_type != "text/event-stream":
+        outcome, severity, error_code = _terminal_http_semantics(response.status_code)
+        await run_in_threadpool(
+            functools.partial(
+                _persist_terminal_request,
+                request,
+                route_template=route_template,
+                outcome=outcome,
+                severity=severity,
+                error_code=error_code,
+                duration_ms=elapsed * 1000,
+                status_code=response.status_code,
+                streaming=False,
+            )
+        )
     logger.info(
         "request_complete request_id=%s route=%s status=%d elapsed_ms=%.2f",
         request_id,
-        request.url.path,
+        route_template,
         response.status_code,
         elapsed * 1000,
     )
@@ -796,7 +930,7 @@ async def query(request: Request, body: QueryRequest) -> QueryResponse:
     pipeline = _get_pipeline()
 
     if _contains_injection_pattern(body.question):
-        logger.warning("Potential injection attempt blocked: %s", body.question[:50])
+        logger.warning("potential_injection_blocked request_id=%s", request.state.request_id)
         raise HTTPException(
             status_code=400,
             detail="Your question contains patterns that cannot be processed. Please rephrase.",
@@ -867,7 +1001,7 @@ async def query_decomposed(
     telemetry.record_decomposed_request()
 
     if _contains_injection_pattern(body.question):
-        logger.warning("Potential injection attempt blocked: %s", body.question[:50])
+        logger.warning("potential_injection_blocked request_id=%s", request.state.request_id)
         raise HTTPException(
             status_code=400,
             detail="Your question contains patterns that cannot be processed. Please rephrase.",
@@ -938,7 +1072,7 @@ async def query_decomposed_stream(request: Request, request_body: QueryRequest):
     if decomposer is None:
         raise HTTPException(status_code=503, detail="The decomposer is not ready yet")
     if _contains_injection_pattern(request_body.question):
-        logger.warning("Potential injection attempt blocked: %s", request_body.question[:50])
+        logger.warning("potential_injection_blocked request_id=%s", request.state.request_id)
         raise HTTPException(
             status_code=400,
             detail="Your question contains patterns that cannot be processed. Please rephrase.",
@@ -1061,30 +1195,63 @@ async def query_decomposed_stream(request: Request, request_body: QueryRequest):
 
         threading.Thread(target=run_stream, daemon=True).start()
         started_at = time.monotonic()
-        while True:
-            if await request.is_disconnected():
-                cancel_event.set()
-                logger.info("Comparative streaming client disconnected; cancelling query")
-                break
-            elapsed = time.monotonic() - started_at
-            if elapsed >= DECOMPOSED_TIMEOUT_SECONDS:
-                cancel_event.set()
-                yield f"data: {json_lib.dumps({'type': 'error', 'data': DECOMPOSED_TIMEOUT_DETAIL})}\n\n"
-                break
-            try:
-                event = await asyncio.wait_for(
-                    queue.get(),
-                    timeout=min(STREAM_QUEUE_POLL_SECONDS, DECOMPOSED_TIMEOUT_SECONDS - elapsed),
-                )
-            except asyncio.TimeoutError:
-                continue
-            if event is None:
-                break
-            event_type, data = event
-            payload = json_lib.dumps({"type": event_type, "data": data}, ensure_ascii=False)
-            yield f"data: {payload}\n\n"
-            if event_type in {"done", "error"}:
-                break
+        terminal_outcome = "interrupted"
+        terminal_severity = "warning"
+        terminal_error_code: str | None = "stream_incomplete"
+        try:
+            while True:
+                if await request.is_disconnected():
+                    cancel_event.set()
+                    terminal_outcome = "cancelled"
+                    terminal_severity = "info"
+                    terminal_error_code = "client_disconnected"
+                    logger.info("Comparative streaming client disconnected; cancelling query")
+                    break
+                elapsed = time.monotonic() - started_at
+                if elapsed >= DECOMPOSED_TIMEOUT_SECONDS:
+                    cancel_event.set()
+                    terminal_outcome = "failed"
+                    terminal_severity = "error"
+                    terminal_error_code = "request_timeout"
+                    yield f"data: {json_lib.dumps({'type': 'error', 'data': DECOMPOSED_TIMEOUT_DETAIL})}\n\n"
+                    break
+                try:
+                    event = await asyncio.wait_for(
+                        queue.get(),
+                        timeout=min(STREAM_QUEUE_POLL_SECONDS, DECOMPOSED_TIMEOUT_SECONDS - elapsed),
+                    )
+                except asyncio.TimeoutError:
+                    continue
+                if event is None:
+                    break
+                event_type, data = event
+                payload = json_lib.dumps({"type": event_type, "data": data}, ensure_ascii=False)
+                yield f"data: {payload}\n\n"
+                if event_type == "done":
+                    terminal_outcome = "succeeded"
+                    terminal_severity = "info"
+                    terminal_error_code = None
+                    break
+                if event_type == "error":
+                    code = data.get("code") if isinstance(data, dict) else None
+                    terminal_outcome = "failed"
+                    terminal_severity = "warning" if code == "provider_quota" else "error"
+                    terminal_error_code = code if isinstance(code, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,63}", code) else "stream_error"
+                    break
+        except asyncio.CancelledError:
+            terminal_outcome = "cancelled"
+            terminal_severity = "info"
+            terminal_error_code = "client_disconnected"
+            raise
+        finally:
+            cancel_event.set()
+            await _persist_stream_terminal(
+                request,
+                route_template="/query/decomposed/stream",
+                outcome=terminal_outcome,
+                severity=terminal_severity,
+                error_code=terminal_error_code,
+            )
 
     return StreamingResponse(
         event_generator(),
@@ -1896,6 +2063,7 @@ app.include_router(
 app.include_router(create_pipeline_router(_pipeline_service))
 app.include_router(create_evaluation_router())
 app.include_router(create_evaluation_job_router(_evaluation_job_service))
+app.include_router(create_telemetry_router(_terminal_telemetry_service))
 
 @app.post("/retrieval/inspect")
 @limiter.limit("10/minute")
@@ -2019,9 +2187,7 @@ async def query_stream(request: Request, request_body: QueryRequest):
     telemetry.record_streaming_request()
 
     if _contains_injection_pattern(request_body.question):
-        logger.warning(
-            "Potential injection attempt blocked: %s", request_body.question[:50]
-        )
+        logger.warning("potential_injection_blocked request_id=%s", request.state.request_id)
         raise HTTPException(
             status_code=400,
             detail="Your question contains patterns that cannot be processed. Please rephrase.",
@@ -2093,17 +2259,26 @@ async def query_stream(request: Request, request_body: QueryRequest):
 
         threading.Thread(target=run_stream, daemon=True).start()
         started_at = time.monotonic()
+        terminal_outcome = "interrupted"
+        terminal_severity = "warning"
+        terminal_error_code: str | None = "stream_incomplete"
 
         try:
             while True:
                 if await request.is_disconnected():
                     cancel_event.set()
+                    terminal_outcome = "cancelled"
+                    terminal_severity = "info"
+                    terminal_error_code = "client_disconnected"
                     logger.info("Streaming client disconnected; cancelling query")
                     break
 
                 elapsed = time.monotonic() - started_at
                 if elapsed >= STREAM_QUERY_TIMEOUT_SECONDS:
                     cancel_event.set()
+                    terminal_outcome = "failed"
+                    terminal_severity = "error"
+                    terminal_error_code = "request_timeout"
                     timeout_payload = json_lib.dumps(
                         {"type": "error", "data": STREAM_TIMEOUT_DETAIL}
                     )
@@ -2132,16 +2307,39 @@ async def query_stream(request: Request, request_body: QueryRequest):
                     yield f"data: {payload}\n\n"
                 except Exception as e:
                     logger.exception("Failed to serialize streaming response event: %s", e)
+                    terminal_outcome = "failed"
+                    terminal_severity = "error"
+                    terminal_error_code = "serialization_error"
                     error_payload = json_lib.dumps(
                         {"type": "error", "data": INTERNAL_ERROR_DETAIL}
                     )
                     yield f"data: {error_payload}\n\n"
                     break
 
-                if event_type in {"done", "error"}:
+                if event_type == "done":
+                    terminal_outcome = "succeeded"
+                    terminal_severity = "info"
+                    terminal_error_code = None
                     break
+                if event_type == "error":
+                    terminal_outcome = "failed"
+                    terminal_severity = "error"
+                    terminal_error_code = "stream_error"
+                    break
+        except asyncio.CancelledError:
+            terminal_outcome = "cancelled"
+            terminal_severity = "info"
+            terminal_error_code = "client_disconnected"
+            raise
         finally:
             cancel_event.set()
+            await _persist_stream_terminal(
+                request,
+                route_template="/query/stream",
+                outcome=terminal_outcome,
+                severity=terminal_severity,
+                error_code=terminal_error_code,
+            )
 
     return StreamingResponse(
         event_generator(),

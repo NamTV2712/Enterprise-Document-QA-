@@ -28,6 +28,13 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 
 ## Documentation
 
+Nine-reference visual validation and bounded accessibility repairs are recorded
+in [`docs/TEST_003_VISUAL_RECEIPT.md`](docs/TEST_003_VISUAL_RECEIPT.md).
+All nine native references were reviewed in Chromium/Firefox; dark/light and
+English/Vietnamese responsive checks passed. Source cards never invent page
+locations for unlocated excerpts. Native browser zoom remains a manual,
+unverified check; this receipt is not blanket accessibility certification.
+
 Cross-layer contract validation and its bounded repairs are recorded in
 [`docs/TEST_002_CONTRACT_RECEIPT.md`](docs/TEST_002_CONTRACT_RECEIPT.md).
 Search snippet ranges are half-open Unicode code-point offsets into the original

@@ -1,5 +1,52 @@
 # Current Planning Status
 
+## TEST-003 complete — Nine-reference visual validation (2026-09-27)
+
+TEST-003-A through H are COMPLETE. [Authoritative matrix and measured receipt](TEST_003_VISUAL_RECEIPT.md)
+accounts for Collections, Documents, Evaluation, Models, Pipeline, Chat,
+Research, Retrieval and Search: eight1586×992 references and Chat1254×856.
+All nine native baselines preceded production repairs; final native Chromium
+and Firefox images and side-by-side comparisons were inspected. Truthful data,
+established readable pane minimums and accessible density explain documented
+B/D/E deviations; no fake screenshot facts or tenth Reranker reference.
+
+Implementation: `acd9487` (bounded visual/accessibility and source-fact repairs).
+Search dark button2.27→4.71:1 (rest/hover/keyboard-focus); BM25 label4.32→8.25.
+Shared connection/selected-text/light-subtle/state roles pass affected consumers.
+Splitter controls are independent; phone targets44px/input text16px, useful
+reader content and existing Back recovery are protected. Guessed source pages
+and missing-section Risk Factors fallback are removed, without a DTO/API change.
+
+Actual final gates: TypeScript PASS; Vitest90 files/790 passed; production build
+PASS (2074 modules, existing506.91kB aggregate warning). Browser300/300 passed:
+90 visual,204 focused domain/route/shell/contracts,6 layout;150 each engine.
+The visual campaign measures648 populated responsive combinations (nine widths,
+dark/light × EN/VI × both engines), exact body/root overflow0;162 whole-page
+axe A/AA analyses report0 violations. Keyboard, mobile and manual image review
+supplement axe; this is not blanket WCAG certification. Native zoom125/150/200
+is explicitly external manual / UNVERIFIED, not simulated through viewports.
+
+Backend unchanged: historical TEST-0021384/188 warnings/83 routes NOT rerun.
+Original12 unrelated untracked paths preserved. Selective source/test/textual
+documentation commits only; no screenshot/report/trace/dist/secret/runtime DB/
+canonical data artifact. Working/staged diff checks PASS. No deterministic
+regression remains; interrupted sweeps are UNKNOWN and excluded. Real staged
+Collections/model-test bearer integration and build/backend warnings remain.
+
+Graph verified at master-plan TEST-004 row: depends on TEST-002 and TEST-003;
+UI-013 follows it. Exact Next Action = TEST-004 — Full product validation.
+STOP: TEST-004 has not started. Earlier TEST-003-A and TEST-002 entries below
+retain their historical meaning and are superseded by this closure.
+
+## TEST-003-A — Native reference plan (2026-09-27)
+
+IN PROGRESS. [Plan and authoritative matrix](TEST_003_VISUAL_RECEIPT.md) records
+the exact nine PNGs, verified native dimensions, canonical routes/selected states,
+image geometry/type/surfaces, semantic ownership and comparison tolerance policy.
+All nine images inspected; production unchanged. Native baseline captures precede
+repairs. Both browsers, responsive/theme/locale/accessibility and honest external
+native-zoom limitation are required. No TEST-004 or new product capability.
+
 ## TEST-002 complete — Cross-layer contracts (2026-09-27)
 
 TEST-002-A through G are COMPLETE. The earlier in-progress plans/reproduction

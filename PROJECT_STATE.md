@@ -1,5 +1,62 @@
 # Project State
 
+## TEST-003 complete — Nine-reference visual validation (2026-09-27)
+
+TEST-003-A through H COMPLETE. [Measured visual receipt](docs/TEST_003_VISUAL_RECEIPT.md)
+maps all nine authoritative PNGs to native dimensions/routes/selected fixture
+states. All-nine baseline-before-repair and final native Chromium/Firefox plus
+side-by-side review are recorded. Deliberate closeness retains truthful data,
+six native metrics, five ingestion stages, configured/loaded/unknown model facts,
+readable evidence pane minimums and real submitted retrieval controls instead
+of forcing unsupported screenshot values or dense inaccessible geometry.
+Reranker received affected-consumer smoke only, not a tenth reference.
+
+Implementation `acd9487`: verified semantic colour corrections, independent
+splitter handle/menu, mobile44px controls/16px input text, focused keyboard
+scroll for Pipeline stages and useful phone reader with existing Back recovery.
+Source cards no longer fabricate page numbers by index or Risk Factors for an
+unlocated section; absent section is explicit. No new capability, dependency,
+API/DTO/backend, auth, request identity or persistence change. The rag-ui-ux
+skill guided rendered/semantic/mobile review; document-provenance rules required
+removing unsupported source location rather than manufacturing metadata.
+
+Known dark Search findings resolved: button2.27→4.71:1 in rest/hover/keyboard
+focus, BM25 label4.32→8.25; shared connection subtitle4.46→7.60. Only one
+light token value changed (--text-subtle); all nine themes/locales and existing
+operational/Reranker consumers were revalidated. Native geometry otherwise
+retains the documented B/D/E differences; no exact pixel-identity claim.
+
+Actual final validation: TypeScript PASS, Vitest90 files/790 passed/0 failed
+(15.51s), build PASS (2074 modules,3.15s; index506.91kB warning remains).
+Production browser90 visual +204 focused domains/route/shell/contracts +6
+layout =300 passed/0 failed,150 per engine. Visual gate:18 native checks,
+648 populated responsive combinations, dark/light × EN/VI; body/root overflow0.
+Whole-page axe162 analyses,0 reported A/AA violations, supplemented by keyboard,
+mobile targets, screenshot review and reader clipping/recovery. An earlier
+bounding-box assertion missed the clipped phone reader; manual inspection led
+to a strengthened ancestor-clipping test, not weakened acceptance. Interrupted
+preview/animation diagnostic runs are UNKNOWN, excluded from final evidence.
+Never overwrite the preview dist with a parallel build; the final hermetic
+harness blocks external origins/fonts and uses existing fixture APIs only.
+
+Native browser zoom125/150/200 is external manual / UNVERIFIED (no supported
+native app UI automation), explicitly allowed as a limitation by this task;
+responsive viewport checks are not native zoom proof. This is not blanket WCAG,
+security, live-provider or final-product certification. Staged real Collections/
+model-test bearer integration, aggregate build warning and historical backend
+warnings remain. Backend TEST-002 baseline1384/188 warnings/83 routes unchanged,
+NOT rerun here. No data regeneration, provider/corpus run or benchmark promotion.
+
+Original12 unrelated untracked paths preserved; tracked/staged task closure is
+clean. Source/tests and textual receipt/checkpoint/README/journal only were
+selectively committed; no generated screenshots/traces/reports/dist, secrets,
+runtime DB, caches or canonical data. No deleted files or deterministic final
+regressions. Closure documentation is a separate commit from implementation.
+
+Actual master-plan graph verified: TEST-004 depends on TEST-002 and TEST-003,
+then UI-013. Exact Next Action = TEST-004 — Full product validation.
+STOP: TEST-004 has not started. Earlier journal entries remain historical.
+
 ## TEST-002 complete — Cross-layer contracts (2026-09-27)
 
 TEST-002-A through G are COMPLETE. [Detailed receipt](docs/TEST_002_CONTRACT_RECEIPT.md)

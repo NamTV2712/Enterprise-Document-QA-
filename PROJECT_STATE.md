@@ -1,5 +1,38 @@
 # Project State
 
+## Current engineering audit and repairs (2026-09-27)
+
+This audit started at `cbfdfda`, with 19 tracked dirty entries, 21 untracked
+entries and no staged changes. API-006 is already complete. UI-012 work was
+already in progress in the worktree and remains uncommitted; this audit neither
+completes nor commits it. Historical completion receipts below are unchanged.
+
+Four independently reproduced defects are repaired in scoped commits:
+
+- AUD-08 / P1: public system metadata disclosed raw local model-cache paths and
+  unsafe build values. `762bda6` reuses the registry identifier allowlist;
+  rejected model values become null and unsafe build values are omitted.
+- AUD-05 / P2: separate database instances could apply the same pending
+  migration snapshot. `da2a2a5` holds the existing per-path reentrant lock
+  across the complete initialization operation.
+- AUD-06 / P2: old Search page success/error could overwrite a newer search;
+  old paging could start during submission. `fbf433b` invalidates its epoch,
+  checks abort, and suspends paging until the new snapshot settles.
+- AUD-07 / P2: Stop discarded answer tokens awaiting the render flush.
+  `ec0ef58` preserves the owning message's buffer before stopping and clears it.
+
+Actual final gates: frontend 85 files / 688 tests, TypeScript and production
+build PASS; affected backend slices 151 and 103 passed; paired-browser Search
+and streaming gate 30/30. Final full backend result is recorded in the authored
+[audit report](docs/ENGINEERING_AUDIT_2026-09-27.md).
+No P0 was verified; these checks are not exhaustive security assurance.
+
+Existing UI-012 and unrelated dirty work remain preserved. Collections bearer
+integration remains staged; the known Unicode highlight defect remains P3;
+migration serialization is in-process, not a multi-process migration protocol.
+Next action: return to UI-012 validation/documentation/closure under its own
+scope, then the graph's cross-layer/visual gates. Do not restart API-006.
+
 ## DATA-005 terminal telemetry/logs (2026-09-27)
 
 Implementation commit `2fd839a` (`feat(data): add terminal telemetry

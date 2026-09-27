@@ -1,5 +1,9 @@
 # Enterprise Document QA
 
+Public `/system/info` exposes bounded model/build identifiers, not local model
+paths or credential-shaped configuration values. Unsafe model identifiers are
+reported as null; unsafe build identifiers are omitted.
+
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?style=for-the-badge&logo=fastapi&logoColor=white)
 ![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB-DC244C?style=for-the-badge)

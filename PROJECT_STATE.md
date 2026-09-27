@@ -1,5 +1,71 @@
 # Project State
 
+## DATA-005 terminal telemetry/logs (2026-09-27)
+
+Implementation commit `2fd839a` (`feat(data): add terminal telemetry
+foundation`) adds one private, content-free operational substrate over the
+existing DATA-001 workspace SQLite database. Deterministic migration v6 extends
+the v3 `telemetry_events` placeholder with schema version, subsystem, severity,
+safe correlation/domain IDs, error code, canonical allowlisted metadata, and
+query indexes. There is no second database, JSON-lines sink, browser writer,
+external observability dependency, or frontend change.
+
+Persisted `request_terminal` records cover only `/query`,
+`/query/decomposed`, both query streams, `/search`, and
+`/retrieval/inspect`. They preserve a server record ID, terminal UTC time,
+route template, capability, independent outcome/severity, safe request
+correlation, measured whole-operation duration or null, and small typed
+metadata. Streaming writes occur at done, error, timeout, disconnect/cancel, or
+incomplete close rather than header return. Writes are immutable/idempotent by
+record ID and best-effort relative to the source response; storage failure
+cannot rewrite or fail the operation, so cross-process exactly-once is not
+claimed.
+
+DATA-004 remains the sole authority for Pipeline, Evaluation, and model-test
+jobs. DATA-005 projects terminal job rows at read time instead of duplicating
+job events. Succeeded, failed, cancelled, interrupted, and
+`budget_exhausted` remain distinct; budget exhaustion is warning severity, not
+provider/model error. Job/projected durations remain null because DATA-004 does
+not own a separate measured duration. Collection activity, ordered job events,
+request telemetry, and process logging remain separate domains. Telemetry and
+job/log history are excluded from portable workspace transfer.
+
+Protected `GET /analytics/summary`, `GET /analytics/timeseries`, and
+`GET /logs` reuse API-001 bearer/loopback/exact Host/Origin access. Public mode
+returns 404 without opening/creating SQLite. Summary rates expose exact
+numerators/denominators and known/unknown duration populations. Timeseries uses
+closed range/interval/metric enums, at most 720 UTC buckets, count zero only
+where defined, and null for duration buckets without samples. Logs are a
+seven-day, SQL-bounded, deterministic `occurred_at DESC, record_id DESC`
+cursor view; telemetry itself retains 30 days and is pruned on repository use.
+
+Ingress is allowlisted rather than blob-redacted after persistence. Credential
+keys/values and bearer/API-key-shaped strings, configured secrets, absolute
+Windows/POSIX paths, control/newline input, unsafe request IDs, unsupported or
+oversized metadata, provider bodies, stack traces, and research content fail
+before insert. Unsafe `X-Request-ID` is replaced before persistence/response;
+the legacy opt-in in-memory metrics snapshot now uses route templates rather
+than dynamic private IDs. No cost, token count, provider-health, resource,
+throughput, confidence, or quality value is fabricated.
+
+Focused DATA-005 domain/API coverage is **37/37**. DATA-001/002/004, access,
+Pipeline, Evaluation jobs, router and legacy API regressions passed **256/256**.
+The full hermetic backend passed **1217 tests, 0 failures, 188 warnings** versus
+1179/0/188 before DATA-005. Compile/import passed; the collision-free route
+inventory is **83** (80 + the three protected reads). `git diff --check` passed.
+No frontend file, dependency, provider, canonical data, runtime database/log,
+or optional Ragas code changed.
+
+Known limits: terminal persistence is deliberately best-effort after the source
+operation; fixed 30-day telemetry and seven-day log windows are not yet mutable
+settings; aggregates scan only bounded time ranges but do not implement an
+external metrics engine; conventional process logs are not ingested; and
+UI-012 has not yet connected the current browser-local Analytics compatibility
+view to these private APIs.
+
+Exact next graph task: `UI-012 — Analytics / Logs / Settings`. Optional
+EVAL-004/Ragas remains off the required spine and was not started.
+
 ## UI-011 native Evaluation workspace (2026-09-27)
 
 Implementation commit `ae81384` (`feat(ui): build native evaluation workspace`)

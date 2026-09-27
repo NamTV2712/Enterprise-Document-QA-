@@ -42,6 +42,14 @@ models or stores. Query/SSE, retrieval inspection, and document/reader/PDF
 routes remain at the application boundary while their compatibility-sensitive
 transport and identity flows are still coupled there.
 
+`src/workspace/telemetry.py` is the DATA-005 operational authority over the
+existing workspace SQLite database. It stores immutable, content-free terminal
+facts for a small allowlist of research operations and projects terminal
+DATA-004 jobs directly from canonical job rows. `src/api/routers/telemetry.py`
+owns the protected summary, timeseries, and cursor-log reads. Job events,
+collection activity, terminal request telemetry, and conventional process logs
+remain distinct concepts; no hidden JSON-lines or second database exists.
+
 `src/api/registry.py` is the provider-free registry domain boundary. It derives
 the three stable model roles from existing settings and already-loaded runtime
 objects, without constructing or invoking them. Configuration, load, credential
@@ -225,6 +233,9 @@ cancellation remains best effort.
 | Semantic response cache | Process memory | Lost on restart |
 | Conversation sessions | Process memory with TTL | Lost on restart |
 | Rate-limit counters | Process memory | Lost on restart |
+| Workspace records and durable jobs | Local workspace SQLite | Persistent in explicit local mode; excluded from public mode |
+| Terminal request telemetry | Same local workspace SQLite | Immutable, 30-day retention; portable backup excludes it |
+| Sanitized logs | Read projection over telemetry and terminal jobs | Seven-day query window; no second log store |
 
 Conversation history retains a bounded number of turns. The history API and LLM
 rewrite path both use complete stored messages; presentation does not truncate
@@ -232,6 +243,40 @@ assistant answers.
 
 Stateless cache entries are filter-aware so responses are not reused across
 incompatible ticker or section constraints.
+
+### Terminal telemetry and operational logs
+
+The terminal request population is intentionally smaller than all HTTP traffic:
+standard/decomposed query, both query streams, discovery Search, and retrieval
+inspection. Non-streaming duration uses the completed application response.
+Streaming duration closes only on the actual terminal stream event, timeout,
+disconnect/cancellation, or incomplete producer close; HTTP headers are not a
+latency endpoint. Unknown timing remains null.
+
+Each record has a server identity, UTC terminal timestamp, route template,
+subsystem/capability, independent severity and outcome, safe request
+correlation, optional allowlisted error code, and small typed metadata. The
+ingress rejects credential-shaped values, configured secrets, absolute paths,
+control/newline input, unsupported fields, and oversized data before SQLite.
+Client request IDs are accepted only as bounded opaque values; unsafe values
+are replaced and never echoed. Legacy in-memory `/metrics` also aggregates by
+route template so dynamic private identifiers do not enter its snapshot.
+
+Telemetry writes are idempotent and immutable by server record ID, but are
+best-effort relative to the already completed request. A write failure cannot
+rewrite or fail that request, and there is no exactly-once claim across process
+loss before the write. DATA-004 terminal jobs are not copied: protected reads
+derive `job_terminal` records from the canonical job state/revision. Cancelled
+and interrupted remain distinct outcomes; `budget_exhausted` remains the stored
+job failure condition but uses warning rather than provider-error severity.
+
+All operational reads reuse the API-001 local-only bearer/loopback/Host/Origin
+boundary. Public mode returns the fail-closed private-workspace response without
+opening SQLite. Summary populations define their numerators and denominators;
+timeseries selectors and UTC bucket counts are bounded; logs use deterministic
+`occurred_at DESC, record_id DESC` cursor pages. No query/document content,
+free-form exception, provider body, stack trace, cost, token count, resource
+measurement, or quality estimate is stored or derived.
 
 ## API Reliability And Security
 

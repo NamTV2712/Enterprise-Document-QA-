@@ -6036,3 +6036,105 @@ dependencies remain unchanged.
 
 Exact Next Action: DATA-005-B/C domain, sanitization, migration, repository and
 focused tests. Do not implement UI-012 or EVAL-004.
+
+## DATA-005-B/C — Structured records, sanitization, migration and query (2026-09-27)
+
+Implementation commit `2fd839a` (`feat(data): add terminal telemetry
+foundation`) adds `SQLiteTelemetryRepository` and `TelemetryService` over the
+existing workspace database. Migration v6 is additive, checksum-tracked and
+transactional; it does not rewrite v1-v5. A v5 database upgrades in place and
+legacy placeholder rows remain outside the typed `request_terminal` population.
+Fresh/reopened databases report schema 6.
+
+The immutable request record contains only server identity, terminal UTC time,
+allowlisted subsystem/route/capability, separate severity/outcome, safe
+correlation, optional safe code, measured duration or null, and canonical small
+metadata. Zero duration remains zero and unknown remains null. Credential-shaped
+or configured-secret values, Authorization/cookie-style fields, Windows/POSIX
+absolute paths, controls/newlines, unsupported fields and oversized metadata
+are rejected before insert. An unsafe client request ID is replaced before it
+can be echoed or stored. Synthetic adversarial values are tests, not credentials.
+
+Telemetry retention is 30 days; expired rows are hidden and pruned at the next
+repository operation. Logs expose seven days without creating a second table.
+Request log pages and terminal-job candidates are independently bounded in SQL,
+then merged by `occurred_at DESC, record_id DESC`; the opaque cursor preserves
+that exact secondary identity. Summary and timeseries accept only 24h/7d/30d,
+hour/day and five named metrics, with a maximum 720 buckets. Empty percentile
+populations are null; count populations may be zero.
+
+## DATA-005-D — Terminal source integration and duplication semantics (2026-09-27)
+
+The request middleware now replaces unsafe request IDs and records route
+templates rather than actual dynamic paths. Non-streaming allowlisted research
+operations persist after the real response is formed. Both query generators own
+their terminal record in `finally`: done, safe error, timeout,
+disconnect/cancellation and incomplete close are distinct, and SSE header return
+does not stop the clock. Client cancellation is informational, validation and
+rate-limit rejection warning, internal/server failure error. No raw question or
+provider body enters the record.
+
+One server telemetry ID makes repeated identical insertion idempotent and a
+conflicting stale insertion fails without rewriting history. Persistence is
+best-effort after the source outcome; injected storage failure returns the
+unchanged real response and logs only a generic warning. A process loss before
+that write can omit a record, so no exactly-once claim is made.
+
+Pipeline/Evaluation/model-test terminal facts are projected from DATA-004
+`jobs`; no telemetry double-write occurs. The projection preserves canonical
+job ID/revision/state/failure code. Succeeded, cancelled, interrupted, generic
+failed and `budget_exhausted` cases are covered. Cancelled remains info,
+interrupted warning, generic failure error and budget exhaustion warning;
+unmeasured job duration remains null. Restart/reopen and transfer tests prove
+records survive locally while telemetry/jobs/job events remain absent from
+portable backup.
+
+## DATA-005-E — Protected HTTP reads and access boundary (2026-09-27)
+
+The thin telemetry router adds exactly three local-workspace reads:
+
+- `GET /analytics/summary?range=24h|7d|30d`
+- `GET /analytics/timeseries?range=...&interval=hour|day&metric=...`
+- `GET /logs?category=request|job&level=info|warning|error&cursor=...&limit=...`
+
+All reuse API-001 local bearer, loopback socket, exact Host and optional exact
+Origin checks. Public mode and unauthorized access fail before service creation;
+public mode creates no DB and reveals no telemetry existence. Invalid selectors,
+cursors and bounds return 422. Response models are strict. The final route
+inventory is 83 unique method/path pairs and 83 unique names, with all three
+owned by `src.api.routers.telemetry`.
+
+## DATA-005-F — Validation, audit and closure (2026-09-27)
+
+Actual gates:
+
+- DATA-005 domain/persistence/projection/query: **24/24**.
+- DATA-005 HTTP/access/lifecycle: **13/13**; the focused legacy route-template
+  metrics check also passed, for **37/37** new DATA-005 tests overall.
+- DATA-001/002/004, access, Pipeline, Evaluation jobs, router and legacy API
+  regression slice: **256/256**, five pre-existing warning instances.
+- Full hermetic backend: **1217 passed, 0 failed, 188 warnings**. Baseline was
+  1179/0/188, so warnings did not grow.
+- Compile/import PASS. Route inventory **83**, collision/name checks PASS.
+  `git diff --check` PASS.
+
+Frontend files/tests/build were not touched or rerun. No provider call, Ragas,
+external telemetry dependency, canonical data mutation, runtime DB/WAL/SHM,
+runtime log, provider dump, screenshot, report, cache, scanner state, or real
+credential is part of the implementation commit. The expected synthetic secret,
+path and control-shaped strings exist only in hermetic redaction tests. The same
+12 unrelated pre-existing untracked paths remain preserved.
+
+Known limits are explicit: best-effort request-terminal persistence is not
+cross-process exactly-once; retention is fixed until UI-012 owns the supported
+settings; process logger output is not ingested; there is no cost/token/resource/
+provider-health/quality aggregation; and UI-012 has not yet replaced the
+browser-local Analytics compatibility surface.
+
+README, architecture, project state and this checkpoint now record the
+implemented authority, sources, access, retention, query contract, tests and
+limitations. DATA-005 is complete after the documentation closure commit
+recorded by the final task receipt.
+
+Exact Next Action: `UI-012 — Analytics / Logs / Settings`. Optional EVAL-004
+remains skipped; do not start either task during DATA-005 closure.

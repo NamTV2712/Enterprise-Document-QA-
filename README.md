@@ -226,6 +226,9 @@ http://localhost:8000/docs
 | `GET` | `/evaluation/jobs/{job_id}/results` | Protected private case inputs/results and native report aggregates |
 | `POST` | `/evaluation/jobs/{job_id}/cancel` | Execution-gated cancellation request requiring the current `If-Match` revision |
 | `GET` | `/evaluation/jobs/{job_id}/events` | Protected ordered SSE replay resumable with `Last-Event-ID` |
+| `GET` | `/analytics/summary` | Protected 24-hour/7-day/30-day terminal request populations, exact rates/denominators, measured-duration percentiles, and terminal job counts |
+| `GET` | `/analytics/timeseries` | Protected bounded UTC buckets for allowlisted request/job count or measured-duration metrics |
+| `GET` | `/logs` | Protected cursor-paginated seven-day projection of sanitized terminal request and durable-job facts |
 | `GET` | `/cache/stats` | Semantic cache metrics |
 | `POST` | `/cache/clear` | Clear semantic cache when explicitly enabled |
 | `POST` | `/cache/test` | Rate-limited query embedding comparison |
@@ -666,10 +669,11 @@ The Evaluation view reads validated publications through the allowlisted
 denominators, bindings, comparison eligibility, grouped trend observations,
 and the four native failure categories. Legacy publications are metadata-only
 compatibility records. The workspace does not export or render stored question,
-answer, ground-truth, or evidence text. The Analytics view stores only local
-operational metadata (event kind, language, ticker, duration, and timestamp).
-Its export never includes questions, answers, source text, session IDs, or
-secrets.
+answer, ground-truth, or evidence text. Until UI-012, the existing Analytics
+page remains its browser-local compatibility surface. DATA-005 separately
+provides protected server-side terminal analytics and sanitized logs; no server
+event contains a question, answer, source text, session ID, provider response,
+credential, or arbitrary message.
 
 The bilingual campaign is registered before execution. Its manifest freezes
 five intents in English and Vietnamese, the canonical artifact hash, and a
@@ -1378,8 +1382,28 @@ cancellation acknowledgement, and restart reconciliation that marks only
 active work interrupted. Raw idempotency keys, credentials, absolute machine
 paths, and executable payload formats are not persisted. Job history and
 artifact references remain private/local and are excluded from portable
-workspace backups. This persistence layer does not expose job HTTP routes or
-run pipeline/evaluation work; API-007 supplies the next adapter boundary.
+workspace backups. Pipeline and Evaluation expose their own protected job
+routes; persistence itself still never runs provider or ingestion work.
+
+DATA-005 uses the existing `telemetry_events` table as the only durable
+terminal-request authority. Schema migration v6 adds typed subsystem, severity,
+outcome/correlation, safe error-code, and bounded allowlisted metadata fields.
+Only `/query`, `/query/decomposed`, their streaming variants, `/search`, and
+`/retrieval/inspect` create terminal records. JSON responses are measured at
+completion; SSE is measured only at done, safe error, timeout, disconnect, or
+incomplete close—not when headers open. A storage failure is best-effort and
+cannot change the source response. Records retain 30 days; `/logs` exposes only
+the most recent seven days. DATA-004 terminal jobs are projected directly from
+canonical job rows, so job events are never duplicated into telemetry.
+
+The three operational read routes require the same local bearer, loopback,
+Host, and Origin boundary as other private workspace reads. Public mode neither
+opens the database nor reveals whether telemetry exists. Analytics ranges,
+intervals, metrics, log category/level, cursor, and page size are closed and
+bounded. Empty duration populations use `null`; count zero remains zero. No
+cost, token count, provider health, resource usage, confidence, or quality
+metric is inferred. Telemetry and job/log history remain excluded from portable
+workspace backup and restore.
 
 `PDF_GENERATION_ENABLED` controls the optional provenance-bound PDF
 representation. Its artifacts remain under the git-ignored `data/` tree;

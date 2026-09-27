@@ -9,6 +9,7 @@ import {
   evidenceReferenceFromSource,
   excerptForSource,
   isWorkspaceAvailabilityFailure,
+  listUnavailableFailure,
   memberCountLabel,
   snapshotFromSource,
 } from "../../lib/collectionModel";
@@ -70,7 +71,9 @@ export function CollectionTargetDialog({
         if (epoch.current !== current) return;
         if ((error as { name?: string })?.name === "AbortError") return;
         setCollections([]);
-        setFailure(describeCollectionFailure(error, vi));
+        setFailure((error as { status?: number })?.status === 404
+          ? listUnavailableFailure(vi)
+          : describeCollectionFailure(error, vi));
       } finally {
         if (epoch.current === current) setLoading(false);
       }

@@ -6,6 +6,7 @@
 
 import { createHash } from "node:crypto";
 import { Page, Route, expect } from "@playwright/test";
+import { nativeDefinitions } from "../src/test/evaluationFixtures";
 
 export const API_ORIGIN = "http://127.0.0.1:8000";
 
@@ -1806,6 +1807,30 @@ export async function installApiFixtures(
         status: 200,
         headers: { ...CORS_HEADERS, "content-type": "application/json" },
         body: JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }),
+      });
+      return;
+    }
+
+    if (path === "/evaluation/metrics" && method === "GET") {
+      await route.fulfill({
+        status: 200,
+        headers: { ...CORS_HEADERS, "content-type": "application/json" },
+        body: JSON.stringify({
+          protocol: "native-evaluation",
+          protocol_version: 1,
+          capabilities: { provider_free: true, computes_judge_scores: false, requires_bound_judge_scores: true },
+          items: nativeDefinitions(),
+          total: 6,
+        }),
+      });
+      return;
+    }
+
+    if (path.startsWith("/evaluation/runs/") && method === "GET") {
+      await route.fulfill({
+        status: 404,
+        headers: { ...CORS_HEADERS, "content-type": "application/json" },
+        body: JSON.stringify({ detail: "Published evaluation was not found" }),
       });
       return;
     }

@@ -2556,7 +2556,12 @@ function AppWorkspace() {
                 onOpenEvaluation={() => handleSelectWorkspaceView("evaluation")}
               />
                 ) : activeView === "evaluation" ? (
-              <EvaluationPanel />
+              <EvaluationPanel
+                selectedId={resolvedRoute.id === "evaluation-run" ? resolvedRoute.params.runId ?? null : null}
+                selectedSource={new URLSearchParams(location.search).get("source") === "job" ? "job" : "report"}
+                onSelectReport={(runId) => navigate(`/evaluation/runs/${encodeURIComponent(runId)}`)}
+                onSelectJob={(jobId) => navigate(`/evaluation/runs/${encodeURIComponent(jobId)}?source=job`)}
+              />
                 ) : activeView === "analytics" ? (
               <AnalyticsPanel />
                 ) : activeView === "overview" ? (

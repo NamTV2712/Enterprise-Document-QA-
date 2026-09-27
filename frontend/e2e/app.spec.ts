@@ -492,7 +492,7 @@ test("citation deep links survive reload and Markdown export keeps evidence anch
   expect(markdown).toContain("<a id=\"evidence-");
 });
 
-test("live evaluation fixture renders provenance and JSON/CSV exports", async ({ page }) => {
+test("legacy evaluation fixture stays metadata-only and does not expose stored case text", async ({ page }) => {
   await installApiFixtures(page);
   const summary = {
     run_id: "live-fixture-v1",
@@ -527,13 +527,11 @@ test("live evaluation fixture renders provenance and JSON/CSV exports", async ({
   await page.goto("/?view=evaluation");
 
   await expect(page.getByText("Live fixture evaluation").first()).toBeVisible();
-  await expect(page.getByText(/Fixture only; not an official benchmark/)).toBeVisible();
-  const jsonDownload = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export evaluation JSON" }).click();
-  expect((await jsonDownload).suggestedFilename()).toBe("live-fixture-v1.json");
-  const csvDownload = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export evaluation CSV" }).click();
-  expect((await csvDownload).suggestedFilename()).toBe("live-fixture-v1.csv");
+  await page.getByRole("button", { name: /Live fixture evaluation/ }).click();
+  await expect(page.getByText(/legacy compatibility report is shown as safe metadata only/i)).toBeVisible();
+  expect(await page.locator("body").innerText()).not.toContain("What was Apple's total net sales?");
+  expect(await page.locator("body").innerText()).not.toContain("Apple reported $391,035 million");
+  await expect(page.getByRole("button", { name: /Export evaluation/i })).toHaveCount(0);
 });
 
 test.describe("visual matrix", () => {

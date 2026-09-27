@@ -77,6 +77,8 @@ export function useResearchSession({ updateMessages }: UseResearchSessionOptions
     const controller = requestAbortRef.current;
     if (!controller) return;
 
+    const buffer = streamingBufferRef.current;
+    streamingBufferRef.current = null;
     requestAbortRef.current = null;
     controller.abort();
     setIsLoading(false);
@@ -85,7 +87,7 @@ export function useResearchSession({ updateMessages }: UseResearchSessionOptions
         message.isStreaming
           ? {
               ...message,
-              text: message.text || "Generation stopped.",
+              text: (message.id === buffer?.messageId ? buffer.text || message.text : message.text) || "Generation stopped.",
               isStreaming: false,
               status: "stopped" as const,
             }

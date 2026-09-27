@@ -1,5 +1,46 @@
 # Project State
 
+## TEST-002 complete — Cross-layer contracts (2026-09-27)
+
+TEST-002-A through G are COMPLETE. [Detailed receipt](docs/TEST_002_CONTRACT_RECEIPT.md)
+records authority ownership for Access, Documents/Search/Retrieval, Collections,
+Models, Datasets, Pipeline, native metrics/analytics/jobs, Telemetry/Logs and
+Settings/transfer. Small test-only catalogs validate live routes/OpenAPI/models,
+independent compiler-resolved TS unions and actual client request construction;
+no runtime schema package or codegen system was added.
+
+Coverage: 53 named route/access pairs (83 registered routes unchanged), 26
+selected response references, 11 bodies, 31 literal unions, 52 real transports,
+seven shared responses and six Unicode snippets. Existing transfer fixtures and
+Python/TS digest algorithms are reused. SQLite→domain→HTTP checks preserve IDs,
+revisions, two zero-based durable Evaluation steps, frozen plan, attempt-slot
+budget, computed zero/false results, terminal outcome/severity and null/zero
+duration. Existing conflict/tombstone/privacy/recovery tests remain authoritative.
+
+Repairs: CL-01 maps casefold match positions back to original Unicode code points
+and slices snippets by code point in TS; CL-02 maps Collection list 404 to the
+existing unavailable-capability state in the evidence-save dialog, without
+changing record 404 or auth; CL-03 corrects synthetic Evaluation step ordinals
+from 1/2 to stored 0/1. All were reproduced before repair. Commits: `7d1c937`
+and `59c56f2`; documentation closure is separate.
+
+Actual full validation: backend 1384 passed / 188 warnings / zero failures
+(95.47s); frontend 89 files / 788 passed (13.69s); TypeScript and production
+build passed. Focused backend 351, frontend 230 and affected components 76
+passed. Focused production Chromium/Firefox contracts 4/4; all four screenshots
+inspected. No full visual campaign, provider run or benchmark promotion claimed.
+Working/staged diff checks and selective source/test/artifact review passed.
+
+The same 12 unrelated untracked paths are preserved. No data regeneration,
+secret/runtime DB/generated schema/build/screenshot/trace was committed. Known
+limits remain: staged Collections/model-test bearer integration; existing 188
+backend warnings and aggregate build-size warning; unchanged dark Search
+button/BM25 label contrast findings for TEST-003; native zoom unverified. These
+checks are not a blanket security or visual certification.
+
+Actual graph verified: Exact Next Action = TEST-003 — Nine-reference visual
+validation. TEST-003 was not started; TEST-004 still depends on both branches.
+
 ## UI-012 complete — Analytics, Logs and Settings (2026-09-27)
 
 UI-012-A through H are COMPLETE. Implementation: `5c41f7f` (`feat(ui):

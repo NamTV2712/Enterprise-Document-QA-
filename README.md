@@ -28,6 +28,12 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 
 ## Documentation
 
+Cross-layer contract validation and its bounded repairs are recorded in
+[`docs/TEST_002_CONTRACT_RECEIPT.md`](docs/TEST_002_CONTRACT_RECEIPT.md).
+Search snippet ranges are half-open Unicode code-point offsets into the original
+returned text, not casefolded text or JavaScript UTF-16 offsets. Private
+Collection-list refusal is distinct from an unknown collection record.
+
 | Document | Purpose |
 |---|---|
 | [`README.md`](README.md) | Public overview, setup, API contract, benchmark, and deployment instructions |

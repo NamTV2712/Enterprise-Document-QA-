@@ -1,5 +1,141 @@
 # Current Planning Status
 
+## TEST-002 complete — Cross-layer contracts (2026-09-27)
+
+TEST-002-A through G are COMPLETE. The earlier in-progress plans/reproduction
+notes below are historical. [Full contract matrix, defects, commands and limits](TEST_002_CONTRACT_RECEIPT.md).
+
+Implementation: `7d1c937` (shared contract suite and Unicode offsets) and
+`59c56f2` (Collection list refusal). 53 named method/path/access pairs, 26
+selected response/OpenAPI references, 11 body models, 31 compiler-resolved
+Python/TS literal unions, 52 real-client transports and seven shared responses.
+Existing canonical transfer fixtures/algorithms are reused. Durable SQLite→HTTP
+checks retain job/step/revision/budget/result and telemetry null/zero/false facts.
+
+Repaired CL-01 casefold/UTF-16 snippet range drift, CL-02 list 404 incorrectly
+shown as record-not-found in the save dialog, and CL-03 zero-based step fixture
+drift. No new feature/provider/dependency/codegen/serving-data change.
+
+Actual final gates: backend 1384 passed / 188 warnings / zero failures; 83 routes.
+Vitest 89 files / 788 passed; TypeScript passed; production build passed with the
+existing aggregate chunk warning. Selected backend 351 passed; focused frontend
+230 passed plus affected components 76 passed. Browser contracts 4/4 (two per
+browser), light/EN desktop and dark/VI phone; screenshots inspected. Diff checks
+passed. Whole-page dark Search contrast is not certified: unchanged button and
+BM25 label findings remain for the visual branch. No native zoom claim.
+
+Tracked/staged tree began clean plus the same 12 unrelated untracked paths;
+those paths remain preserved. Only TEST-002-owned source/tests/docs are committed,
+not generated reports/images/databases/secrets. Collections/model-test bearer
+integration remains staged, with truthful refusal; API-001 is not weakened.
+
+The actual dependency graph confirms TEST-003 as the remaining visual branch
+before TEST-004. Exact Next Action: TEST-003 — Nine-reference visual validation.
+STOP: TEST-003 was not implemented.
+
+## TEST-002-E — CL-02 verified repair plan (2026-09-27)
+
+IN PROGRESS. P2 surface-specific refusal defect: CollectionTargetDialog uses
+the record-level 404 mapping for GET /collections. The new component regression
+fails deterministically: it renders Collection not found plus creation controls
+instead of the private capability-unavailable state. API-001 and the existing
+CollectionsWorkspace list handling are authoritative. Reuse listUnavailableFailure
+only in the dialog's list catch; leave record/mutation 404 untouched. No auth
+integration, backend access change, persistence fallback or new control. Risk:
+misclassifying record errors, covered explicitly by the regression. Validate the
+component, Collections neighbors and two-browser Search save handoff.
+
+Browser diagnostics: reduced-motion settles the established entry animation.
+Light Search passes whole-page axe; dark Search still reports existing primary
+button (2.27:1) and BM25 label (4.32:1) contrast. Neither owns snippet offsets;
+no CSS was changed. Retain this finding for the visual gate, not a CSS redesign
+in TEST-002. Contract browser assertions cover the repaired renderer/dialog;
+whole-page visual certification remains outside this task.
+
+CL-03 test-fixture drift: the independent UI evaluationJob fixture supplies
+step ordinals 1/2, while DATA-004 persists and validates 0/1. The new parity test
+fails 1/12; real SQLite→EVAL-003 HTTP checks pass with names execute_cases /
+aggregate_report and ordinals 0/1. Correct the synthetic fixture only to index;
+do not change durable storage or invent a presentation contract. Risk is limited
+to test expectations, covered by full Vitest and existing browser fixtures.
+
+## TEST-002-B/C/D — Shared contract evidence (2026-09-27)
+
+IN PROGRESS; not a completion receipt. Shared test-only catalogs now bind 53
+named method/path/access pairs (selected request/response models, revision and
+resume headers), 31 independent Python/actual compiler-resolved TS unions,
+and 49 real frontend request examples checked against live backend parameters.
+Focused results before response work: Python 134 passed / one warning; Vitest
+80 passed / two files; TypeScript passed. No runtime schema package/codegen.
+
+The response fixture adds registry unknown/null/zero, log outcome vs severity,
+null vs measured-zero duration, native computed-zero/false/unavailable/NA and
+finite Pipeline/Evaluation events. Python uses explicit UTF-8 fixture reads.
+Test-harness errors (pytest reserved parameter name, jsdom setup and initial
+event-owner lookup) were corrected without changing production behavior.
+
+Verified defect CL-01: discovery offsets. Two Python regressions fail on
+`Straße` because casefold expands the original text; two TS regressions fail
+on astral prefixes because JS slicing uses UTF-16. API ranges are half-open
+Unicode code-point positions in the returned original text, not folded text
+or UTF-16. Smallest repair: map folded match positions back to original code
+points in `build_snippet`; slice by code point in `snippetSegments`. Ranking,
+query semantics, original text, bounds and IDs stay unchanged. Shared fixtures
+are the regression authority; build and focused two-browser Search follow.
+
+UI semantics: Search submission → ranked excerpt card → API-owned literal
+match highlights; open/save handoffs retain the same chunk/document identity.
+Success marks the intended original word; empty/no-match/retry behavior is
+unchanged. Existing page/card/reader hierarchy, request epochs, recent-query
+storage and page/local scroll owners remain authoritative. Review risks:
+casefold expansion, astral splitting, truncated-window offsets, accidental
+text alteration and changing ranking/provider behavior. No CSS/control changes.
+
+Remaining: persistence→HTTP semantics, expanded negative/error/SSE checks,
+transfer reuse, affected full gates and requirement-by-requirement closure.
+Exact Next Action: CL-01 bounded repair and focused regression proof.
+
+## TEST-002-A — Cross-layer contract plan (2026-09-27)
+
+IN PROGRESS, recorded before implementation. Start HEAD `7d178f2`, clean
+tracked/staged tree and the same 12 unrelated untracked paths. TEST-002 only;
+no TEST-003 visual campaign, optional Ragas, new routes/settings or codegen.
+
+Authority and required boundary matrix:
+
+| Surface | Authority and contract pairs | Required evidence |
+| --- | --- | --- |
+| Access | API-001 dependencies/settings → routes → memory session/private clients | Named public/local/execution classification; 401/403/404; no public bearer or token URL/storage; preflight is not authorization |
+| Documents/Search/Retrieval | Catalog/discovery/trace domain → API DTOs → clients/types/reader handoffs | Exact document/chunk/snapshot IDs; paging/query encoding; 404/410; range semantics; skipped/null timing and raw score families |
+| Collections | DATA-003 repository → router payload/requests → typed clients | Four member kinds; canonical IDs/revisions; PATCH body vs DELETE query revision; conflict/tombstone/export semantics |
+| Registries | API-006 configured/observed/provenance owners → DTOs → unions | Configured/load/availability independent; unknown/null/count-zero; corpus/evaluation discrimination and provenance states |
+| Pipeline | DATA-004 jobs + API-007 staging → DTOs → client/SSE | Canonical run/revision; five stages/order; If-Match; queued/cancelling/interrupted; numeric event resume, close is not success |
+| Native metrics/analytics | EVAL-001 protocol + EVAL-002 analysis → public DTOs → Evaluation client/types | Protocol v1/six metric IDs; computed/unavailable/not_applicable; 0/false/null; candidate_minus_baseline; eligibility/groups/four failure categories |
+| Evaluation jobs | Frozen plan + durable store/coordinator → EVAL-003 DTOs → private client | Canonical job/revision; two steps; provider_attempt_slot; budget exhaustion; cancellation/interruption/event/results and hidden-text projection |
+| Telemetry/Logs | DATA-005 SQLite terminal facts/canonical jobs → DTOs → operational transport/UI | Three ranges/two intervals/five metrics; severity vs outcome; opaque cursor/order; null duration vs measured zero |
+| Settings/transfer | Existing configuration/registry/transfer owners → redacted DTOs → safe projection and browser actions | Only supported facts/actions; no operational mutation API; memory auth; existing Python/TS backup digest/identity/revision fixtures |
+
+Strategy: extend rather than replace the existing hermetic suites. One compact
+test-only catalog will bind selected route/path/method/access/request/response
+facts and independent Python/TypeScript enum owners. Backend tests inspect live
+registered routes/OpenAPI and canonical domain literals; frontend tests inspect
+actual compiler-resolved unions and capture real wrapper requests. Small shared
+edge responses connect backend validation to frontend parsing/rendering where
+useful; preserve existing transfer canonicalization fixtures/algorithm. No
+generated OpenAPI snapshot, shared runtime schema package or provider call.
+
+Existing backend router tests cover registration/ownership, but most frontend
+fixtures are independent of backend schema validation. Close that gap, then
+selected persistence→domain→HTTP semantic tests and client mutation/error/SSE
+checks. Reproduce any mismatch before correcting its authoritative owner.
+Collections and model-test bearer attachment remain staged product integration;
+test truthful refusals without weakening access or adding that roadmap feature.
+
+Escalation: new Python/Vitest tests → affected existing contract slices →
+TypeScript/full Vitest → full hermetic backend. Build/browser only for relevant
+runtime changes. Audit explicit staging/artifacts and update current records.
+Exact Next Action: TEST-002-B/C catalog and route/schema/union/request parity.
+
 ## UI-012 complete — Analytics, Logs and Settings (2026-09-27)
 
 UI-012-A through H are COMPLETE. Implementation: `5c41f7f` (`feat(ui):

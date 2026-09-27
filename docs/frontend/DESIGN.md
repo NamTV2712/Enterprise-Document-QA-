@@ -92,10 +92,11 @@ data, and phone chart interval/unit labels live outside the scaled SVG.
 The route surfaces preserve the enterprise reference composition while binding
 every value to an authoritative source. Research renders live SSE answers,
 citations, stages, and reader handoffs; Documents renders catalog metadata,
-reader coverage, and representation availability; Search and Retrieval Lab
-render `/retrieval/inspect` traces without generation or confidence claims;
+reader coverage, and representation availability; Search reads provider-free
+`POST /search` snapshots (paged by `GET /search/{search_id}`), while Retrieval
+Lab renders `/retrieval/inspect` traces without generation or confidence claims;
 Library renders browser-local conversations, evidence, and storage state;
-Models renders only `/system/info` retrieval fields; Pipeline renders the
+Models separates configured and observed identity via `/models`; Pipeline renders the
 API-007 public definition and, after explicit local connection, staged durable
 job history/detail; and Evaluation renders EVAL-001 definitions, EVAL-002
 public publications/analytics, and EVAL-003 frozen job controls after the same

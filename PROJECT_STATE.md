@@ -1,5 +1,57 @@
 # Project State
 
+## TEST-004 complete — Full product validation (2026-09-28)
+
+TEST-004-A through H COMPLETE. [Final product receipt](docs/TEST_004_FINAL_PRODUCT_RECEIPT.md)
+is authoritative for the 13-surface matrix, commands, repaired defects and
+remaining limits. Started at `e4c6710` on `codex/bilingual-research-workspace`;
+source/test commits `defec4f6` and `0609e2f`, followed by a separate closure
+documentation commit. The final source was replayed in a managed detached,
+data-free checkout with no `.env` or untracked source: app import/startup and
+shutdown PASS, 83 unique routes, frontend frozen install/TypeScript/build PASS.
+The original 12 unrelated untracked paths remain untouched in the main tree.
+
+Backend final baseline: original checkout **1388 passed/188 warnings/0 failed**;
+clean data-free checkout **1354 passed/34 skipped/148 warnings/0 failed**. All
+34 skips are explicit local corpus/evaluation-artifact requirements, not
+deterministic failures. Focused final migrations/persistence, transfer, API-001,
+collection atomicity, Search, native jobs, telemetry, TEST-002 and bootstrap
+**360 passed/1 warning**. Fresh/reopen/upgrade SQLite, WAL/FK/busy settings,
+job/telemetry versions, portable canonical transfer exclusion and public no-DB
+mode remain intact. Local bearer, exact Host port, Origin, loopback and
+forwarded-header protections remain intact; a real-browser synthetic-token
+check found no token in storage, IndexedDB, cookie, URL, DOM, backup or logs,
+and reload lost the memory-only connection.
+
+Frontend: **90 Vitest files/792 passed**, TypeScript PASS, production build
+2074 modules PASS, existing aggregate ~506.92 kB chunk warning. Product
+runtime is a built Vite app using real FastAPI lifespan/handlers, SQLite,
+Search/Retrieval/Chat/Research, registries, staging, native Evaluation and
+server telemetry with only bounded corpus/model/provider dependencies doubled.
+Final A–F product campaign **24/24** (12 Chromium, 12 Firefox), 14 direct routes,
+96 responsive combinations, 120 whole-page axe analyses with zero reported
+A/AA violations, zero body/root overflow and selected screenshot inspection.
+Separate real HTTP/SSE **16/16**, local reader **6/6**, TEST-002 browser **4/4**,
+focused TS contracts/components **118/118** and affected TEST-003
+Chat/Research/Evaluation native/responsive **30/30** pass. This is not a full
+repeat of TEST-003's 300 tests/648 combinations or a blanket WCAG claim.
+
+Four reproduced P2 regressions were repaired: clipped/unusable scope popover,
+controlled scope dismissal reopening, low-contrast light source score and
+low-contrast dark Evaluation hover metadata. Focused tests failed before each
+repair and passed after; no P0/P1/P2 acceptance regression remains. The
+browser Collections/model-test bearer integration remains staged: the
+Collections API works under local auth and the current wrapper truthfully
+refuses, with no bypass. Native zoom125/150/200 is manual/unverified. Existing
+backend dependency warnings and bundle warning remain. No live provider,
+corpus mutation, Ragas, new feature, load/SLA or broad security certification.
+No generated DB/log/report/trace/screenshot/dist, secret or lockfile change
+entered Git. Final tracked tree is clean at handoff.
+
+Actual master graph: TEST-004 depends on TEST-002/TEST-003 and precedes UI-013.
+**Exact Next Action = UI-013 — Cleanup/documentation. STOP: not implemented.**
+Earlier journal entries are historical.
+
 ## TEST-003 complete — Nine-reference visual validation (2026-09-27)
 
 TEST-003-A through H COMPLETE. [Measured visual receipt](docs/TEST_003_VISUAL_RECEIPT.md)

@@ -74,7 +74,7 @@ Collection-list refusal is distinct from an unknown collection record.
 | Decomposition | Comparative and enumeration queries decomposed into focused sub-queries |
 | Evaluation | Native v1 definitions, validated publications, backend-owned comparison/trends/failures, and protected frozen jobs |
 | Research workspace | Vite/React interface with searchable company and section controls, English/Vietnamese UI and answer selection, streaming answers, measured request-stage traces when the backend provides them, conservative source-bound financial metric cards when the retrieved evidence supports them, a first-class Sources pane and shared Document pane backed by indexed excerpts with exact chunk/hash/revision synchronization across Structured, Normalized text, and an optional provenance-bound PDF representation, canonical evidence deep links, accent-insensitive evidence inspection with per-panel search and copy, per-answer bookmarks, feedback, private notes, local evidence collections, a reliable conversation Library, JSON backup/restore, session context status, glossary/help, research templates, command palette, keyboard shortcuts, lazy tool panels, and responsive Light/Dark themes |
-| Research tools | Provider-free Retrieval Lab for BM25/dense/RRF/reranker trace inspection with preset comparison and JSON/CSV export, read-only Document Explorer with filing/chunk search, Search workspace, native Evaluation definitions/public analytics plus memory-gated frozen jobs, truthful Models and Datasets registries over configured/runtime identity plus corpus/evaluation provenance, an isolated Pipeline staging workspace, local Analytics, System & provenance metadata without filesystem paths or secrets, and three lazy-loaded Archify diagrams under Architecture |
+| Research tools | Provider-free Retrieval Lab for BM25/dense/RRF/reranker trace inspection with preset comparison and JSON/CSV export, read-only Document Explorer with filing/chunk search, Search workspace, native Evaluation definitions/public analytics plus memory-gated frozen jobs, truthful Models and Datasets registries over configured/runtime identity plus corpus/evaluation provenance, an isolated Pipeline staging workspace, server-backed local-workspace Analytics, System & provenance metadata without filesystem paths or secrets, and three lazy-loaded Archify diagrams under Architecture |
 | Conversation UX | Separate Overview and Conversation views, responsive 216px wide/56px compact desktop navigation, mobile workspace navigation, bounded answer cards, contextual scope controls beside the composer, and interpreted-query metadata |
 
 The frontend's document reader caches indexed chunk details for five minutes
@@ -1554,8 +1554,20 @@ bun run test:e2e-integration
 ```
 
 It builds with a fixed loopback API origin, starts the deterministic FastAPI
-harness and byte-splitting proxy, and runs seven transport/session tests in
+harness and byte-splitting proxy, and runs eight transport/session tests in
 each of Chromium and Firefox with one worker. The harness is provider-free.
+
+The TEST-004 product gate serves a separate production build against real
+FastAPI public/local handlers and an isolated temporary SQLite workspace:
+
+```bash
+bun run test:e2e-product
+```
+
+Its bounded corpus, retrieval and provider dependencies are deterministic test
+fixtures; it does not read the developer `.env` or require `data/` or live
+provider access. Activate a backend test environment first, or set
+`HARNESS_PYTHON` to its interpreter path.
 
 ## Running With Docker
 

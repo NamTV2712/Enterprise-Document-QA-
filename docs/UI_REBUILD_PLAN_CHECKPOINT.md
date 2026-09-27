@@ -1,5 +1,62 @@
 # Current Planning Status
 
+## TEST-004 complete — Full product validation (2026-09-28)
+
+TEST-004-A through H COMPLETE. [Final receipt and per-feature matrix](TEST_004_FINAL_PRODUCT_RECEIPT.md)
+supersede the historical in-progress A entry below. Starting HEAD `e4c6710`;
+source/test repair commits `defec4f6` and `0609e2f`; this checkpoint and receipt
+are in a separate closure commit. Managed detached data-free checkout imports
+the real app, compiles, has 83 unique routes, installs 284 frozen frontend
+packages and serves the built frontend against real FastAPI public/local
+handlers and a temporary SQLite workspace. No `.env`, provider, canonical
+`data/`, untracked source or generated artifact is required.
+
+- B: Full clean backend **1354 passed/34 skipped/148 warnings/0 failed**;
+  every skip requires absent git-ignored local corpus/evaluation artifacts.
+  Untouched original checkout ran **1388 passed/188 warnings/0 failed**.
+  Focused persistence/migrations/transfer/access/atomicity/Search/jobs/logs/
+  TEST-002/bootstrap: **360 passed/1 warning**; public mode creates no DB.
+- C: Real Documents→Search snapshot→reader→provider-free Retrieval and fresh
+  Chat and Research-family SSE→citation→reader journeys pass. 16/16 separate
+  HTTP/session tests cover partial/unavailable/decomposed paths.
+- D: Protected SQLite Collection CRUD/conflict/tombstone, truthful staged
+  browser refusal, Models/Datasets registry and Pipeline one queued run/five
+  steps/events/cancel pass. Existing Collections/model-test browser bearer
+  integration remains staged; API-001 was not weakened.
+- E: Six native-v1 metrics, exact zero, frozen budget/two-step Evaluation
+  result, server Analytics/Logs privacy/cursors and Settings transfer/reload
+  credential loss pass. No Ragas or live provider.
+- F: Final production-like suite **24/24** (12/engine), 14 direct routes,
+  Back/Forward, A–F journeys, 96 responsive combinations, 120 whole-page
+  axe analyses with zero reported A/AA violations and zero body/root overflow.
+  Selected generated screenshots inspected but untracked.
+- G: Four reproduced P2 visual/interaction defects repaired with focused
+  failing regressions; test-only selector/isolation/SSE assertions corrected.
+  TEST-002 browser contracts **4/4**, focused TS/component contracts **118/118**,
+  affected TEST-003 Chat/Research/Evaluation native/responsive **30/30**,
+  local reader/identity suite **6/6**. Final clean source HEAD `0609e2f`
+  has zero deterministic acceptance failures.
+- H: TypeScript PASS, full Vitest **90 files/792 passed**, build PASS/2074
+  modules (existing ~506.92 kB warning). README/DESIGN drift corrected;
+  artifact/secret/lockfile checks and final closure-HEAD replay recorded in
+  receipt/handoff. The original 12 unrelated untracked paths remain; no
+  task-created DB, screenshot, trace, dist, credential or data is committed.
+
+Limitations: provisioned backend interpreter is not a fresh package install;
+native zoom125/150/200 is manual/unverified; no production SLA, broad WCAG or
+security certification. The actual master-plan graph has UI-013 after TEST-004.
+**Exact Next Action = UI-013 — Cleanup/documentation. STOP: UI-013 not started.**
+
+## TEST-004-A — Final product acceptance plan (2026-09-27)
+
+IN PROGRESS. [Final acceptance/journey matrix](TEST_004_FINAL_PRODUCT_RECEIPT.md)
+records current HEAD `e4c6710`, clean-checkout/import/build and real HTTP/SQLite
+integration strategy, access/migrations/transfer/privacy gates, six compact
+product journeys, both browsers/locales/width sanity, final-HEAD revalidation
+and artifact audit. Existing TEST-003 visual authority and known native zoom /
+staged bearer limitations stay explicit. No live providers, data mutation,
+new capability, dependency changes, optional Ragas or UI-013 cleanup authorized.
+
 ## TEST-003 complete — Nine-reference visual validation (2026-09-27)
 
 TEST-003-A through H are COMPLETE. [Authoritative matrix and measured receipt](TEST_003_VISUAL_RECEIPT.md)

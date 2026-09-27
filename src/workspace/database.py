@@ -182,6 +182,14 @@ class WorkspaceDatabase:
 
     def initialize(self) -> int:
         """Create and migrate the configured database, safely and repeatably."""
+        # The receipt snapshot and all pending migrations form one operation.
+        # Locking only individual migration transactions lets another instance
+        # apply the same pending list between inspection and application. The
+        # shared reentrant lock also permits nested write transactions below.
+        with self._write_lock:
+            return self._initialize_locked()
+
+    def _initialize_locked(self) -> int:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
         except OSError as error:

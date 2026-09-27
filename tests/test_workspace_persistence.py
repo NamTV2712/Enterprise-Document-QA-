@@ -109,6 +109,71 @@ def test_repeat_migration_is_idempotent(database: WorkspaceDatabase) -> None:
     assert [tuple(row) for row in after] == [tuple(row) for row in before]
 
 
+@pytest.mark.parametrize("upgrade", [False, True], ids=["fresh", "upgrade"])
+def test_concurrent_initializers_share_the_complete_migration_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, upgrade: bool,
+) -> None:
+    path = tmp_path / "workspace.sqlite3"
+    if upgrade:
+        WorkspaceDatabase(path, migrations=MIGRATIONS[:1]).initialize()
+    first = WorkspaceDatabase(path)
+    second = WorkspaceDatabase(path.parent / "." / path.name)
+    first_read = threading.Event()
+    release_first = threading.Event()
+    second_started = threading.Event()
+    second_read = threading.Event()
+    results: list[int] = []
+    errors: list[BaseException] = []
+    original_first_read = first._read_and_validate_migration_receipts
+    original_second_read = second._read_and_validate_migration_receipts
+
+    def paused_read() -> list[sqlite3.Row]:
+        rows = original_first_read()
+        first_read.set()
+        assert release_first.wait(5), "test did not release the first initializer"
+        return rows
+
+    def observed_read() -> list[sqlite3.Row]:
+        second_read.set()
+        return original_second_read()
+
+    monkeypatch.setattr(first, "_read_and_validate_migration_receipts", paused_read)
+    monkeypatch.setattr(second, "_read_and_validate_migration_receipts", observed_read)
+
+    def initialize(instance: WorkspaceDatabase, started: threading.Event | None = None) -> None:
+        if started is not None:
+            started.set()
+        try:
+            results.append(instance.initialize())
+        except BaseException as error:
+            errors.append(error)
+
+    threads = [threading.Thread(target=initialize, args=(first,)),
+               threading.Thread(target=initialize, args=(second, second_started))]
+    threads[0].start()
+    try:
+        assert first_read.wait(5)
+        threads[1].start()
+        assert second_started.wait(5)
+        # The first caller still owns an unapplied receipt snapshot. A second
+        # instance must not inspect that snapshot until the upgrade completes.
+        inspected_pending_receipts = second_read.wait(0.2)
+    finally:
+        release_first.set()
+        for thread in threads:
+            if thread.ident is not None:
+                thread.join(5)
+    assert not any(thread.is_alive() for thread in threads)
+    assert not inspected_pending_receipts
+    assert errors == []
+    assert sorted(results) == [6, 6]
+    with second.connection() as connection:
+        receipts = connection.execute(
+            "SELECT version, checksum FROM schema_migrations ORDER BY version"
+        ).fetchall()
+    assert [tuple(row) for row in receipts] == [(item.version, item.checksum) for item in MIGRATIONS]
+
+
 def test_migration_sequence_must_be_ordered_and_contiguous(tmp_path: Path) -> None:
     migration = Migration(2, "out_of_order", ("CREATE TABLE example(id TEXT)",))
 

@@ -247,7 +247,7 @@ class SearchRequest(BaseModel):
 
 
 class DiscoverySnippet(BaseModel):
-    """A bounded real-text excerpt with match ranges for safe highlighting."""
+    """Real-text excerpt with half-open Unicode code-point match ranges."""
 
     text: str
     ranges: list[tuple[int, int]]

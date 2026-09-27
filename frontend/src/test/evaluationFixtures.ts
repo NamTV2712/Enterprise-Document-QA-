@@ -49,7 +49,7 @@ export function evaluationJob(id = "job-a", overrides: Partial<EvaluationJob> = 
     progress: { stage: null, current: null, total: null },
     steps: ["execute_cases", "aggregate_report"].map((name, index) => ({
       name: name as "execute_cases" | "aggregate_report", step_id: `${id}-step-${index}`, job_id: id,
-      ordinal: index + 1, state: "pending", revision: 1, started_at: null, finished_at: null,
+      ordinal: index, state: "pending", revision: 1, started_at: null, finished_at: null,
     })),
     artifact_references: [], budget_consumed: 0, publication_status: "not_published", report_digest: null,
     result: null, failure: null, ...overrides,

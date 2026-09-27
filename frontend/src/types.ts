@@ -435,8 +435,9 @@ export type DiscoveryMode = "keyword";
 export type DiscoveryGrouping = "document" | "chunk";
 
 /**
- * A bounded real-text excerpt. `ranges` are character offsets into `text`, so
- * the client highlights by slicing and never renders returned text as HTML.
+ * A bounded real-text excerpt. `ranges` are half-open Unicode code-point
+ * offsets into the original `text`, not UTF-16 or casefolded-text offsets.
+ * The client highlights literal text and never renders it as HTML.
  */
 export interface DiscoverySnippet {
   text: string;

@@ -236,7 +236,8 @@ def test_telemetry_write_failure_is_best_effort_and_does_not_change_source_respo
     assert not (tmp_path / "workspace.sqlite3").exists()
 
 
-def test_private_log_route_exposes_only_structured_safe_fields(tmp_path: Path, monkeypatch) -> None:
+@pytest.mark.parametrize("duration", [None, 0.0])
+def test_private_log_route_exposes_only_structured_safe_fields(tmp_path: Path, monkeypatch, duration) -> None:
     _configure_local(monkeypatch, tmp_path)
     database = WorkspaceDatabase(tmp_path / "workspace.sqlite3")
     assert database.initialize() == 6
@@ -249,7 +250,7 @@ def test_private_log_route_exposes_only_structured_safe_fields(tmp_path: Path, m
         severity="warning",
         outcome="rejected",
         correlation_id="request-safe",
-        duration_ms=None,
+        duration_ms=duration,
         error_code="http_422",
         metadata={"http_method": "POST", "streaming": False, "decomposed": False, "status_code": 422},
     )
@@ -263,7 +264,10 @@ def test_private_log_route_exposes_only_structured_safe_fields(tmp_path: Path, m
     item = response.json()["items"][0]
     assert item["kind"] == "request_terminal"
     assert item["route_template"] == "/retrieval/inspect"
-    assert item["duration_ms"] is None
+    assert item["duration_ms"] == duration
+    assert item["record_id"] == "tel_safe_api"
+    assert (item["level"], item["outcome"]) == ("warning", "rejected")
+    assert item["metadata"]["decomposed"] is False
     assert set(item) == {
         "record_id", "occurred_at", "category", "level", "kind", "subsystem",
         "outcome", "correlation_id", "domain_id", "route_template", "error_code",

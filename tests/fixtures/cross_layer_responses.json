@@ -1,0 +1,33 @@
+{
+  "responses": [
+    {"id": "models", "model": "src.api.registry_models:ModelRegistryResponse", "value": {"items": [{"id": "generator", "role": "generator", "provider": "groq", "configured_model_id": "synthetic-generator", "configured_revision": null, "runtime_model_id": null, "runtime_revision": null, "configuration_status": "configured", "load_status": "not_loaded", "availability_status": "unknown", "availability_reason": null, "credential_status": "configured", "test_capabilities": []}], "total": 1}},
+    {"id": "datasets", "model": "src.api.registry_models:DatasetRegistryResponse", "value": {"items": [
+      {"id": "serving-corpus", "kind": "corpus", "name": "Synthetic corpus", "description": "", "availability": "unavailable", "reason_code": "corpus_unavailable", "reason": null, "version": null, "revision": null, "record_count": null, "record_unit": "documents"},
+      {"id": "evaluation-test-set", "kind": "evaluation", "name": "Synthetic evaluation", "description": "", "availability": "available", "reason_code": null, "reason": null, "version": null, "revision": null, "record_count": 0, "record_unit": "cases"}
+    ], "total": 2}},
+    {"id": "logs", "model": "src.api.telemetry_models:OperationalLogPageResponse", "value": {"items": [
+      {"record_id": "tel-contract-1", "occurred_at": "2026-09-27T12:00:00Z", "category": "request", "level": "info", "kind": "request_terminal", "subsystem": "query", "outcome": "cancelled", "correlation_id": "contract-request", "domain_id": null, "route_template": "/query/stream", "error_code": "client_disconnected", "duration_ms": 0, "metadata": {"http_method": "POST", "streaming": true, "decomposed": false, "status_code": 200}},
+      {"record_id": "job:contract-job:3", "occurred_at": "2026-09-27T12:00:00Z", "category": "job", "level": "warning", "kind": "job_terminal", "subsystem": "evaluation", "outcome": "failed", "correlation_id": "contract-job", "domain_id": "contract-job", "route_template": null, "error_code": "budget_exhausted", "duration_ms": null, "metadata": {}}
+    ], "next_cursor": "opaque+/cursor==", "has_more": true, "limit": 50}},
+    {"id": "series", "model": "src.api.telemetry_models:AnalyticsTimeseriesResponse", "value": {"range": "24h", "interval": "hour", "metric": "request_duration_p95_ms", "unit": "milliseconds", "started_at": "2026-09-27T10:00:00Z", "ended_at": "2026-09-27T12:00:00Z", "points": [
+      {"started_at": "2026-09-27T10:00:00Z", "ended_at": "2026-09-27T11:00:00Z", "value": null, "denominator": 0},
+      {"started_at": "2026-09-27T11:00:00Z", "ended_at": "2026-09-27T12:00:00Z", "value": 0.0, "denominator": 1}
+    ]}},
+    {"id": "nativeCase", "model": "src.api.evaluation_models:NativeCaseResultModel", "value": {"case_id": "contract-case", "context_sha256": null, "metrics": [
+      {"metric_id": "native.faithfulness", "metric_version": 1, "status": "computed", "value": 0.0, "reason_code": null},
+      {"metric_id": "native.fallback_correctness", "metric_version": 1, "status": "computed", "value": false, "reason_code": null},
+      {"metric_id": "native.answer_relevancy", "metric_version": 1, "status": "unavailable", "value": null, "reason_code": "missing_bound_judge_score"},
+      {"metric_id": "native.keyword_recall_proxy", "metric_version": 1, "status": "not_applicable", "value": null, "reason_code": "missing_required_keywords"}
+    ]}},
+    {"id": "pipelineEvent", "model": "src.api.pipeline_models:PipelineRunEventResponse", "value": {"run_id": "contract-run", "event_id": "contract-event-3", "sequence": 3, "event_type": "progress", "state": "running", "reason_code": null, "progress": {"stage": "chunk_filings", "current": 0, "total": 1}, "occurred_at": "2026-09-27T12:00:00Z"}},
+    {"id": "evaluationEvent", "model": "src.workspace.jobs:JobEvent", "value": {"job_id": "contract-job", "event_id": "contract-event-3", "sequence": 3, "event_type": "progress", "state": "cancelling", "reason_code": null, "progress": {"stage": "execute_cases", "current": 0, "total": 1}, "occurred_at": "2026-09-27T12:00:00Z"}}
+  ],
+  "snippets": [
+    {"text": "Revenue rose", "terms": ["revenue"], "snippet": {"text": "Revenue rose", "ranges": [[0, 7]], "truncated": false}, "marked": ["Revenue"]},
+    {"text": "Straße revenue", "terms": ["revenue"], "snippet": {"text": "Straße revenue", "ranges": [[7, 14]], "truncated": false}, "marked": ["revenue"]},
+    {"text": "Straße revenue", "terms": ["strasse"], "snippet": {"text": "Straße revenue", "ranges": [[0, 6]], "truncated": false}, "marked": ["Straße"]},
+    {"text": "📈 revenue growth", "terms": ["revenue"], "snippet": {"text": "📈 revenue growth", "ranges": [[2, 9]], "truncated": false}, "marked": ["revenue"]},
+    {"text": "💼📈 revenue", "terms": ["revenue"], "snippet": {"text": "💼📈 revenue", "ranges": [[3, 10]], "truncated": false}, "marked": ["revenue"]},
+    {"text": "", "terms": ["revenue"], "snippet": {"text": "", "ranges": [], "truncated": false}, "marked": []}
+  ]
+}

@@ -212,25 +212,39 @@ class DiscoveryResult:
     limited_by_ceiling: bool
 
 
+def _casefold_with_offsets(text: str) -> tuple[str, list[int]]:
+    """Bind every folded code point to its original code-point position."""
+    folded: list[str] = []
+    offsets: list[int] = []
+    for position, character in enumerate(text):
+        expansion = character.casefold()
+        folded.append(expansion)
+        offsets.extend([position] * len(expansion))
+    return "".join(folded), offsets
+
+
 def build_snippet(text: str, query_terms: Sequence[str]) -> Snippet:
     """Return a bounded real-text excerpt with the matched term ranges.
 
     The window starts at the first matched term when one exists, otherwise at
     the beginning of the chunk. Ranges index into the returned text, so the
-    frontend can highlight without receiving HTML.
+    frontend can highlight without receiving HTML. Half-open ranges count
+    Unicode code points in the original returned text, not casefold expansions
+    or JavaScript UTF-16 code units.
     """
     collapsed = " ".join(text.split())
     if not collapsed:
         return Snippet(text="", ranges=(), truncated=False)
 
-    lowered = collapsed.casefold()
+    lowered, original_offsets = _casefold_with_offsets(collapsed)
+    terms = [term.casefold() for term in query_terms if term]
     first_match = -1
-    for term in query_terms:
-        if not term:
-            continue
+    for term in terms:
         position = lowered.find(term)
-        if position != -1 and (first_match == -1 or position < first_match):
-            first_match = position
+        if position != -1:
+            original_position = original_offsets[position]
+            if first_match == -1 or original_position < first_match:
+                first_match = original_position
 
     start = 0 if first_match == -1 else max(0, first_match - _SNIPPET_WINDOW)
     window = collapsed[start : start + SNIPPET_MAX_LENGTH]
@@ -240,17 +254,15 @@ def build_snippet(text: str, query_terms: Sequence[str]) -> Snippet:
     if truncated:
         window = f"{window}…"
 
-    window_lowered = window.casefold()
+    window_lowered, window_offsets = _casefold_with_offsets(window)
     ranges: list[tuple[int, int]] = []
-    for term in query_terms:
-        if not term:
-            continue
+    for term in terms:
         cursor = 0
         while len(ranges) < SNIPPET_MAX_RANGES:
             position = window_lowered.find(term, cursor)
             if position == -1:
                 break
-            ranges.append((position, position + len(term)))
+            ranges.append((window_offsets[position], window_offsets[position + len(term) - 1] + 1))
             cursor = position + len(term)
     ranges.sort()
     merged: list[tuple[int, int]] = []

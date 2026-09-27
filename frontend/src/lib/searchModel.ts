@@ -161,14 +161,17 @@ export interface SnippetSegment {
 
 /**
  * Split a snippet into highlighted and plain segments from the API's ranges.
+ * Offsets count Unicode code points, not JavaScript UTF-16 code units.
  * Ranges are clamped to the returned text and skipped when they are empty or
  * out of order, so malformed data renders as plain text instead of throwing.
  */
 export function snippetSegments(snippet: DiscoverySnippet): SnippetSegment[] {
   const { text, ranges } = snippet;
   if (!text) return [];
+  const characters = Array.from(text);
+  const slice = (start: number, end?: number) => characters.slice(start, end).join("");
   const safe = ranges
-    .map(([start, end]) => [Math.max(0, start), Math.min(text.length, end)] as [number, number])
+    .map(([start, end]) => [Math.max(0, start), Math.min(characters.length, end)] as [number, number])
     .filter(([start, end]) => end > start)
     .sort((left, right) => left[0] - right[0]);
   if (safe.length === 0) return [{ text, match: false }];
@@ -186,11 +189,11 @@ export function snippetSegments(snippet: DiscoverySnippet): SnippetSegment[] {
   const segments: SnippetSegment[] = [];
   let cursor = 0;
   for (const [start, end] of merged) {
-    if (start > cursor) segments.push({ text: text.slice(cursor, start), match: false });
-    segments.push({ text: text.slice(start, end), match: true });
+    if (start > cursor) segments.push({ text: slice(cursor, start), match: false });
+    segments.push({ text: slice(start, end), match: true });
     cursor = end;
   }
-  if (cursor < text.length) segments.push({ text: text.slice(cursor), match: false });
+  if (cursor < characters.length) segments.push({ text: slice(cursor), match: false });
   return segments;
 }
 

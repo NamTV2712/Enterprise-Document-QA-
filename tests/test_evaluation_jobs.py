@@ -452,8 +452,11 @@ def test_only_one_worker_claims_and_calls_provider(tmp_path):
     assert calls["judging"] == 1
 
 
-def test_private_http_access_creation_results_and_events(tmp_path, monkeypatch):
-    service, _ = _service(tmp_path)
+@pytest.mark.parametrize("edge", ["zero", "false"])
+def test_private_http_access_creation_results_and_events(tmp_path, monkeypatch, edge):
+    service, _ = _service(tmp_path, generate=(
+        lambda _prompt: "I could not find sufficient information in the filings."
+    ) if edge == "false" else None)
     app = FastAPI()
     app.include_router(create_evaluation_job_router(lambda: service))
     token = "evaluation-local-token-0123456789"
@@ -489,12 +492,40 @@ def test_private_http_access_creation_results_and_events(tmp_path, monkeypatch):
     detail = call("GET", f"/evaluation/jobs/{job_id}")
     assert detail.status_code == 200 and detail.json()["state"] == "succeeded"
     assert detail.json()["budget_consumed"] <= 3
+    stored = service.repository.get_job(job_id)
+    assert (detail.json()["id"], detail.json()["revision"], detail.json()["state"]) == (
+        stored.job_id, stored.revision, stored.state,
+    )
+    assert [(step["name"], step["ordinal"], step["state"]) for step in detail.json()["steps"]] == [
+        ("execute_cases", 0, "succeeded"), ("aggregate_report", 1, "succeeded"),
+    ]
+    assert detail.json()["frozen"]["budget_unit"] == "provider_attempt_slot"
+    assert detail.json()["frozen"] == service.get(job_id)["frozen"]
     results = call("GET", f"/evaluation/jobs/{job_id}/results")
     assert results.status_code == 200 and results.json()["total"] == 1
+    stored_cases, total = service.store.list_cases(job_id, limit=50, offset=0)
+    assert total == 1
+    metrics = results.json()["items"][0]["metrics"]
+    assert metrics == stored_cases[0]["metrics"]
+    target = next(row for row in metrics if row["metric_id"] == (
+        "native.faithfulness" if edge == "zero" else "native.fallback_correctness"
+    ))
+    assert target["status"] == "computed"
+    if edge == "zero":
+        assert target["value"] == 0.0 and not isinstance(target["value"], bool)
+    else:
+        assert target["value"] is False
+    assert results.json()["report_digest"] == service.store.report(job_id).digest
     events = call("GET", f"/evaluation/jobs/{job_id}/events")
     assert events.status_code == 200 and "event: created" in events.text
     resumed = call("GET", f"/evaluation/jobs/{job_id}/events", headers_override={**headers, "Last-Event-ID": "1"})
     assert "id: 1\n" not in resumed.text
     assert call("POST", f"/evaluation/jobs/{job_id}/cancel", headers_override=headers).status_code == 428
+    queued = _create(service, key="cancel-contract")
+    cancelled = call("POST", f"/evaluation/jobs/{queued.job_id}/cancel", headers_override={**headers, "If-Match": '"1"'})
+    assert cancelled.status_code == 200
+    assert (cancelled.json()["state"], cancelled.json()["revision"]) == ("cancelled", 2)
+    assert service.repository.get_job(queued.job_id).state == "cancelled"
+    assert call("POST", f"/evaluation/jobs/{queued.job_id}/cancel", headers_override={**headers, "If-Match": '"1"'}).status_code == 409
     monkeypatch.setattr(access.settings, "enable_workspace_execution", False)
     assert call("POST", "/evaluation/jobs", json_body=body).status_code == 403

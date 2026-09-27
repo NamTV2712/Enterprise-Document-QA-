@@ -438,8 +438,8 @@ test("guided portfolio route reaches research, retrieval, evaluation, and archit
   await expect(page.getByText("No published reports yet", { exact: true })).toBeVisible();
 
   await page.getByRole("link", { name: "Settings", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "System & provenance" })).toBeVisible();
-  await expect(page.getByText("Provider-free tools")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
+  await expect(page.getByText("Retention policy · read only")).toBeVisible();
 });
 
 test("Documents and Search open the exact chunk in the shared indexed reader", async ({ page }) => {

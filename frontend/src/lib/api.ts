@@ -120,7 +120,7 @@ export const getApiBaseUrl = (): string => {
   return base.replace(/\/$/, ""); // Remove trailing slash
 };
 
-async function apiFetch(
+export async function apiFetch(
   url: string,
   options: RequestInit = {},
 ): Promise<Response> {

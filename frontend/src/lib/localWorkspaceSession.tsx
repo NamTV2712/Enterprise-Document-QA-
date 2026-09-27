@@ -53,7 +53,11 @@ export function LocalWorkspaceSessionProvider({ children }: { children: React.Re
       const verified = await pipelineApi.verifyLocalWorkspaceToken(candidate);
       if (requestId !== requestGeneration.current) return;
       tokenRef.current = candidate;
-      setConfiguration(verified);
+      setConfiguration({ deployment_mode: verified.deployment_mode, capabilities: {
+        public_provider_free: verified.capabilities.public_provider_free,
+        local_workspace: verified.capabilities.local_workspace,
+        execution_jobs: verified.capabilities.execution_jobs,
+      } });
       setStatus("connected");
       generationRef.current += 1;
       setGeneration(generationRef.current);

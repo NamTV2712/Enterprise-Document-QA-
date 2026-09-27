@@ -68,7 +68,6 @@ import { useEvidenceSelection } from "./hooks/useEvidenceSelection";
 import { useReaderSession } from "./hooks/useReaderSession";
 import { useResearchSession } from "./hooks/useResearchSession";
 import { useLocale, type Locale } from "./lib/i18n";
-import { recordAnalyticsEvent } from "./lib/analyticsStore";
 import { getResearchTemplateCopy, isSendableResearchQuestion, RESEARCH_TEMPLATES, type ResearchTemplate, type ResearchTemplateApplyPayload } from "./lib/researchTemplates";
 import { importEvidenceCollections, mergeEvidenceCollections, preflightEvidenceCollectionsImport, saveEvidence, snapshotProvenanceFromSource } from "./lib/evidenceCollections";
 import type { EvidenceItem } from "./lib/evidenceCollections";
@@ -121,8 +120,11 @@ const RerankerPanel = lazy(() =>
 const DocumentExplorerPanel = lazy(() =>
   import("./components/DocumentExplorerPanel").then(({ DocumentExplorerPanel }) => ({ default: DocumentExplorerPanel })),
 );
-const SystemInfoPanel = lazy(() =>
-  import("./components/SystemInfoPanel").then(({ SystemInfoPanel }) => ({ default: SystemInfoPanel })),
+const SettingsPage = lazy(() =>
+  import("./components/operations/SettingsPage").then(({ SettingsPage }) => ({ default: SettingsPage })),
+);
+const LogsPage = lazy(() =>
+  import("./components/operations/LogsPage").then(({ LogsPage }) => ({ default: LogsPage })),
 );
 const EvaluationPanel = lazy(() =>
   import("./components/EvaluationPanel").then(({ EvaluationPanel }) => ({ default: EvaluationPanel })),
@@ -1087,12 +1089,6 @@ function AppWorkspace() {
     // the final save. Duplicate sends are blocked while one is in flight.
     const identity = beginSend(text);
     if (!identity) return;
-    const analyticsStartedAt = Date.now();
-    recordAnalyticsEvent({
-      kind: "query_started",
-      ticker: requestSnapshot.ticker,
-      language: requestSnapshot.answerLanguage,
-    });
 
     // Re-check a saved conversation's backend session before spending the
     // question; the session can expire while the user is reading. A
@@ -1183,13 +1179,6 @@ function AppWorkspace() {
           ),
         );
         markRequestIdle();
-        recordAnalyticsEvent({
-          kind: "query_error",
-          ticker: requestSnapshot.ticker,
-          language: requestSnapshot.answerLanguage,
-          durationMs: Date.now() - analyticsStartedAt,
-          status: "error",
-        });
       };
 
       try {
@@ -1214,13 +1203,6 @@ function AppWorkspace() {
           } : m));
           registerBackendExchange();
           markRequestIdle();
-          recordAnalyticsEvent({
-            kind: "query_completed",
-            ticker: requestSnapshot.ticker,
-            language: requestSnapshot.answerLanguage,
-            durationMs: Date.now() - analyticsStartedAt,
-            status: "completed",
-          });
         } else {
           await streamDecomposedQuery(
             payload,
@@ -1256,13 +1238,6 @@ function AppWorkspace() {
               );
               registerBackendExchange();
               markRequestIdle();
-              recordAnalyticsEvent({
-                kind: "query_completed",
-                ticker: requestSnapshot.ticker,
-                language: requestSnapshot.answerLanguage,
-                durationMs: Date.now() - analyticsStartedAt,
-                status: "completed",
-              });
             } else if (event.type === "error") {
               finishComparativeError(event.data);
             }
@@ -1359,13 +1334,6 @@ function AppWorkspace() {
                 ),
               );
               registerBackendExchange();
-              recordAnalyticsEvent({
-                kind: "query_completed",
-                ticker: requestSnapshot.ticker,
-                language: requestSnapshot.answerLanguage,
-                durationMs: Date.now() - analyticsStartedAt,
-                status: "completed",
-              });
               markRequestIdle();
             } else if (event.type === "error") {
               cancelPendingFlush();
@@ -1389,13 +1357,6 @@ function AppWorkspace() {
                 ),
               );
               markRequestIdle();
-              recordAnalyticsEvent({
-                kind: "query_error",
-                ticker: requestSnapshot.ticker,
-                language: requestSnapshot.answerLanguage,
-                durationMs: Date.now() - analyticsStartedAt,
-                status: "error",
-              });
             }
           },
           (error) => {
@@ -1423,13 +1384,6 @@ function AppWorkspace() {
               ),
             );
             markRequestIdle();
-            recordAnalyticsEvent({
-              kind: "query_error",
-              ticker: requestSnapshot.ticker,
-              language: requestSnapshot.answerLanguage,
-              durationMs: Date.now() - analyticsStartedAt,
-              status: "connection_closed",
-            });
           },
           controller.signal,
         );
@@ -1458,13 +1412,6 @@ function AppWorkspace() {
           ),
         );
         markRequestIdle();
-        recordAnalyticsEvent({
-          kind: "query_error",
-          ticker: requestSnapshot.ticker,
-          language: requestSnapshot.answerLanguage,
-          durationMs: Date.now() - analyticsStartedAt,
-          status: "error",
-        });
       } finally {
         cancelPendingFlush();
         finishRequest(controller);
@@ -1715,12 +1662,6 @@ function AppWorkspace() {
       variantId: feedback?.variantId ?? null,
     };
     void answerActions.feedback(target, feedback);
-    recordAnalyticsEvent({
-      kind: "feedback",
-      status: feedback
-        ? `${feedback.rating}${feedback.category ? `:${feedback.category}` : ""}`
-        : "cleared",
-    });
   }, [activeConversationId, answerActions]);
 
   const handleSaveAnswerVersion = useCallback(async (target: { messageId: string; variantId: string | null }) => {
@@ -2550,10 +2491,11 @@ function AppWorkspace() {
                 onClearSelectedRun={() => navigate("/pipeline")}
               />
                 ) : activeView === "system" ? (
-              <SystemInfoPanel
-                onOpenDocuments={() => handleSelectWorkspaceView("documents")}
-                onOpenRetrieval={() => handleSelectWorkspaceView("retrieval")}
-                onOpenEvaluation={() => handleSelectWorkspaceView("evaluation")}
+              resolvedRoute.id === "logs" ? <LogsPage /> : <SettingsPage
+                theme={themePreference} onThemeChange={handleSelectTheme}
+                storageMode={storageMode} storageWarning={storageWarning} writerStatus={writerStatus}
+                onRequestWriter={requestLibraryWriter} onExportBackup={handleExportBackup}
+                onImportBackup={handleImportBackup}
               />
                 ) : activeView === "evaluation" ? (
               <EvaluationPanel

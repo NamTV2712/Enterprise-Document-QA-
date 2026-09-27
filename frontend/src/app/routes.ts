@@ -96,7 +96,7 @@ export const SHELL_NAVIGATION_SECTIONS: readonly ShellNavigationSection[] = [
   {
     id: "manage", labelKey: "nav.groupManage", items: [
       { routeId: "settings", path: "/settings", labelKey: "nav.settings", descriptionKey: "nav.settingsDescription", icon: "system", accentFamily: "system", availability: "available" },
-      { routeId: "logs", path: "/logs", labelKey: "nav.logs", descriptionKey: "nav.logsDescription", icon: "system", accentFamily: "system", availability: "deferred" },
+      { routeId: "logs", path: "/logs", labelKey: "nav.logs", descriptionKey: "nav.logsDescription", icon: "system", accentFamily: "system", availability: "available" },
     ],
   },
 ] as const;
@@ -108,7 +108,7 @@ const LEGACY_VIEW_TO_ROUTE: Readonly<Record<WorkspaceView, ShellRouteId>> = {
   datasets: "datasets",
 };
 
-const DEFERRED_ROUTE_IDS = new Set<AppRouteId>(["logs"]);
+const DEFERRED_ROUTE_IDS = new Set<AppRouteId>();
 
 function safeDecode(value: string): string {
   try { return decodeURIComponent(value); } catch { return value; }

@@ -33,7 +33,8 @@ test.describe("UI-002 routing and shell", () => {
       await page.goto(path, { waitUntil: "domcontentloaded" });
       await expect(page.getByRole("main", { name: "Research workspace" })).toHaveAttribute("data-route-id", routeId);
     }
-    await expect(page.locator("[data-route-state='unavailable']")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Logs", exact: true })).toBeVisible();
+    await expect(page.getByText("Private data is not connected")).toBeVisible();
   });
 
   test("translates legacy URLs once and preserves query and evidence identity", async ({ page }) => {

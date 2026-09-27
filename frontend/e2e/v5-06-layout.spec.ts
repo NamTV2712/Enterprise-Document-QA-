@@ -148,7 +148,7 @@ test.describe("V5-06 responsive workbench", () => {
     await installApiFixtures(page);
     await loadAnswer(page, 1920, 1080);
 
-    const resizer = page.locator("[data-pane-resizer='sources']");
+    const resizer = page.getByRole("separator", { name: "Resize Sources pane" });
     await expect(resizer).toHaveAttribute("aria-valuemin", "300");
     await expect(resizer).toHaveAttribute("aria-valuemax", "400");
     const initial = await readPanePreferences(page);

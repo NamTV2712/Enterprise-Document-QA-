@@ -224,7 +224,7 @@ export function PipelineExecution({ events = [], trace, isStreaming = false }: P
           <button
             type="button"
             onClick={() => setShowDetails((prev) => !prev)}
-            className="text-blue-400 hover:text-blue-300 font-medium transition-colors ml-1"
+            className="text-[var(--accent-text)] hover:underline font-medium transition-colors ml-1 min-h-11 sm:min-h-0"
           >
             {showDetails ? (locale === "vi" ? "Ẩn chi tiết" : "Hide details") : (locale === "vi" ? "Xem chi tiết" : "View details")}
           </button>

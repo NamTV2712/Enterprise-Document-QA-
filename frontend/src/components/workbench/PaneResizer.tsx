@@ -169,23 +169,27 @@ export function PaneResizer({
 
   return (
     <div
-      ref={elementRef}
       className={`workbench-pane-resizer workbench-pane-resizer--${pane}`}
       data-pane-resizer={pane}
       data-pane-resizer-width={width}
-      role="separator"
-      tabIndex={0}
-      aria-orientation="vertical"
-      aria-valuemin={limits.min}
-      aria-valuemax={limits.max}
-      aria-valuenow={clampPaneWidth(pane, width)}
-      aria-valuetext={`${clampPaneWidth(pane, width)}px ${label}`}
-      aria-label={vi ? `Đổi độ rộng ${label}` : `Resize ${label}`}
-      onPointerDown={handlePointerDown}
-      onDoubleClick={reset}
-      onKeyDown={handleKeyDown}
     >
-      <span className="workbench-pane-resizer__line" aria-hidden="true" />
+      <div
+        ref={elementRef}
+        className="workbench-pane-resizer__handle"
+        role="separator"
+        tabIndex={0}
+        aria-orientation="vertical"
+        aria-valuemin={limits.min}
+        aria-valuemax={limits.max}
+        aria-valuenow={clampPaneWidth(pane, width)}
+        aria-valuetext={`${clampPaneWidth(pane, width)}px ${label}`}
+        aria-label={vi ? `Đổi độ rộng ${label}` : `Resize ${label}`}
+        onPointerDown={handlePointerDown}
+        onDoubleClick={reset}
+        onKeyDown={handleKeyDown}
+      >
+        <span className="workbench-pane-resizer__line" aria-hidden="true" />
+      </div>
       <details className="workbench-pane-resizer__menu">
         <summary aria-label={vi ? `Mở điều khiển kích thước ${label}` : `Open ${label} size controls`}>⋯</summary>
         <div className="workbench-pane-resizer__controls" role="group" aria-label={vi ? `Điều khiển kích thước ${label}` : `${label} size controls`}>

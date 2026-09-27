@@ -456,7 +456,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                 <span className="sr-only">
                   {locale === "vi" ? "Trợ lý Nghiên cứu Hồ sơ SEC" : "SEC Filing Research Assistant"}
                 </span>
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[var(--state-success-border)]">
                   Answer
                 </span>
                 <span className="text-xs text-slate-400 font-mono">
@@ -671,7 +671,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                       key={source.chunk_id || idx}
                       type="button"
                       onClick={() => inspectCitation(idx)}
-                      className="px-2.5 py-0.5 rounded-lg border border-slate-800 bg-slate-900/80 hover:bg-slate-800 text-xs font-mono text-blue-400 font-semibold transition-colors"
+                      className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 px-2.5 py-0.5 rounded-lg border border-slate-800 bg-slate-900/80 hover:bg-slate-800 text-xs font-mono text-[var(--accent-text)] font-semibold transition-colors"
                       title={`Open source [${idx + 1}]`}
                     >
                       [{idx + 1}]

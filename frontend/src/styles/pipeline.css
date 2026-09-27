@@ -46,7 +46,7 @@
 .pipeline-connection-chip.is-connected {
   border-color: color-mix(in srgb, var(--success) 42%, var(--border-subtle));
   background: color-mix(in srgb, var(--success) 10%, var(--surface-raised));
-  color: var(--success);
+  color: var(--state-success-text);
 }
 
 .pipeline-policy-note,
@@ -136,6 +136,11 @@
   overflow-x: auto;
   padding-bottom: 0.45rem;
   scrollbar-width: thin;
+}
+
+.pipeline-flow-track:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
 }
 
 .pipeline-flow-item {

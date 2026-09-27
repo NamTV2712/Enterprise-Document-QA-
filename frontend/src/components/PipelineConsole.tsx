@@ -816,7 +816,7 @@ export function PipelineConsole({
             )}
             {definition && (
               <div className="console-card__body pipeline-flow-body">
-                <div className="pipeline-flow-track" aria-label={locale === "vi" ? "Thứ tự các bước staging" : "Staging step order"}>
+                <div className="pipeline-flow-track" role="region" tabIndex={0} aria-label={locale === "vi" ? "Thứ tự các bước staging" : "Staging step order"}>
                   {definition.stages.map((stage, index) => {
                     const step = selectedRun?.steps.find((candidate) => candidate.stage_id === stage.stage_id);
                     const stageName = (copy.stageNames as Record<string, string>)[stage.stage_id] ?? stage.stage_id;

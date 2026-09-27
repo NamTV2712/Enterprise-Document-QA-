@@ -158,13 +158,13 @@
 
 .console-btn--primary {
   border-color: transparent;
-  background: var(--primary);
-  color: #ffffff;
+  background: var(--accent-button-bg);
+  color: var(--accent-button-text);
   box-shadow: 0 4px 14px color-mix(in srgb, var(--primary) 32%, transparent);
 }
 
 .console-btn--primary:hover:not(:disabled) {
-  background: var(--primary-hover);
+  background: var(--accent-button-bg);
   box-shadow: 0 6px 18px color-mix(in srgb, var(--primary) 42%, transparent);
 }
 
@@ -497,6 +497,11 @@
   font-size: 0.75rem;
   color: var(--text-muted);
   overflow-wrap: anywhere;
+}
+
+/* Muted text loses contrast against the selected row's stronger tint. */
+.console-table tbody tr.is-selected .console-table__secondary {
+  color: var(--text-secondary);
 }
 
 /* --- Company avatar ------------------------------------------------------ */
@@ -1740,6 +1745,18 @@
 }
 
 @media (max-width: 640px) {
+  .console-btn {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  .console-input,
+  .search-query-form .console-input,
+  .retrieval-query-form .console-input {
+    min-height: 2.75rem;
+    font-size: 1rem;
+  }
+
   .conversation-followups__grid,
   .conversation-insights__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

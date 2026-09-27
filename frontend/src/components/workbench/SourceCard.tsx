@@ -103,7 +103,7 @@ export function SourceCard({
     source.filing_date ? "Filed " + source.filing_date : null,
     source.report_date ? "Report " + source.report_date : null,
   ].filter(Boolean).join(" · ");
-  const section = source.section || meta.section;
+  const section = source.section || (meta.section === "General Document" ? "" : meta.section);
   const advancedScoreKind = scoreKindLabel(source, locale);
   const statusId = idPrefix + "-status-" + index;
   const selectionLabel = (vi ? "Mở đoạn trích nguồn" : "Open source excerpt") + " " + (index + 1) + ": " + source.citation;
@@ -230,11 +230,8 @@ export function SourceCard({
             {excerpt}
           </span>
           <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-1">
-            <span className="px-1.5 py-0.5 rounded bg-slate-800/80 border border-slate-700/60 font-medium text-[var(--text-muted)]">
-              {section === "risk_factors" ? "Risk Factors" : section ? section.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Risk Factors"}
-            </span>
-            <span className="text-slate-500 font-mono">
-              p. {index === 0 ? "12" : index === 1 ? "28" : index === 2 ? "45" : index === 3 ? "67" : "88"}
+            <span className="px-1.5 py-0.5 rounded bg-slate-800/80 border border-slate-700/60 font-medium text-[var(--text-secondary)]">
+              {section === "risk_factors" ? "Risk Factors" : section ? section.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : (vi ? "Không có thông tin mục" : "Section unavailable")}
             </span>
           </div>
         </span>

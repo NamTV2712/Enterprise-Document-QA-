@@ -241,9 +241,15 @@
 
 .source-card__select.is-selected {
   border-color: #3b82f6 !important;
-  background: rgba(30, 58, 138, 0.25) !important;
+  background: var(--surface-selected) !important;
   box-shadow: 0 0 0 1px #3b82f6 !important;
   outline: none;
+}
+
+.source-card__select.is-selected .source-card__excerpt,
+.source-card__select.is-selected .source-card__meta,
+.source-card__select.is-selected .source-card__state {
+  color: var(--text-secondary);
 }
 
 .source-card__select:focus-visible {
@@ -776,7 +782,13 @@
   touch-action: none;
 }
 
-.workbench-pane-resizer::before {
+.workbench-pane-resizer__handle {
+  position: absolute;
+  inset: 0;
+  outline: none;
+}
+
+.workbench-pane-resizer__handle::before {
   position: absolute;
   z-index: -1;
   top: 0;
@@ -801,13 +813,13 @@
 }
 
 .workbench-pane-resizer:hover .workbench-pane-resizer__line,
-.workbench-pane-resizer:focus-visible .workbench-pane-resizer__line,
+.workbench-pane-resizer__handle:focus-visible .workbench-pane-resizer__line,
 .workbench-pane-resizer:active .workbench-pane-resizer__line {
   background: var(--accent-text);
   opacity: 1;
 }
 
-.workbench-pane-resizer:focus-visible {
+.workbench-pane-resizer__handle:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
@@ -1089,5 +1101,41 @@
   .workbench-pane-resizer__controls button,
   .workbench-context__switcher button {
     transition: none;
+  }
+}
+
+/* Keep dense desktop controls, but give phone actions a usable hit area. */
+@media (max-width: 640px) {
+  .evidence-drawer-dialog .evidence-workspace-rail:has(.document-workspace) {
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100%;
+  }
+
+  .evidence-drawer-dialog .context-panel:has(.document-workspace) > .sources-pane {
+    display: none;
+  }
+
+  .evidence-drawer-dialog .document-workspace__header-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    width: 100%;
+  }
+
+  .workbench-application-main :is(button, summary),
+  .evidence-drawer-dialog :is(button, summary) {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  .workbench-application-main :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea),
+  .evidence-drawer-dialog :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    font-size: 1rem;
+  }
+
+  .workbench-application-main :is(input:not([type="checkbox"]):not([type="radio"]):not([data-composite-input]), select),
+  .evidence-drawer-dialog :is(input:not([type="checkbox"]):not([type="radio"]):not([data-composite-input]), select),
+  .evidence-drawer-dialog [data-composite-field] {
+    min-height: 2.75rem;
   }
 }

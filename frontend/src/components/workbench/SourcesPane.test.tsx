@@ -77,6 +77,13 @@ function renderPane(
 }
 
 describe("SourcesPane", () => {
+  test("does not manufacture pages or a Risk Factors section for unlocated excerpts", () => {
+    renderPane({ sources: [{ citation: "Unclassified excerpt", text_preview: "Indexed text without page or section metadata." }] });
+    expect(screen.queryByText(/^p\.\s*\d+$/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Risk Factors")).not.toBeInTheDocument();
+    expect(screen.getByText("Section unavailable")).toBeInTheDocument();
+  });
+
   test("renders one source stack with honest saved and stale states", () => {
     renderPane();
 

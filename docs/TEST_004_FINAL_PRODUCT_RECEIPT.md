@@ -152,6 +152,14 @@ when `done` is omitted; stale selectors were aligned to current semantic labels.
 TEST-002 Python/TS route, enum, null/zero/false, revision, cursor, Unicode and
 SSE assertions remain green. No request/response contract changed.
 
+Representative commands actually run: `python -m pytest -q --tb=short`,
+`python -m pytest -q -rs --tb=short`, `bun install --frozen-lockfile`,
+`bun run lint`, `bun run test`, `bun run build`,
+`bun run test:e2e-product`, `bun run test:e2e-integration`,
+`bun run test:e2e-local`, `bunx playwright test e2e/test-002-contracts.spec.ts
+--workers=2`, and `bunx playwright test e2e/test-003-visual.spec.ts -g
+'@(native|responsive) (chat|research|evaluation)' --workers=2`.
+
 ## G — Reproduced defects, repair and replay
 
 All four product defects were P2; each failed in a focused real-browser or
@@ -172,8 +180,9 @@ component check before the smallest correction and passed after repair:
    Firefox axe, final two-browser hover/focus and TEST-003 Evaluation pass.
 
 Test-only corrections aligned legacy reader/source locators, preserved a real
-omitted-`done` assertion, and isolated bootstrap environment overrides. An
-intermediate sequential Chat→Research test was rejected after one 21/22 clean
+omitted-`done` assertion, isolated bootstrap environment overrides, and waited
+for the enabled send control in the partial-stream unit test under parallel
+load. An intermediate sequential Chat→Research test was rejected after one 21/22 clean
 run: its second request could be withheld during a conversation transition and
 it could relabel an existing Chat conversation. Independent fresh-family tests
 now assert both the URL and completed SSE; the final 24/24 run is authoritative.
@@ -184,7 +193,8 @@ No deterministic P0/P1/P2 acceptance regression remains.
 TEST-004 production repairs, real-server tests and regressions are in
 `defec4f62b59fa108501601a3e10b1a09ef35ada`; independent Chat/Research
 test correction in `0609e2ff4fe33a09358d1620e1cf7e648ff30bba`. Closure
-documentation is a separate commit. README's real product command and
+documentation is a separate commit; a final parallel-load unit-test readiness
+followup remains test-only. README's real product command and
 server-backed Analytics wording, and DESIGN's Search/Models endpoints, were
 corrected; ARCHITECTURE and FRONTEND_CONTRACT needed no material change.
 No dependency/lockfile, canonical data, `.env`, generated DB/WAL/log/report,

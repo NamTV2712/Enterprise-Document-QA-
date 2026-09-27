@@ -6,7 +6,8 @@ TEST-004-A through H COMPLETE. [Final product receipt](docs/TEST_004_FINAL_PRODU
 is authoritative for the 13-surface matrix, commands, repaired defects and
 remaining limits. Started at `e4c6710` on `codex/bilingual-research-workspace`;
 source/test commits `defec4f6` and `0609e2f`, followed by a separate closure
-documentation commit. The final source was replayed in a managed detached,
+documentation commit and a test-only send-readiness correction exposed by the
+final-HEAD replay. The final source was replayed in a managed detached,
 data-free checkout with no `.env` or untracked source: app import/startup and
 shutdown PASS, 83 unique routes, frontend frozen install/TypeScript/build PASS.
 The original 12 unrelated untracked paths remain untouched in the main tree.

@@ -31,7 +31,7 @@ handlers and a temporary SQLite workspace. No `.env`, provider, canonical
   axe analyses with zero reported A/AA violations and zero body/root overflow.
   Selected generated screenshots inspected but untracked.
 - G: Four reproduced P2 visual/interaction defects repaired with focused
-  failing regressions; test-only selector/isolation/SSE assertions corrected.
+  failing regressions; test-only selector/isolation/SSE/send-readiness assertions corrected.
   TEST-002 browser contracts **4/4**, focused TS/component contracts **118/118**,
   affected TEST-003 Chat/Research/Evaluation native/responsive **30/30**,
   local reader/identity suite **6/6**. Final clean source HEAD `0609e2f`

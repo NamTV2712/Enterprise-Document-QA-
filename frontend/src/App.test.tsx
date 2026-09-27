@@ -437,7 +437,9 @@ describe("App request cancellation", () => {
     fireEvent.change(input, {
       target: { value: "What are Apple's main risk factors?" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Send question" }));
+    const send = screen.getByRole("button", { name: "Send question" });
+    await waitFor(() => expect(send).toBeEnabled());
+    fireEvent.click(send);
 
     await screen.findByText("Partial answer");
     expect(

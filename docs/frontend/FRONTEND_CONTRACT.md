@@ -288,3 +288,54 @@ reconciliation. Public mode, unauthorized, denied, unknown job, validation,
 network, and stream failures remain distinct. Desktop preserves the reference
 main/list and selected-run rail; compact/mobile layouts stack them without
 body/root horizontal overflow or squeezing the history table.
+
+## Evaluation workspace acceptance (UI-011)
+
+`/evaluation` is one native Evaluation workspace. The existing
+`/evaluation/runs/:runId` route owns canonical selected identity: its default is
+a validated public publication, while `?source=job` explicitly selects the
+private EVAL-003 job namespace. Report and job IDs are never inferred from
+payload shape. Direct links and Back/Forward preserve the discriminator.
+
+EVAL-001 is the only metric authority. The workspace renders exactly its six
+versioned native definitions and keeps computed numeric zero, computed boolean
+false, `unavailable`, and `not_applicable` distinct. Definitions keep their
+backend meanings: citation-index validity does not claim support, and keyword
+recall proxy does not claim Recall@K. Public native results contain safe IDs,
+hashes, metrics, counts, and denominators; legacy reports are explicitly
+metadata-only.
+
+EVAL-002 owns every analytical result. Comparison displays the returned
+baseline, candidate, `candidate_minus_baseline`, coverage, denominators and
+compatibility reasons, including null incompatible deltas; React does not
+choose a winner or calculate confidence. Trends render backend observations in
+their returned binding groups on a fixed ratio scale, with a table equivalent,
+and never connect missing points, smooth, merge, forecast, or generate demo
+history. Failures use only fallback expectation mismatch, invalid citation
+index, missing required keyword, and unavailable prerequisite. The last is not
+relabeled as model failure.
+
+Private jobs reuse the UI-010 app-level local-workspace session. The token is
+never placed in storage, cookies, URLs, query strings, rendered text, or logs;
+only private evaluation routes receive it. One explicit create submits one
+idempotency key and adopts the server's canonical queued ID, revision, frozen
+plan, six metrics, and `provider_attempt_slot` budget. The only durable steps
+are `execute_cases` and `aggregate_report`; absent progress stays unknown.
+Private completion never implies public publication.
+
+Selected job detail, projected results, ordered finite SSE batches and cancel
+responses share an identity/session/page lifetime. AbortController plus a
+monotonic epoch rejects late A→B→A work. Stream close/network failure is not a
+job state. Cancellation sends current `If-Match`, prevents duplicates, exposes
+409 reconciliation, and keeps cancelling/cancelled distinct. Interrupted is a
+terminal state with no unsupported resume/retry/restart control. The private
+results client drops raw question, answer, ground-truth and evidence fields at
+the transport boundary before state is created.
+
+The five workspace areas are keyboard-operable tabs with labelled panels,
+visible focus and non-color state text. Wide layouts preserve the metric strip,
+publication/job list and selected rail; compact/mobile layouts stack rather
+than squeeze tables. The required 1586×992, 1440×900, 1280×856, 1024×768,
+768×900, 390×844 and 1440×700 rendered gates require zero body/root horizontal
+overflow, reduced-motion support, English/Vietnamese operation and WCAG A/AA
+axe results with no violations in the workspace scope.

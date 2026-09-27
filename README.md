@@ -55,9 +55,9 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 | Cache | Filter-aware semantic response cache for repeated stateless queries |
 | Memory | Multi-turn backend memory, query rewriting, and a searchable local conversation library with bookmarks, Markdown export, and versioned JSON backup/restore |
 | Decomposition | Comparative and enumeration queries decomposed into focused sub-queries |
-| Evaluation | Fixed benchmark with faithfulness, relevancy, and context precision metrics |
+| Evaluation | Native v1 definitions, validated publications, backend-owned comparison/trends/failures, and protected frozen jobs |
 | Research workspace | Vite/React interface with searchable company and section controls, English/Vietnamese UI and answer selection, streaming answers, measured request-stage traces when the backend provides them, conservative source-bound financial metric cards when the retrieved evidence supports them, a first-class Sources pane and shared Document pane backed by indexed excerpts with exact chunk/hash/revision synchronization across Structured, Normalized text, and an optional provenance-bound PDF representation, canonical evidence deep links, accent-insensitive evidence inspection with per-panel search and copy, per-answer bookmarks, feedback, private notes, local evidence collections, a reliable conversation Library, JSON backup/restore, session context status, glossary/help, research templates, command palette, keyboard shortcuts, lazy tool panels, and responsive Light/Dark themes |
-| Research tools | Provider-free Retrieval Lab for BM25/dense/RRF/reranker trace inspection with preset comparison and JSON/CSV export, read-only Document Explorer with filing/chunk search, Search workspace, public-report-only Evaluation, truthful Models and Datasets registries over configured/runtime identity plus corpus/evaluation provenance, an isolated Pipeline staging workspace, local Analytics, System & provenance metadata without filesystem paths or secrets, and three lazy-loaded Archify diagrams under Architecture |
+| Research tools | Provider-free Retrieval Lab for BM25/dense/RRF/reranker trace inspection with preset comparison and JSON/CSV export, read-only Document Explorer with filing/chunk search, Search workspace, native Evaluation definitions/public analytics plus memory-gated frozen jobs, truthful Models and Datasets registries over configured/runtime identity plus corpus/evaluation provenance, an isolated Pipeline staging workspace, local Analytics, System & provenance metadata without filesystem paths or secrets, and three lazy-loaded Archify diagrams under Architecture |
 | Conversation UX | Separate Overview and Conversation views, responsive 216px wide/56px compact desktop navigation, mobile workspace navigation, bounded answer cards, contextual scope controls beside the composer, and interpreted-query metadata |
 
 The frontend's document reader caches indexed chunk details for five minutes
@@ -425,6 +425,19 @@ Progress is the last durable DATA-004 receipt and can lag a committed case
 at a cancellation/crash boundary; the private results count remains
 authoritative.
 
+The `/evaluation` workspace consumes these contracts without running an
+evaluation in the browser. `/evaluation/runs/{id}` is the canonical selected
+publication route; private job links use the same existing route with
+`?source=job` so report and job identities remain explicit. Public definitions,
+publications, results, comparison, trends, and failures are anonymous reads.
+Private job list/create/detail/results/cancel/events reuse the Pipeline
+workspace token owner, which stores the credential in memory only. The UI
+projects private results to identifiers, hashes, definitions, aggregates, and
+metrics before React state, dropping raw question, answer, ground-truth, and
+evidence fields. It preserves computed zero/false separately from unavailable
+and not-applicable, displays only backend deltas/taxonomy/progress, and offers
+no client evaluator, publication, resume, retry, or provider path.
+
 Current official benchmark: the two-phase pipeline (offline Phase 1
 frozen retrieval artifact, then frozen-evidence generation and judging) now
 uses the promoted `selective_packed_v5_enumeration_candidate` strategy over
@@ -648,17 +661,15 @@ visible rather than implying cloud synchronization.
 
 ### Evaluation, analytics, and quota-safe campaign handoff
 
-The Evaluation view reads only reports published through the allowlisted
-`data/public_evaluations/` contract. It exposes provenance, case evidence, and
-aggregate scores without browsing arbitrary diagnostic files. The Recorded
-demo is explicitly labelled and is provider-free; it is not an official
-benchmark. The Analytics view stores only local operational metadata (event
-kind, language, ticker, duration, and timestamp). Its export never includes
-questions, answers, source text, session IDs, or secrets.
-
-Selected evaluation reports can also be exported from the workspace as
-provenance-preserving JSON or case-level CSV. These exports are local UI
-artifacts and do not invoke a provider.
+The Evaluation view reads validated publications through the allowlisted
+`data/public_evaluations/` contract and exposes text-free native case metrics,
+denominators, bindings, comparison eligibility, grouped trend observations,
+and the four native failure categories. Legacy publications are metadata-only
+compatibility records. The workspace does not export or render stored question,
+answer, ground-truth, or evidence text. The Analytics view stores only local
+operational metadata (event kind, language, ticker, duration, and timestamp).
+Its export never includes questions, answers, source text, session IDs, or
+secrets.
 
 The bilingual campaign is registered before execution. Its manifest freezes
 five intents in English and Vietnamese, the canonical artifact hash, and a

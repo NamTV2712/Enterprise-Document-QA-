@@ -87,10 +87,11 @@ render `/retrieval/inspect` traces without generation or confidence claims;
 Library renders browser-local conversations, evidence, and storage state;
 Models renders only `/system/info` retrieval fields; Pipeline renders the
 API-007 public definition and, after explicit local connection, staged durable
-job history/detail; and Evaluation renders only public
-evaluation reports. Missing fields use an explicit unavailable state rather
-than a mock value. These rules apply in both themes and at every responsive
-breakpoint.
+job history/detail; and Evaluation renders EVAL-001 definitions, EVAL-002
+public publications/analytics, and EVAL-003 frozen job controls after the same
+explicit memory-only local connection. Missing fields use an explicit
+unavailable state rather than a mock value. These rules apply in both themes
+and at every responsive breakpoint.
 
 ## PDF representation UX
 

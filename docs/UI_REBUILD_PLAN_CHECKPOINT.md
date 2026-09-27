@@ -5741,3 +5741,207 @@ latest project-state section for evidence and exact validation commands.
 `UI-011 — Evaluation`, under a separate feature request. API-006 is already
 complete. No hygiene blocker was reproduced that should precede UI-011; retain
 the staged private-auth limitation and schedule the P3 follow-ups separately.
+
+## UI-011-A — Evaluation contract and ownership (2026-09-26)
+
+UI-011 is now in progress, starting at `f3fb42a` with clean tracked/staged
+source and the same 12 unrelated untracked paths. The immediately preceding
+audit is a completed prerequisite, not a receipt for UI-011. No roadmap work
+after Evaluation is authorized here.
+
+### Contract and visual authority
+
+Master-plan sections 9, 10, 12, 14-16 and the task graph define one Evaluation
+workspace: definitions, run history/report rail, comparison, trends, failure
+analysis, and private frozen job controls. UI-002 already owns `/evaluation`
+and `/evaluation/runs/:runId`. A selected publication uses that existing
+canonical route. A private canonical job uses the same route with an explicit
+`source=job` query discriminator, so job/publication namespaces cannot collide;
+the default is a public report for existing links. No new route or resume/
+publication endpoint is invented. App owns navigation; the workspace owns
+selection-bound reads, filters and drafts. Back/Forward/direct links must prove
+this contract in the browser, including a private deep link while disconnected.
+
+Authoritative image inspected: `evaluation-ui-reference-dark-v1.png`,
+**1586 x 992**. Pixel geometry from the supplied image (approximate bounds):
+sidebar x0-204; topbar y0-56; content origin (221,80), right edge1568. Title and
+actions occupy y80-123; metric strip y139-293 has five reference cards with
+12px gaps, widths248-304. History x221-1218/y306-721 (997x415), selected rail
+x1231-1568/y306-721 (337x415). Lower trend x221-1004/y733-980 (783x247),
+failure x1016-1568 (552x247), 12px gap. Panels use ~16px interior spacing,
+~8px radii, compact 13-14px metadata, 16px panel headings, 22px page heading,
+24px values, and small outlined state chips. History controls are in its header,
+with 34px column header, ~54px rows and 42px pager. Charts are secondary to
+the run/detail surface. The screenshot has no top-level page tabs; additional
+catalog/compare flows will be progressive disclosures or labelled workspace
+sections, not an invented selectable evaluation engine.
+
+The screenshot's groundedness/citation accuracy/latency/pass-rate/benchmark,
+arbitrary failure labels, sample runs, sparkline improvements, date-range
+claims, account/quota and upgrade controls are not production data. Preserve
+the composition with six native metrics and actual backend populations;
+ratio visuals use fixed [0,1], observations remain separate points/groups.
+Shared shell tokens/primitives remain authoritative for existing chrome.
+Stitch is optional and has not been used for this task.
+
+### API and state map
+
+- Public anonymous: metrics catalog; mixed native/legacy publication list/detail;
+  native results; backend POST comparison; GET grouped trends; GET failures.
+  Legacy compatibility remains explicitly labelled and metadata-only; it cannot
+  enter native comparison/trends or act as a fallback metric engine.
+- Private explicit bearer: the six EVAL-003 list/create/detail/results/cancel/
+  finite-SSE routes. Reuse the app-level UI-010 memory-only owner. No global
+  bearer transport, persistent token, URL credential or second session owner.
+- Creation freezes and queues a registered artifact with native six-metric set,
+  provider-backed mode and provider_attempt_slot budget. One logical attempt
+  retains one Idempotency-Key; no automatic ambiguous POST retry. Server returns
+  canonical ID/revision/frozen binding/state. No optimistic job identity.
+- Cancellation uses current If-Match, duplicate protection, visible 409 and
+  non-forcing refresh. Requested/cancelling/cancelled are separate. Exactly
+  execute_cases and aggregate_report steps; durable progress only; interrupted
+  is terminal and has no resume/retry control. Private completion is not public
+  publication. Completed durable results remain accessible after stop/failure.
+- Metric identity/version/type/meaning and status/denominator are API-owned.
+  Zero and false are computed values; null is unavailable/not-applicable, never
+  zero. Delta comes only from candidate_minus_baseline. No winner/confidence,
+  interpolated/smoothed history, invented failure taxonomy or client evaluator.
+- Private raw question, answer, ground truth and rendered evidence are dropped
+  in a typed API-boundary projection; only IDs/hashes/metrics reach UI state.
+
+### Task semantics, hierarchy and risk gate
+
+Entry: Tools/Evaluation or canonical selected identity. Intent: inspect native
+definitions/public results, compare eligible publications, or explicitly launch
+and monitor one private frozen evaluation. Available evidence: API definitions,
+published report metadata, durable private receipts. Primary action: New
+Evaluation only after local connection and execution capability. Result:
+server-canonical queued job/detail. Success is server terminal state, never
+stream close or frontend animation. Recovery: reconnect, reload/reconcile,
+correct refused inputs; no force-write or unsupported resume.
+
+Component plan: typed evaluation API/DTO module; workspace controller with
+independent public list/catalog, selected report/job, compare, trends and
+failures lifetimes; metric strip/catalog; history plus detail rail; job creation
+dialog; comparison results; trend groups and category analysis. Existing
+EvaluationPanel will be replaced after focused replacement contracts exist.
+The old client comparison must not remain the native analytics owner.
+
+State matrix: loading/empty/read-only/error/recoverable for every read; queued,
+running,cancelling,cancelled,succeeded,failed,interrupted for jobs; separate
+budget_exhausted failure; computed/unavailable/not_applicable for metrics;
+comparable/incompatible/unavailable/unpaired for comparison. Private unavailable
+is not an empty successful list. Public no-history is legitimate.
+
+Request ownership: AbortController plus successor epoch for every asynchronous
+state write (including loading/errors/mutations); selected identity and session
+generation scope detail/results/events/cancel. A#1-B-A#2 invalidates #1. One
+selected event owner resumes ordered finite batches from numeric Last-Event-ID;
+duplicates do not repaint and network closure is non-terminal. No new browser
+persistence. Notices clear with owning operation/selection. Workspace/page
+scroll owns panels; long hashes wrap in disclosures; dialogs own focus/scroll.
+
+Responsive order: title/actions, metrics, list, selected detail, trends/failures,
+comparison/catalog as requested; stack rails at compact widths and use labelled
+cards on mobile, not squeezed tables. Required captures: native1586x992,
+1440x900,1280x856,1024x768,768x900,390x844,1440x700. Body/root overflow zero;
+both themes/EN-VI, keyboard/focus/touch/reduced motion and rendered Axe checks.
+
+Five self-review risks: hidden text leakage; native/legacy/job identity
+conflation; false/zero/null coercion; stale selection/session/event mutation;
+reference mimicry introducing unsupported numbers/states. Each needs direct
+regression evidence, not only a full-suite count.
+
+### Planned execution and completion boundary
+
+B: typed client/DTO and privacy/route/header/abort/SSE tests. C: shared session,
+jobs/create/detail/events/cancel with canonical route and lifetimes. D: native
+catalog/results plus backend compare/trends/failures. E: race tests and
+production native-size capture/compare/fix loop. F/G: responsive accessibility,
+TypeScript, full Vitest/build, dedicated Chromium/Firefox and route/reference
+gates. H: artifact audit, docs, selective commits and requirement-by-requirement
+completion receipt. Prefer no backend changes or dependencies. Tests are
+synthetic/hermetic and outputs stay ignored. Current completion is unproven;
+do not report UI-011 complete until all acceptance gates are evidenced.
+
+Exact Next Action: continue UI-011-B/C, not optional EVAL-004 or DATA-005.
+
+## UI-011-B through D — typed integration and product surfaces (2026-09-27)
+
+- Added one typed `evaluationApi` for the seven public EVAL-001/002 reads and
+  six private EVAL-003 job routes. Public calls omit bearer; private calls take
+  the UI-010 runtime token explicitly. All reads/mutations accept AbortSignal;
+  create owns Idempotency-Key, cancel owns If-Match and events own numeric
+  Last-Event-ID. Error bodies are never rendered.
+- Private results use a field-by-field boundary projection. Synthetic tests put
+  sentinel question/answer/ground-truth/evidence values in transport payloads
+  and prove none reach the returned DTO or DOM.
+- Replaced the old client-computed/demo Evaluation panel with six native metric
+  cards, validated native/legacy history and selected rail, safe paged results,
+  backend comparison, grouped point-only trends, the exact four failure groups,
+  and private list/create/detail/results/cancel/events. No dependency or backend
+  change was needed.
+- Private creation adopts only the server canonical ID/state/revision/frozen
+  snapshot. The UI names provider_attempt_slot, exactly two backend steps,
+  durable/unknown progress, publication separation, budget exhaustion, and
+  terminal interruption without a retry/resume action.
+
+Focused contract receipt: API **35/35**, metrics/results **11/11**, job/event/
+cancel **17/17**, public async lifetimes **6/6**, workspace **13/13**; total
+Evaluation-focused Vitest **82/82**.
+
+## UI-011-E/F — races, visual loop, responsive and accessibility (2026-09-27)
+
+Every selected report/job/result page and compare/trend/failure request has an
+abort owner plus successor guard. Job session/selection/page lifetimes reject
+A#1→B→A#2 detail, results, event, error and cancel writes. Event batches are
+ordered/deduplicated; finite close/network failure does not alter durable job
+state. Creation is synchronously duplicate-protected and keeps its logical key
+for ambiguous transport outcomes.
+
+The production fixture was captured and inspected at all required sizes. At
+1586×992 the implementation preserves the reference's dense metric strip and
+history/selected-detail composition, while six real native definitions and
+labelled feature tabs consume more vertical space than its five unsupported
+metric cards. 1024/768 stack detail, 390 uses one-card/mobile flow, and every
+required viewport has body/root overflow 0. Both themes and EN/VI were captured.
+The workspace uses the shared keyboard Tabs primitive (Arrow/Home/End), labelled
+panels, 44px controls, non-color statuses, visible focus, reduced motion and
+trend table equivalents. Axe found one selected-row dark metadata contrast at
+4.16:1; switching that selected metadata to `--text-secondary` cleared the
+final A/AA scan.
+
+Final frontend gates: TypeScript PASS; production build PASS (existing aggregate
+chunk-size warning only); full Vitest **84 files / 619 tests PASS**.
+
+## UI-011-G — production browser and reference gates (2026-09-27)
+
+Dedicated `ui-011-evaluation.spec.ts` covers all 24 requested browser areas plus
+Vietnamese semantics with hermetic data and no provider calls. Final paired run:
+**24/24** (**12 Chromium + 12 Firefox**). It captures default/catalog, selected
+report, incompatible compare, empty/real trends, failures, private unavailable,
+queued/running/results, budget/cancel/interrupted, Vietnamese, and seven viewport
+states. Canonical report/job routing, paging, Back/Forward, token non-persistence,
+private-only authorization, one POST, Last-Event-ID, revision cancellation,
+hidden-text projection, axe and overflow are asserted.
+
+Controlled Chromium shell/route/legacy/reference pass: **5/5**; after the one
+generic fixture omission was corrected, canonical `ui-routing.spec.ts` passed
+**3/3**. The r8 native reference receipt passed. Screenshots/traces/videos remain
+under ignored Playwright output and are not staged.
+
+## UI-011-H — artifact audit, commits and closure (2026-09-27)
+
+Implementation commit: `ae81384` — `feat(ui): build native evaluation workspace`.
+Backend unchanged. No Ragas/TruLens code, provider call, real credential, raw
+evaluation content, `data/` file, DB/WAL/SHM, runtime publication, build output,
+browser output or dependency was staged. Fixture tokens and hidden-text sentinels
+are synthetic. The same 12 unrelated pre-existing untracked paths were preserved.
+
+README, frontend contract/design, project state and this checkpoint now describe
+the implemented public/private boundary, native semantics, routing, tests,
+visual decisions and limitations. UI-011 is complete after the documentation
+closure commit recorded by the final task receipt.
+
+Exact Next Action: `DATA-005 — Terminal telemetry/logs`. EVAL-004 remains optional
+and was not started.

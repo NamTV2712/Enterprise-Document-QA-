@@ -1,5 +1,72 @@
 # Project State
 
+## UI-011 native Evaluation workspace (2026-09-27)
+
+Implementation commit `ae81384` (`feat(ui): build native evaluation workspace`)
+replaces the historical report/demo console with one typed consumer/control
+surface for EVAL-001/002/003. `/evaluation` owns definitions, validated
+publication history/detail, backend comparison, grouped trends, native failure
+analysis, and protected frozen jobs. `/evaluation/runs/:runId` remains the
+canonical selected route; `?source=job` explicitly distinguishes a private job
+from a public report and is preserved by direct navigation and browser history.
+No backend route, schema, dependency, worker, provider, publication, benchmark,
+canonical data, or optional Ragas integration changed.
+
+The metric strip uses exactly the six native-v1 identities/meanings. Computed
+zero and false remain real values, while unavailable and not-applicable remain
+separate labelled states with their backend denominators/counts. Comparison
+uses only returned `candidate_minus_baseline` and compatibility facts. Trend
+points stay in backend binding groups with no interpolation, smoothing, merge,
+or forecast. Failure analysis uses exactly the four EVAL-002 categories and
+states that an unavailable prerequisite is not automatically model failure.
+Legacy publications are metadata-only; no client-side evaluator or native
+publication path remains in the workspace.
+
+Private job calls reuse UI-010's app-level memory-only token owner. Creation is
+one duplicate-protected POST with one logical Idempotency-Key and adopts the
+server canonical queued identity/revision/frozen plan. Budget is displayed only
+as `provider_attempt_slot`; the two durable steps are `execute_cases` and
+`aggregate_report`; unknown progress stays unknown. Detail/results/events and
+cancellation are selection/session/page epoch-bound. Finite SSE close is
+non-terminal, ordered replay uses Last-Event-ID, cancellation sends If-Match and
+reconciles 409 without overwrite, and interrupted offers no resume/retry. Raw
+private question, answer, ground-truth and evidence fields are projected away
+inside the typed API client before React state.
+
+Validation is hermetic and synthetic. Evaluation-focused Vitest coverage is
+**82 tests** (35 API, 11 metric/results, 17 job/event/cancel, 6 public request
+lifetimes, 13 workspace); the full frontend is **84 files / 619 tests**, with
+TypeScript and the production build passing. The dedicated production-browser
+gate is **24/24** (12 Chromium + 12 Firefox) and covers the prompt's 24 required
+areas, both languages/themes, axe, reduced motion, and all seven required
+viewports with zero body/root overflow. Controlled Chromium route/shell,
+legacy-privacy and Evaluation reference checks passed **5/5** after adding the
+public metric/default-404 fixture contract; the canonical route suite then
+passed **3/3**. Rendered default/report, compare, empty/real trends, failures,
+private unavailable, queued/running/results, budget/cancel/interrupted, VI, and
+responsive receipts were inspected and remain ignored test output.
+
+The authoritative `evaluation-ui-reference-dark-v1.png` is 1586×992 (sidebar
+~204px, topbar 56px, content origin ~221×80, metric/history/rail gaps ~12px).
+The implementation preserves its compact metric strip, dense history/detail
+split, state chips, radii and typography where backend truth allows. It adds a
+labelled keyboard tab row for the actual public analytics/private job surfaces,
+uses six native cards instead of five unsupported screenshot metrics, and does
+not reproduce screenshot-only groundedness, latency, pass-rate, benchmark,
+quota, or arbitrary failure data. One selected-row dark contrast defect found
+by the rendered axe gate was corrected from 4.16:1 to the tokenized secondary
+text color; final workspace scans have no reported A/AA violation.
+
+Known limitations: job execution still depends on a separately running local
+backend worker/provider configuration; there is deliberately no job resume,
+retry, publication or monetary-cost API. Legacy public publications remain
+metadata-only, and native history/trends remain honestly empty until reports
+are explicitly published. The build retains the existing >500 kB aggregate
+chunk warning outside the lazy Evaluation chunk; this task added no dependency.
+
+Exact next graph task: `DATA-005 — Terminal telemetry/logs`. Optional EVAL-004
+Ragas is not on the required spine and was not started.
+
 ## Post-rebuild correctness audit and repairs (2026-09-26)
 
 This pass started at `8dfdb3f`, not the historical UI-008 recovery baseline.

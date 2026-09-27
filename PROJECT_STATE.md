@@ -1,5 +1,90 @@
 # Project State
 
+## UI-012 complete — Analytics, Logs and Settings (2026-09-27)
+
+UI-012-A through H are COMPLETE. Implementation: `5c41f7f` (`feat(ui):
+integrate server analytics logs and supported settings`). Documentation closure
+is a separate commit. The older UI-012-A/foundation notes and audit receipts
+below describe their historical state and are preserved.
+
+Analytics is DATA-005 server truth: protected summary and UTC timeseries,
+24h/7d/30d, hour/day and all five metrics. Rates retain numerator/denominator,
+duration known/unknown populations preserve null and measured zero, and jobs
+retain namespace/outcome aggregation. Observations are not interpolated or
+smoothed and have a bounded table equivalent. The browser-local Analytics
+writer/store/range modules and obsolete tests are retired; stored history is
+untouched. Range changes read summary/series; metric/interval changes read
+series only. Explicit Refresh, no polling.
+
+Logs consumes protected `GET /logs`: seven-day API records, not process logs.
+Request/job category, returned severity and domain outcome remain independent.
+Category/level/cursor are URL-owned; filters reset cursor; page limit is 50.
+Opaque cursors pass unchanged, API order is retained, and detail disclosures
+perform no request. No hidden research/provider/credential fields enter state.
+
+Settings support matrix: theme/language are editable browser preferences;
+backup preview/confirmed import/export and writer recovery reuse existing
+owners. Connection reuses the UI-010 memory-only session, clears its input on
+submit, shares across routes and clears on disconnect/reload. Protected
+configuration status is read-only; public system/model reads have no bearer.
+Provider presence/unknown availability is not health. Fixed 30-day telemetry
+and seven-day Logs policy are read-only. No workspace-settings mutation API
+exists; no fake Save/retention/log-clear/model/provider/key controls were added.
+Architecture/help remains `/settings?panel=architecture`.
+
+Read lifetimes use abort plus monotonic epochs and selection/session identity,
+including A→B→A. Error bodies are never reflected; extra JSON fields are
+projected away before state. Public/private unavailable, unauthorized, denied,
+backend failure, invalid selectors, real empty and unmeasured are distinct.
+Analytics/Logs query selectors and direct routes preserve Back/Forward.
+
+Actual final validation on the committed implementation:
+
+- Task-focused Vitest: transport 27, Analytics 19, Logs 13, Settings 12 and
+  shared session 3 = 74/74 across five files.
+- Full Vitest: 85 files / 688 tests passed; TypeScript `bun run lint` passed.
+- Playwright production builds passed (existing aggregate >500 kB warning).
+- `e2e/ui-012-operations.spec.ts` + `e2e/ui-routing.spec.ts`: 34/34,
+  17 Chromium + 17 Firefox (28 UI-012 + six route/shell cases), 51.9s.
+- Changed guided-navigation regression: 2/2, one per browser, 12.0s.
+- Selected Pipeline/Evaluation shared-session neighbors: 6/6, three per browser,
+  16.1s. No broader reference or integration campaign is claimed.
+- Both browsers: all three routes at 1586×992, 1440×900, 1280×856, 1024×768,
+  768×900, 390×844, 1440×700, 1366×768 and 1920×1080; light/EN and dark/VI,
+  reduced motion, focus/reachable lower actions and zero body/root overflow.
+  Focused workspace axe A/AA scans returned zero violations.
+- Screenshots inspected for each route at desktop light/EN and phone dark/VI,
+  including scrolled lower content. Cards stack, log records stay readable and
+  the bucket table/pagination/help actions remain reachable.
+
+No dedicated Analytics/Logs/Settings reference exists in the nine-PNG inventory.
+`evaluation-ui-reference-dark-v1.png` (1586×992) informed shared chrome/card
+language only, not borrowed metrics or a parity target. Native browser zoom
+125/150/200% remains an external manual check; viewport tests do not certify it.
+
+UI-012 changes no backend, dependencies, canonical data, provider execution or
+official benchmark. The separate intervening audit committed backend/privacy
+and frontend race fixes; its final backend is 1234 passed / 188 warnings / 83
+unique API method/path routes, not a UI-012 test-count increase. UI-011's
+historical frontend baseline was 84 files / 619 tests; current 85 / 688 includes
+the audit's four frontend regressions.
+
+Artifact/index review and diff checks passed. Only explicit UI-012 source,
+tests and docs were staged. Screenshots, traces, bundles, DB/WAL/SHM, caches,
+real credentials and all 12 unrelated untracked paths remain excluded.
+Original UI-012 start: clean tracked/staged tree + 12 unrelated untracked paths.
+Post-audit resumption: 19 tracked dirty + 21 untracked, no staging.
+Final closure: clean tracked/staged tree + the same 12 unrelated untracked paths.
+
+Known limits: fixed read-only operational policy; Logs is not process-log
+ingestion; descriptive provider flags do not probe health; native zoom remains
+manual; existing bundle/parser/dependency warnings and the audit's separate
+Unicode-highlight/Collections-auth/multi-process caveats are unchanged.
+
+Exact Next Action: TEST-002 — Cross-layer contracts, verified from the master
+graph. TEST-003 follows the completed UI dependencies; TEST-004 waits on both.
+Optional EVAL-004/Ragas is not required. STOP: none of these tasks was started.
+
 ## Current engineering audit and repairs (2026-09-27)
 
 This audit started at `cbfdfda`, with 19 tracked dirty entries, 21 untracked

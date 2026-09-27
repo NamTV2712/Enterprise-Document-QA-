@@ -1,5 +1,57 @@
 # Frontend Contract
 
+## Operational workspace acceptance (UI-012)
+
+`/analytics` is authoritative only for DATA-005 server terminal telemetry and
+canonical terminal-job projections. Private reads use the existing app-level
+memory-only local session. URL state is `range=24h|7d|30d`, `interval=hour|day`,
+and one of the five API metric identities. Range changes read summary and series;
+metric/interval changes read series only; explicit Refresh owns new reads.
+Rates display the returned numerator/denominator and value. Measured/unknown
+duration populations and null/zero remain distinct. Job namespace/outcome counts
+retain the API aggregation: budget exhaustion is included in failed in summary,
+while its warning severity and code remain visible in Logs. UTC charts plot only
+returned observations, with no connecting line, smoothing, interpolation or
+forecast; a bounded scrollable table exposes every bucket and denominator.
+There are no fabricated cost, tokens, resource, health, confidence or quality
+metrics. The browser-local Analytics writer/store/range modules are retired;
+existing stored history is untouched and never combined with server facts.
+
+`/logs` reads only the seven-day API projection, not process log files or
+collection/job-event history. Category request/job and level info/warning/error
+remain independent of domain outcome. URL category/level/cursor support history;
+filter changes reset cursor. The fixed page limit is 50. Next passes the opaque
+cursor unchanged; Newest removes it. Records retain exact server order, including
+equal timestamps. Native disclosures show only allowed record/correlation/domain
+IDs, route template, UTC timestamp, duration, code, kind and four metadata keys.
+No research text, prompt, provider body, stack trace, cookie, credential or path
+enters page state from extra response fields.
+
+`/settings` edits only browser theme/language through the existing owners and
+offers real backup preview/confirmed merge/export and writer recovery. It reuses
+the same connection owner as Pipeline/Evaluation, clears the password input at
+submission, and never echoes or persists the bearer. Protected configuration
+status supplies read-only deployment/capabilities; public system info supplies
+projected version/retrieval facts; public Models supplies only descriptive
+generator provider/configuration/credential-presence/availability flags. Unknown
+availability is not health and browsing never invokes inference. Model/dataset
+details link to their registries. Retention 30 days and log window 7 days are
+fixed read-only DATA-005 policy. Planned workspace-settings reads/writes do not
+exist; no fake Save, clear, retention, provider/model mutation, user or key UI is
+offered. `/settings?panel=architecture` remains the existing help/diagram route.
+
+AbortController, monotonic completion epochs, and unique selection lifetimes
+reject late range/metric/filter/page/session work, including A→B→A. Disconnected,
+unauthorized, denied, public-unavailable, backend-error, invalid selectors, real
+empty and absent measurement are distinct. The private token goes only on private
+reads. Transport constructs safe typed objects before React state; status errors
+never reflect backend bodies. Cards/groups stack on compact/mobile widths; logs
+remain readable cards, tables scroll locally, all actions are reachable, focus is
+visible, and reduced motion is honored. Both browsers cover EN/light and VI/dark,
+the seven requested viewports plus 1366/1920 widths, zero body/root overflow,
+and focused axe A/AA scans. No dedicated Analytics/Logs/Settings reference exists;
+completed-shell design tokens govern these routes.
+
 ## Non-negotiable behavior
 
 - Preserve existing Vite/React/TypeScript/Tailwind/Lucide conventions.

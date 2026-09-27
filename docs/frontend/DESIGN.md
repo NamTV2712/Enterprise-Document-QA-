@@ -79,6 +79,16 @@ an `OFFICIAL_PDF` or `DERIVED_PDF` artifact.
 
 ## Truthful route surfaces
 
+UI-012 extends the same language to Analytics, Logs, and Settings without a
+dedicated reference screenshot. Analytics uses a compact population strip,
+outcome/job groups and UTC observations with a table equivalent. Logs uses
+readable record cards and native detail disclosures, with independent severity
+and outcome. Settings groups editable browser presentation/recovery controls
+separately from read-only retention, provider, deployment and system facts.
+All share the app's connection owner and explicit refresh; private-unavailable
+is never an empty dashboard. Compact layouts stack cards instead of compressing
+data, and phone chart interval/unit labels live outside the scaled SVG.
+
 The route surfaces preserve the enterprise reference composition while binding
 every value to an authoritative source. Research renders live SSE answers,
 citations, stages, and reader handoffs; Documents renders catalog metadata,

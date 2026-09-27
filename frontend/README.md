@@ -14,6 +14,25 @@ progressively disclosed so the answer remains the visual focus. The layout is
 responsive for mobile drawers, keyboard navigation, dark mode, and reduced
 motion preferences.
 
+## Analytics, Logs and Settings
+
+Analytics reads DATA-005 server summary and UTC buckets for 24h, 7d and 30d.
+Rates retain their numerator/denominator; null duration is not measured and
+zero remains real. The former browser-local Analytics writer is retired without
+deleting stored user history. Logs reads only the sanitized seven-day request/job
+projection, with category/severity filters, safe detail and opaque cursor paging.
+Neither page polls; use Refresh. URL selectors support Back/Forward.
+
+Private reads reuse the app-level local connection from Pipeline/Evaluation.
+The bearer stays in memory, is cleared on disconnect/reload, and never goes on
+public system/model reads. Public deployments show unavailable, not false zeros.
+Settings edits browser theme/language and reuses real backup preview/import,
+export and writer recovery. Retention (30 days), log window (7 days), provider
+presence, deployment/capabilities and current system facts are read-only.
+No retention, log-clear, model/provider switch or workspace-settings write API
+exists; no fake mutation controls are offered. Architecture/help remains at
+`/settings?panel=architecture`.
+
 ## Conversation Library
 
 Conversations persist through a schema-v2 repository. IndexedDB holds records

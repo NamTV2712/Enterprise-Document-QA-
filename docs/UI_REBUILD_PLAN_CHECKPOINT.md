@@ -1,5 +1,90 @@
 # Current Planning Status
 
+## UI-012 complete — Analytics, Logs and Settings (2026-09-27)
+
+UI-012-A through H are COMPLETE. Implementation: `5c41f7f` (`feat(ui):
+integrate server analytics logs and supported settings`). Documentation closure
+is a separate commit. The older UI-012-A/foundation notes and audit receipts
+below describe their historical state and are preserved.
+
+Analytics is DATA-005 server truth: protected summary and UTC timeseries,
+24h/7d/30d, hour/day and all five metrics. Rates retain numerator/denominator,
+duration known/unknown populations preserve null and measured zero, and jobs
+retain namespace/outcome aggregation. Observations are not interpolated or
+smoothed and have a bounded table equivalent. The browser-local Analytics
+writer/store/range modules and obsolete tests are retired; stored history is
+untouched. Range changes read summary/series; metric/interval changes read
+series only. Explicit Refresh, no polling.
+
+Logs consumes protected `GET /logs`: seven-day API records, not process logs.
+Request/job category, returned severity and domain outcome remain independent.
+Category/level/cursor are URL-owned; filters reset cursor; page limit is 50.
+Opaque cursors pass unchanged, API order is retained, and detail disclosures
+perform no request. No hidden research/provider/credential fields enter state.
+
+Settings support matrix: theme/language are editable browser preferences;
+backup preview/confirmed import/export and writer recovery reuse existing
+owners. Connection reuses the UI-010 memory-only session, clears its input on
+submit, shares across routes and clears on disconnect/reload. Protected
+configuration status is read-only; public system/model reads have no bearer.
+Provider presence/unknown availability is not health. Fixed 30-day telemetry
+and seven-day Logs policy are read-only. No workspace-settings mutation API
+exists; no fake Save/retention/log-clear/model/provider/key controls were added.
+Architecture/help remains `/settings?panel=architecture`.
+
+Read lifetimes use abort plus monotonic epochs and selection/session identity,
+including A→B→A. Error bodies are never reflected; extra JSON fields are
+projected away before state. Public/private unavailable, unauthorized, denied,
+backend failure, invalid selectors, real empty and unmeasured are distinct.
+Analytics/Logs query selectors and direct routes preserve Back/Forward.
+
+Actual final validation on the committed implementation:
+
+- Task-focused Vitest: transport 27, Analytics 19, Logs 13, Settings 12 and
+  shared session 3 = 74/74 across five files.
+- Full Vitest: 85 files / 688 tests passed; TypeScript `bun run lint` passed.
+- Playwright production builds passed (existing aggregate >500 kB warning).
+- `e2e/ui-012-operations.spec.ts` + `e2e/ui-routing.spec.ts`: 34/34,
+  17 Chromium + 17 Firefox (28 UI-012 + six route/shell cases), 51.9s.
+- Changed guided-navigation regression: 2/2, one per browser, 12.0s.
+- Selected Pipeline/Evaluation shared-session neighbors: 6/6, three per browser,
+  16.1s. No broader reference or integration campaign is claimed.
+- Both browsers: all three routes at 1586×992, 1440×900, 1280×856, 1024×768,
+  768×900, 390×844, 1440×700, 1366×768 and 1920×1080; light/EN and dark/VI,
+  reduced motion, focus/reachable lower actions and zero body/root overflow.
+  Focused workspace axe A/AA scans returned zero violations.
+- Screenshots inspected for each route at desktop light/EN and phone dark/VI,
+  including scrolled lower content. Cards stack, log records stay readable and
+  the bucket table/pagination/help actions remain reachable.
+
+No dedicated Analytics/Logs/Settings reference exists in the nine-PNG inventory.
+`evaluation-ui-reference-dark-v1.png` (1586×992) informed shared chrome/card
+language only, not borrowed metrics or a parity target. Native browser zoom
+125/150/200% remains an external manual check; viewport tests do not certify it.
+
+UI-012 changes no backend, dependencies, canonical data, provider execution or
+official benchmark. The separate intervening audit committed backend/privacy
+and frontend race fixes; its final backend is 1234 passed / 188 warnings / 83
+unique API method/path routes, not a UI-012 test-count increase. UI-011's
+historical frontend baseline was 84 files / 619 tests; current 85 / 688 includes
+the audit's four frontend regressions.
+
+Artifact/index review and diff checks passed. Only explicit UI-012 source,
+tests and docs were staged. Screenshots, traces, bundles, DB/WAL/SHM, caches,
+real credentials and all 12 unrelated untracked paths remain excluded.
+Original UI-012 start: clean tracked/staged tree + 12 unrelated untracked paths.
+Post-audit resumption: 19 tracked dirty + 21 untracked, no staging.
+Final closure: clean tracked/staged tree + the same 12 unrelated untracked paths.
+
+Known limits: fixed read-only operational policy; Logs is not process-log
+ingestion; descriptive provider flags do not probe health; native zoom remains
+manual; existing bundle/parser/dependency warnings and the audit's separate
+Unicode-highlight/Collections-auth/multi-process caveats are unchanged.
+
+Exact Next Action: TEST-002 — Cross-layer contracts, verified from the master
+graph. TEST-003 follows the completed UI dependencies; TEST-004 waits on both.
+Optional EVAL-004/Ragas is not required. STOP: none of these tasks was started.
+
 ## Current engineering audit and repairs (2026-09-27)
 
 This audit started at `cbfdfda`, with 19 tracked dirty entries, 21 untracked
@@ -32,6 +117,103 @@ integration remains staged; the known Unicode highlight defect remains P3;
 migration serialization is in-process, not a multi-process migration protocol.
 Next action: return to UI-012 validation/documentation/closure under its own
 scope, then the graph's cross-layer/visual gates. Do not restart API-006.
+
+## UI-012-A — Exact operational product contract (2026-09-27)
+
+### UI-012-B/C/D/E — Implemented foundation and focused verification
+
+Typed transport now consumes DATA-005 summary/timeseries/logs, protected
+configuration status, public system facts, and public `/models` descriptive
+provider flags. Transport constructs allowlisted objects before React state,
+preserves null/zero, caps timeseries at 720, validates identities and returns
+status-only errors without reflecting API bodies. Shared abort/epoch reads are
+range/filter/cursor/refresh/session bound and hide stale data during render.
+Analytics shows exact rate populations, measured/unknown durations, namespace
+and outcome job counts; UTC points have a table and no connecting/interpolated
+line. Logs preserves API order, category/severity/outcome and opaque cursors;
+details are presentation-only. Settings reuses app presentation/storage/import
+owners and the memory-only session, with read-only policy/capability/provider
+flags. Provider presence/unknown availability is never health. No backend edit.
+
+Retired browser Analytics writer, range/store modules and obsolete tests;
+historical browser storage is left untouched. Updated route/copy ownership.
+Focused first pass: 70/70 including the existing three shared-session tests;
+subsequent provider transport addition yields 68 task-focused tests. TypeScript
+and build passed. Initial full Vitest had the previously recorded 5-second App
+history timeout; isolated App rerun passed and full rerun passed 85 files / 681
+tests without changing timeout/assertions. Build retains the existing aggregate
+chunk warning. Rendered Chromium exposed select accessible names including
+their options; explicit control names fixed that. Screenshot review also added
+the missing shared secondary-button geometry. Browser validation is ongoing;
+these observations are not a completion claim.
+
+RECORDED BEFORE IMPLEMENTATION. Starting HEAD `cbfdfda`; tracked/staged tree
+clean, all 12 unrelated untracked paths preserved. Only UI-012 is authorized.
+
+Routes: `/analytics`, `/logs`, `/settings`, retaining `/settings?panel=architecture`.
+Analytics reads protected DATA-005 summary and timeseries. URL selectors are
+`range=24h|7d|30d`, `interval=hour|day`, and the five backend metric identities.
+Summary preserves outcome counts, rate numerator/denominator, known/unknown
+duration populations and terminal-job namespace/outcome counts. Timeseries plots
+only returned UTC buckets, at most 720; null is absent measurement, zero is real.
+An accessible table accompanies unsmoothed observations. Explicit refresh only.
+
+Logs reads protected `GET /logs`, category request/job, level info/warning/error,
+limit 50 and unmodified opaque cursor. Category/level/cursor live in URL history;
+filter changes reset cursor. Server order is retained. Row disclosures show only
+projected safe facts; severity, outcome, job identity and request correlation
+remain distinct. Seven-day API projection excludes conventional process logs.
+
+Settings support matrix: browser theme and EN/VI language are editable through
+existing app owners; backup/export/import and storage recovery reuse existing
+conversation owners; local connect/disconnect reuse UI-010 memory-only session.
+Protected `/system/configuration-status` supplies deployment/capability flags.
+Public `/system/info` supplies only explicitly projected safe current facts.
+No `/workspace/settings` GET/PATCH exists (router inventory/source confirms the
+master's planned routes have not been implemented). Thus operational retention
+30 days / logs 7 days is read-only and no server Save, retention toggle, provider
+switch, model switch, arbitrary configuration, user or key manager is created.
+Provider/model details link to UI-009 rather than duplicate registry controls.
+No backend addition is required by this capability-based UI-012 scope.
+
+References: all nine local PNGs match the gap-matrix inventory. None is dedicated
+to Analytics, Logs or Settings. Evaluation's 1586×992 reference was inspected
+only for established shared chrome, compact cards/table and disclosure language;
+there is no screenshot-parity target or borrowed metric. Existing design tokens
+and completed shell are the visual authority for these three pages.
+
+Task semantics: enter a direct route, inspect terminal operations or current
+configuration, explicitly connect for private reads, select scope/filter or
+refresh, see server facts; recover with reconnect/retry without false empties.
+Hierarchy: heading/source boundary, controls, access state, then metrics/chart
+or log list, or grouped Settings. Components own page queries; app owns route,
+theme/storage and session; transport projects fields before state. No new store.
+AbortController plus monotonic epoch and selection/session identity guard every
+read and cleanup. Errors belong to that read. Page content owns scrolling;
+bounded tables scroll locally; mobile logs become cards and settings stack.
+
+State matrix: disconnected, connecting, loading, ready, real empty, null-duration,
+401 unauthorized, 403 denied, 404 private unavailable, 422 invalid selectors,
+503/network unavailable, unexpected response, refreshing and read-only. No
+inaccessible state becomes zero. Self-review risks: null/zero confusion; stale
+range/filter/session replies; unsafe extra JSON fields; dead settings controls;
+compact layout/long-ID overflow.
+
+Planned files: operational typed client/types/fixtures/query hook; Analytics
+replacement; Logs page; Settings page/shared connection; narrow App/routes/copy
+integration; focused client/component/lifetime/privacy tests; dedicated hermetic
+Playwright suite; docs. Legacy browser Analytics will lose dashboard authority
+and its unnecessary event writer will be retired without deleting stored user data.
+
+Gates: focused tests → TypeScript → full Vitest → build → Chromium/Firefox;
+route/shell neighbors, light/dark EN/VI axe, reduced motion and rendered review
+at 1586×992, 1440×900, 1280×856, 1024×768, 768×900, 390×844, 1440×700
+(plus skill widths 1366/1920). Zero body/root overflow. Native browser zoom is
+a separate manual gate if automation cannot operate browser chrome. Audit exact
+tracked artifacts/secrets; commit intended files and preserve all unrelated work.
+
+Exact Next Action: UI-012-B through E implementation and focused validation.
+After full acceptance verify TEST-002 from the graph and stop before starting it.
 
 Implementation through EVAL-003 is COMPLETE. Historical receipts remain below;
 the latest EVAL-003-A..G and post-rebuild audit receipts are at the end. The next dependency-ready task

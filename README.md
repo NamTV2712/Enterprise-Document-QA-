@@ -673,11 +673,25 @@ The Evaluation view reads validated publications through the allowlisted
 denominators, bindings, comparison eligibility, grouped trend observations,
 and the four native failure categories. Legacy publications are metadata-only
 compatibility records. The workspace does not export or render stored question,
-answer, ground-truth, or evidence text. Until UI-012, the existing Analytics
-page remains its browser-local compatibility surface. DATA-005 separately
-provides protected server-side terminal analytics and sanitized logs; no server
-event contains a question, answer, source text, session ID, provider response,
+answer, ground-truth, or evidence text. Analytics now reads DATA-005 server
+summary and UTC timeseries for 24 hours, 7 days, or 30 days after an explicit
+local connection. Rates retain their populations, null duration stays unmeasured,
+and zero remains a real value. Logs reads the protected seven-day API projection,
+with category/severity filters, safe record details, and opaque cursor paging.
+The former browser-local Analytics dashboard and writer are retired; existing
+stored history is left untouched and does not contribute to server metrics.
+No server event contains a question, answer, source text, session ID, provider response,
 credential, or arbitrary message.
+
+Settings exposes existing browser theme/language preferences, browser backup
+preview/confirmed import/export and writer recovery, the same memory-only local
+connection used by Pipeline/Evaluation, and allowlisted current system/provider/
+capability facts. Full reload clears the bearer. Telemetry retention (30 days)
+and log window (7 days) are read-only: there is no workspace-settings mutation,
+retention edit, log-clear, model/provider switch, or keys manager API. Public
+deployments show private-data unavailability rather than a zero population.
+Analytics and Logs selectors are URL-backed and support Back/Forward. Refresh
+is explicit; there is no operational-page polling timer.
 
 The bilingual campaign is registered before execution. Its manifest freezes
 five intents in English and Vietnamese, the canonical artifact hash, and a

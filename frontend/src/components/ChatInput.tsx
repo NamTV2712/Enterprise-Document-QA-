@@ -251,7 +251,7 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
             }
             disabled={isTextareaDisabled}
             aria-describedby="chat-input-hint"
-            className="w-full resize-none bg-transparent border-0 outline-none focus:ring-0 text-sm md:text-base text-[var(--text-primary)] py-1 min-h-[38px] font-sans"
+            className="w-full resize-none bg-transparent border-0 outline-none focus:ring-0 text-sm md:text-base text-[var(--text-primary)] py-1 min-h-[80px] md:min-h-[38px] font-sans"
           />
 
           <div className="flex flex-wrap items-center justify-between gap-2 pt-2 mt-1 border-t border-[var(--border-subtle)]">
@@ -295,16 +295,21 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
                   aria-label={locale === "vi" ? "Bật hoặc tắt nghiên cứu sâu" : "Toggle Deep Research"}
                   disabled={isLoading}
                   onClick={() => !isLoading && onToggleComparative(!enableComparative)}
-                  className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    enableComparative ? "bg-blue-600" : "bg-[var(--border-strong)]"
-                  }`}
+                  className="relative inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
                 >
                   <span
                     aria-hidden="true"
-                    className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                      enableComparative ? "translate-x-3" : "translate-x-0"
+                    data-switch-track
+                    className={`pointer-events-none relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors duration-200 ease-in-out ${
+                      enableComparative ? "bg-blue-600" : "bg-[var(--border-strong)]"
                     }`}
-                  />
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out ${
+                        enableComparative ? "translate-x-3" : "translate-x-0"
+                      }`}
+                    />
+                  </span>
                 </button>
               </label>
 

@@ -59,7 +59,14 @@ Decision-model provider permission is independent of RAG provider permission.
 The operational trace contains safe action facts, never model reasoning or raw
 provider responses. Search writes only its existing bounded in-process
 snapshot, and the document tool returns bounded indexed previews. This layer
-has no HTTP self-calls, Agent route, durable job or UI. See
+has no HTTP self-calls or Agent UI. AGENT-003 wraps it in the same private
+DATA-004 SQLite job authority used by Pipeline and Evaluation. A v7 migration
+adds the `agent` namespace and bounded event summaries; one atomic job claim
+owns each execution, and startup marks unreconciled active runs interrupted
+without replay. `/agent/runs` reads require local bearer access, while creation
+and cancellation also require execution capability. The runtime resolves a
+decision model at execution; without a structured provider adapter it records
+unavailability rather than a fabricated answer. See
 [`docs/AGENT_EXTENSION_PLAN.md`](docs/AGENT_EXTENSION_PLAN.md) for the separate
 optional sequence.
 

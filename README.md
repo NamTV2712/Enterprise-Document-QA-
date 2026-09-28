@@ -65,13 +65,15 @@ load test. See [frontend setup](frontend/README.md), [architecture](ARCHITECTURE
 The required UI rebuild roadmap is complete through UI-013; EVAL-004/Ragas is
 optional, not a missing native-evaluation prerequisite.
 
-The optional Agent extension now includes typed in-process tools and a bounded,
-request-local single-Agent orchestration loop. It can select Search, Retrieval
-inspection, canonical document previews and explicitly gated RAG queries using
-a strict structured decision model contract. A deterministic fake model is
-tested; a real structured provider adapter is pending. There is no Agent API,
-durable run or Agent page. Bounds and security boundaries are described in
-[the extension plan](docs/AGENT_EXTENSION_PLAN.md).
+The optional Agent extension includes typed in-process research tools, one
+bounded single-Agent orchestrator, and private durable runs over the local
+DATA-004 workspace. Six `/agent/runs` routes support queued creation, detail,
+results, ordered finite SSE events and revision-safe cancellation. Create and
+cancel require local execution access; reads require local bearer access. A
+deterministic decision model is tested, but a real structured provider adapter
+is still pending, so production runs report decision-provider unavailability
+without calling tools. There is no Agent page or multi-agent behavior. See
+[the extension plan](docs/AGENT_EXTENSION_PLAN.md) for bounds and recovery.
 
 ## Overview
 

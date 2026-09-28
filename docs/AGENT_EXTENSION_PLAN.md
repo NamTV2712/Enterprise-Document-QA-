@@ -9,7 +9,7 @@ extension. It does not change the status of any completed task.
 |---|---|---|
 | AGENT-001 | Typed closed-world tools and bounded existing-UI sweep | Complete |
 | AGENT-002 | Bounded single-agent tool-selection and execution loop | Complete |
-| AGENT-003 | Durable runs, operational events, cancellation | Future |
+| AGENT-003 | Durable runs, operational events, cancellation | Complete |
 | AGENT-004 | Multi-step evidence gathering over current services | Future |
 | AGENT-005 | Prompt-injection and tool-policy hardening | Future |
 | AGENT-006 | Agent evaluation protocol | Future |
@@ -115,7 +115,76 @@ multi-agent role or Ragas integration is in this stage.
 - AGENT-002-E complete: real adapter explicitly deferred; AGENT-001 tests pass.
 - AGENT-002-F complete: full backend, import/route, clean-checkout and artifact gates recorded in `PROJECT_STATE.md`.
 
-**Exact next optional task: AGENT-003 — durable Agent runs, events and
-cancellation.** It owns DATA-004 integration, persisted safe trace, lifecycle,
-restart/interruption semantics, bounded event stream and API routes. AGENT-002
-does not begin any of those concerns.
+## AGENT-003 contract and checkpoint
+
+The only durable authority is the existing DATA-004 `SQLiteJobRepository` in
+the private local workspace. Additive, checksum-tracked migration v7 widens the
+`jobs.namespace` constraint to `agent` and adds keyed bounded Agent decision
+summaries to the existing `job_events` sequence. It transactionally rebuilds
+the constrained table and preserves existing Pipeline, Evaluation, model-test,
+step and event rows. No second database, jobs table, resume scheduler or
+state-machine framework exists. An external `agent_<opaque>` run ID maps to an
+internal DATA-004 `job_<opaque>` identity; request IDs and search IDs remain
+separate.
+
+Creation freezes protocol v1, goal, locale, ordered tool allowlist, both
+independent provider permissions, final-evidence and duplicate-call policy,
+all AGENT-002 limits, and a safe server-owned decision-model identity. A
+SHA-256 fingerprint binds the immutable payload. DATA-004 hashes the bounded
+Idempotency-Key and rejects conflicting reuse. The sole coarse durable step
+is `execute_agent`. Atomic `queued -> running` claim admits one owner; the
+worker constructs one `AgentOrchestrator` from the frozen plan and an
+execution-time model factory. The default production factory is absent, so a
+run finishes `failed` with a bounded `unavailable` Agent result and
+`decision_provider_unavailable` code; it never fabricates an answer or calls
+a tool. Tests inject a deterministic scripted model. No provider object or
+credential is serialized.
+
+AGENT-002's optional trace sink writes one keyed `agent_decision` event per
+operational decision. DATA-004 system events (`created`, `state_changed`,
+`step_changed`, `cancellation_requested`, `cancelled`, `interrupted`) share the
+same monotonic per-run sequence. Decision events are limited to 20, keyed by
+decision index, idempotent on identical delivery, and limited to 2048 UTF-8
+bytes each. Their strict allowlist contains tool name, argument *names*,
+outcome, bounded canonical evidence IDs/count and counters. Source excerpts,
+raw model output, hidden chain-of-thought and credentials are excluded. The
+terminal Agent result stores answer only on completion, validated evidence
+references, counters and typed failure, within 8192 UTF-8 bytes. No full
+AGENT-002 observations are persisted. Durable Agent status remains distinct
+inside the DATA-004 state: only `completed` maps to `succeeded`; invalid,
+unavailable, exhausted and other noncompleted outcomes map to `failed` with
+their explicit Agent status/code. A cancellation request maps `running ->
+cancelling`; acknowledgement maps `cancelling -> cancelled` and can retain
+safe counters. Queued cancellation is immediately terminal. `If-Match`
+revision conflicts never overwrite newer state.
+
+Local startup drains every page of DATA-004 active jobs to `interrupted` and
+never replays an Agent. A queued run left before claim stays queued; an
+idempotent repeat of the same create request can redispatch it. There is no
+automatic queued-run scheduler or resume endpoint. A process can die after a
+provider/tool effect and before its event or terminal commit. That effect is
+ambiguous; no exactly-once external execution guarantee is claimed. Local
+cancellation is polled between AGENT-002 calls, not an interrupt of an
+in-flight decision/provider call. A finite SSE fetch uses DATA-004 sequence
+as `Last-Event-ID`; transport closure has no success meaning. Run detail is
+authoritative. No bearer appears in an event URL or cursor.
+
+Six backend routes are owned here: GET/POST `/agent/runs`, GET
+`/agent/runs/{run_id}`, GET `/agent/runs/{run_id}/results`, POST
+`/agent/runs/{run_id}/cancel`, and GET `/agent/runs/{run_id}/events`. Reads
+require API-001 local workspace access. Create and cancel additionally require
+execution capability. Creation dispatches once via the existing current-process
+background-task pattern; repeated dispatch cannot pass DATA-004's claim.
+The frontend remains unchanged. The final product route inventory is 89.
+
+- AGENT-003-A complete: DATA-004 owner, v7 migration, route/access, interruption and event contracts mapped.
+- AGENT-003-B complete: frozen run and result models, one DATA-004 namespace, persistence and migration tests.
+- AGENT-003-C complete: atomic claim, injected model factory and direct AGENT-002 reuse.
+- AGENT-003-D complete: ordered keyed safe events, bounded terminal result and Unicode tests.
+- AGENT-003-E complete: revision-safe cancellation, startup recovery and three crash-window tests.
+- AGENT-003-F complete: private API, `If-Match`, `Last-Event-ID`, access and route contracts.
+- AGENT-003-G complete: Agent/DATA/Pipeline/Evaluation/full-backend, clean-checkout and artifact gates recorded in `PROJECT_STATE.md`.
+
+**Exact next optional task: AGENT-004 — Agentic Research / bounded multi-step
+evidence gathering.** It may use these durable runs and four existing tools;
+it does not require multi-agent behavior. AGENT-003 does not start that work.

@@ -1,5 +1,72 @@
 # Project State
 
+## AGENT-003 complete — Optional durable Agent runs, events and cancellation (2026-09-28)
+
+The required roadmap remains complete. AGENT-003 wraps the unchanged
+AGENT-002 decision/tool loop in one `AgentDurableService`; DATA-004 remains the
+only lifecycle, revision, idempotency and event authority. Transactional,
+checksum-tracked migration **v7** widens the existing `jobs` namespace to
+`agent` and adds keyed bounded decision summaries to `job_events`, preserving
+Pipeline, Evaluation, model-test and existing event/step rows. No second SQLite
+database, parallel job framework, new dependency or lockfile was added.
+External `agent_<opaque>` run IDs differ from DATA-004's internal `job_<opaque>`
+IDs; no row IDs or search/request IDs are reused. One coarse `execute_agent`
+step and an atomic `queued -> running` revisioned claim admit one execution
+owner. A frozen SHA-256-bound plan stores goal, locale, protocol version,
+server-owned decision-model identity, four-tool allowlist, independent decision
+and RAG provider permissions, final-reference policy, duplicate-call policy
+and every AGENT-002 limit. DATA-004 stores only a hash of the idempotency key.
+
+The coordinator resolves a decision model at execution and calls
+`AgentOrchestrator.run`; it contains no second Agent loop. Production has no
+strict structured decision adapter, so its default model returns a typed
+`unavailable` outcome and the durable job fails with
+`decision_provider_unavailable`, without invoking a tool or inventing an
+answer. Scripted fake models drive hermetic tests. The AGENT-002 trace sink
+persists at most 20 keyed `agent_decision` summaries, each at most 2048 UTF-8
+bytes; DATA-004 event IDs and per-run sequences order them with lifecycle
+events. A decision event includes safe action kind, tool, argument *names*,
+outcome, bounded canonical evidence IDs/count and counters, never source text,
+raw model output, credentials or chain-of-thought. The durable terminal result
+is limited to 8192 UTF-8 bytes and stores the final answer only on completion,
+validated evidence references, actual counters and typed failure status.
+Full AGENT-002 observations are not persisted. Transport closure of finite SSE
+does not imply success; run detail/state is authoritative.
+
+Private GET list/detail/results/events reuse API-001 local bearer, loopback,
+exact Host and Origin checks. POST create/cancel additionally require execution
+capability. Six `/agent/runs` routes use bounded typed DTOs,
+`Idempotency-Key`, revision `If-Match`, and resumable `Last-Event-ID` from an
+Authorization-header-protected finite SSE fetch; no bearer is accepted in a
+URL. Create queues and dispatches with the existing current-process background
+task pattern. Queued work left before claim is not automatically scheduled on
+restart; a repeat of the same idempotent create can redispatch it. Running or
+cancelling work at startup becomes `interrupted` across all recovery pages,
+with no automatic replay. Running cancellation remains `cancelling` until the
+AGENT-002 boundary sees it and DATA-004 acknowledges it; an in-flight
+decision/RAG call is not promised immediate interruption. A crash after a
+provider/tool effect but before event or terminal commit leaves an ambiguous
+external effect; exactly-once provider execution is not claimed.
+
+Source/test commit `0783511` added the v7 migration, durable coordinator and
+models, thin private router, AGENT-002 trace sink and focused migration,
+claim, event, cancellation, crash, API and access tests. Focused AGENT-003
+tests **19 passed**; AGENT-001/002 tests remain **44 passed**. The full backend
+gate is **1458 passed, 0 failed, 188 warnings** versus the AGENT-002 baseline
+1432/188. Agent/API compile and import pass; the product route inventory is
+**89 unique method/path pairs** versus 83. The shared frontend contract tests
+passed **83/83**; no frontend source, UI or Agentic Research work changed.
+The last full frontend baseline remains 90 files/792 tests. The 12 existing
+unrelated untracked paths remain outside commits. A managed clean checkout
+at source commit `0783511` had no `.env`, `data/` or untracked source; its
+v6→v7 migration and scripted durable-run smokes passed, as did Agent,
+registry and API imports and the 89-route inventory. The staged artifact
+audit found only intentional synthetic secret/hostile strings in tests. This
+closes AGENT-003-G.
+
+**Exact Next Action = AGENT-004 — Agentic Research / bounded multi-step
+evidence gathering, as a separate optional task. STOP before AGENT-004.**
+
 ## AGENT-002 complete — Optional bounded single-Agent orchestration (2026-09-28)
 
 The required roadmap remains complete. AGENT-002 adds exactly one in-memory,

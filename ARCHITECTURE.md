@@ -71,7 +71,12 @@ versioned research policy to that same loop: caller-declared bounded
 objectives, a canonical source-identity ledger, typed gaps and final coverage
 checks. Research configuration and terminal metadata use the existing frozen
 plan/result JSON; decision events may name a safe objective ID. The workspace
-schema remains v7 and the route count remains 89. See
+schema remains v7 and the route count remains 89. AGENT-006 evaluates a
+terminal durable run as a read-only in-process snapshot of the frozen plan,
+bounded events and result. Its versioned metrics keep operational outcomes,
+structural evidence checks and missing prerequisites separate. The report
+contains safe counters and provenance hashes, with no overall score,
+provider call, Agent replay, storage mutation or new API route. See
 [`docs/AGENT_EXTENSION_PLAN.md`](docs/AGENT_EXTENSION_PLAN.md) for the separate
 optional sequence.
 

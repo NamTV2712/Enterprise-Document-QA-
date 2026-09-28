@@ -12,7 +12,7 @@ extension. It does not change the status of any completed task.
 | AGENT-003 | Durable runs, operational events, cancellation | Complete |
 | AGENT-004 | Multi-step evidence gathering over current services | Complete |
 | AGENT-005 | Prompt-injection and tool-policy hardening | Complete |
-| AGENT-006 | Agent evaluation protocol | Future |
+| AGENT-006 | Agent evaluation protocol | In progress |
 | UI-014 | Agent workspace and safe operational trace | Future |
 | TEST-005 | Cross-layer and adversarial final validation | Future |
 
@@ -351,3 +351,64 @@ dependencies, frontend, and four-tool set are unchanged.
 **Exact next optional task: AGENT-006 — Agent Evaluation Protocol.** It should
 measure separate completion, tool use, evidence, citation, gap, budget and
 policy outcomes. Do not start AGENT-006, UI-014 or multi-agent behavior here.
+
+## AGENT-006 native evaluation contract (design checkpoint)
+
+`native-agent-evaluation` v1 evaluates one terminal, already recorded Agent
+run from its frozen plan, bounded durable result and ordered safe events. It
+never reexecutes the Agent, invokes a tool or provider, or reads filing text.
+It is separate from EVAL-001's six `native-evaluation` RAG metrics and has no
+overall Agent score. Every metric has semantic version 1. A semantic change
+requires a version bump. Ratios use exact integer numerators/denominators and
+four-decimal display values; denominator zero is `not_applicable`, never a
+computed zero. `unavailable` means the durable snapshot lacks a prerequisite.
+Real zero and false are `computed` values. Direction `neutral` means neither
+larger nor smaller is inherently better.
+
+The authoritative v1 metric inventory is below. `T` is a tool-decision event;
+`A` is a tool event admitted to execution (`observed` or `failed`); `F` is
+an admitted tool event with `failed` outcome. Counts from events describe
+**recorded** work, a lower bound if a run was interrupted before an event
+commit. The terminal result supplies exact total counters when present.
+Metric IDs use the `native_agent.` prefix, all have version `1`, and source
+fields are named in the calculation column.
+
+| Metric suffix | Type / direction | Applies and exact calculation/source | Means; does not mean |
+|---|---|---|---|
+| `execution_completed` | boolean / higher | Every terminal run: `run.state == succeeded` with `result.agent_status == completed` | Execution ended with an answer; not factual correctness |
+| `recorded_tool_decision_count` | count / neutral | All runs: count `agent_decision` events with `decision_kind=tool` | Recorded tool choices; not every uncommitted attempted action |
+| `admitted_tool_call_count` | count / neutral | All runs: count `A` | Recorded calls admitted to execution; not optimality |
+| `tool_admission_fraction` | ratio / higher | If `T>0`: `A/T` | Share of recorded tool choices admitted; not tool service success |
+| `invalid_tool_attempt_count` | count / lower | Rejected tool events with `unknown_tool` or `invalid_arguments` | Structurally invalid choices; not malicious intent |
+| `policy_denial_attempt_count` | count / lower | Rejected tool policy/research events plus a `decision_provider_required` terminal denial | Recorded denials; not a security attack score |
+| `duplicate_rejection_count` | count / lower | Rejected tool events with `duplicate_tool_call` | Exact repeated work stopped by the existing loop; not all unnecessary work |
+| `tool_failure_fraction` | ratio / lower | If `A>0`: `F/A` | Admitted calls ending with typed tool/projection failure; not invalid selection |
+| `tool_unavailable_count` | count / neutral | Admitted failed tool events with `tool_unavailable` | Recorded tool availability failures; not model quality |
+| `invalid_final_attempt_count` | count / lower | Rejected `final` decision events | Recorded final-contract rejections, including unseen/ambiguous citations; not claim truth |
+| `step_budget_utilization` | ratio / neutral | Terminal result present: `result.step_count / frozen.limits.max_steps` | Frozen step capacity used; not quality or efficiency |
+| `tool_budget_utilization` | ratio / neutral | Terminal result and positive limit: `result.tool_call_count / frozen.limits.max_tool_calls` | Frozen call capacity used; not quality or efficiency |
+| `budget_exhausted` | boolean / neutral | Terminal result present: `result.agent_status == budget_exhausted` | Actual terminal budget outcome; not inferred from utilization |
+| `decision_provider_unavailable` | boolean / neutral | Terminal result present: `result.failure.code == decision_provider_unavailable` | Decision-provider availability outcome; not Agent correctness |
+| `evidence_identity_validity` | ratio / higher | Research ledger with entries: structurally valid canonical doc/chunk pairs / ledger entries | Identity consistency under AGENT-005 rules; not evidence relevance or claim support |
+| `final_reference_validity` | ratio / higher | Completed final with refs and complete current-run ID metadata: references present in this run / final refs | Structured current-run identity; not source-label resolution or semantic citation support |
+| `objective_coverage` | ratio / higher | Research result: objectives marked `sufficient` under frozen `agent_research_v1` threshold / configured objectives | Bounded policy sufficiency; not factual completeness |
+| `unresolved_gap_fraction` | ratio / lower | Research result: typed unresolved gaps / configured objectives | Bounded unresolved objectives; not answer incorrectness |
+| `research_evidence_count` | count / neutral | Research result: canonical ledger entries | Retained entries; not relevance or diversity quality |
+| `distinct_document_count` | count / neutral | Research result: distinct non-null document IDs in ledger | Source-document count; not quality |
+| `distinct_chunk_count` | count / neutral | Research result: distinct chunk IDs in ledger | Source-chunk count; not quality |
+
+The report separately retains the terminal job state, Agent status/failure
+code, per-tool recorded counts, exact typed gap-code counts and safe
+provenance hashes. Non-research runs mark research-only metrics
+`not_applicable`. A missing terminal result makes result-dependent metrics
+`unavailable`; recorded event counts remain computable. Generic durable runs
+do not retain complete source pairs or Source-label mappings, so those checks
+are `unavailable` when the bounded event projection cannot prove them.
+Invalid event order, impossible counters, conflicting frozen plan/result,
+unseen final references when observation IDs are complete, malformed research
+coverage, and AGENT-005 ticker/accession mismatches are corruption errors,
+not low scores. The report uses the repository's finite canonical JSON and
+SHA-256 digest; it does not persist or publish a report. No API route or
+SQLite migration is planned.
+
+- AGENT-006-A in progress: metric inventory, applicability, provenance and corruption semantics defined before implementation.

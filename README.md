@@ -83,6 +83,14 @@ report decision-provider unavailability without calling tools. There is no
 Agent page or multi-agent behavior. See [the extension plan](docs/AGENT_EXTENSION_PLAN.md)
 for research bounds, partial results and recovery.
 
+The provider-free `native-agent-evaluation` v1 protocol evaluates an existing
+terminal Agent run from its frozen plan, safe events and durable result. It
+returns separate versioned execution, tool, budget, evidence and research
+metrics with `computed`, `unavailable` and `not_applicable` states, plus a
+canonical report digest. It neither reruns the Agent nor judges factual
+correctness, and it exposes no overall Agent score. Reports are computed
+in-process; no evaluation route or report storage is added.
+
 ## Overview
 
 - Problem type: enterprise document question answering over financial filings.

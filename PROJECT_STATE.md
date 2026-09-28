@@ -1,9 +1,8 @@
 # Project State
 
-## UI-013 finalization — Cleanup, documentation and handoff (2026-09-28)
+## UI-013 complete — Cleanup, documentation and handoff (2026-09-28)
 
-UI-013-A through E are complete; F, the final committed-HEAD data-free smoke,
-remains to be recorded before closure. Starting source HEAD `d71a458` had no
+UI-013-A through F are COMPLETE. Starting source HEAD `d71a458` had no
 tracked/staged changes and 12 unrelated untracked paths. The exact master-plan
 gate allows deletion only after zero references, replacement tests and
 compatibility/rollback proof. App still imports `EvidenceWorkspaceRail`;
@@ -52,8 +51,20 @@ while the hermetic tests/product harness can run without them.
 Current-facing README, ARCHITECTURE, frontend contract/design and browser-test
 instructions were reconciled; historical TEST-002/003/004 receipts remain
 untouched. Local links, named files/scripts, nine tracked references, route
-count and migration version passed UI-013 checks. After F validates the final
-committed HEAD, the required roadmap has no further mandatory task.
+count and migration version passed UI-013 checks. A managed detached checkout
+of committed docs HEAD `450a51c` had no `.env` or `data/`; FastAPI imported with
+83 unique routes/migration v6, frontend TypeScript and 2074-module build passed,
+and nine core-document local link sets had zero missing targets. This uses a
+provisioned Python interpreter and existing frozen frontend dependencies, not a
+fresh Python install. The final docs-only closure HEAD is replayed before
+handoff; resolve its exact SHA with `git rev-parse HEAD`.
+
+**Required roadmap COMPLETE. Exact Next Action = optional/future work only;
+there is no remaining mandatory UI rebuild task.** The main future product
+integration is Collections browser bearer wiring (and the related model-test
+wrapper), with explicit authority and memory-only credential handling. Optional
+EVAL-004/Ragas does not block native Evaluation. Earlier “Exact Next Action”
+statements below are chronological task receipts, not current instructions.
 
 ## TEST-004 complete — Full product validation (2026-09-28)
 

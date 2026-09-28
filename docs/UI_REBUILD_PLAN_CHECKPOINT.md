@@ -1,5 +1,36 @@
 # Current Planning Status
 
+## UI-013-F complete — Final clean-checkout and roadmap closure (2026-09-28)
+
+UI-013-A through F COMPLETE. The committed documentation HEAD `450a51c` was
+replayed in the attached managed detached checkout without `.env`, `data/` or
+untracked source. `src.api.app` imported and constructed FastAPI with **83/83
+unique method/path pairs** and SQLite migration **v6**. Frontend TypeScript
+(`bun run lint`) and production build passed, transforming **2074 modules**;
+the historical ~506.92 kB chunk warning remains. Nine core/changed Markdown
+documents had **zero missing local links**; named setup files/scripts and all
+nine tracked reference PNGs exist. The closure commit changes only this record
+and PROJECT_STATE; replay its final HEAD before handoff and report that exact
+SHA there, since a document cannot contain its own commit hash.
+
+No runtime/source/CSS file was removed, no API route or dependency changed, and
+no historical compatibility reader was retired. The original 12 unrelated
+untracked paths remain in the main tree; generated dist and test outputs remain
+ignored, with no credential, canonical data, runtime DB or lockfile committed.
+The pre-UI-013 main baseline was backend **1388 passed/188 warnings**,
+clean data-free backend **1354 passed/34 skipped/148 warnings**, frontend
+**90 files/792 passed**, and real-handler browser **24/24**. These full suites
+were not rerun merely for documentation changes; a same-source read-only audit
+immediately before UI-013 repeated main backend/frontend/product gates.
+`git diff --check` and staged-file review passed. Native zoom remains manual,
+Collections/model-test bearer browser integration remains staged, and Ragas is
+optional. No production load/SLA, broad WCAG or security certification is
+claimed.
+
+**Required roadmap COMPLETE. Exact Next Action = optional/future work only.**
+The first such product integration, if separately authorized, is Collections
+browser bearer wiring without weakening API-001 or creating a second writer.
+
 ## UI-013-B–E — Bounded cleanup and documentation (2026-09-28)
 
 COMPLETE. B: zero runtime/source/CSS files removed; no safe deletion required.
@@ -28,14 +59,15 @@ graph has no task after UI-013; EVAL-004/Ragas remains optional.
 E: tracked/staged baseline was clean plus 12 unrelated untracked paths; those
 paths and `data/`/`.env` remain untouched. No generated screenshot, trace,
 dist, runtime DB, provider output or lockfile entered the intended diff.
-`git diff --check`, selective staging review and final committed-head artifact
-audit remain the closure gate. F remains pending until the committed data-free
-checkout imports FastAPI, inventories routes, typechecks/builds frontend and
-verifies documented paths. Do not infer F from the pre-UI-013 TEST-004 receipt.
+At this stage, `git diff --check`, selective staging review and final
+committed-head artifact audit remained the closure gate. F was pending until
+the committed data-free checkout imported FastAPI, inventoried routes,
+typechecked/built frontend and verified documented paths. F above records that
+new evidence rather than inferring it from the pre-UI-013 TEST-004 receipt.
 
 ## UI-013-A — Cleanup and final handoff contract (2026-09-28)
 
-IN PROGRESS from `d71a458` on `codex/bilingual-research-workspace`; tracked and
+PLAN RECORDED from `d71a458` on `codex/bilingual-research-workspace`; tracked and
 staged files are clean, with the same 12 unrelated untracked paths. The master
 plan makes UI-013 the last required task after TEST-004. It permits removal of
 obsolete wrappers, composition, styles, or demo imports only with zero-reference,

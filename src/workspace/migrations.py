@@ -331,6 +331,142 @@ TERMINAL_TELEMETRY = Migration(
 )
 
 
+AGENT_DURABLE_JOBS = Migration(
+    version=7,
+    name="agent_durable_jobs",
+    statements=(
+        # SQLite cannot widen a CHECK constraint in place. Preserve every
+        # dependent row inside the migration transaction while rebuilding jobs.
+        "CREATE TABLE job_steps_v7 AS SELECT * FROM job_steps",
+        "CREATE TABLE job_events_v7 AS SELECT * FROM job_events",
+        "CREATE TABLE evaluation_attempts_v7 AS SELECT * FROM evaluation_attempts",
+        "CREATE TABLE evaluation_case_results_v7 AS SELECT * FROM evaluation_case_results",
+        "CREATE TABLE evaluation_reports_v7 AS SELECT * FROM evaluation_reports",
+        "DROP TABLE job_steps",
+        "DROP TABLE job_events",
+        "DROP TABLE evaluation_attempts",
+        "DROP TABLE evaluation_case_results",
+        "DROP TABLE evaluation_reports",
+        """
+        CREATE TABLE jobs_v7 (
+            job_id TEXT PRIMARY KEY,
+            namespace TEXT NOT NULL CHECK (namespace IN ('pipeline', 'evaluation', 'model_test', 'agent')),
+            job_type TEXT NOT NULL,
+            state TEXT NOT NULL CHECK (
+                state IN ('queued', 'running', 'cancelling', 'cancelled', 'succeeded', 'failed', 'interrupted')
+            ),
+            configuration_fingerprint TEXT NOT NULL,
+            artifact_run_id TEXT,
+            failure_code TEXT,
+            revision INTEGER NOT NULL CHECK (revision >= 1),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            started_at TEXT,
+            finished_at TEXT,
+            record_schema_version INTEGER,
+            idempotency_key_hash TEXT,
+            payload_json TEXT,
+            artifact_references_json TEXT,
+            progress_stage TEXT,
+            progress_current INTEGER,
+            progress_total INTEGER,
+            result_json TEXT,
+            failure_message TEXT,
+            cancellation_requested_at TEXT
+        )
+        """,
+        "INSERT INTO jobs_v7 SELECT * FROM jobs",
+        "DROP TABLE jobs",
+        "ALTER TABLE jobs_v7 RENAME TO jobs",
+        """
+        CREATE TABLE job_steps (
+            step_id TEXT PRIMARY KEY,
+            job_id TEXT NOT NULL,
+            ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
+            step_name TEXT NOT NULL,
+            state TEXT NOT NULL CHECK (
+                state IN ('pending', 'running', 'cancelled', 'succeeded', 'failed', 'skipped', 'interrupted')
+            ),
+            revision INTEGER NOT NULL CHECK (revision >= 1),
+            started_at TEXT,
+            finished_at TEXT,
+            FOREIGN KEY (job_id) REFERENCES jobs(job_id) ON DELETE CASCADE,
+            UNIQUE (job_id, ordinal)
+        )
+        """,
+        "INSERT INTO job_steps SELECT * FROM job_steps_v7",
+        """
+        CREATE TABLE job_events (
+            event_id TEXT PRIMARY KEY,
+            job_id TEXT NOT NULL,
+            sequence INTEGER NOT NULL CHECK (sequence >= 1),
+            event_type TEXT NOT NULL,
+            state TEXT,
+            reason_code TEXT,
+            progress_current INTEGER,
+            progress_total INTEGER,
+            occurred_at TEXT NOT NULL,
+            progress_stage TEXT,
+            agent_event_key TEXT,
+            agent_payload_json TEXT,
+            FOREIGN KEY (job_id) REFERENCES jobs(job_id) ON DELETE CASCADE,
+            UNIQUE (job_id, sequence)
+        )
+        """,
+        """
+        INSERT INTO job_events(event_id, job_id, sequence, event_type, state, reason_code,
+                               progress_current, progress_total, occurred_at, progress_stage)
+        SELECT event_id, job_id, sequence, event_type, state, reason_code,
+               progress_current, progress_total, occurred_at, progress_stage FROM job_events_v7
+        """,
+        """
+        CREATE TABLE evaluation_attempts (
+            job_id TEXT NOT NULL,
+            ordinal INTEGER NOT NULL CHECK (ordinal >= 1),
+            case_id TEXT NOT NULL,
+            phase TEXT NOT NULL CHECK (phase IN ('generation', 'correction', 'judging')),
+            attempted_at TEXT NOT NULL,
+            PRIMARY KEY (job_id, ordinal),
+            UNIQUE (job_id, case_id, phase),
+            FOREIGN KEY (job_id) REFERENCES jobs(job_id) ON DELETE CASCADE
+        )
+        """,
+        "INSERT INTO evaluation_attempts SELECT * FROM evaluation_attempts_v7",
+        """
+        CREATE TABLE evaluation_case_results (
+            job_id TEXT NOT NULL,
+            ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
+            case_id TEXT NOT NULL,
+            result_json TEXT NOT NULL,
+            committed_at TEXT NOT NULL,
+            PRIMARY KEY (job_id, case_id),
+            UNIQUE (job_id, ordinal),
+            FOREIGN KEY (job_id) REFERENCES jobs(job_id) ON DELETE CASCADE
+        )
+        """,
+        "INSERT INTO evaluation_case_results SELECT * FROM evaluation_case_results_v7",
+        """
+        CREATE TABLE evaluation_reports (
+            job_id TEXT PRIMARY KEY,
+            report_json BLOB NOT NULL,
+            committed_at TEXT NOT NULL,
+            FOREIGN KEY (job_id) REFERENCES jobs(job_id) ON DELETE CASCADE
+        )
+        """,
+        "INSERT INTO evaluation_reports SELECT * FROM evaluation_reports_v7",
+        "DROP TABLE job_steps_v7",
+        "DROP TABLE job_events_v7",
+        "DROP TABLE evaluation_attempts_v7",
+        "DROP TABLE evaluation_case_results_v7",
+        "DROP TABLE evaluation_reports_v7",
+        "CREATE INDEX job_events_order_idx ON job_events (job_id, sequence)",
+        "CREATE UNIQUE INDEX jobs_idempotency_idx ON jobs (namespace, idempotency_key_hash) WHERE idempotency_key_hash IS NOT NULL",
+        "CREATE INDEX jobs_listing_idx ON jobs (namespace, state, created_at DESC, job_id DESC)",
+        "CREATE UNIQUE INDEX agent_event_key_idx ON job_events (job_id, agent_event_key) WHERE agent_event_key IS NOT NULL",
+    ),
+)
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     CORE_FOUNDATION,
     RESEARCH_DOMAINS,
@@ -338,6 +474,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     DURABLE_JOB_CONTRACT,
     FROZEN_EVALUATION_JOBS,
     TERMINAL_TELEMETRY,
+    AGENT_DURABLE_JOBS,
 )
 
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
@@ -365,6 +502,7 @@ EXPECTED_TABLES_BY_VERSION: dict[int, frozenset[str]] = {
     4: frozenset(),
     5: frozenset({"evaluation_artifacts", "evaluation_attempts", "evaluation_case_results", "evaluation_reports"}),
     6: frozenset(),
+    7: frozenset(),
 }
 
 

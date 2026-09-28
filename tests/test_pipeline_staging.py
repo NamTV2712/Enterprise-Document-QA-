@@ -52,7 +52,7 @@ def _call(method: str, path: str, **kwargs) -> httpx.Response:
 
 def _repository(tmp_path: Path, *, name: str = "workspace.sqlite3") -> SQLiteJobRepository:
     database = WorkspaceDatabase(tmp_path / name)
-    assert database.initialize() == 6
+    assert database.initialize() == 7
     counter = itertools.count(1)
     return SQLiteJobRepository(
         database,
@@ -158,7 +158,7 @@ def test_stage_is_idempotent_allowlisted_queued_and_provider_free(tmp_path, monk
 def test_equivalent_concurrent_staging_requests_resolve_to_one_durable_run(tmp_path) -> None:
     path = tmp_path / "concurrent.sqlite3"
     database = WorkspaceDatabase(path)
-    assert database.initialize() == 6
+    assert database.initialize() == 7
     configuration = settings.model_copy(deep=True)
 
     def stage_one() -> str:
@@ -300,7 +300,7 @@ def test_http_stage_list_detail_cancel_and_resumable_sse(monkeypatch, tmp_path) 
     reopened = SQLiteJobRepository(WorkspaceDatabase(tmp_path / "workspace.sqlite3"))
     persisted = reopened.get_job(run["id"])
     assert persisted.state == "cancelled" and persisted.revision == 2
-    assert reopened.database.current_schema_version() == MIGRATIONS[-1].version == 6
+    assert reopened.database.current_schema_version() == MIGRATIONS[-1].version == 7
 
 
 def test_running_cancellation_remains_cancelling_until_acknowledged(tmp_path) -> None:

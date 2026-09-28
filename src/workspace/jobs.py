@@ -20,7 +20,7 @@ from src.workspace.database import WorkspaceDatabase
 from src.workspace.repository import utc_timestamp
 
 
-JobNamespace = Literal["pipeline", "evaluation", "model_test"]
+JobNamespace = Literal["pipeline", "evaluation", "model_test", "agent"]
 JobState = Literal[
     "queued",
     "running",
@@ -40,7 +40,7 @@ JobStepState = Literal[
     "interrupted",
 ]
 
-JOB_NAMESPACES = frozenset({"pipeline", "evaluation", "model_test"})
+JOB_NAMESPACES = frozenset({"pipeline", "evaluation", "model_test", "agent"})
 JOB_STATES = frozenset(
     {"queued", "running", "cancelling", "cancelled", "succeeded", "failed", "interrupted"}
 )
@@ -52,6 +52,12 @@ TERMINAL_STEP_STATES = frozenset({"cancelled", "succeeded", "failed", "skipped",
 
 MAX_JOB_PAYLOAD_BYTES = 64 * 1024
 MAX_JOB_RESULT_BYTES = 256 * 1024
+MAX_AGENT_EVENT_BYTES = 2048
+MAX_AGENT_DECISION_EVENTS = 20
+_AGENT_EVENT_FIELDS = frozenset({
+    "decision_index", "decision_kind", "tool_name", "argument_names", "outcome",
+    "evidence_count", "evidence_refs", "step_count", "tool_call_count", "failure_code",
+})
 MAX_JOB_STEPS = 64
 MAX_ARTIFACT_REFERENCES = 128
 MAX_FAILURE_MESSAGE_CHARS = 2048
@@ -182,6 +188,17 @@ class JobEvent:
     reason_code: str | None
     progress: JobProgress
     occurred_at: str
+
+
+@dataclass(frozen=True)
+class AgentJobEvent:
+    event_id: str
+    sequence: int
+    event_type: str
+    state: JobState | None
+    reason_code: str | None
+    occurred_at: str
+    payload: dict[str, object]
 
 
 @dataclass(frozen=True)
@@ -697,9 +714,13 @@ class SQLiteJobRepository:
                 safe_failure_code, safe_failure_message = _validate_failure(
                     failure_code, failure_message, self._forbidden_secret_values
                 )
-                if result is not None:
+                if result is not None and current.namespace != "agent":
                     raise ValueError("failed or interrupted jobs cannot persist a success result")
-                result_json = None
+                result_json = (
+                    _canonical_object(result, label="agent terminal result", max_bytes=MAX_JOB_RESULT_BYTES,
+                                      forbidden_values=self._forbidden_secret_values)
+                    if result is not None else None
+                )
             else:
                 if result is not None or failure_code is not None or failure_message is not None:
                     raise ValueError("running transition cannot persist a result or failure")
@@ -883,12 +904,21 @@ class SQLiteJobRepository:
             )
             return self._job_in(connection, job_id)
 
-    def acknowledge_cancellation(self, job_id: str, *, expected_revision: int) -> DurableJob:
+    def acknowledge_cancellation(
+        self, job_id: str, *, expected_revision: int, result: Mapping[str, object] | None = None,
+    ) -> DurableJob:
         timestamp = self._clock()
         with self.database.transaction(write=True) as connection:
             job = self._job_in(connection, job_id)
             self._assert_revision(job.revision, expected_revision)
             validate_job_transition(job.state, "cancelled")
+            if result is not None and job.namespace != "agent":
+                raise ValueError("only Agent cancellation may include a safe terminal result")
+            result_json = (
+                _canonical_object(result, label="agent terminal result", max_bytes=MAX_JOB_RESULT_BYTES,
+                                  forbidden_values=self._forbidden_secret_values)
+                if result is not None else None
+            )
             connection.execute(
                 "UPDATE job_steps SET state = 'cancelled', revision = revision + 1, finished_at = ? "
                 "WHERE job_id = ? AND state IN ('pending', 'running')",
@@ -896,8 +926,8 @@ class SQLiteJobRepository:
             )
             cursor = connection.execute(
                 "UPDATE jobs SET state = 'cancelled', revision = revision + 1, updated_at = ?, "
-                "finished_at = ? WHERE job_id = ? AND revision = ?",
-                (timestamp, timestamp, job_id, expected_revision),
+                "finished_at = ?, result_json = ? WHERE job_id = ? AND revision = ?",
+                (timestamp, timestamp, result_json, job_id, expected_revision),
             )
             if cursor.rowcount != 1:
                 raise JobConflictError("durable job revision conflict")
@@ -996,6 +1026,109 @@ class SQLiteJobRepository:
                 )
             )
         return tuple(events)
+
+    def append_agent_decision_event(
+        self, job_id: str, *, event_key: str, payload: Mapping[str, object],
+        step_count: int, max_steps: int,
+    ) -> AgentJobEvent:
+        """Append one bounded, keyed operational fact under DATA-004's sequence."""
+        if set(payload) != _AGENT_EVENT_FIELDS:
+            raise ValueError("Agent event must contain only safe operational fields")
+        _validate_name(event_key, label="Agent event key")
+        decision_index = payload.get("decision_index")
+        if (type(decision_index) is not int or not 1 <= decision_index <= MAX_AGENT_DECISION_EVENTS
+                or event_key != f"decision_{decision_index}"):
+            raise ValueError("Agent event key must match one bounded decision")
+        if type(step_count) is not int or type(max_steps) is not int or not 0 <= step_count <= max_steps <= 20:
+            raise ValueError("Agent progress is out of bounds")
+        if decision_index > max_steps:
+            raise ValueError("Agent decision exceeds the frozen step ceiling")
+        encoded = _canonical_object(
+            payload, label="Agent event", max_bytes=MAX_AGENT_EVENT_BYTES,
+            forbidden_values=self._forbidden_secret_values,
+        )
+        timestamp = self._clock()
+        with self.database.transaction(write=True) as connection:
+            job = self._job_in(connection, job_id)
+            if job.namespace != "agent":
+                raise JobNotFoundError("Agent run does not exist")
+            existing = connection.execute(
+                "SELECT * FROM job_events WHERE job_id = ? AND agent_event_key = ?",
+                (job_id, event_key),
+            ).fetchone()
+            if existing is not None:
+                if existing["agent_payload_json"] != encoded:
+                    raise JobConflictError("Agent event key was reused with different data")
+                return self._agent_event_from_row(existing)
+            if job.state not in {"running", "cancelling"}:
+                raise JobTransitionError("Agent decision events require an active run")
+            count = int(connection.execute(
+                "SELECT COUNT(*) FROM job_events WHERE job_id = ? AND agent_event_key IS NOT NULL",
+                (job_id,),
+            ).fetchone()[0])
+            if count >= MAX_AGENT_DECISION_EVENTS:
+                raise JobLimitError("Agent decision event history is full")
+            if decision_index != count + 1:
+                raise JobConflictError("Agent decision event order is not monotonic")
+            sequence = int(connection.execute(
+                "SELECT COALESCE(MAX(sequence), 0) + 1 FROM job_events WHERE job_id = ?",
+                (job_id,),
+            ).fetchone()[0])
+            cursor = connection.execute(
+                "UPDATE jobs SET revision = revision + 1, updated_at = ?, progress_stage = 'execute_agent', "
+                "progress_current = ?, progress_total = ? WHERE job_id = ? AND revision = ?",
+                (timestamp, step_count, max_steps, job_id, job.revision),
+            )
+            if cursor.rowcount != 1:
+                raise JobConflictError("durable job revision conflict")
+            connection.execute(
+                "INSERT INTO job_events(event_id, job_id, sequence, event_type, state, reason_code, "
+                "progress_stage, progress_current, progress_total, occurred_at, agent_event_key, agent_payload_json) "
+                "VALUES (?, ?, ?, 'agent_decision', ?, NULL, 'execute_agent', ?, ?, ?, ?, ?)",
+                (self._new_id("event"), job_id, sequence, job.state,
+                 step_count, max_steps, timestamp, event_key, encoded),
+            )
+            row = connection.execute(
+                "SELECT * FROM job_events WHERE job_id = ? AND sequence = ?", (job_id, sequence),
+            ).fetchone()
+            return self._agent_event_from_row(row)
+
+    def _agent_event_from_row(self, row: sqlite3.Row) -> AgentJobEvent:
+        raw = row["agent_payload_json"]
+        payload = {} if raw is None else _decode_object(raw, label="Agent event", max_bytes=MAX_AGENT_EVENT_BYTES)
+        if raw is not None and set(payload) != _AGENT_EVENT_FIELDS:
+            raise JobDataError("persisted Agent event has invalid fields")
+        try:
+            _validate_safe_tree(payload, self._forbidden_secret_values)
+        except ValueError as error:
+            raise JobDataError("persisted Agent event is unsafe") from error
+        state = str(row["state"]) if row["state"] is not None else None
+        if state is not None and state not in JOB_STATES:
+            raise JobDataError("persisted Agent event state is invalid")
+        return AgentJobEvent(
+            event_id=str(row["event_id"]), sequence=int(row["sequence"]),
+            event_type=str(row["event_type"]), state=cast(JobState | None, state),
+            reason_code=str(row["reason_code"]) if row["reason_code"] is not None else None,
+            occurred_at=str(row["occurred_at"]), payload=payload,
+        )
+
+    def list_agent_events(
+        self, job_id: str, *, after_sequence: int = 0, limit: int = 100,
+    ) -> tuple[AgentJobEvent, ...]:
+        _validate_opaque(job_id, label="job ID")
+        if type(after_sequence) is not int or after_sequence < 0:
+            raise ValueError("event sequence must be non-negative")
+        if type(limit) is not int or not 1 <= limit <= MAX_LIST_LIMIT:
+            raise JobLimitError("event list limit is out of bounds")
+        with self.database.connection() as connection:
+            job = self._job_in(connection, job_id)
+            if job.namespace != "agent":
+                raise JobNotFoundError("Agent run does not exist")
+            rows = connection.execute(
+                "SELECT * FROM job_events WHERE job_id = ? AND sequence > ? "
+                "ORDER BY sequence LIMIT ?", (job_id, after_sequence, limit),
+            ).fetchall()
+        return tuple(self._agent_event_from_row(row) for row in rows)
 
     def _append_event_in(
         self,

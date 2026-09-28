@@ -167,7 +167,7 @@ def test_real_non_streaming_query_writes_one_content_free_terminal_record(
         WorkspaceDatabase(tmp_path / "workspace.sqlite3"),
         forbidden_secret_values=(TOKEN,),
     )
-    assert repository.database.initialize() == 6
+    assert repository.database.initialize() == 7
     with repository.database.connection() as connection:
         rows = connection.execute("SELECT * FROM telemetry_events").fetchall()
     assert len(rows) == 1
@@ -200,7 +200,7 @@ def test_real_stream_records_terminal_after_done_not_when_headers_open(
     assert response.status_code == 200
     assert '"type": "done"' in response.text
     database = WorkspaceDatabase(tmp_path / "workspace.sqlite3")
-    assert database.initialize() == 6
+    assert database.initialize() == 7
     with database.connection() as connection:
         rows = connection.execute("SELECT * FROM telemetry_events").fetchall()
     assert len(rows) == 1
@@ -240,7 +240,7 @@ def test_telemetry_write_failure_is_best_effort_and_does_not_change_source_respo
 def test_private_log_route_exposes_only_structured_safe_fields(tmp_path: Path, monkeypatch, duration) -> None:
     _configure_local(monkeypatch, tmp_path)
     database = WorkspaceDatabase(tmp_path / "workspace.sqlite3")
-    assert database.initialize() == 6
+    assert database.initialize() == 7
     repository = SQLiteTelemetryRepository(database, forbidden_secret_values=(TOKEN,))
     repository.record_request_terminal(
         telemetry_id="tel_safe_api",

@@ -5,7 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from threading import Event
+from collections.abc import Awaitable, Callable
+from typing import Protocol
 
 from pydantic import ValidationError
 
@@ -29,6 +30,13 @@ _SOURCE_LABEL = re.compile(r"\[Source\s+[1-9][0-9]*\]")
 _SEARCH_ID = re.compile(r"\bsearch-[0-9a-f]{16}\b")
 _DOCUMENT_ID = re.compile(r"\b[A-Z]{1,5}:[A-Za-z0-9_.-]{4,128}\b")
 _CHUNK_ID = re.compile(r"\b[A-Z]{1,5}_[0-9]{8,}_[A-Za-z0-9_]+\b")
+
+
+class CancellationSignal(Protocol):
+    def is_set(self) -> bool: ...
+
+
+TraceSink = Callable[[AgentTraceEntry, int, int], Awaitable[None]]
 
 
 def _observed_refs(state: AgentState) -> set[tuple[str, str]]:
@@ -156,10 +164,24 @@ class AgentOrchestrator:
         return AgentOrchestrator._result(state, status, domain=domain, code=code)
 
     async def run(
-        self, goal: str, context: AgentExecutionContext, *, cancel_event: Event | None = None,
+        self, goal: str, context: AgentExecutionContext, *,
+        cancel_event: CancellationSignal | None = None, trace_sink: TraceSink | None = None,
     ) -> AgentResult:
         """One validated decision is one step; only executed tools consume tool budget."""
         state = AgentState(goal=AgentGoal(text=goal), locale=context.locale)
+
+        async def record(entry: AgentTraceEntry) -> None:
+            state.trace.append(entry)
+            if trace_sink is not None:
+                await trace_sink(entry, state.step_count, state.tool_call_count)
+
+        async def reject_tool(
+            decision: ToolDecision, status: AgentStatus, domain: FailureDomain, code: FailureCode,
+        ) -> AgentResult:
+            result = self._reject_tool(state, decision, status, domain, code)
+            if trace_sink is not None:
+                await trace_sink(state.trace[-1], state.step_count, state.tool_call_count)
+            return result
         if self.decision_model.requires_provider and not self.policy.allow_decision_provider_execution:
             return self._result(state, "policy_denied", domain="policy", code="decision_provider_required")
 
@@ -181,7 +203,7 @@ class AgentOrchestrator:
             try:
                 decision = parse_decision(raw_decision)
             except (ValueError, ValidationError, TypeError):
-                state.trace.append(AgentTraceEntry(
+                await record(AgentTraceEntry(
                     decision_index=state.decision_call_count, kind="invalid",
                     outcome="rejected", failure_code="malformed_decision",
                 ))
@@ -191,12 +213,12 @@ class AgentOrchestrator:
             if isinstance(decision, FinalDecision):
                 failure = _validate_final(state, decision, self.policy)
                 if failure is not None:
-                    state.trace.append(AgentTraceEntry(
+                    await record(AgentTraceEntry(
                         decision_index=state.decision_call_count, kind="final",
                         outcome="rejected", failure_code=failure,
                     ))
                     return self._result(state, "invalid_decision", domain="policy", code=failure)
-                state.trace.append(AgentTraceEntry(
+                await record(AgentTraceEntry(
                     decision_index=state.decision_call_count, kind="final", outcome="completed",
                     evidence_refs=decision.evidence_refs,
                 ))
@@ -208,29 +230,29 @@ class AgentOrchestrator:
             try:
                 tool = self.registry.get(decision.tool_name)
             except AgentToolError:
-                return self._reject_tool(state, decision, "invalid_decision", "tool", "unknown_tool")
+                return await reject_tool(decision, "invalid_decision", "tool", "unknown_tool")
             if tool.name not in context.policy.allowed_tools:
-                return self._reject_tool(state, decision, "policy_denied", "policy", "tool_not_allowed")
+                return await reject_tool(decision, "policy_denied", "policy", "tool_not_allowed")
             if tool.provider_execution and not context.policy.allow_provider_execution:
-                return self._reject_tool(state, decision, "policy_denied", "policy", "tool_provider_required")
+                return await reject_tool(decision, "policy_denied", "policy", "tool_provider_required")
             try:
                 validated = tool.input_model.model_validate(decision.arguments)
             except (ValidationError, ValueError, TypeError):
-                return self._reject_tool(state, decision, "invalid_decision", "tool", "invalid_arguments")
+                return await reject_tool(decision, "invalid_decision", "tool", "invalid_arguments")
 
             if state.tool_call_count >= self.limits.max_tool_calls:
-                return self._reject_tool(state, decision, "budget_exhausted", "policy", "max_tool_calls")
+                return await reject_tool(decision, "budget_exhausted", "policy", "max_tool_calls")
             if state.per_tool_calls[tool.name] >= self._per_tool_limits[tool.name]:
-                return self._reject_tool(state, decision, "budget_exhausted", "policy", "per_tool_limit")
+                return await reject_tool(decision, "budget_exhausted", "policy", "per_tool_limit")
             if len(state.observations) >= self.limits.max_observations:
-                return self._reject_tool(state, decision, "budget_exhausted", "policy", "max_observations")
+                return await reject_tool(decision, "budget_exhausted", "policy", "max_observations")
 
             signature = hashlib.sha256(json.dumps(
                 [tool.name, validated.model_dump(mode="json")], sort_keys=True,
                 separators=(",", ":"), ensure_ascii=False,
             ).encode("utf-8")).hexdigest()
             if self.policy.reject_duplicate_calls and signature in state.seen_calls:
-                return self._reject_tool(state, decision, "invalid_decision", "policy", "duplicate_tool_call")
+                return await reject_tool(decision, "invalid_decision", "policy", "duplicate_tool_call")
             if cancel_event is not None and cancel_event.is_set():
                 return self._result(state, "cancelled", domain="system", code="cancelled")
 
@@ -248,7 +270,7 @@ class AgentOrchestrator:
                     "execution_failed": ("failed", "tool", "tool_execution_failed"),
                     "provider_required": ("policy_denied", "policy", "tool_provider_required"),
                 }[error.code]
-                state.trace.append(AgentTraceEntry(
+                await record(AgentTraceEntry(
                     decision_index=state.decision_call_count, kind="tool", tool_name=tool.name,
                     argument_names=tuple(sorted(decision.arguments)), outcome="failed", failure_code=code,
                 ))
@@ -259,13 +281,13 @@ class AgentOrchestrator:
                     self.limits.max_total_observation_bytes - state.observation_bytes,
                 )
             except ObservationLimitError:
-                state.trace.append(AgentTraceEntry(
+                await record(AgentTraceEntry(
                     decision_index=state.decision_call_count, kind="tool", tool_name=tool.name,
                     outcome="failed", failure_code="observation_bytes",
                 ))
                 return self._result(state, "budget_exhausted", domain="policy", code="observation_bytes")
             except ObservationIntegrityError:
-                state.trace.append(AgentTraceEntry(
+                await record(AgentTraceEntry(
                     decision_index=state.decision_call_count, kind="tool", tool_name=tool.name,
                     outcome="failed", failure_code="invalid_observation",
                 ))
@@ -273,7 +295,7 @@ class AgentOrchestrator:
             state.observations.append(projected)
             state.observation_bytes += len(projected.model_dump_json().encode("utf-8"))
             refs = _observation_refs(projected)[:20]
-            state.trace.append(AgentTraceEntry(
+            await record(AgentTraceEntry(
                 decision_index=state.decision_call_count, kind="tool", tool_name=tool.name,
                 argument_names=tuple(sorted(decision.arguments)), outcome="observed",
                 evidence_refs=refs,

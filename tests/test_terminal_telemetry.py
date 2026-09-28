@@ -49,7 +49,7 @@ def _repository(
     secrets: tuple[str, ...] = (),
 ) -> SQLiteTelemetryRepository:
     database = WorkspaceDatabase(tmp_path / "workspace.sqlite3")
-    assert database.initialize() == 6
+    assert database.initialize() == 7
     counter = itertools.count(1)
     return SQLiteTelemetryRepository(
         database,
@@ -195,7 +195,7 @@ def test_reopen_preserves_terminal_records_and_migration_v6_is_idempotent(tmp_pa
     expected = _record(repository)
 
     reopened_database = WorkspaceDatabase(tmp_path / "workspace.sqlite3")
-    assert reopened_database.initialize() == 6
+    assert reopened_database.initialize() == 7
     reopened = SQLiteTelemetryRepository(reopened_database, clock=MutableClock(), forbidden_secret_values=())
 
     assert reopened.request_records(started_at=NOW - timedelta(hours=1), ended_at=NOW + timedelta(seconds=1)) == (expected,)
@@ -213,7 +213,7 @@ def test_v5_upgrade_adds_terminal_columns_without_rewriting_historical_migration
         )
 
     upgraded = WorkspaceDatabase(path)
-    assert upgraded.initialize() == 6
+    assert upgraded.initialize() == 7
     with upgraded.connection() as connection:
         columns = {row["name"] for row in connection.execute("PRAGMA table_info(telemetry_events)")}
         receipt = connection.execute(
@@ -235,7 +235,7 @@ def test_retention_hides_and_prunes_expired_rows_on_reopen(tmp_path: Path) -> No
         clock=MutableClock(),
         forbidden_secret_values=(),
     )
-    assert reopened.database.initialize() == 6
+    assert reopened.database.initialize() == 7
     assert reopened.request_records(started_at=NOW - timedelta(days=30), ended_at=NOW) == ()
     with reopened.database.connection() as connection:
         assert connection.execute("SELECT COUNT(*) FROM telemetry_events").fetchone()[0] == 0

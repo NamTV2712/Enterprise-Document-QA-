@@ -69,7 +69,7 @@ def test_catalog_names_are_unique_and_cover_every_completed_surface():
     assert len({route["id"] for route in CATALOG["routes"]}) == len(CATALOG["routes"])
     assert {route["path"].split("/")[1] for route in CATALOG["routes"]} == {
         "models", "datasets", "documents", "search", "retrieval", "collections",
-        "pipeline", "evaluation", "analytics", "logs", "system", "workspace",
+        "pipeline", "evaluation", "agent", "analytics", "logs", "system", "workspace",
     }
 
 

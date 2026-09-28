@@ -8,6 +8,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from src.agent.research_models import ResearchSummary, ResearchView
+
 
 TOOL_NAMES = frozenset({"search_documents", "inspect_retrieval", "read_document", "ask_rag"})
 _CREDENTIAL = re.compile(
@@ -119,6 +121,9 @@ FailureCode = Literal[
     "invalid_evidence_reference", "invalid_citation", "duplicate_tool_call", "max_steps",
     "max_tool_calls", "per_tool_limit", "max_observations", "observation_bytes",
     "cancelled", "internal_error", "invalid_observation",
+    "research_objective_required", "research_scope_mismatch", "research_search_limit",
+    "research_unresolved_mismatch", "research_objective_uncited", "research_answer_too_long",
+    "research_reference_limit",
 ]
 AgentStatus = Literal[
     "completed", "invalid_decision", "policy_denied", "budget_exhausted",
@@ -139,6 +144,7 @@ class AgentTraceEntry(BaseModel):
     decision_index: int
     kind: Literal["tool", "final", "invalid"]
     tool_name: str | None = None
+    objective_id: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{0,31}$")
     argument_names: tuple[str, ...] = ()
     outcome: Literal["observed", "completed", "rejected", "failed"]
     evidence_refs: tuple[EvidenceRef, ...] = ()
@@ -157,6 +163,7 @@ class AgentResult(BaseModel):
     observations: tuple[AgentObservation, ...]
     trace: tuple[AgentTraceEntry, ...]
     failure: AgentFailure | None = None
+    research: ResearchSummary | None = None
 
 
 class DecisionToolSpec(BaseModel):
@@ -190,6 +197,7 @@ class DecisionRequest(BaseModel):
     observations: tuple[AgentObservation, ...]
     step_count: int
     tool_call_count: int
+    research: ResearchView | None = None
 
 
 @dataclass
@@ -204,3 +212,5 @@ class AgentState:
     trace: list[AgentTraceEntry] = field(default_factory=list)
     seen_calls: set[str] = field(default_factory=set)
     observation_bytes: int = 0
+    research_view: ResearchView | None = None
+    research_summary: ResearchSummary | None = None

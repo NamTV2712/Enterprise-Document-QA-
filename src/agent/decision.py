@@ -19,6 +19,7 @@ class ToolDecision(BaseModel):
     kind: Literal["tool"]
     tool_name: str = Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")
     arguments: dict[str, DecisionScalar]
+    objective_id: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{0,31}$")
 
     @field_validator("arguments")
     @classmethod
@@ -40,12 +41,25 @@ class FinalDecision(BaseModel):
     kind: Literal["final"]
     answer: str = Field(min_length=1, max_length=4000)
     evidence_refs: tuple[EvidenceRef, ...] = Field(default=(), max_length=20)
+    unresolved_objective_ids: tuple[str, ...] = Field(default=(), max_length=6)
 
     @field_validator("evidence_refs", mode="before")
     @classmethod
     def json_array_refs(cls, value: object) -> object:
         # JSON has arrays, not tuples. Keep every nested item strictly validated.
         return tuple(value) if isinstance(value, list) else value
+
+    @field_validator("unresolved_objective_ids", mode="before")
+    @classmethod
+    def json_unresolved_ids(cls, value: object) -> object:
+        return tuple(value) if isinstance(value, list) else value
+
+    @field_validator("unresolved_objective_ids")
+    @classmethod
+    def bounded_unresolved_ids(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if any(not re.fullmatch(r"[a-z][a-z0-9_]{0,31}", item) for item in value):
+            raise ValueError("invalid unresolved objective ID")
+        return value
 
     @field_validator("answer")
     @classmethod

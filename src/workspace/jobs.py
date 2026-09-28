@@ -57,7 +57,9 @@ MAX_AGENT_DECISION_EVENTS = 20
 _AGENT_EVENT_FIELDS = frozenset({
     "decision_index", "decision_kind", "tool_name", "argument_names", "outcome",
     "evidence_count", "evidence_refs", "step_count", "tool_call_count", "failure_code",
+    "objective_id",
 })
+_AGENT_EVENT_FIELDS_V1 = _AGENT_EVENT_FIELDS - {"objective_id"}
 MAX_JOB_STEPS = 64
 MAX_ARTIFACT_REFERENCES = 128
 MAX_FAILURE_MESSAGE_CHARS = 2048
@@ -1032,7 +1034,7 @@ class SQLiteJobRepository:
         step_count: int, max_steps: int,
     ) -> AgentJobEvent:
         """Append one bounded, keyed operational fact under DATA-004's sequence."""
-        if set(payload) != _AGENT_EVENT_FIELDS:
+        if set(payload) not in (_AGENT_EVENT_FIELDS, _AGENT_EVENT_FIELDS_V1):
             raise ValueError("Agent event must contain only safe operational fields")
         _validate_name(event_key, label="Agent event key")
         decision_index = payload.get("decision_index")
@@ -1096,7 +1098,7 @@ class SQLiteJobRepository:
     def _agent_event_from_row(self, row: sqlite3.Row) -> AgentJobEvent:
         raw = row["agent_payload_json"]
         payload = {} if raw is None else _decode_object(raw, label="Agent event", max_bytes=MAX_AGENT_EVENT_BYTES)
-        if raw is not None and set(payload) != _AGENT_EVENT_FIELDS:
+        if raw is not None and set(payload) not in (_AGENT_EVENT_FIELDS, _AGENT_EVENT_FIELDS_V1):
             raise JobDataError("persisted Agent event has invalid fields")
         try:
             _validate_safe_tree(payload, self._forbidden_secret_values)

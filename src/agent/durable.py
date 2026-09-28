@@ -75,6 +75,7 @@ def _durable_result(result: AgentResult, *, cancelled: bool = False) -> AgentDur
         tool_call_count=result.tool_call_count, per_tool_calls=dict(result.per_tool_calls),
         observation_count=len(result.observations),
         failure=result.failure if not cancelled else None,
+        research=result.research,
     )
     if len(_canonical_json(payload.model_dump(mode="json"))) > MAX_AGENT_RESULT_BYTES:
         raise ValueError("bounded Agent result exceeds durable byte limit")
@@ -105,11 +106,12 @@ class AgentDurableService:
             require_observation_for_final=body.require_observation_for_final,
             reject_duplicate_calls=body.reject_duplicate_calls,
             limits=AgentRunCreateRequest.model_validate(body.model_dump()).limits,
+            research=body.research,
         )
 
     def create(self, body: AgentRunCreateRequest, *, idempotency_key: str) -> AgentRunResponse:
         plan = self._plan(body)
-        encoded = plan.model_dump(mode="json")
+        encoded = plan.model_dump(mode="json", exclude_none=True)
         fingerprint = hashlib.sha256(_canonical_json(encoded)).hexdigest()
         job = self.repository.create_job(
             namespace="agent", job_type=AGENT_JOB_TYPE,
@@ -128,7 +130,7 @@ class AgentDurableService:
     def _frozen(job: DurableJob) -> FrozenAgentPlan:
         try:
             plan = FrozenAgentPlan.model_validate(job.payload)
-            if hashlib.sha256(_canonical_json(plan.model_dump(mode="json"))).hexdigest() != job.configuration_fingerprint:
+            if hashlib.sha256(_canonical_json(plan.model_dump(mode="json", exclude_none=True))).hexdigest() != job.configuration_fingerprint:
                 raise ValueError("frozen Agent fingerprint mismatch")
             if len(job.steps) != 1 or job.steps[0].name != AGENT_STEP:
                 raise ValueError("Agent durable step is invalid")
@@ -211,7 +213,8 @@ class AgentDurableService:
     ) -> None:
         summary = AgentEventSummary(
             decision_index=entry.decision_index, decision_kind=entry.kind,
-            tool_name=entry.tool_name, argument_names=list(entry.argument_names),
+            tool_name=entry.tool_name, objective_id=entry.objective_id,
+            argument_names=list(entry.argument_names),
             outcome=entry.outcome, evidence_count=len(entry.evidence_refs),
             evidence_refs=list(entry.evidence_refs[:8]), step_count=step_count,
             tool_call_count=tool_call_count, failure_code=entry.failure_code,
@@ -295,6 +298,7 @@ class AgentDurableService:
                     require_observation_for_final=plan.require_observation_for_final,
                     reject_duplicate_calls=plan.reject_duplicate_calls,
                 ),
+                research=plan.research,
             )
             context = AgentExecutionContext(
                 ToolPolicy(frozenset(plan.allowed_tools), plan.allow_provider_tool_execution),

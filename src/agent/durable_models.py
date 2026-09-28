@@ -7,6 +7,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from src.agent.research import validate_research_limits
+from src.agent.research_models import ResearchConfig, ResearchSummary
 from src.agent.state import (
     AgentFailure, AgentGoal, AgentLimits, AgentStatus, EvidenceRef, TOOL_NAMES,
 )
@@ -27,6 +29,7 @@ class AgentRunCreateRequest(BaseModel):
     require_observation_for_final: bool = True
     reject_duplicate_calls: bool = True
     limits: AgentLimits = Field(default_factory=AgentLimits)
+    research: ResearchConfig | None = None
 
     @model_validator(mode="after")
     def safe_request(self) -> "AgentRunCreateRequest":
@@ -35,6 +38,8 @@ class AgentRunCreateRequest(BaseModel):
             raise ValueError("durable Agent goals cannot contain control characters")
         if len(set(self.allowed_tools)) != len(self.allowed_tools):
             raise ValueError("allowed tools must be unique")
+        if self.research is not None:
+            validate_research_limits(self.research, self.limits)
         return self
 
 
@@ -52,6 +57,7 @@ class FrozenAgentPlan(BaseModel):
     require_observation_for_final: bool
     reject_duplicate_calls: bool
     limits: AgentLimits
+    research: ResearchConfig | None = None
 
     @field_validator("allowed_tools", mode="before")
     @classmethod
@@ -67,6 +73,8 @@ class FrozenAgentPlan(BaseModel):
             raise ValueError("decision model identity is invalid")
         if len(set(self.allowed_tools)) != len(self.allowed_tools) or not set(self.allowed_tools) <= TOOL_NAMES:
             raise ValueError("frozen tool allowlist is invalid")
+        if self.research is not None:
+            validate_research_limits(self.research, self.limits)
         return self
 
 
@@ -82,6 +90,7 @@ class AgentDurableResult(BaseModel):
     per_tool_calls: dict[str, int]
     observation_count: int = Field(ge=0, le=10)
     failure: AgentFailure | None = None
+    research: ResearchSummary | None = None
 
     @field_validator("evidence_refs", mode="before")
     @classmethod
@@ -152,6 +161,7 @@ class AgentEventSummary(BaseModel):
     decision_index: int = Field(ge=1, le=20)
     decision_kind: Literal["tool", "final", "invalid"]
     tool_name: str | None = None
+    objective_id: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{0,31}$")
     argument_names: list[str] = Field(default_factory=list, max_length=16)
     outcome: Literal["observed", "completed", "rejected", "failed"]
     evidence_count: int = Field(ge=0, le=20)

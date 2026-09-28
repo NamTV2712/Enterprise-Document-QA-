@@ -17,6 +17,8 @@ from src.agent.decision import (
 from src.agent.errors import AgentToolError
 from src.agent.observation import ObservationIntegrityError, ObservationLimitError, project_observation
 from src.agent.policies import AgentExecutionContext
+from src.agent.research import ResearchSession
+from src.agent.research_models import ResearchConfig
 from src.agent.registry import AgentToolRegistry
 from src.agent.state import (
     AgentFailure, AgentGoal, AgentLimits, AgentResult, AgentRunPolicy, AgentState,
@@ -103,6 +105,7 @@ class AgentOrchestrator:
     def __init__(
         self, registry: AgentToolRegistry, decision_model: AgentDecisionModel,
         *, limits: AgentLimits | None = None, policy: AgentRunPolicy | None = None,
+        research: ResearchConfig | None = None,
     ) -> None:
         if type(decision_model.requires_provider) is not bool:
             raise ValueError("decision model provider classification must be explicit")
@@ -113,6 +116,12 @@ class AgentOrchestrator:
         self.limits = limits or AgentLimits()
         self._per_tool_limits = dict(self.limits.per_tool_calls)
         self.policy = policy or AgentRunPolicy()
+        self.research = research
+        if research is not None:
+            if not isinstance(research, ResearchConfig):
+                raise ValueError("research policy must be typed")
+            # Validate at construction, before any decision model or tool call.
+            ResearchSession(research, self.limits)
 
     def _request(self, state: AgentState, context: AgentExecutionContext) -> DecisionRequest:
         available = tuple(
@@ -136,6 +145,7 @@ class AgentOrchestrator:
             ) for tool in available),
             observations=tuple(observation.model_copy(deep=True) for observation in state.observations),
             step_count=state.step_count, tool_call_count=state.tool_call_count,
+            research=state.research_view.model_copy(deep=True) if state.research_view else None,
         )
 
     @staticmethod
@@ -150,6 +160,7 @@ class AgentOrchestrator:
             tool_call_count=state.tool_call_count, per_tool_calls=dict(state.per_tool_calls),
             observations=tuple(state.observations), trace=tuple(state.trace),
             failure=AgentFailure(domain=domain, code=code) if domain and code else None,
+            research=state.research_summary,
         )
 
     @staticmethod
@@ -159,6 +170,7 @@ class AgentOrchestrator:
     ) -> AgentResult:
         state.trace.append(AgentTraceEntry(
             decision_index=state.decision_call_count, kind="tool", tool_name=decision.tool_name,
+            objective_id=decision.objective_id,
             argument_names=tuple(sorted(decision.arguments)), outcome="rejected", failure_code=code,
         ))
         return AgentOrchestrator._result(state, status, domain=domain, code=code)
@@ -169,6 +181,14 @@ class AgentOrchestrator:
     ) -> AgentResult:
         """One validated decision is one step; only executed tools consume tool budget."""
         state = AgentState(goal=AgentGoal(text=goal), locale=context.locale)
+        research = ResearchSession(self.research, self.limits) if self.research else None
+
+        def refresh_research() -> None:
+            if research is not None:
+                state.research_summary = research.summary()
+                state.research_view = research.view()
+
+        refresh_research()
 
         async def record(entry: AgentTraceEntry) -> None:
             state.trace.append(entry)
@@ -211,7 +231,20 @@ class AgentOrchestrator:
             state.step_count += 1
 
             if isinstance(decision, FinalDecision):
+                if research is None and decision.unresolved_objective_ids:
+                    await record(AgentTraceEntry(
+                        decision_index=state.decision_call_count, kind="final",
+                        outcome="rejected", failure_code="research_unresolved_mismatch",
+                    ))
+                    return self._result(state, "invalid_decision", domain="policy",
+                                        code="research_unresolved_mismatch")
                 failure = _validate_final(state, decision, self.policy)
+                if failure is None and research is not None:
+                    failure = research.validate_final(
+                        decision.evidence_refs, decision.unresolved_objective_ids,
+                    )
+                    if failure is None and len(decision.answer.encode("utf-8")) > 1200:
+                        failure = "research_answer_too_long"
                 if failure is not None:
                     await record(AgentTraceEntry(
                         decision_index=state.decision_call_count, kind="final",
@@ -222,7 +255,18 @@ class AgentOrchestrator:
                     decision_index=state.decision_call_count, kind="final", outcome="completed",
                     evidence_refs=decision.evidence_refs,
                 ))
-                return self._result(state, "completed", answer=decision.answer,
+                answer = decision.answer
+                if research is not None and state.research_summary and not state.research_summary.evidence:
+                    answer = (
+                        "No indexed source evidence was collected for this research goal."
+                        if state.locale == "en" else
+                        "Không thu thập được bằng chứng nguồn đã lập chỉ mục cho mục tiêu nghiên cứu này."
+                    )
+                if research is not None and state.research_summary and state.research_summary.gaps:
+                    label = "Unresolved research objectives" if state.locale == "en" else "Mục tiêu nghiên cứu chưa giải quyết"
+                    gaps = ", ".join(f"{gap.objective_id} ({gap.code})" for gap in state.research_summary.gaps)
+                    answer = f"{answer}\n\n{label}: {gaps}."
+                return self._result(state, "completed", answer=answer,
                                     evidence_refs=decision.evidence_refs)
 
             # Validate the canonical name, policy and typed arguments before any
@@ -239,6 +283,12 @@ class AgentOrchestrator:
                 validated = tool.input_model.model_validate(decision.arguments)
             except (ValidationError, ValueError, TypeError):
                 return await reject_tool(decision, "invalid_decision", "tool", "invalid_arguments")
+            if research is None and decision.objective_id is not None:
+                return await reject_tool(decision, "invalid_decision", "policy", "research_objective_required")
+            if research is not None:
+                research_failure = research.before_tool(decision.objective_id, tool.name, validated)
+                if research_failure is not None:
+                    return await reject_tool(decision, "invalid_decision", "policy", research_failure)
 
             if state.tool_call_count >= self.limits.max_tool_calls:
                 return await reject_tool(decision, "budget_exhausted", "policy", "max_tool_calls")
@@ -259,6 +309,10 @@ class AgentOrchestrator:
             state.seen_calls.add(signature)
             state.tool_call_count += 1
             state.per_tool_calls[tool.name] += 1
+            if research is not None:
+                assert decision.objective_id is not None
+                research.start_tool(decision.objective_id, tool.name, validated)
+                refresh_research()
             try:
                 observation = await self.registry.invoke(tool.name, decision.arguments, context)
             except AgentToolError as error:
@@ -272,6 +326,7 @@ class AgentOrchestrator:
                 }[error.code]
                 await record(AgentTraceEntry(
                     decision_index=state.decision_call_count, kind="tool", tool_name=tool.name,
+                    objective_id=decision.objective_id,
                     argument_names=tuple(sorted(decision.arguments)), outcome="failed", failure_code=code,
                 ))
                 return self._result(state, status, domain=domain, code=code)
@@ -283,20 +338,27 @@ class AgentOrchestrator:
             except ObservationLimitError:
                 await record(AgentTraceEntry(
                     decision_index=state.decision_call_count, kind="tool", tool_name=tool.name,
+                    objective_id=decision.objective_id,
                     outcome="failed", failure_code="observation_bytes",
                 ))
                 return self._result(state, "budget_exhausted", domain="policy", code="observation_bytes")
             except ObservationIntegrityError:
                 await record(AgentTraceEntry(
                     decision_index=state.decision_call_count, kind="tool", tool_name=tool.name,
+                    objective_id=decision.objective_id,
                     outcome="failed", failure_code="invalid_observation",
                 ))
                 return self._result(state, "failed", domain="tool", code="invalid_observation")
             state.observations.append(projected)
             state.observation_bytes += len(projected.model_dump_json().encode("utf-8"))
+            if research is not None:
+                assert decision.objective_id is not None
+                research.observed(decision.objective_id, tool.name, validated, projected, state.step_count)
+                refresh_research()
             refs = _observation_refs(projected)[:20]
             await record(AgentTraceEntry(
                 decision_index=state.decision_call_count, kind="tool", tool_name=tool.name,
+                objective_id=decision.objective_id,
                 argument_names=tuple(sorted(decision.arguments)), outcome="observed",
                 evidence_refs=refs,
             ))

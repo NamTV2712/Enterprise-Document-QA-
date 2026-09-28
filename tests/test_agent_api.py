@@ -129,3 +129,35 @@ def test_agent_http_queued_cancel_validation_and_execution_gate(tmp_path, monkey
     assert _call(app, "POST", "/agent/runs", body=BODY).status_code == 403
     assert _call(app, "POST", path + "/cancel",
                  headers={**_headers(), "If-Match": '"2"'}).status_code == 403
+
+
+def test_agent_http_optional_research_contract_is_backwards_compatible(tmp_path, monkeypatch):
+    service, _, calls, _, _ = _service(tmp_path, (
+        {"kind": "tool", "objective_id": "apple_risk", "tool_name": "read_document",
+         "arguments": {"document_id": DOC}},
+        {"kind": "final", "answer": "The filing contains risk evidence.",
+         "evidence_refs": [{"kind": "document_id", "value": DOC}],
+         "unresolved_objective_ids": []},
+    ))
+    app = FastAPI()
+    app.include_router(create_agent_run_router(lambda: service))
+    _local(monkeypatch)
+    body = {"goal": "Find Apple risk evidence.", "research": {
+        "objectives": [{"objective_id": "apple_risk", "question": "Find Apple risk evidence",
+                        "ticker_scope": "AAPL"}],
+    }}
+    created = _call(app, "POST", "/agent/runs", body=body)
+    assert created.status_code == 201, created.text
+    run_id = created.json()["run_id"]
+    assert created.json()["frozen"]["research"]["version"] == "agent_research_v1"
+    detail = _call(app, "GET", f"/agent/runs/{run_id}")
+    assert detail.status_code == 200 and detail.json()["state"] == "succeeded"
+    assert detail.json()["result"]["research"]["evidence"][0]["document_id"] == DOC
+    assert calls == ["read_document"]
+    events = _call(app, "GET", f"/agent/runs/{run_id}/events")
+    assert '"objective_id":"apple_risk"' in events.text
+    assert "The filing contains risk evidence" not in events.text
+    invalid = _call(app, "POST", "/agent/runs", body={**body, "research": {
+        "objectives": [{"objective_id": "bad", "question": "Bearer synthetic-secret"}],
+    }}, headers={**_headers(), "Idempotency-Key": "invalid-research"})
+    assert invalid.status_code == 422

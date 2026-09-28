@@ -48,13 +48,18 @@ truthfully receive a refusal; public clients never inherit the bearer. Local
 mode and its jobs assume one serving process. No Redis, Celery, Kafka, second
 workspace database or external telemetry service is part of this topology.
 
-The optional `src/agent/` foundation binds four in-process tools to the same
+The optional `src/agent/` package binds four in-process tools to the same
 Search, Retrieval inspection, document catalog/chunk index and RAG services.
 Its registry validates strict inputs, labels observations as untrusted data and
 requires an explicit tool allowlist; RAG additionally requires an explicit
-provider-execution policy. Search writes only its existing bounded in-process
+provider-execution policy. One request-local orchestrator accepts strict
+structured decisions from one abstract decision model, applies step/tool and
+observation bounds, validates final evidence IDs and returns a typed result.
+Decision-model provider permission is independent of RAG provider permission.
+The operational trace contains safe action facts, never model reasoning or raw
+provider responses. Search writes only its existing bounded in-process
 snapshot, and the document tool returns bounded indexed previews. This layer
-has no HTTP self-calls, Agent route, planning loop, durable job or UI. See
+has no HTTP self-calls, Agent route, durable job or UI. See
 [`docs/AGENT_EXTENSION_PLAN.md`](docs/AGENT_EXTENSION_PLAN.md) for the separate
 optional sequence.
 

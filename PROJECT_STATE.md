@@ -1,5 +1,59 @@
 # Project State
 
+## AGENT-002 complete — Optional bounded single-Agent orchestration (2026-09-28)
+
+The required roadmap remains complete. AGENT-002 adds exactly one in-memory,
+request-local `AgentOrchestrator` over the four AGENT-001 tools. One abstract
+`AgentDecisionModel` returns strictly discriminated structured tool or final
+decisions; a scripted fake is used in deterministic tests. The current
+generator cannot guarantee structured Agent output, so a real provider adapter
+is deferred. Free-form Markdown/prose is never parsed into actions and no live
+provider quota was used. No Agent route, UI, durable run, migration, dependency,
+lockfile, multi-agent role or Ragas integration was added.
+
+Default bounds are 8 validated decisions, 5 executed tool calls, per-tool
+ceilings of Search 2 / Retrieval inspection 2 / Document read 3 / RAG 1,
+5 observations, 8 evidence records per observation, 160 excerpt characters,
+4096 bytes per observation and 16384 observation bytes per run. Schema ceilings
+prevent arbitrarily large overrides. A validated decision is one step; only
+an executed tool consumes tool-call budget. Tool, per-tool and observation-count
+ceilings are checked before execution. Exact repeated canonical calls are
+rejected. The default research policy requires an observation before final;
+an explicit generic policy permits zero-tool final. Decision-model provider
+permission and provider-backed `ask_rag` permission are independent.
+
+The model request separates system policy, user goal, truthful tool schemas
+and projected observations marked `untrusted_data`. Projection bounds text and
+record count, redacts credential/path patterns, and preserves whole canonical
+search/document/chunk IDs plus score family names and values. Unsafe identities
+or non-finite scores cause a typed tool failure. Final structured references
+must have appeared in the current run; `[Source N]` labels must resolve
+unambiguously to observed evidence and cited IDs. Duplicate or unseen
+references fail closed. This is identity validation, not semantic claim
+judging. The safe operational trace has indexes, tool names, argument *names*,
+outcomes, evidence IDs and content-free failure codes; it contains no hidden
+chain-of-thought, raw provider response or credential. Terminal statuses
+distinguish completed, invalid decision, policy denial, budget exhaustion,
+unavailable dependency, failure and request-local cancellation. Cancellation
+is checked between calls, not inside an in-flight model/provider call.
+
+Source/test commit `5b31a5d` added the strict decision and state/result models,
+observation projection, orchestrator and 25 scripted tests. AGENT-002 focused
+tests **25 passed**; combined AGENT-001 + AGENT-002 tests **44 passed**. Full
+backend **1432 passed, 0 failed, 188 warnings** versus AGENT-001's
+1407/188. Agent package compile/import passes; FastAPI product inventory
+remains **83 unique method/path pairs**. Frontend remains unchanged at the
+last verified **90 files/792 tests**, with TypeScript/build PASS from AGENT-001;
+those frontend checks were not rerun for this backend-only stage. The 12
+unrelated pre-existing untracked paths remain outside commits. A clean managed
+checkout had no `.env` or `data/`; it imported `src.agent` and `src.api.app`,
+constructed the four-tool registry, passed a scripted orchestration smoke,
+and retained 83 product routes. The staged artifact/secret audit found only
+intentional synthetic adversarial test strings. This closes AGENT-002-F.
+
+**Exact Next Action = AGENT-003 — durable Agent runs, events and cancellation,
+as a separate optional task. STOP before AGENT-003.**
+
 ## AGENT-001 complete — Optional typed tool foundation and bounded UI sweep (2026-09-28)
 
 This is a **new optional extension** after the completed UI-013 roadmap, not a

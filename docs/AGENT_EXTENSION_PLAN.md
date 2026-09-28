@@ -12,7 +12,7 @@ extension. It does not change the status of any completed task.
 | AGENT-003 | Durable runs, operational events, cancellation | Complete |
 | AGENT-004 | Multi-step evidence gathering over current services | Complete |
 | AGENT-005 | Prompt-injection and tool-policy hardening | Complete |
-| AGENT-006 | Agent evaluation protocol | In progress |
+| AGENT-006 | Agent evaluation protocol | Complete |
 | UI-014 | Agent workspace and safe operational trace | Future |
 | TEST-005 | Cross-layer and adversarial final validation | Future |
 
@@ -411,4 +411,17 @@ not low scores. The report uses the repository's finite canonical JSON and
 SHA-256 digest; it does not persist or publish a report. No API route or
 SQLite migration is planned.
 
-- AGENT-006-A in progress: metric inventory, applicability, provenance and corruption semantics defined before implementation.
+- AGENT-006-A complete: metric inventory, applicability, provenance and corruption semantics defined before implementation.
+- AGENT-006-B complete: versioned provider-free case, report, 21 metric definitions and strict canonical parser implemented.
+- AGENT-006-C complete: terminal, tool, policy, budget, research, evidence and citation metrics derived from frozen plans, durable results and safe events.
+- AGENT-006-D complete: 29 hermetic evaluation tests cover zero, unavailable and not-applicable states, research gaps, corruption, digest determinism, secret absence and no tool/network calls.
+- AGENT-006-E complete: primary and managed clean-checkout backend gates, route inventory and artifact audit recorded in `PROJECT_STATE.md`.
+
+V1 evaluates a single terminal run. It does not aggregate cases, invoke a
+model, or claim semantic answer quality. The SHA-256 digest detects accidental
+report changes; it is not an authenticity signature. No Agent evaluation API,
+stored evaluation report, schema migration or frontend change was added.
+
+**Exact next optional task: UI-014 — Agent workspace and safe operational
+trace.** Start it only as a separate task; TEST-005 follows UI-014. Do not
+start either task as part of AGENT-006.

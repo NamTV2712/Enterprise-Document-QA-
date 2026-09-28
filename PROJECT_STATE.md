@@ -1,5 +1,66 @@
 # Project State
 
+## AGENT-006 complete — Optional native Agent evaluation (2026-09-28)
+
+The required product roadmap remains complete. AGENT-006 adds a separate
+provider-free `native-agent-evaluation` v1 protocol for one terminal durable
+Agent run. It reads the frozen plan, bounded terminal result and ordered safe
+events without replay, tool invocation, provider call, filing text or network.
+There is no Agent evaluation route, persisted report, SQLite migration,
+dependency, frontend change or Ragas integration. The Agent route inventory
+remains **89 unique method/path pairs** and the workspace schema remains
+**v7**. Production still has no structured Agent decision provider adapter.
+
+The protocol defines **21 versioned metrics** without an overall score:
+completion; recorded tool decisions, admission, invalid attempts, policy
+denials, duplicate rejections, tool failures and unavailability; invalid final
+attempts; step and tool budget use and exhaustion; decision-provider
+unavailability; evidence identity and final reference identity; research
+objective coverage, unresolved gaps, evidence entries and distinct document
+and chunk counts. Each definition states type, bounds, direction,
+applicability, source fields, numerator/denominator, meaning and nonmeaning.
+`computed` includes actual zero or false, while `not_applicable` denotes a
+zero denominator or irrelevant research metric and `unavailable` denotes
+missing durable prerequisites. Ratios retain integer operands and a
+four-decimal value. Generic durable events can truncate source pairs or
+reference sets; the evaluator reports `unavailable` when current-run identity
+cannot be proved from them. Research-ledger identity and frozen objective
+thresholds are checked exactly. Invalid ordering, counters, plan fingerprint,
+coverage, scope or source pairs raise corruption instead of producing a low
+score. Typed terminal facts and gap counts remain separate from metrics.
+
+Reports bind the run to canonical SHA-256 hashes of the frozen plan, safe
+events and terminal result and include a deterministic report digest. A
+strict parser rejects unsupported versions, altered definitions, malformed
+values, duplicate JSON keys, non-finite numbers, mismatched facts and changed
+digests. The digest detects change; it is not an authenticity signature.
+V1 evaluates one run and does not aggregate cases or judge factual
+correctness, semantic claim support, source-label mapping from persisted
+generic traces, or optimal tool selection.
+
+Source, test and design commit `fa86d431fb4de2d1a36673e5df768cbaa89b33a9`
+added `src/agent/evaluation_models.py`, `src/agent/evaluation.py`, 29 hermetic
+tests and protocol documentation. The new test module passed **29/29** with
+zero warnings. Focused Agent/native EVAL regressions passed **260/260**;
+the Agent-only clean-checkout suite passed **187/187**. Primary full backend
+passed **1582, 0 failed, 188 warnings**, up from AGENT-005's 1553.
+A managed clean checkout at the source commit had no `.env`, `data/` or
+untracked source and passed **1548, 34 artifact-dependent skips, 148
+warnings**. Agent/API compilation and import checks passed, and route
+inventory remained 89. Full backend suites ran serially because the
+integration harness uses fixed localhost ports.
+
+Frontend source, tests and build inputs were unchanged; the last verified
+frontend baseline remains **90 Vitest files / 792 tests**, TypeScript and
+production build passed. No lockfile, migration, corpus or evaluation data
+changed. The same 12 unrelated untracked paths in the primary checkout
+remain untouched. Collections/model-test browser bearer integration remains
+staged; native zoom remains manual/unverified; the ~506.92 kB build warning
+and optional Ragas work remain separate.
+
+**Exact Next Action = UI-014 — Agent workspace and safe operational trace,
+as a separate optional task. STOP before UI-014 or TEST-005 here.**
+
 ## AGENT-005 complete — Optional Agent Security Hardening (2026-09-28)
 
 The required product roadmap remains complete. AGENT-005 added a hermetic

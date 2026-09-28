@@ -1,5 +1,63 @@
 # Project State
 
+## AGENT-005 complete — Optional Agent Security Hardening (2026-09-28)
+
+The required product roadmap remains complete. AGENT-005 added a hermetic
+adversarial campaign over the existing four-tool single-Agent architecture;
+it did not add a tool, route, provider adapter, UI, multi-agent role, network
+access, migration or dependency. The threat model and 20-class attack matrix
+were written in `docs/AGENT_EXTENSION_PLAN.md` before production changes.
+
+One reproducible **P2 evidence-integrity defect** was found. A structured
+tool result could supply separately canonical but contradictory document and
+chunk IDs, allowing a Microsoft chunk to be attributed to an Apple filing or
+an Apple chunk to a different Apple accession in the research ledger. Two
+deterministic regressions failed before the fix. `src/agent/observation.py`
+now checks recognizable ticker prefixes and standard SEC accession identity
+at the observation boundary; conflicting pairs fail with the existing
+`invalid_observation` result before entering Agent observations or research
+state. Matching standard IDs and legacy synthetic IDs remain valid. This is
+identity consistency, not proof that a source's text or metadata is true.
+No other reachable P0–P2 Agent security defect was reproduced.
+
+The new `tests/test_agent_security.py` passes **73** parameterized cases.
+It exercises direct, indirect and nested injection; exact tool lookup and
+strict arguments; independent provider permissions; copied policy and tool
+metadata views; frozen research objectives and budgets; source labels,
+cross-run citations and RAG prose; safe error handling; synthetic secret
+absence from decision context, terminal state, events, API output and logs;
+network/file/shell capability spies; Unicode and size limits; durable event
+and cancellation forgery; and API-001 bearer, Host, Origin, loopback,
+forwarded-header, execution-gate and numeric cursor behavior. Existing
+AGENT-001/002/003/004 and DATA-004 tests remain green. The decision model is
+scripted: there is still no production structured provider adapter and no
+claim about live-model prompt-injection reliability. Application-owned
+registry internals are not exposed to model or filing content. A model's
+attempt to mutate the policy or tool-schema view did not change enforcement.
+
+Source/test/plan commit `edbca09069aeb1b99295574a0f8b102599278889`
+contains the minimal production check and adversarial suite. Final working
+checkout backend validation: **1553 passed, 0 failed, 188 warnings** versus
+AGENT-004's **1480/188**. Focused Agent, DATA-004, Discovery, Retrieval and
+Document regressions: **236 passed, 13 warnings**. Agent/API compile and
+imports pass; inventory remains **89 unique method/path pairs** and four
+canonical Agent tools. A managed clean checkout of `edbca09` had no `.env`,
+`data/` or untracked source: Agent tests **158 passed, 1 warning**; full
+backend **1519 passed, 34 artifact-dependent skips, 148 warnings**; compile,
+imports, 89 routes and fresh SQLite **v7** initialization passed. The clean
+checkout was clean after validation. Final `git diff --check` passed.
+
+Frontend source, tests and build inputs were unchanged; the last verified
+frontend baseline remains **90 Vitest files / 792 tests**, TypeScript and
+production build passed. No dependency, lockfile, migration, corpus or
+evaluation artifact changed. The same 12 unrelated untracked paths in the
+primary checkout were preserved outside the commit. The historical staged
+Collections/model-test browser bearer integration, native zoom manual check,
+~506.92 kB build warning and optional Ragas limitation remain separate.
+
+**Exact Next Action = AGENT-006 — Agent Evaluation Protocol, as a separate
+optional task. STOP before AGENT-006, Agent UI or multi-agent behavior.**
+
 ## AGENT-004 complete — Optional bounded Agentic Research (2026-09-28)
 
 The required roadmap remains complete. AGENT-004 adds optional

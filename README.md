@@ -66,14 +66,17 @@ The required UI rebuild roadmap is complete through UI-013; EVAL-004/Ragas is
 optional, not a missing native-evaluation prerequisite.
 
 The optional Agent extension includes typed in-process research tools, one
-bounded single-Agent orchestrator, and private durable runs over the local
-DATA-004 workspace. Six `/agent/runs` routes support queued creation, detail,
-results, ordered finite SSE events and revision-safe cancellation. Create and
-cancel require local execution access; reads require local bearer access. A
-deterministic decision model is tested, but a real structured provider adapter
-is still pending, so production runs report decision-provider unavailability
-without calling tools. There is no Agent page or multi-agent behavior. See
-[the extension plan](docs/AGENT_EXTENSION_PLAN.md) for bounds and recovery.
+bounded single-Agent orchestrator, private DATA-004 durable runs, and an
+optional bounded research policy. Research runs freeze up to six explicit
+objectives, gather canonical evidence across existing tools, track gaps and
+validate current-run citations before synthesis. The six `/agent/runs` routes
+support queued creation, detail, results, ordered finite SSE events and
+revision-safe cancellation. Create and cancel require local execution access;
+reads require local bearer access. A deterministic decision model is tested,
+but a real structured provider adapter is still pending, so production runs
+report decision-provider unavailability without calling tools. There is no
+Agent page or multi-agent behavior. See [the extension plan](docs/AGENT_EXTENSION_PLAN.md)
+for research bounds, partial results and recovery.
 
 ## Overview
 

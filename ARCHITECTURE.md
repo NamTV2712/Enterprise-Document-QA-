@@ -66,7 +66,12 @@ owns each execution, and startup marks unreconciled active runs interrupted
 without replay. `/agent/runs` reads require local bearer access, while creation
 and cancellation also require execution capability. The runtime resolves a
 decision model at execution; without a structured provider adapter it records
-unavailability rather than a fabricated answer. See
+unavailability rather than a fabricated answer. AGENT-004 adds an optional
+versioned research policy to that same loop: caller-declared bounded
+objectives, a canonical source-identity ledger, typed gaps and final coverage
+checks. Research configuration and terminal metadata use the existing frozen
+plan/result JSON; decision events may name a safe objective ID. The workspace
+schema remains v7 and the route count remains 89. See
 [`docs/AGENT_EXTENSION_PLAN.md`](docs/AGENT_EXTENSION_PLAN.md) for the separate
 optional sequence.
 

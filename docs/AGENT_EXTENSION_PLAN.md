@@ -10,7 +10,7 @@ extension. It does not change the status of any completed task.
 | AGENT-001 | Typed closed-world tools and bounded existing-UI sweep | Complete |
 | AGENT-002 | Bounded single-agent tool-selection and execution loop | Complete |
 | AGENT-003 | Durable runs, operational events, cancellation | Complete |
-| AGENT-004 | Multi-step evidence gathering over current services | Future |
+| AGENT-004 | Multi-step evidence gathering over current services | Complete |
 | AGENT-005 | Prompt-injection and tool-policy hardening | Future |
 | AGENT-006 | Agent evaluation protocol | Future |
 | UI-014 | Agent workspace and safe operational trace | Future |
@@ -185,6 +185,77 @@ The frontend remains unchanged. The final product route inventory is 89.
 - AGENT-003-F complete: private API, `If-Match`, `Last-Event-ID`, access and route contracts.
 - AGENT-003-G complete: Agent/DATA/Pipeline/Evaluation/full-backend, clean-checkout and artifact gates recorded in `PROJECT_STATE.md`.
 
-**Exact next optional task: AGENT-004 — Agentic Research / bounded multi-step
-evidence gathering.** It may use these durable runs and four existing tools;
-it does not require multi-agent behavior. AGENT-003 does not start that work.
+## AGENT-004 contract and checkpoint
+
+Research is an optional `agent_research_v1` policy inside the existing
+`AgentOrchestrator.run` decision loop. There is no second execution loop,
+planner service, new tool, route or database. The caller supplies 1–6 typed,
+bounded objectives in the optional `/agent/runs` `research` field. Each has a
+stable safe ID, a question of at most 120 characters and an optional canonical
+ticker scope. These are caller intent, not source evidence; evidence is
+attributed only after a canonical document/chunk ID is observed. At most five
+distinct ticker scopes are accepted. Objectives cannot be added from retrieved
+text or silently generated from model prose. Generic runs omit `research` and
+keep AGENT-002 behavior.
+
+Each research tool decision names exactly one frozen objective. The decision
+model sees a separate bounded research view with objective coverage, gaps,
+source identities and prior action outcomes; AGENT-002 still validates every
+structured decision, tool input, provider gate and budget. Research policy
+checks the objective and optional ticker/document scope before invocation.
+Exact canonical calls are rejected through AGENT-002's duplicate rule, and
+research permits at most two search attempts per objective, subject to the
+frozen global search, step and tool ceilings. Query refinement is a new
+validated model decision, never an automatic recursive search. Search can
+discover indexed passages, Retrieval can inspect ranked candidates, Document
+can inspect canonical indexed previews, and RAG can provide a grounded
+generated answer when separately authorized. Only its cited source records,
+never generated prose, enter the research ledger.
+
+The ledger retains at most six distinct `(document_id, chunk_id)` source
+identities in first-seen order, within AGENT-002's observation capacity.
+Repeated canonical evidence keeps one entry and unions objective associations.
+Document ID prefixes yield canonical ticker attribution when valid; an
+objective with a ticker scope receives credit only for matching documents.
+Different documents/chunks remain distinct even with similar excerpts.
+Ledger entries store IDs, ticker, objective IDs, first tool and step, not raw
+source text, score-derived confidence or hidden reasoning. In-memory action
+history holds at most the AGENT-002 ten-tool ceiling and safe bounded query
+intent; durable results store only content-free source identity metadata.
+
+Coverage is an explicit deterministic threshold of 1–2 distinct ledger
+entries per objective (default 1): `none`, `some`, or `sufficient` means only
+that threshold, not factual completeness. Up to six typed gaps use
+`no_evidence`, `below_threshold`, `search_exhausted` or `ledger_full`.
+The model can choose a follow-up within existing budgets. A final decision
+must list exactly the unresolved objective IDs and cite retained current-run
+ledger evidence for every sufficient objective. AGENT-002's canonical-ID and
+`[Source N]` validation still applies. Partial completion uses the existing
+`completed` Agent status plus structured gaps and an explicit unresolved
+footer; no new job state is invented. With no source evidence, the final
+answer becomes a deterministic no-evidence statement. Research answers are
+limited to 1200 UTF-8 bytes before that bounded footer, with at most 12
+structured references, so the existing 8192-byte durable-result cap holds.
+This checks identity and policy coverage, not semantic claim support.
+
+AGENT-003 freezes the version, objectives and research bounds in its existing
+fingerprinted plan and stores the bounded summary in its existing result JSON.
+An optional objective ID is included in safe keyed decision events; older
+AGENT-003 events and generic plans remain readable. Cancellation retains the
+ledger collected before acknowledgement; restart still interrupts without
+replay. Mid-run ledger entries are not separately checkpointed, though safe
+decision events retain bounded evidence references. No SQLite migration is
+needed; schema version remains v7. The six routes and 89-route inventory
+remain unchanged. The production decision-model adapter is still absent, so
+normal research runs report `decision_provider_unavailable` without tool use.
+
+- AGENT-004-A complete: research policy/version, objectives, ledger, gaps and bounds defined.
+- AGENT-004-B complete: typed state and deterministic canonical evidence ledger tested.
+- AGENT-004-C complete: gap context, search attempts, duplicate prevention and comparison scopes tested.
+- AGENT-004-D complete: final readiness, current-run references, partial disclosure and injection boundaries tested.
+- AGENT-004-E complete: frozen plan/result, safe objective events, cancellation and restart tested.
+- AGENT-004-F complete: Agent/domain/full-backend, import/route, clean-checkout and artifact gates recorded in `PROJECT_STATE.md`.
+
+**Exact next optional task: AGENT-005 — prompt-injection and tool-policy
+hardening.** It owns the broader adversarial campaign. Stop before AGENT-005;
+multi-agent behavior, Agent UI and Ragas remain future work.

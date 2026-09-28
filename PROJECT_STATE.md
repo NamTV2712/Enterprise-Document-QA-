@@ -1,5 +1,81 @@
 # Project State
 
+## AGENT-004 complete — Optional bounded Agentic Research (2026-09-28)
+
+The required roadmap remains complete. AGENT-004 adds optional
+`agent_research_v1` policy/state to the sole AGENT-002 decision/execution
+loop. There is no second Agent loop, new tool, new route, UI, multi-agent role,
+provider adapter or dependency. The caller declares 1–6 bounded objectives
+in the optional `research` request field; each has a safe ID, at most 120
+characters of user question intent and an optional ticker scope. At most five
+distinct scopes are accepted. A validated structured tool decision identifies
+one frozen objective. Retrieved filing text is untrusted data and cannot add
+an objective, choose a tool or change policy. The decision model receives a
+bounded research view with coverage, gaps, prior action outcomes and source
+identities, while AGENT-002 still enforces every step/tool/provider,
+observation and cancellation boundary.
+
+The deterministic ledger keeps at most six first-seen canonical
+`(document_id, chunk_id)` entries, within frozen AGENT-002 observation
+capacity. Identical IDs merge objective associations; distinct documents or
+chunks remain separate regardless of textual similarity. Canonical ticker
+attribution comes from a valid document ID prefix, and a scoped objective
+receives only matching evidence. Search, provider-free Retrieval inspection,
+indexed Document previews and authorized RAG citations may contribute source
+records. Generated RAG prose cannot become documentary evidence. No excerpts,
+raw provider responses, score-derived confidence or hidden reasoning enter
+the durable ledger. In-memory history holds at most ten safe action summaries
+and exact canonical argument fingerprints. Per-objective search attempts are
+at most two and never exceed the frozen global search ceiling; exact repeated
+work is rejected before another service call.
+
+Coverage `none`/`some`/`sufficient` means only a frozen 1–2 distinct-entry
+threshold (default one), not proof of a complete or correct answer. Typed
+gaps are `no_evidence`, `below_threshold`, `search_exhausted` and
+`ledger_full`, at most six. The model may use another allowed tool to pursue
+a gap within the existing hard bounds. Final structured references must be
+retained in this run's ledger and pass AGENT-002's canonical ID and
+`[Source N]` checks; every sufficient objective must have a cited ledger
+entry. A final decision explicitly lists exactly the unresolved objective
+IDs. Partial answers keep the existing `completed` status with structured
+gaps and an appended disclosure. With no source evidence, a deterministic
+no-evidence answer replaces model prose. Research final answers are capped
+at 1200 UTF-8 bytes before disclosure and 12 references to fit AGENT-003's
+8192-byte durable result. Semantic claim verification remains out of scope.
+
+AGENT-003 freezes the research version, objective list and thresholds in its
+existing SHA-256-bound plan, stores the bounded terminal summary in existing
+result JSON and includes a safe optional objective ID in keyed decision
+events. Older generic plans and AGENT-003 events remain readable. A cancelled
+run can retain evidence gathered before acknowledgement; startup still marks
+active work interrupted without replay. Full mid-run ledgers are not
+checkpointed; existing events retain bounded source references and objective
+IDs. SQLite migration remains **v7**. The six `/agent/runs` routes remain
+unchanged, with an optional backward-compatible research request/result
+schema. Production still has no structured Agent decision adapter and returns
+`decision_provider_unavailable` without invoking tools or fabricating work.
+
+Source/test commit `4df1f22` added typed research policy and ledger, optional
+AGENT-002/003 integration and 19 hermetic tests. Focused Agent/DATA tests
+**90 passed**; targeted Search, Retrieval, Document, cross-layer, router and
+bootstrap regressions **239 passed, 13 warnings**. The final full backend
+gate is **1477 passed, 0 failed, 188 warnings** versus AGENT-003's
+1458/188. Agent/API compile and imports pass; the product inventory remains
+**89 unique routes**. Frontend source and tests were not changed; the last
+full frontend baseline remains **90 files/792 tests**. The 12 existing
+unrelated untracked paths remain outside commits. No migration, dependency,
+lockfile or corpus/evaluation data changed. A managed clean checkout at source
+commit `4df1f22` had no `.env`, `data/` or untracked source; three scripted
+single-objective, comparative and durable-reopen research smokes passed there,
+as did Agent/API imports, four-tool registry construction and the 89-route
+inventory. The intended source diff contains only Agent policy/model/runtime,
+the existing safe event allowlist, and hermetic tests; its hostile text and
+credential-shaped strings are synthetic fixtures, not secrets. This closes
+AGENT-004-F.
+
+**Exact Next Action = AGENT-005 — Prompt-injection and tool-policy
+hardening, as a separate optional task. STOP before AGENT-005.**
+
 ## AGENT-003 complete — Optional durable Agent runs, events and cancellation (2026-09-28)
 
 The required roadmap remains complete. AGENT-003 wraps the unchanged

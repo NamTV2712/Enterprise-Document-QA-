@@ -1,5 +1,10 @@
-"""Bounded, closed-world tools for a future single Agent orchestrator."""
+"""Bounded in-process research tools and one request-local Agent orchestrator."""
 
+from src.agent.orchestration import AgentOrchestrator
 from src.agent.registry import AgentToolRegistry, build_tool_registry
+from src.agent.state import AgentGoal, AgentLimits, AgentResult, AgentRunPolicy
 
-__all__ = ["AgentToolRegistry", "build_tool_registry"]
+__all__ = [
+    "AgentGoal", "AgentLimits", "AgentOrchestrator", "AgentResult", "AgentRunPolicy",
+    "AgentToolRegistry", "build_tool_registry",
+]

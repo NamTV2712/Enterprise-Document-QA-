@@ -65,6 +65,11 @@ load test. See [frontend setup](frontend/README.md), [architecture](ARCHITECTURE
 The required UI rebuild roadmap is complete through UI-013; EVAL-004/Ragas is
 optional, not a missing native-evaluation prerequisite.
 
+An optional Agent extension now starts with a typed in-process tool foundation
+for Search, Retrieval inspection, canonical document previews and gated RAG
+queries. It adds no Agent API, planning loop or Agent page. The registry and
+security boundary are described in [the extension plan](docs/AGENT_EXTENSION_PLAN.md).
+
 ## Overview
 
 - Problem type: enterprise document question answering over financial filings.

@@ -1,5 +1,51 @@
 # Project State
 
+## AGENT-001 complete — Optional typed tool foundation and bounded UI sweep (2026-09-28)
+
+This is a **new optional extension** after the completed UI-013 roadmap, not a
+reopened requirement. The [extension plan](docs/AGENT_EXTENSION_PLAN.md) is
+authoritative for AGENT-001 through TEST-005. `src/agent/` adds a deterministic
+four-name closed-world registry (`search_documents`, `inspect_retrieval`,
+`read_document`, `ask_rag`), strict Pydantic input validation, typed structured
+observations, explicit access/effect/provider metadata, content-free error
+categories and an allowlist/provider policy. The application binds existing
+in-process services through `create_agent_tool_registry()`; no backend HTTP
+self-call, route, migration, durable Agent job, planning loop, UI, new dependency
+or framework was added. RAG remains explicitly provider-gated, stateless per
+Agent call and tested with a deterministic fake; no live provider was invoked.
+Search retains API-004 snapshot IDs and Unicode offsets, Retrieval retains
+API-005 stages and distinct score families including negative reranker logits,
+and document reads use canonical IDs and bounded indexed previews without
+claiming full source availability. Hostile filing text stays untrusted data and
+cannot select tools or change policy.
+
+The bounded UI sweep inspected all 14 primary routes at 1440×900 and 390×844
+in dark English/Vietnamese, with eight dense routes also at 1024×768, using
+the real production build and deterministic product handlers in Chromium and
+Firefox. It checked body/root overflow, visible control geometry, selected
+screenshots and representative Axe scans. One reproduced phone Chat composer
+defect clipped the wrapped placeholder and expanded the Deep Research visual
+switch to the mobile 44 px hit size. The component now gives the prompt enough
+height and centers a 28×16 visual track inside a 44 px touch target. The same
+composer serves Research. The focused test failed before the repair and passed
+after; final sweep **32/32** and existing light/EN plus dark/VI populated
+responsive/overlay gate **4/4** passed across Chromium/Firefox. No other
+reproducible rendering defect was found in this bounded sweep. Native browser
+zoom is still manual/unverified.
+
+Final original-checkout backend **1407 passed, 0 failed, 188 warnings** (baseline
+1388/188); selected touched-domain tests and the Agent tests passed before the
+final full-suite replay. FastAPI remains
+**83 unique routes**. Frontend remains **90 Vitest files/792 passed**; TypeScript
+and 2074-module production build PASS. The aggregate index warning is now
+about 507.13 kB, still non-blocking. The same 12 pre-existing unrelated
+untracked paths are preserved; generated browser assets, `data/`, `.env`,
+dependencies and lockfiles are outside commits. No historical benchmark was
+changed or promoted.
+
+**Exact Next Action = AGENT-002 — Bounded single-agent orchestration, as a
+separate optional task. STOP: AGENT-002 has not started.**
+
 ## UI-013 complete — Cleanup, documentation and handoff (2026-09-28)
 
 UI-013-A through F are COMPLETE. Starting source HEAD `d71a458` had no

@@ -68,13 +68,14 @@ def _run(model, research, calls=None, *, services=None, limits=None, cancel=None
 
 
 def _two_company_services(calls):
+    # Equal preview text must not collapse evidence from distinct filings.
     chunks = [
         {"chunk_id": CHUNK, "ticker": "AAPL", "accession_number": "0000320193-25-000079",
          "section": "risk_factors", "filing_date": "2025-10-31", "report_date": "2025-09-27",
          "chunk_index": 0, "text": "Apple risk evidence."},
         {"chunk_id": MSFT_CHUNK, "ticker": "MSFT", "accession_number": "0000789019-25-000001",
          "section": "risk_factors", "filing_date": "2025-10-31", "report_date": "2025-06-30",
-         "chunk_index": 0, "text": "Microsoft risk evidence."},
+         "chunk_index": 0, "text": "Apple risk evidence."},
     ]
     rows = [
         {"document_id": doc, "ticker": ticker, "filing_date": "2025-10-31",
@@ -188,6 +189,23 @@ def test_retrieval_inspection_can_refine_the_same_objective_without_new_loop():
     assert result.research.evidence[0].first_tool == "search_documents"
     assert result.research.objectives[0].evidence_count == 1
     assert result.observations[1].evidence[0].scores["cross_encoder_score"] == -2.5
+
+
+def test_same_canonical_evidence_keeps_both_objective_associations():
+    config = _config(
+        _objective("apple_ai", ticker="AAPL"),
+        _objective("apple_cyber", ticker="AAPL", question="Find cybersecurity risk evidence"),
+    )
+    model = ScriptedDecisionModel(
+        _tool("apple_ai", "search_documents", query="AI risk", ticker="AAPL"),
+        _tool("apple_cyber", "read_document", document_id=DOC),
+        _final("The filing contains evidence for both objectives.", ("chunk_id", CHUNK)),
+    )
+    result, _ = _run(model, config)
+    assert result.status == "completed"
+    assert len(result.research.evidence) == 1
+    assert result.research.evidence[0].objective_ids == ("apple_ai", "apple_cyber")
+    assert all(item.coverage == "sufficient" for item in result.research.objectives)
 
 
 def test_empty_search_gap_followup_and_truthful_unresolved_final():
@@ -322,6 +340,26 @@ def test_final_references_and_partial_gap_disclosure_fail_closed():
     )
     result, _ = _run(model, _config())
     assert result.failure.code == "research_unresolved_mismatch"
+
+
+def test_final_rejects_source_seen_only_in_another_research_run():
+    first_config = _config(_objective(
+        "microsoft_risk", ticker="MSFT", question="Find Microsoft risk evidence",
+    ))
+    first_model = ScriptedDecisionModel(
+        _tool("microsoft_risk", "read_document", document_id=MSFT_DOC),
+        _final("Microsoft source found.", ("chunk_id", MSFT_CHUNK)),
+    )
+    first, _ = _run(first_model, first_config, services=_two_company_services([]))
+    assert first.status == "completed"
+    assert first.research.evidence[0].chunk_id == MSFT_CHUNK
+    second_model = ScriptedDecisionModel(
+        _tool("apple_risk", "read_document", document_id=DOC),
+        _final("Use an earlier run's source.", ("chunk_id", MSFT_CHUNK)),
+    )
+    second, _ = _run(second_model, _config(), services=_two_company_services([]))
+    assert second.status == "invalid_decision"
+    assert second.failure.code == "invalid_evidence_reference"
 
 
 def test_ledger_cap_keeps_whole_ids_and_observation_bytes_remain_bounded():
@@ -482,6 +520,34 @@ def test_research_durable_cancellation_keeps_safe_ledger_and_stops_next_tool(tmp
     assert cancelled.result.research.evidence[0].chunk_id == CHUNK
     assert calls == ["read_document"]
     assert service.get(created.run_id).state == "cancelled"
+
+
+def test_partial_research_gaps_survive_durable_reopen(tmp_path: Path):
+    db = WorkspaceDatabase(tmp_path / "agent.sqlite3")
+    db.initialize()
+    repo = SQLiteJobRepository(db)
+    calls = []
+    model = ScriptedDecisionModel(
+        _tool("microsoft_risk", "search_documents", query="MSFT AI risk", ticker="MSFT"),
+        _final("No source evidence was returned.", unresolved=("microsoft_risk",)),
+    )
+    service = AgentDurableService(
+        repo, lambda: build_tool_registry(_services(calls)),
+        decision_model_factory=lambda _identity: model, decision_model_id="scripted_test",
+    )
+    body = AgentRunCreateRequest(goal="Find Microsoft risk evidence.", research=_config(
+        _objective("microsoft_risk", ticker="MSFT", question="Find Microsoft risk evidence"),
+    ))
+    created = service.create(body, idempotency_key="partial-research")
+    finished = asyncio.run(service.run(created.run_id))
+    assert finished.state == "succeeded" and finished.result.research.gaps[0].code == "no_evidence"
+    reopened = AgentDurableService(SQLiteJobRepository(WorkspaceDatabase(db.path)),
+                                   service.registry_factory)
+    persisted = reopened.get(created.run_id)
+    assert persisted.frozen.research == body.research
+    assert persisted.result.research.gaps[0].objective_id == "microsoft_risk"
+    assert persisted.result.evidence_refs == ()
+    assert calls == ["search_documents"]
 
 
 def test_research_running_job_restart_interrupts_without_replay(tmp_path: Path):

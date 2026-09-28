@@ -56,10 +56,12 @@ schema. Production still has no structured Agent decision adapter and returns
 `decision_provider_unavailable` without invoking tools or fabricating work.
 
 Source/test commit `4df1f22` added typed research policy and ledger, optional
-AGENT-002/003 integration and 19 hermetic tests. Focused Agent/DATA tests
-**90 passed**; targeted Search, Retrieval, Document, cross-layer, router and
-bootstrap regressions **239 passed, 13 warnings**. The final full backend
-gate is **1477 passed, 0 failed, 188 warnings** versus AGENT-003's
+AGENT-002/003 integration and 19 hermetic tests. Follow-up test commit
+`a82e6c3` added three source-association, cross-run and partial-result
+boundary tests. Focused Agent/DATA tests **93 passed**; targeted Search,
+Retrieval, Document, cross-layer, router and bootstrap regressions
+**239 passed, 13 warnings**. The final full backend
+gate is **1480 passed, 0 failed, 188 warnings** versus AGENT-003's
 1458/188. Agent/API compile and imports pass; the product inventory remains
 **89 unique routes**. Frontend source and tests were not changed; the last
 full frontend baseline remains **90 files/792 tests**. The 12 existing

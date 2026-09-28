@@ -46,6 +46,10 @@ canonical Agent tools. A managed clean checkout of `edbca09` had no `.env`,
 backend **1519 passed, 34 artifact-dependent skips, 148 warnings**; compile,
 imports, 89 routes and fresh SQLite **v7** initialization passed. The clean
 checkout was clean after validation. Final `git diff --check` passed.
+Full backend suites in separate worktrees must run serially: the integration
+HTTP harness uses fixed localhost ports `8765`, `8766` and `8900`. A
+simultaneous validation attempt made session and rate-limit tests share those
+servers and fail transiently; the subsequent serial clean-checkout run passed.
 
 Frontend source, tests and build inputs were unchanged; the last verified
 frontend baseline remains **90 Vitest files / 792 tests**, TypeScript and

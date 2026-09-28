@@ -69,7 +69,12 @@ The optional Agent extension includes typed in-process research tools, one
 bounded single-Agent orchestrator, private DATA-004 durable runs, and an
 optional bounded research policy. Research runs freeze up to six explicit
 objectives, gather canonical evidence across existing tools, track gaps and
-validate current-run citations before synthesis. The six `/agent/runs` routes
+validate current-run citations before synthesis. Agent observations reject
+conflicting document/chunk source identities when the IDs encode a
+recognizable ticker or SEC filing accession. Invalid structured evidence ends
+the run with a typed `invalid_observation` result instead of entering the
+research ledger. The AGENT-005 adversarial checkpoint is documented in
+[the extension plan](docs/AGENT_EXTENSION_PLAN.md). The six `/agent/runs` routes
 support queued creation, detail, results, ordered finite SSE events and
 revision-safe cancellation. Create and cancel require local execution access;
 reads require local bearer access. A deterministic decision model is tested,

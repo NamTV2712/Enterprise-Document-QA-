@@ -11,7 +11,7 @@ extension. It does not change the status of any completed task.
 | AGENT-002 | Bounded single-agent tool-selection and execution loop | Complete |
 | AGENT-003 | Durable runs, operational events, cancellation | Complete |
 | AGENT-004 | Multi-step evidence gathering over current services | Complete |
-| AGENT-005 | Prompt-injection and tool-policy hardening | Future |
+| AGENT-005 | Prompt-injection and tool-policy hardening | Complete |
 | AGENT-006 | Agent evaluation protocol | Future |
 | UI-014 | Agent workspace and safe operational trace | Future |
 | TEST-005 | Cross-layer and adversarial final validation | Future |
@@ -259,3 +259,95 @@ normal research runs report `decision_provider_unavailable` without tool use.
 **Exact next optional task: AGENT-005 — prompt-injection and tool-policy
 hardening.** It owns the broader adversarial campaign. Stop before AGENT-005;
 multi-agent behavior, Agent UI and Ragas remain future work.
+
+## AGENT-005 threat model and security checkpoint
+
+AGENT-005 tests the existing single-Agent architecture with deterministic
+scripted decisions and synthetic hostile data. It does not claim resistance
+to a live decision-model provider, because no production structured adapter
+exists. The primary invariant is that untrusted data cannot become
+control-plane authority.
+
+The trusted control plane consists of the four-tool registry and metadata,
+server-owned tool bindings, API-001 access checks, frozen run policy and
+limits, independent provider permissions, DATA-004 lifecycle/revisions/event
+sequence, caller-validated research objectives, and canonical structured
+evidence identities. Untrusted inputs include the user goal and objective
+text, model decisions and arguments, filing snippets and metadata, retrieval
+and document previews, RAG-generated prose, final answers, and raw
+tool/provider exception text. The boundary chain is API input validation →
+frozen plan; decision response → strict parser → exact registry/policy/budget
+and input checks → tool invocation; typed tool result → bounded untrusted
+observation; observation → canonical research ledger; operational facts →
+bounded durable events/result. Source prose has no path back to the trusted
+registry, policy, access grant, lifecycle, or revision authority.
+
+The attack matrix records the expected enforcement layer and measurable
+outcome. `0` calls means no underlying tool service call; `≤budget` means
+only explicitly validated calls within the frozen bound. `None` in the last
+column means no attacker-chosen durable state/event or synthetic secret leak.
+
+| Attack class | Entry point | Enforcement | Service calls | Durable effect / leak |
+|---|---|---|---|---|
+| Direct policy/tool injection | User goal | Frozen policy, strict decision parser | 0 without validated tool decision | None |
+| Indirect document instructions | Search/Document/Retrieval text | Untrusted observation projection | 0 from text alone | None |
+| Nested/encoded instructions | JSON, Markdown, XML, YAML, HTML or quoted text | No prose-to-decision parser | 0 from text alone | None |
+| Unknown/near-match tool | Model decision name | Exact registry lookup | 0 | Typed rejection only |
+| Malicious search arguments | Model arguments | Strict Search input | 0 if invalid | Typed rejection only |
+| Malicious Retrieval arguments | Model arguments | Strict Retrieval input | 0 if invalid | Typed rejection only |
+| Path-shaped Document ID | Model arguments | Canonical ID schema and catalog lookup | 0 if invalid | Typed rejection only |
+| RAG provider/config override | Model arguments | Strict RAG input and provider gate | 0 if invalid/denied | Typed rejection only |
+| Provider escalation | Goal, observation or decision | Independent provider permissions | 0 when denied | None |
+| Budget escalation | Decision extras or text | Frozen limits and pre-call gates | ≤budget | Bounded events only |
+| Objective injection | Source/RAG/error prose | Caller-frozen research config | 0 from text alone | No new objective |
+| Forged evidence/Source label | Source or RAG prose | Structured projection and final reference validation | ≤budget | No forged ID |
+| Cross-run citation | Final decision | Current-run observation and ledger | ≤budget | Rejected final |
+| RAG answer poisoning | Generated prose | Source-record-only projection | ≤budget | No prose evidence |
+| Error-string injection | Tool/provider exception | Typed content-free error mapping | ≤budget | No raw error/leak |
+| Event/revision forgery | Source or model text | DATA-004 keyed event/revision authority | ≤budget | No forged event |
+| Lifecycle/cancel forgery | API extras or source text | Strict DTO and revisioned cancellation | 0 from text alone | No transition |
+| API access bypass | Agent routes | API-001 bearer, Host, Origin, loopback, execution gate | 0 denied | No private read/write |
+| URL/secret in cursor or ID | Query/header/source text | Header-only bearer, opaque IDs, numeric sequence | 0 denied | No secret in URL/ID |
+| Unicode/oversize/loop amplification | Goal, decision, tool output | Typed size ceilings, projection and frozen loop | ≤budget | Bounded result/events |
+
+Candidate weaknesses to reproduce before any production edit: the registry
+holds an internal mutable mapping despite frozen tool descriptors; some
+frozen Pydantic views contain mutable nested dicts; error and event payloads
+need adversarial round-trip checks. A candidate is not a defect until a
+reachable untrusted path changes authority or leaks a protected value.
+
+AGENT-005 found one reproducible P2 evidence-integrity defect. A typed tool
+result could carry individually canonical but conflicting `document_id` and
+`chunk_id` values. The projection admitted that pair, allowing the research
+ledger to attribute a chunk from another ticker or filing to the stated
+document. Two deterministic tests failed before the fix: cross-ticker and
+same-ticker/different-accession pairs. The projection now checks the
+recognizable ticker prefix and, for standard SEC accession IDs, the filing
+accession before constructing an `EvidenceRecord`. A conflict produces the
+existing typed `invalid_observation` outcome; source text, budget and tool
+authority are unchanged. The check remains compatible with synthetic or
+legacy IDs that do not encode an accession; it cannot prove arbitrary source
+metadata truthful. No other reachable P0–P2 defect was reproduced.
+
+The hermetic AGENT-005 adversarial module covers all matrix rows with scripted
+decisions and hostile synthetic snippets, including exact tool names, strict
+arguments, the two independent provider gates, copied policy/metadata views,
+objective ownership, current-run citations, RAG prose, safe errors, durable
+events/cancellation, API-001 access, synthetic secrets, denied network/file/
+shell capability attempts, Unicode/oversize handling and frozen loop limits.
+The production decision adapter remains absent, so this is a structural
+boundary result, not a live-model prompt-injection guarantee. The registry's
+internal mapping and frozen models' nested dictionaries remain application
+owned; the decision model receives defensive metadata/policy projections,
+and attempted mutation of those views did not affect execution. No registry
+API accepts model or filing text as registration input. The API, migrations,
+dependencies, frontend, and four-tool set are unchanged.
+
+- AGENT-005-A complete: threat model and attack matrix recorded before production changes.
+- AGENT-005-B complete: conflicting structured evidence pair reproduced and rejected at projection.
+- AGENT-005-C complete: deterministic hostile-text, provider, policy, budget, evidence, durability, access and capability checks.
+- AGENT-005-D complete: regression and clean-checkout receipts are recorded in `PROJECT_STATE.md`.
+
+**Exact next optional task: AGENT-006 — Agent Evaluation Protocol.** It should
+measure separate completion, tool use, evidence, citation, gap, budget and
+policy outcomes. Do not start AGENT-006, UI-014 or multi-agent behavior here.

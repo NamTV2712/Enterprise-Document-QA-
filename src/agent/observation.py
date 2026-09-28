@@ -57,6 +57,22 @@ def _canonical(kind: str, value: str | None) -> str | None:
     return value
 
 
+def _validate_source_pair(document_id: str | None, chunk_id: str | None) -> None:
+    """Reject conflicting filing identities when source IDs use SEC chunk conventions."""
+    if not document_id or not chunk_id:
+        return
+    ticker, separator, accession = document_id.partition(":")
+    if not separator or not re.fullmatch(r"[A-Z][A-Z0-9.-]{0,9}", ticker):
+        return
+    chunk_ticker = re.match(r"([A-Z][A-Z0-9.-]{0,9})[_-]", chunk_id)
+    if chunk_ticker and chunk_ticker.group(1) != ticker:
+        raise ObservationIntegrityError("conflicting source identity")
+    if re.fullmatch(r"\d{10}-\d{2}-\d{6}", accession):
+        chunk_accession = re.match(r"[A-Z][A-Z0-9.-]{0,9}_(\d{18})_", chunk_id)
+        if chunk_accession and chunk_accession.group(1) != accession.replace("-", ""):
+            raise ObservationIntegrityError("conflicting source identity")
+
+
 def _record(
     *, document_id: str | None = None, chunk_id: str | None = None,
     source_label: str | None = None, citation: str | None = None,
@@ -67,9 +83,12 @@ def _record(
         raise ObservationIntegrityError("unsafe score family")
     bounded_excerpt, truncated = _safe_text(excerpt, excerpt_limit)
     bounded_citation, citation_truncated = _safe_text(citation, 256)
+    canonical_document_id = _canonical("document_id", document_id)
+    canonical_chunk_id = _canonical("chunk_id", chunk_id)
+    _validate_source_pair(canonical_document_id, canonical_chunk_id)
     return EvidenceRecord(
-        document_id=_canonical("document_id", document_id),
-        chunk_id=_canonical("chunk_id", chunk_id),
+        document_id=canonical_document_id,
+        chunk_id=canonical_chunk_id,
         source_label=source_label, citation=bounded_citation or None,
         score_kind=score_kind, scores=scores or {}, excerpt=bounded_excerpt,
     ), truncated or citation_truncated

@@ -928,7 +928,6 @@ app.include_router(create_collections_router(_collections_repository))
 async def query(request: Request, body: QueryRequest) -> QueryResponse:
     """Main endpoint: receive the question, return the answer + source citation"""
     pipeline = _get_pipeline()
-
     if _contains_injection_pattern(body.question):
         logger.warning("potential_injection_blocked request_id=%s", request.state.request_id)
         raise HTTPException(
@@ -936,19 +935,8 @@ async def query(request: Request, body: QueryRequest) -> QueryResponse:
             detail="Your question contains patterns that cannot be processed. Please rephrase.",
         )
 
-    original_question = _sanitize_question(body.question)
-    normalized = normalize_retrieval_question(original_question)
-    ticker = body.ticker or normalized.detected_ticker
     try:
-        response = await _run_query_with_timeout(
-            pipeline.query,
-            question=normalized.question,
-            top_k=body.top_k,
-            ticker=ticker,
-            section=body.section,
-            session_id=body.session_id,
-            answer_language=body.answer_language,
-        )
+        result = await _query_service(body, pipeline=pipeline)
         telemetry.record_provider_event("completed")
     except TimeoutError:
         logger.warning("Query timed out after %.1f seconds", QUERY_TIMEOUT_SECONDS)
@@ -964,6 +952,26 @@ async def query(request: Request, body: QueryRequest) -> QueryResponse:
         logger.exception("Error occurred while processing query: %s", e)
         raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
 
+    return result
+
+
+async def _query_service(body: QueryRequest, pipeline: RAGPipeline | None = None) -> QueryResponse:
+    """Shared RAG operation for the HTTP route and the gated Agent adapter."""
+    if _contains_injection_pattern(body.question):
+        raise ValueError("question contains unsupported instruction patterns")
+    pipeline = pipeline or _get_pipeline()
+    original_question = _sanitize_question(body.question)
+    normalized = normalize_retrieval_question(original_question)
+    ticker = body.ticker or normalized.detected_ticker
+    response = await _run_query_with_timeout(
+        pipeline.query,
+        question=normalized.question,
+        top_k=body.top_k,
+        ticker=ticker,
+        section=body.section,
+        session_id=body.session_id,
+        answer_language=body.answer_language,
+    )
     sources = [
         _source_chunk_payload(chunk, rank=index + 1)
         for index, chunk in enumerate(response.retrieved_chunks)
@@ -2069,37 +2077,47 @@ app.include_router(create_telemetry_router(_terminal_telemetry_service))
 @limiter.limit("10/minute")
 async def retrieval_inspect(request: Request, body: RetrievalInspectRequest) -> dict:
     """Inspect local retrieval stages without invoking the language model."""
-    pipeline: RAGPipeline | None = _state.get("pipeline")
-    if pipeline is None:
-        raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
+    pipeline = _get_pipeline()
     if _contains_injection_pattern(body.question):
         raise HTTPException(
             status_code=400,
             detail="Your question contains patterns that cannot be processed. Please rephrase.",
         )
-    original_question = _sanitize_question(body.question)
-    normalized = normalize_retrieval_question(original_question)
-    ticker = body.ticker or normalized.detected_ticker
     try:
-        trace = await run_in_threadpool(
-            pipeline.retriever.inspect,
-            query=normalized.question,
-            top_k=body.top_k,
-            ticker=ticker,
-            section=body.section,
-            candidate_pool=body.candidate_pool,
-            preset=body.preset,
-            chunk_filter=_inspect_chunk_filter(
-                document_id=body.document_id,
-                filing_date=body.filing_date,
-                year=body.year,
-            ),
-        )
+        return await _inspect_retrieval_service(body, pipeline=pipeline)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+    except HTTPException:
+        raise
     except Exception:
         logger.exception("Retrieval inspection failed")
         raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
+
+
+async def _inspect_retrieval_service(
+    body: RetrievalInspectRequest, pipeline: RAGPipeline | None = None,
+) -> dict:
+    """Shared API-005 inspection, including canonical identity and scope."""
+    pipeline = pipeline or _get_pipeline()
+    if _contains_injection_pattern(body.question):
+        raise ValueError("question contains unsupported instruction patterns")
+    original_question = _sanitize_question(body.question)
+    normalized = normalize_retrieval_question(original_question)
+    ticker = body.ticker or normalized.detected_ticker
+    trace = await run_in_threadpool(
+        pipeline.retriever.inspect,
+        query=normalized.question,
+        top_k=body.top_k,
+        ticker=ticker,
+        section=body.section,
+        candidate_pool=body.candidate_pool,
+        preset=body.preset,
+        chunk_filter=_inspect_chunk_filter(
+            document_id=body.document_id,
+            filing_date=body.filing_date,
+            year=body.year,
+        ),
+    )
     chunk_records = _chunk_records_index()
     for candidate in trace.get("candidates", []):
         records = chunk_records.get(candidate.get("chunk_id"), [])
@@ -2124,6 +2142,20 @@ async def retrieval_inspect(request: Request, body: RetrievalInspectRequest) -> 
         "query_interpretation": _query_interpretation(original_question, normalized),
         "trace": trace,
     }
+
+
+def create_agent_tool_registry():
+    """Bind the optional Agent foundation to current in-process services."""
+    from src.agent.registry import build_tool_registry
+    from src.agent.tools import ToolServices
+
+    return build_tool_registry(ToolServices(
+        discovery=_discovery_service,
+        inspect=_inspect_retrieval_service,
+        catalog=_catalog_rows_or_unavailable,
+        document_chunks=_document_chunks_index,
+        rag_query=_query_service,
+    ))
 
 
 INJECTION_PATTERNS = [

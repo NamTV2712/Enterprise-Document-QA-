@@ -512,13 +512,13 @@ Saved planning documents are the external prerequisite for TEST-001. TEST-002 en
 | TEST-004 | Full product validation | TEST-002, TEST-003 | Browser/integration suites | Widths/locales/two browsers | Final integration |
 | UI-013 | Cleanup/documentation | TEST-004 | Old wrappers/styles/README/contracts/project state | Zero references/compatibility/rollback | Last |
 
-Spine: TEST-001 branches into UI-001 → UI-002 → pages, API-001 → DATA-001 → import/collections/jobs, and API-002 → services. DATA-004 enables Pipeline and evaluation execution. Service/page work converges at TEST-002 and TEST-003, then TEST-004, then UI-013. No rebuild task has started.
+Spine: TEST-001 branches into UI-001 → UI-002 → pages, API-001 → DATA-001 → import/collections/jobs, and API-002 → services. DATA-004 enables Pipeline and evaluation execution. Service/page work converges at TEST-002 and TEST-003, then TEST-004, then UI-013. This is the planning dependency graph; current completion status is recorded at the top of `PROJECT_STATE.md` and `UI_REBUILD_PLAN_CHECKPOINT.md`.
 
 ## 22. Definition of Done
 
 Every visible destination is backed by an actual capability. All nine references have recorded visual review. Browser migration preserves research content, variants and evidence identity. Readers/cancellation/retrieval/old links remain compatible. Pipeline cannot overwrite canonical serving data. Evaluation exposes definitions/denominators/bindings, obeys budgets and separates official reports from private/incomplete jobs. Workspace privacy and content-free telemetry are verified.
 
-Required contracts, integration, browser and visual gates pass. Documentation reflects implemented behavior. Cleanup follows compatibility and rollback gates. Persisting this plan, full matrix and checkpoint completes planning only. TEST-001 awaits a separate implementation instruction.
+Required contracts, integration, browser and visual gates pass. Documentation reflects implemented behavior. Cleanup follows compatibility and rollback gates. The final status of these gates is recorded in the current project state and checkpoint; the earlier planning-only status is historical, not a pending implementation instruction.
 
 ## Appendix A. Reference Gap Matrix
 

@@ -1,5 +1,40 @@
 # Frontend Contract
 
+## Current route and authority index (UI-013)
+
+`frontend/src/app/routes.ts` owns the canonical navigation. Workspace routes
+are `/chat`, `/research`, `/documents`, `/search`, `/collections`, `/retrieval`,
+`/models`, `/pipeline`, `/reranker`, `/evaluation`, `/analytics`, `/datasets`,
+`/settings`, and `/logs`. Supported detail routes retain conversation,
+document, collection, Pipeline run and Evaluation run IDs; legacy root/query/hash
+links translate through the existing adapter. Browser Back/Forward must preserve
+the selected route identity, not recreate an answer or execute a provider.
+
+App owns route/document identity and the shared memory-only local connection.
+Research/reader hooks own submitted scope, stream cancellation, answer variant,
+selected source, document/revision and stale-response rejection. Browser
+IndexedDB/localStorage owns saved conversations, tombstones, backups and
+presentation preferences; it is not a fallback writer for a failed SQLite
+operation. Local SQLite owns Collections, DATA-004 jobs, private Evaluation work
+and DATA-005 terminal telemetry. A public deployment does not open that DB.
+
+Public catalog, Search, provider-free inspection, registries and published
+evaluation reads carry no local bearer. The explicit local session supplies
+private Pipeline/Evaluation/Analytics/Logs/Settings requests and clears on
+disconnect or reload; credentials never enter `VITE_*`, URLs, browser storage or
+export. The ordinary Collections and model-test wrappers do not yet consume
+that owner. Their real-browser 401/refusal is a supported current limitation,
+not evidence of successful private browser CRUD, and API-001 must not be relaxed
+to hide it. Protected routes still require local mode, loopback, Host/Origin
+admission and bearer; execution adds its own capability gate.
+
+Domain requests keep stable IDs and revision preconditions. Abort plus request
+epochs reject stale success or errors; SSE answers retain their originating
+conversation/message/variant and exact cited source. Raw retrieval scores are
+ranking signals, not confidence. `null`/unavailable/unknown differs from
+measured zero or false, and an empty successful result differs from refusal.
+Controls without an API or supported data source are omitted rather than faked.
+
 ## Operational workspace acceptance (UI-012)
 
 `/analytics` is authoritative only for DATA-005 server terminal telemetry and
@@ -144,6 +179,11 @@ unavailable in this deployment mode, 410 that the collection is tombstoned and
 cannot be recreated, 409 that the collection changed elsewhere, and 422 that a
 bound, kind or reference was refused. An unavailable capability renders that
 state, never an empty list, and never opens a private database.
+
+This is the DATA-003 API and component contract, not a claim that the ordinary
+browser wrapper can authenticate today. TEST-004 exercised protected SQLite
+CRUD through an authorized local client and separately confirmed the current
+browser wrapper's truthful refusal after a shared-session connection.
 
 Members open by their stored identity: documents through the catalogue reader
 with `returnView: "library"` (the reader's back control names Collections),

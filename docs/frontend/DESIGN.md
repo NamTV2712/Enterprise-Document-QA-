@@ -8,10 +8,13 @@ retrieved evidence, and continue or save the work.
 
 ## Information architecture
 
-Primary destinations are Chat, Documents, Search, and Library. Retrieval Lab,
-Evaluation, Analytics, System, and Architecture are secondary Tools. Chat is a
-workbench, Documents/Search are browse-and-inspect surfaces, Library is a
-local content surface, and Tools are diagnostic surfaces.
+The implemented Workspace navigation leads with Chat, Research, Documents,
+Search, and Collections. The on-device conversation Library is the Conversations
+tab within Collections, not a separate primary URL. Build groups Retrieval,
+Models, Pipeline, and Reranker; Evaluate groups Evaluation, Analytics, and
+Datasets; Manage groups Settings and Logs. Architecture/help lives under
+`/settings?panel=architecture`. Chat/Research are answer workbenches;
+Documents/Search browse and inspect without implying that an answer exists.
 
 ## Visual direction
 
@@ -43,6 +46,23 @@ hex values.
 Every substantial change records its first decision, primary action, states,
 mobile order, five self-review risks, and visual evidence. Build success is
 necessary but not sufficient; the rendered app must be inspected and iterated.
+
+## Final visual validation boundary
+
+TEST-003 reviewed the nine tracked references: Chat, Research, Documents,
+Search, Collections, Retrieval, Models, Pipeline and Evaluation. Native
+Chromium/Firefox screenshots, selected-state geometry and responsive
+light/dark × English/Vietnamese checks are recorded in
+[`TEST_003_VISUAL_RECEIPT.md`](../TEST_003_VISUAL_RECEIPT.md). The shared shell
+uses semantic surface/text/focus/status roles rather than copying every
+reference pixel. Verified repairs covered contrast in both themes, non-color
+selection cues, independent splitter focus/menus, and a useful phone reader
+with Back recovery. At phone widths the contract uses at least 44px interactive
+targets and 16px text-entry fonts; document, source, table and overlay scrolling
+retain their own owners. TEST-003's reported 300 production browser passes,
+648 populated responsive combinations and 162 A/AA axe analyses are bounded
+evidence, not exact pixel identity or blanket WCAG certification. Native browser
+zoom at 125%, 150% and 200% remains manual and unverified.
 
 ## Current skill governance
 

@@ -1,7 +1,10 @@
 # TODO
 
-This file tracks only the current actionable queue. Historical results,
-rejected experiments, and detailed evidence remain in `PROJECT_STATE.md`.
+This file retains the research, quality, and deployment backlog. The required
+UI rebuild graph is complete through UI-013; unchecked items here are optional
+post-roadmap decisions unless a new task explicitly authorizes them. Historical
+results, rejected experiments, and detailed evidence remain in
+`PROJECT_STATE.md`.
 
 ## Active Quality Backlog
 

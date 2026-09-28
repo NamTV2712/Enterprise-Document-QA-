@@ -1,5 +1,60 @@
 # Project State
 
+## UI-013 finalization — Cleanup, documentation and handoff (2026-09-28)
+
+UI-013-A through E are complete; F, the final committed-HEAD data-free smoke,
+remains to be recorded before closure. Starting source HEAD `d71a458` had no
+tracked/staged changes and 12 unrelated untracked paths. The exact master-plan
+gate allows deletion only after zero references, replacement tests and
+compatibility/rollback proof. App still imports `EvidenceWorkspaceRail`;
+legacy route/document/conversation readers, Evaluation report metadata and the
+nonstreaming decomposed path have live callers or tests. The former
+browser-local Analytics writer is already gone. **No safe source/CSS deletion
+was required.** UI-013 makes no runtime, route, migration, dependency or
+lockfile change. No optional Ragas capability was added.
+
+Current product: Vite/React/TypeScript with Bun serves 14 workspace routes
+(Chat, Research, Documents, Search, Collections, Retrieval, Models, Pipeline,
+Reranker, Evaluation, Analytics, Datasets, Settings, Logs) and canonical detail
+routes. FastAPI has **83 unique method/path pairs**. SQLite migration **v6**
+owns local workspace records, DATA-004 durable jobs and DATA-005 content-free
+terminal telemetry; browser conversations/preferences remain separately
+on-device. Public catalog/Search/provider-free inspection/registries and
+published reports do not require a private DB. Private reads/writes require
+local mode, a loopback peer, allowed Host/Origin and bearer; execution adds a
+separate gate. The shared browser connection keeps the token in memory for
+Pipeline/Evaluation/Analytics/Logs/Settings and loses it on reload. Pipeline
+stages isolated queued work, not automatic corpus promotion. Native Evaluation
+is EVAL-001 protocol → EVAL-002 public analytics → EVAL-003 frozen jobs → UI-011;
+job completion is not automatic report publication. DATA-005 feeds UI-012
+Analytics/Logs, not process-log ingestion.
+
+Verified pre-UI-013 source baseline: original checkout backend **1388 passed,
+188 warnings**; clean data-free checkout **1354 passed, 34 artifact-dependent
+skips, 148 warnings**; frontend **90 files/792 passed**, TypeScript and
+production build PASS (2074 modules). TEST-004 real-handler product journeys
+**24/24** across Chromium/Firefox, with 16/16 separate HTTP/SSE, 6/6 local
+reader, 4/4 TEST-002 browser and 30/30 affected TEST-003 cases. A subsequent
+read-only audit on the same source HEAD reran backend 1388/188, frontend
+90/792, TypeScript/build and product browser 24/24. The final committed-HEAD
+smoke is separate evidence, not a re-run of every earlier campaign.
+
+Disposition of remaining limits: Collections and model-test browser bearer
+integration are **supported current limitations / future integration**, not
+permission to weaken API-001; EVAL-004/Ragas and always-on deployment or new
+evaluation experiments are **optional future work**. Native zoom125/150/200 is
+a **manual unverified visual gate**. The ~506.92 kB aggregate bundle warning
+and historical parser/dependency warnings are **non-blocking tooling findings**.
+No live-provider, production load/SLA, blanket WCAG or security certification
+is claimed. Corpus-backed serving needs local `data/` and configured models,
+while the hermetic tests/product harness can run without them.
+
+Current-facing README, ARCHITECTURE, frontend contract/design and browser-test
+instructions were reconciled; historical TEST-002/003/004 receipts remain
+untouched. Local links, named files/scripts, nine tracked references, route
+count and migration version passed UI-013 checks. After F validates the final
+committed HEAD, the required roadmap has no further mandatory task.
+
 ## TEST-004 complete — Full product validation (2026-09-28)
 
 TEST-004-A through H COMPLETE. [Final product receipt](docs/TEST_004_FINAL_PRODUCT_RECEIPT.md)

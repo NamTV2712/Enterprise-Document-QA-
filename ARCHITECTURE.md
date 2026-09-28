@@ -32,6 +32,22 @@ The frontend and backend are separate applications and deployment units. The
 backend Docker image does not build or serve the frontend. Browser-exposed
 configuration is limited to `VITE_*` values and must not contain secrets.
 
+The diagram shows the online answer path, not every authority. The current
+system has three distinct access planes:
+
+| Plane | FastAPI boundary | Authoritative state and work |
+| --- | --- | --- |
+| Public reads | Catalog, Search snapshots, provider-free Retrieval inspection, safe registries and published reports | Indexed corpus/Qdrant, in-memory BM25 and public report artifacts; no private workspace database is opened in public mode |
+| Local private workspace | Explicit `WORKSPACE_MODE=local`, loopback socket peer, allowlisted Host/Origin and dedicated bearer | One SQLite database for typed Collections, transfer, durable jobs, evaluation job records and DATA-005 telemetry; browser conversations/preferences remain separately on-device |
+| Execution-gated operations | Local private access plus `ENABLE_WORKSPACE_EXECUTION` | Bounded DATA-004 jobs; Pipeline stages in isolated destinations and EVAL-003 frozen plans, without automatic serving-corpus promotion or report publication |
+
+The browser's shared connection owner holds the bearer only in memory for
+Pipeline, Evaluation, Analytics, Logs and Settings private requests. Ordinary
+Collections and model-test browser wrappers still lack that integration and
+truthfully receive a refusal; public clients never inherit the bearer. Local
+mode and its jobs assume one serving process. No Redis, Celery, Kafka, second
+workspace database or external telemetry service is part of this topology.
+
 `src/api/app.py` owns FastAPI creation, lifespan/bootstrap, shared runtime
 state, middleware, exception handling, and route registration. Existing
 health, corpus metadata, system information, model/dataset registries,
@@ -300,6 +316,20 @@ headers and unconfigured deployments fall back to the socket peer. The current
 in-memory limiter is suitable only for the single-worker topology.
 
 ## Evaluation Architecture
+
+The current product's native path is EVAL-001's versioned six-metric protocol
+and explicit computed/unavailable/not-applicable semantics, EVAL-002's validated
+public publications with backend-owned comparison/trends/failure aggregation,
+then EVAL-003's protected, frozen, budgeted DATA-004 jobs surfaced by UI-011.
+Private job completion is not public publication; one published run supplies
+one observed trend point, not an interpolated history. EVAL-004/Ragas is an
+optional isolated extension, not a dependency of this native path. DATA-005
+records content-free terminal requests and canonical terminal-job projections
+in the same SQLite database; UI-012 reads bounded Analytics/Logs from that
+authority. Logs are not process-log ingestion, and absent timing stays null.
+
+The following older Phase 2 benchmark and provider discussion is retained for
+evaluation provenance, not as a replacement for the native UI/job protocol.
 
 Evaluation routes fixed test cases through the same query decomposition and RAG
 paths used by the application. It combines:

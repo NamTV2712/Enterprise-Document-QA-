@@ -1,5 +1,67 @@
 # Current Planning Status
 
+## UI-013-B–E — Bounded cleanup and documentation (2026-09-28)
+
+COMPLETE. B: zero runtime/source/CSS files removed; no safe deletion required.
+Retain App-imported `EvidenceWorkspaceRail`, DocumentPane's legacy tabs,
+old URL/reader and browser-schema migration paths, nonstreaming decomposed
+transport, public Evaluation report reader and TEST-002/003/004 harnesses.
+They retain live callers, compatibility contracts or test consumers. The old
+Analytics browser writer is already absent. No migration/route/dependency
+changes and no product behavior change were introduced.
+
+C: README gained a compact product/run/test/data/private-mode handoff;
+ARCHITECTURE now distinguishes public/local/execution authorities and native
+evaluation/telemetry; frontend contract indexes routes/authority and foregrounds
+the staged Collections/model-test browser bearer limitation; DESIGN records
+the nine-reference visual scope and manual zoom limit; frontend/README
+separates mocked default E2E from real-handler suites. Planning-era master
+status and optional TODO wording were made current without rewriting receipts.
+All local Markdown links in nine core/changed docs resolve; named setup files,
+receipts, scripts and all nine tracked reference PNGs exist.
+
+D: PROJECT_STATE's new leading UI-013 section records current product,
+SQLite v6, 83 FastAPI routes, baselines, access/evaluation/telemetry authority
+and categorized limits. Historical chronology is preserved. The mandatory
+graph has no task after UI-013; EVAL-004/Ragas remains optional.
+
+E: tracked/staged baseline was clean plus 12 unrelated untracked paths; those
+paths and `data/`/`.env` remain untouched. No generated screenshot, trace,
+dist, runtime DB, provider output or lockfile entered the intended diff.
+`git diff --check`, selective staging review and final committed-head artifact
+audit remain the closure gate. F remains pending until the committed data-free
+checkout imports FastAPI, inventories routes, typechecks/builds frontend and
+verifies documented paths. Do not infer F from the pre-UI-013 TEST-004 receipt.
+
+## UI-013-A — Cleanup and final handoff contract (2026-09-28)
+
+IN PROGRESS from `d71a458` on `codex/bilingual-research-workspace`; tracked and
+staged files are clean, with the same 12 unrelated untracked paths. The master
+plan makes UI-013 the last required task after TEST-004. It permits removal of
+obsolete wrappers, composition, styles, or demo imports only with zero-reference,
+replacement-test, compatibility, and rollback evidence. Legacy URL and browser
+schema readers remain protected compatibility paths. EVAL-004/Ragas is optional.
+
+Source inventory: `EvidenceWorkspaceRail` is still App's imported ContextPanel
+alias; legacy document tabs, route translation, conversation-schema readers,
+Evaluation report metadata, nonstreaming decomposed query, and old save-status
+mapping retain live callers or tests. The former browser-local Analytics writer
+is already absent. No safe source/CSS deletion is proven; retain uncertain
+selectors and migration readers. There is no dedicated final-handoff artifact
+specified by the master plan, so concise current-facing core docs will be the
+handoff rather than a duplicate document.
+
+Documentation drift: README needs a compact run/test/data/private-mode/current
+status entry; ARCHITECTURE's lead map omits SQLite/access/evaluation planes;
+FRONTEND_CONTRACT needs current route/authority and staged bearer clarity;
+DESIGN's navigation summary lags the implemented Research/Collections routes;
+frontend/README's blanket mocked-browser statement is stale; planning-era
+master prose still says no rebuild task has started. Keep historical receipts.
+Validate local links, scripts, route count and diff; docs-only work does not
+justify another full browser campaign. After the final commit, smoke the
+committed HEAD in the attached data-free detached checkout: backend import and
+route inventory, frontend TypeScript/build, and documented file/script paths.
+
 ## TEST-004 complete — Full product validation (2026-09-28)
 
 TEST-004-A through H COMPLETE. [Final receipt and per-feature matrix](TEST_004_FINAL_PRODUCT_RECEIPT.md)

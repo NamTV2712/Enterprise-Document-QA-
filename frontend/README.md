@@ -119,9 +119,11 @@ and session history remain fresh requests.
 
 ## Browser Verification
 
-Browser tests run against the production build with fully mocked API routes;
-no test reaches a real backend or provider. Display assertions check real
-rendered state (bounding box plus the opacity/visibility ancestor chain) and
+The default `test:e2e` suite uses mocked API routes against a production build.
+Separate `test:e2e-integration`, `test:e2e-local`, and `test:e2e-product` suites
+use deterministic real FastAPI HTTP handlers; the product suite also uses a
+temporary SQLite workspace. None requires a live provider. Display assertions
+check real rendered state (bounding box plus the opacity/visibility ancestor chain) and
 never force animation state; under `prefers-reduced-motion` entrance
 animations are disabled so content is visible immediately.
 
@@ -129,6 +131,14 @@ animations are disabled so content is visible immediately.
 VITE_API_BASE_URL=http://127.0.0.1:8000 bun run test:e2e
 bun e2e/token-contrast.mjs
 ```
+
+For real-handler verification, activate the backend test environment or set
+`HARNESS_PYTHON` to its interpreter path, then run `bun run test:e2e-product`.
+The TEST-004 receipt records 24 Chromium/Firefox journeys against the built app
+and local public/private API. The integration and local
+reader suites are available as `bun run test:e2e-integration` and
+`bun run test:e2e-local`. Their corpus/model/provider dependencies are
+controlled test doubles, not live SEC or Groq calls.
 
 `test:e2e` builds, serves `dist/` with `vite preview`, and runs Playwright
 across Chromium and Firefox: streaming and dropped-stream normalization,

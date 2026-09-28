@@ -15,6 +15,56 @@ reported as null; unsafe build identifiers are omitted.
 Enterprise Document QA is a production-style Retrieval-Augmented Generation application for answering grounded questions over SEC 10-K filings.
 The system ingests a 50-company filing corpus, extracts key sections and financial tables, builds a hybrid search index, and serves cited financial answers through a Vite/React research workspace backed by FastAPI streaming, semantic caching, multi-turn memory, and query decomposition.
 
+## Start here — current product
+
+The independent frontend exposes Chat, Research, Documents, Search, Collections,
+Retrieval, Models, Pipeline, Reranker, Evaluation, Analytics, Datasets, Settings,
+and Logs. FastAPI supplies public catalog/search/inspection/report reads; opt-in
+local mode adds a private SQLite workspace, queued Pipeline staging, frozen
+native Evaluation jobs, and content-free operational telemetry. Pipeline staging
+does not execute or promote the canonical corpus. Browser conversations and
+presentation preferences have separate on-device storage.
+
+From a clean source checkout, install Python dependencies as described in
+[Local Setup](#local-setup), then start the backend and frontend in separate
+terminals (PowerShell examples):
+
+```powershell
+.venv\Scripts\python.exe -m uvicorn src.api.app:app --reload --port 8000
+```
+
+```powershell
+cd frontend
+bun install --frozen-lockfile
+bun run dev
+```
+
+Set `frontend/.env.local` from `frontend/.env.example` with
+`VITE_API_BASE_URL=http://localhost:8000`. Browser `VITE_*` values must never
+contain secrets. A data-free checkout can import the API and run the hermetic
+tests, but corpus-backed retrieval/answers need local `data/` artifacts and
+configured models; live generation additionally needs the documented
+server-side Groq configuration. No `.env` or `data/` is needed for the
+deterministic TEST-004 product harness.
+
+The default `WORKSPACE_MODE=public` does not open the private database. For
+local mode, configure a dedicated `LOCAL_WORKSPACE_TOKEN` (at least 32
+non-whitespace characters), loopback Host/Origin allowlists and, only for
+execution, `ENABLE_WORKSPACE_EXECUTION=true`. Enter the token in the app's
+Connection control: the shared Pipeline/Evaluation/Analytics/Logs/Settings
+session holds it only in memory and loses it on reload. The ordinary
+Collections and model-test browser wrappers are not yet connected to that
+bearer owner; their refusal states are intentional, not an auth bypass.
+
+Core checks are `.venv\Scripts\python.exe -m pytest tests -q --tb=short` at
+the root and `bun run lint`, `bun run test`, `bun run build` under `frontend/`.
+`bun run test:e2e-product` uses real FastAPI public/local handlers and temporary
+SQLite with deterministic corpus/provider doubles; it is not a live-provider or
+load test. See [frontend setup](frontend/README.md), [architecture](ARCHITECTURE.md),
+[current state](PROJECT_STATE.md), and the [final product receipt](docs/TEST_004_FINAL_PRODUCT_RECEIPT.md).
+The required UI rebuild roadmap is complete through UI-013; EVAL-004/Ragas is
+optional, not a missing native-evaluation prerequisite.
+
 ## Overview
 
 - Problem type: enterprise document question answering over financial filings.
@@ -46,7 +96,7 @@ Collection-list refusal is distinct from an unknown collection record.
 | [`README.md`](README.md) | Public overview, setup, API contract, benchmark, and deployment instructions |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Stable component boundaries, data and request flows, state ownership, and extension paths |
 | [`PROJECT_STATE.md`](PROJECT_STATE.md) | Living engineering journal, measured decisions, rejected experiments, and current milestone state |
-| [`TODO.md`](TODO.md) | Short current action queue for always-on deployment, diagnostics, and evidence-gated backlog work |
+| [`TODO.md`](TODO.md) | Optional post-roadmap deployment, diagnostics, and evidence-gated backlog work |
 | [`AGENTS.md`](AGENTS.md) | Stable repository rules and operational traps for coding agents |
 | [`frontend/README.md`](frontend/README.md) | Frontend-specific local development, Vercel setup, and API usage |
 | [`docs/LOCAL_RELEASE_RUNBOOK.md`](docs/LOCAL_RELEASE_RUNBOOK.md) | Provider-free local Docker build, smoke test, provenance, and receipt |
@@ -55,6 +105,9 @@ Collection-list refusal is distinct from an unknown collection record.
 | [`docs/UX_IMPROVEMENT_ROUND_REPORT.md`](docs/UX_IMPROVEMENT_ROUND_REPORT.md) | P0-P14 SEC Research Workspace UX, performance, Archify, and KEY5 receipt |
 | [`docs/frontend/V5_WORKBENCH_CONTRACT.md`](docs/frontend/V5_WORKBENCH_CONTRACT.md) | V5-00 through V5-08 workbench contract, ownership, responsive geometry, and validation receipts |
 | [`docs/EVALUATION_REVIEW_GUIDE.md`](docs/EVALUATION_REVIEW_GUIDE.md) | Evaluation and experiments workflow for live, recorded, and missing reports |
+| [`docs/TEST_004_FINAL_PRODUCT_RECEIPT.md`](docs/TEST_004_FINAL_PRODUCT_RECEIPT.md) | Final real-HTTP product, clean-checkout, browser, and limitation evidence |
+| [`docs/frontend/FRONTEND_CONTRACT.md`](docs/frontend/FRONTEND_CONTRACT.md) | Current route, state, private-client, and reader contracts |
+| [`docs/frontend/DESIGN.md`](docs/frontend/DESIGN.md) | Current visual and responsive design contract |
 
 ## Key Features
 
@@ -1729,7 +1782,12 @@ Secrets are loaded from `.env` and should never be committed.
 | Multi-turn conversation memory | Complete |
 | Query decomposition | Integrated and validated for comparative and enumeration queries |
 | Docker deployment | Complete; CPU-only image supports local Qdrant or stateless Qdrant Cloud startup |
-| Vite frontend | Deployed on Vercel with Overview/Conversation navigation, local conversation Library, first-class Sources and shared Document inspection with exact cross-representation evidence synchronization and canonical deep links, synchronized light/dark/system themes, and resizable desktop controls; verified against the local Docker backend through the reserved ngrok URL |
+| Vite frontend | Independent Chat/Research and twelve other primary routes, with local conversation Library, first-class Sources and shared Document inspection, synchronized light/dark/system themes, and responsive panes; TEST-004 exercised the built app against real FastAPI handlers and temporary SQLite |
+
+The required rebuild graph (API/DATA/UI through UI-013 and TEST-002/003/004) is
+complete. This is a validated local/product baseline, not an always-on hosting,
+live-provider, production-load, WCAG, or security certification. See the final
+receipt above for exact test populations and exclusions.
 
 ## Known Limitations
 
@@ -1745,9 +1803,15 @@ Secrets are loaded from `.env` and should never be committed.
 - Hybrid retrieval improves source quality but adds CPU latency due to cross-encoder re-ranking.
 - Semantic cache and conversation memory are currently in-memory and are lost on process restart.
 - Typed Collections uses the protected local API; its normal client is not yet
-  connected to the memory-only bearer owner (currently scoped to Pipeline).
+  connected to the shared Pipeline/Evaluation/operations memory-only bearer owner.
   Unauthorized/public states remain explicit. Its Previous/Next navigation is
   bounded by the active filtered count, independently of the all-collections count.
+- The model-test browser wrapper likewise lacks bearer integration. Neither
+  gap authorizes weakening local Host/Origin/loopback/bearer checks.
+- Native browser zoom at 125%, 150%, and 200% remains a manual, unverified
+  visual gate. The ~506.92 kB aggregate JS chunk warning and existing backend
+  parser/dependency warnings are non-blocking tooling findings, not zero-warning
+  or performance claims.
 - Multi-turn query rewriting adds one LLM call for follow-up questions.
 - Public API routes remain unauthenticated. CORS allowlisting, per-IP rate limits, input validation, and generic error messages mitigate abuse but are not access control; any client that knows the URL can call the public routes. Opt-in local workspace capabilities use the loopback-and-bearer boundary described above (see `ARCHITECTURE.md`).
 - Groq free tier can return `429 Too Many Requests`; SDK retries can recover but increase latency.
@@ -1765,6 +1829,10 @@ Secrets are loaded from `.env` and should never be committed.
 - Docker runs CPU-only for portability. Local development on the Legion RTX 5060 can use CUDA for faster embedding generation.
 
 ## Roadmap
+
+The required UI rebuild roadmap is complete. The numbered items below are
+optional research or deployment decisions, not unfinished UI-013 dependencies;
+EVAL-004/Ragas is optional and is not required for native Evaluation.
 
 1. Treat Answer Scope Closure v1 as closed `NO-GO`; preserve its reports and
    do not create another V20/V21 variant without a new benchmark or provider

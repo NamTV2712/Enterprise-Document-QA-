@@ -107,6 +107,13 @@ test("running cancellation remains cancelling until in-flight transport returns"
   await control(page, "start");
   await expect.poll(async () => (await state(page)).entered).toBe(true);
   await expect(page.locator(".agent-run-detail .agent-state--running")).toBeVisible();
+  // The claim and execution-step events both say running but have distinct revisions.
+  // Wait for the held provider's authoritative revision to reach the UI before cancelling.
+  const held = await (await page.request.get(`${API}/agent/runs/${id}`, { headers })).json();
+  expect(held.state).toBe("running");
+  await expect(page.locator(".agent-facts > div")
+    .filter({ has: page.locator("dt").filter({ hasText: /^Revision$/ }) }).locator("dd"))
+    .toHaveText(String(held.revision));
   await page.locator(".agent-run-detail").getByRole("button", { name: "Request cancellation" }).click();
   await expect(page.locator(".agent-run-detail .agent-state--cancelling")).toBeVisible();
   await expect(page.getByText("Cancellation requested. An in-flight call may continue", { exact: false })).toBeVisible();

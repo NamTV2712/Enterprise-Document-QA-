@@ -36,12 +36,25 @@ integration or network-only test.
 Implementation validation: **1583 backend tests passed, 0 failed, 188
 warnings**; focused route/Agent contracts **20 passed**; frontend **94 Vitest
 files / 815 tests** passed; TypeScript passed; production build passed with
-the existing large-chunk warning. The hermetic production-build browser
+the existing large-chunk warning (main chunk **508.30 kB**). The hermetic
+production-build browser
 campaign passed **14/14** in Chromium and Firefox, including four axe scopes,
 EN/VI, light/dark, 1440×900, 1024×768, 768×900, 390×844 and 1440×700.
 Desktop and phone captures were visually inspected. The prior 12 unrelated
-untracked paths remained untouched. Managed clean-checkout and final
-commit/push receipts follow after the source commit.
+untracked paths remained untouched. Source, tests and documentation were
+committed as `eb5affa54c4d19ebcab6b99f91c5b2f567b14db1`.
+
+A managed clean checkout of that commit contained no `.env`, `data/` or
+untracked source. With frozen Bun dependencies and the existing Python venv,
+the full backend passed **1549, 34 expected artifact-dependent skips, 148
+warnings**; the frontend passed **94 Vitest files / 815 tests**, TypeScript,
+the **2079-module production build**, and **7/7 Chromium** UI-014 browser
+checks. The clean production main chunk was **508.30 kB** and retains Vite's
+500 kB warning. Primary Chromium/Firefox UI-014 checks passed **14/14**.
+This clean worktree remained source-clean after validation; generated
+dependencies, build output and browser captures were ignored. The final
+documentation commit records this clean-checkout receipt, with no source
+changes or TEST-005 work.
 
 TEST-005 is the exact next optional task. Do not start it as UI-014 cleanup.
 The staged Collections/model-test browser bearer integration, manual native

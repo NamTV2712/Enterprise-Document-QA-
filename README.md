@@ -96,6 +96,13 @@ through one private read-only `GET /agent/runs/{run_id}/evaluation` route for
 terminal runs. No report storage is added; active runs return 409, and an
 inconsistent snapshot fails closed.
 
+The optional Agent extension has a final cross-layer validation receipt in
+[TEST-005](docs/TEST_005_AGENT_FINAL_RECEIPT.md). It exercises the built
+frontend against real FastAPI Agent routes and temporary SQLite in Chromium
+and Firefox, alongside the closed-tool, lifecycle, adversarial, evaluation,
+access and data-free checkout gates. The scripted successful research model
+is test-only; production still reports decision-provider unavailability.
+
 ## Overview
 
 - Problem type: enterprise document question answering over financial filings.

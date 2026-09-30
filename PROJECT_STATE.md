@@ -1,5 +1,44 @@
 # Project State
 
+## TEST-005 complete — Final optional Agent extension validation (2026-09-30)
+
+The required roadmap remains complete. TEST-005 closed the separate optional
+AGENT-001–006/UI-014 extension with a 12-layer contract and adversarial
+matrix in [the final receipt](docs/TEST_005_AGENT_FINAL_RECEIPT.md). It added
+test-only real-server Agent journeys and strengthened the A→B→A stale
+evaluation assertion. No production behavior, tool, metric, route, migration,
+dependency or provider adapter changed. No deterministic production P0/P1/P2
+defect was reproduced; early browser failures were two overly broad test
+locators for a valid two-chunk evidence ledger.
+
+The focused Agent backend suite passed **188/188**. The primary full backend
+passed **1583/1583**, with **188 historical warnings**. Product route inventory
+is **90** unique method/path pairs, including seven private Agent routes;
+fresh and reopened SQLite are **v7**. Frontend TypeScript, **94 Vitest files /
+815 tests**, and the production build passed. The real built frontend plus
+FastAPI and temporary SQLite Agent campaign passed **12/12** across Chromium
+and Firefox. It verified disconnected/public access, production
+`decision_provider_unavailable`, scripted search→read→final research,
+revisioned cancellation, interrupted read/evaluation, and five responsive
+viewports with zero body/root horizontal overflow and zero focused Axe A/AA
+violations. The inherited UI-014 browser campaign passed **14/14**.
+
+A managed source-clean checkout without `.env`, `data/`, prior dependencies,
+build output or untracked source passed **1549 backend tests, 34 expected
+artifact skips, 148 warnings**. Frozen Bun installation caused no lockfile
+drift. The clean frontend passed TypeScript, **94 Vitest files / 815 tests**, production
+build and real-server scripted research smoke in both engines. The final
+documentation-only HEAD is revalidated from its own clean checkout before
+push; exact remote identity is reported with the final task result.
+
+Production still has no structured Agent decision provider. Cancellation is
+cooperative, restart marks interrupted without replay, Agent metrics do not
+judge factual or semantic quality, native zoom remains manually unverified,
+Collections/model-test browser bearer integration is staged, Ragas is optional,
+and Vite still warns on the **508.30 kB** main chunk. These remain separate
+future limitations. The same 12 unrelated untracked paths in the main tree
+remain untouched.
+
 ## UI-014 complete — Optional Agent workspace and safe operational trace (2026-09-30)
 
 The required roadmap remains complete. UI-014 adds the private `/agent` list
@@ -56,7 +95,9 @@ dependencies, build output and browser captures were ignored. The final
 documentation commit records this clean-checkout receipt, with no source
 changes or TEST-005 work.
 
-TEST-005 is the exact next optional task. Do not start it as UI-014 cleanup.
+At UI-014 close, TEST-005 was the next optional task; its completion is
+recorded above.
+
 The staged Collections/model-test browser bearer integration, manual native
 zoom check, existing chunk-size warning and optional Ragas remain future
 limitations.

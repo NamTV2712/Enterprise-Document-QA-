@@ -14,7 +14,7 @@ extension. It does not change the status of any completed task.
 | AGENT-005 | Prompt-injection and tool-policy hardening | Complete |
 | AGENT-006 | Agent evaluation protocol | Complete |
 | UI-014 | Agent workspace and safe operational trace | Complete |
-| TEST-005 | Cross-layer and adversarial final validation | In progress |
+| TEST-005 | Cross-layer and adversarial final validation | Complete |
 
 ## AGENT-001 authority map
 
@@ -570,3 +570,30 @@ untracked source and must pass the owned import, route, migration, frontend
 and real-backend browser smoke gates. Final completion requires the matrix,
 full suites, artifact/secret audit, final receipt, exact-HEAD push and remote
 verification. Optional future work remains separately scoped.
+
+## TEST-005-B–H closure (2026-09-30)
+
+The 12-layer matrix and gate evidence are in
+`docs/TEST_005_AGENT_FINAL_RECEIPT.md`. The seven focused Agent modules passed
+188/188; the primary backend passed 1583/1583 with 188 historical warnings.
+The real built-frontend/FastAPI/temporary-SQLite Agent campaign passed 12/12
+across Chromium and Firefox, with the five required viewports, EN/VI,
+dark/light, zero body/root horizontal overflow and zero focused Axe A/AA
+violations. UI-014's existing browser regression passed 14/14. The full
+frontend passed TypeScript, 94 Vitest files/815 tests and production build;
+the known 508.30 kB main-chunk warning remains.
+
+The clean data-free source checkpoint passed 1549 backend tests with 34
+expected artifact-dependent skips and 148 warnings, fresh/reopened SQLite v7,
+90 product routes, frozen Bun installation without lockfile drift, TypeScript,
+815 frontend tests, production build and real-server scripted research smoke
+in both engines. The final committed HEAD receives the same clean-checkout
+gate before the exact upstream push. No production defect, migration, tool,
+metric, provider adapter, dependency or second loop was introduced. The only
+test correction narrowed locators to two valid evidence cards. The same 12
+unrelated untracked paths in the main tree remain untouched.
+
+AGENT-001–006, UI-014 and TEST-005 are complete. The required roadmap was
+already complete and remains closed. Future provider integration, staged
+Collections/model-test browser bearer connections, native zoom inspection,
+optional Ragas and the bundle warning remain separately scoped.

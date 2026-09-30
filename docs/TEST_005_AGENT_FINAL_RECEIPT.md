@@ -22,8 +22,8 @@ deterministic success; the production route must report unavailability.
 | 8 Frontend client | `agentApi.ts`, `agentTypes.ts`; wire unions, header bearer, numeric SSE and error boundary | Vitest plus real HTTP; no broad `any` or contract drift | Pass: TypeScript, 94 files/815 Vitest; built client crossed real HTTP boundaries |
 | 9 Agent UI | `AgentWorkspace`, sections/hook; truthful state, research, metrics, cancellation and A→B→A | Component tests and built browser; no stale paint, fabricated evidence or CoT | Pass: UI-014 14/14, strengthened stale evaluation digest check, real UI/axe 12/12 |
 | 10 Real product journey | built Vite + real FastAPI + temp SQLite; unavailable, scripted research, cancel, interrupted | Chromium/Firefox, controlled servers; real durable/event/evaluation reads in UI | Pass: TEST-005 12/12 (six journeys per engine), five responsive viewports |
-| 11 Clean checkout | final committed HEAD without `.env`, `data/`, prior dist or untracked source | Imports, fresh/reopen v7, full owned suites, built real-server Agent smoke | Pending |
-| 12 Hygiene | repository/git and browser storage; 12 unrelated paths, no secrets or generated artifacts | status/diff/secret audit, bearer reload/disconnect; exact HEAD pushed | Pending |
+| 11 Clean checkout | final committed HEAD without `.env`, `data/`, prior dist or untracked source | Imports, fresh/reopen v7, full owned suites, built real-server Agent smoke | Pass at source checkpoint: 1549/34 backend, 815 frontend, v7/90, two-engine research smoke; final-HEAD replay is required before push |
+| 12 Hygiene | repository/git and browser storage; 12 unrelated paths, no secrets or generated artifacts | status/diff/secret audit, bearer reload/disconnect; exact HEAD pushed | Pass for source checkpoint and browser credential scan; final staged-file and remote-HEAD audit required at push |
 
 Expected baselines: primary backend **1583 passed, 188 warnings**; clean
 data-free backend **1549 passed, 34 artifact-dependent skips**; **90** API
@@ -114,3 +114,26 @@ campaign is offline, deterministic and not a load or live-provider test.
 Native browser zoom at 125/150/200 remains manual. Staged Collections and
 model-test browser bearer integration, optional Ragas and the bundle warning
 remain separate future work.
+
+## H — Clean checkout and release audit
+
+The managed checkout of source checkpoint `95542f60dc62e91ffc75686c3def862fa1b4d979`
+started with a clean tracked tree and no `.env`, `data/`, `node_modules`,
+`dist` or TEST-005 browser output. `src.agent` and `src.api.app` imports
+passed. Both fresh and reopened temporary SQLite databases reported schema
+**v7**; the product inventory had **90** unique method/path pairs. The full
+data-free backend passed **1549**, with **34 expected artifact-dependent
+skips** and **148 warnings**. `bun install --frozen-lockfile` installed 284
+packages without lockfile drift; TypeScript, **94 Vitest files/815 tests** and
+the production build passed. The built frontend against the real FastAPI,
+temporary SQLite and scripted decision model passed the successful-research
+smoke in **Chromium and Firefox (2/2)**. The worktree remained tracked-clean
+after ignored dependencies and browser captures were generated.
+
+The final documentation commit changes only the plan, receipt, README and
+project journal. The final committed HEAD must be validated in its own clean
+checkout and match the upstream branch exactly. Generated test databases,
+WAL/SHM, reports, screenshots, traces, `dist`, dependencies and local corpus
+are excluded from the intended commit set. The main checkout's 12 pre-existing
+untracked paths are preserved. The exact final HEAD and push verification are
+reported in the task result because a commit cannot contain its own hash.

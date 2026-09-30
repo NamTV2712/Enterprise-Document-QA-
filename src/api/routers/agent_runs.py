@@ -7,7 +7,7 @@ import re
 import sqlite3
 from collections.abc import Callable, Iterator
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
@@ -95,7 +95,7 @@ def create_agent_run_router(get_service: Callable[[], AgentDurableService]) -> A
 
     @router.post("/agent/runs", response_model=AgentRunResponse, status_code=201)
     async def create_agent_run(
-        body: AgentRunCreateRequest, background: BackgroundTasks, response: Response,
+        body: AgentRunCreateRequest, response: Response,
         idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
         _grant: AccessGrant = Depends(require_execution_access),
     ) -> AgentRunResponse:
@@ -103,8 +103,6 @@ def create_agent_run_router(get_service: Callable[[], AgentDurableService]) -> A
             raise HTTPException(422, "A bounded Idempotency-Key header is required")
         service = get_service()
         run = await _invoke(lambda: service.create(body, idempotency_key=idempotency_key))
-        if run.state == "queued":
-            background.add_task(service.run, run.run_id)
         response.headers["ETag"] = f'"{run.revision}"'
         return run
 

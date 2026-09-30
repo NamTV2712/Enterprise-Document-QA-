@@ -39,7 +39,7 @@ def create_health_router(health_payload: Callable[[], dict[str, Any]], *,
     async def health_ready() -> dict:
         """Report whether the RAG pipeline is ready to accept query traffic."""
         payload = health_payload()
-        if not payload["pipeline_ready"]:
+        if not payload["pipeline_ready"] or payload.get("worker_ready") is False:
             raise HTTPException(status_code=503, detail="The pipeline is not ready yet")
         return payload
 

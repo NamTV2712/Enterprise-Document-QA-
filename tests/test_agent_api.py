@@ -12,6 +12,7 @@ from src.api import access
 from src.api.routers.agent_runs import create_agent_run_router
 from tests.test_agent_durable import _create, _service
 from tests.test_agent_orchestration import DOC, _final, _tool
+from tests.worker_helpers import finish_agent_with_worker
 
 
 TOKEN = "agent-local-token-0123456789-abcdef"
@@ -73,6 +74,8 @@ def test_agent_http_create_detail_result_events_resume_and_revision(tmp_path, mo
     run_id = created.json()["run_id"]
     assert created.json()["state"] == "queued" and created.headers["etag"] == '"1"'
     assert created.json()["frozen"]["locale"] == "vi"
+    assert calls == []
+    finish_agent_with_worker(service, run_id)
     assert calls == ["read_document"]
     detail = _call(app, "GET", f"/agent/runs/{run_id}")
     assert detail.status_code == 200 and detail.json()["state"] == "succeeded"
@@ -150,6 +153,8 @@ def test_agent_http_optional_research_contract_is_backwards_compatible(tmp_path,
     assert created.status_code == 201, created.text
     run_id = created.json()["run_id"]
     assert created.json()["frozen"]["research"]["version"] == "agent_research_v1"
+    assert calls == []
+    finish_agent_with_worker(service, run_id)
     detail = _call(app, "GET", f"/agent/runs/{run_id}")
     assert detail.status_code == 200 and detail.json()["state"] == "succeeded"
     assert detail.json()["result"]["research"]["evidence"][0]["document_id"] == DOC

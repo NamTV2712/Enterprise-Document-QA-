@@ -11,6 +11,7 @@ from src.agent.registry import build_tool_registry
 from tests.test_agent_api import _call, _headers
 from tests.test_agent_orchestration import DOC, _services
 from tests.test_agent_provider import BEARER, KEY, FakeSDK, final, tool, wire
+from tests.worker_helpers import finish_agent_with_worker
 
 
 @pytest.fixture
@@ -37,6 +38,11 @@ def headers():
     return _headers(token=BEARER)
 
 
+def finish(created):
+    assert created.json()["state"] == "queued"
+    return finish_agent_with_worker(application._agent_durable_service(), created.json()["run_id"])
+
+
 def test_existing_private_capability_and_create_use_actual_resolver(configured, caplog):
     sdk, calls = configured
     app = application.app
@@ -51,6 +57,8 @@ def test_existing_private_capability_and_create_use_actual_resolver(configured, 
     frozen = create.json()["frozen"]
     assert frozen["decision_provider"]["mechanism"] == "native_strict_json_schema"
     assert frozen["allow_provider_tool_execution"] is False
+    assert not calls and not sdk.requests
+    finish(create)
     assert calls == ["read_document"] and len(sdk.requests) == 2
     detail = _call(app, "GET", f"/agent/runs/{run_id}", headers=headers())
     result = _call(app, "GET", f"/agent/runs/{run_id}/results", headers=headers())
@@ -78,6 +86,7 @@ def test_unavailable_configuration_is_truthful_without_sdk_calls(configured, mon
     assert status.json()["agent_decision_provider"]["available"] is False
     create = _call(application.app, "POST", "/agent/runs", headers=headers(), body={
         "goal": "Check provider availability.", "allow_decision_provider_execution": True})
+    finish(create)
     detail = _call(application.app, "GET", "/agent/runs/" + create.json()["run_id"], headers=headers())
     assert detail.json()["result"]["failure"]["code"] == "decision_provider_unavailable"
     assert not sdk.requests and not calls
@@ -91,6 +100,7 @@ def test_private_execution_and_decision_grants_are_required_before_transport(con
     assert _call(application.app, "POST", "/agent/runs", headers=headers(), body={"goal": "Find evidence."}).status_code == 403
     monkeypatch.setattr(application.settings, "enable_workspace_execution", True)
     created = _call(application.app, "POST", "/agent/runs", headers=headers(), body={"goal": "Find evidence."})
+    finish(created)
     detail = _call(application.app, "GET", "/agent/runs/" + created.json()["run_id"], headers=headers())
     assert detail.json()["result"]["failure"]["code"] == "decision_provider_required"
     assert not sdk.requests and not calls
@@ -111,6 +121,7 @@ def test_runtime_secret_observation_never_enters_api_state_result_events_or_eval
     monkeypatch.setattr(application, "create_agent_tool_registry", lambda: build_tool_registry(_services(calls, text=secret)))
     created = _call(application.app, "POST", "/agent/runs", headers=headers(), body={
         "goal": "Find risk evidence.", "allow_decision_provider_execution": True})
+    finish(created)
     run_id = created.json()["run_id"]
     detail = _call(application.app, "GET", f"/agent/runs/{run_id}", headers=headers())
     events = _call(application.app, "GET", f"/agent/runs/{run_id}/events", headers=headers())

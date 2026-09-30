@@ -694,78 +694,119 @@ class SQLiteJobRepository:
     ) -> DurableJob:
         if target_state in {"cancelling", "cancelled"}:  # pragma: no cover - typing guard
             raise JobTransitionError("use the explicit cancellation operations")
-        timestamp = self._clock()
         with self.database.transaction(write=True) as connection:
-            current = self._job_in(connection, job_id)
-            self._assert_revision(current.revision, expected_revision)
-            validate_job_transition(current.state, target_state)
-            if target_state == "succeeded" and any(
-                step.state not in {"succeeded", "skipped"} for step in current.steps
-            ):
-                raise JobTransitionError("a job cannot succeed before every step succeeds or is skipped")
-            if target_state == "succeeded":
-                result_json = _canonical_object(
-                    result or {},
-                    label="job result",
-                    max_bytes=MAX_JOB_RESULT_BYTES,
-                    forbidden_values=self._forbidden_secret_values,
-                )
-                safe_failure_code = None
-                safe_failure_message = None
-            elif target_state in {"failed", "interrupted"}:
-                safe_failure_code, safe_failure_message = _validate_failure(
-                    failure_code, failure_message, self._forbidden_secret_values
-                )
-                if result is not None and current.namespace != "agent":
-                    raise ValueError("failed or interrupted jobs cannot persist a success result")
-                result_json = (
-                    _canonical_object(result, label="agent terminal result", max_bytes=MAX_JOB_RESULT_BYTES,
-                                      forbidden_values=self._forbidden_secret_values)
-                    if result is not None else None
-                )
-            else:
-                if result is not None or failure_code is not None or failure_message is not None:
-                    raise ValueError("running transition cannot persist a result or failure")
-                result_json = None
-                safe_failure_code = None
-                safe_failure_message = None
-            started_at = timestamp if target_state == "running" else current.started_at
-            finished_at = timestamp if target_state in TERMINAL_JOB_STATES else None
-            if target_state in {"failed", "interrupted"}:
-                connection.execute(
-                    "UPDATE job_steps SET state = ?, revision = revision + 1, finished_at = ? "
-                    "WHERE job_id = ? AND state = 'running'",
-                    (target_state, timestamp, job_id),
-                )
-            cursor = connection.execute(
-                "UPDATE jobs SET state = ?, revision = revision + 1, updated_at = ?, started_at = ?, "
-                "finished_at = ?, result_json = ?, failure_code = ?, failure_message = ? "
-                "WHERE job_id = ? AND revision = ?",
-                (
-                    target_state,
-                    timestamp,
-                    started_at,
-                    finished_at,
-                    result_json,
-                    safe_failure_code,
-                    safe_failure_message,
-                    job_id,
-                    expected_revision,
-                ),
+            return self._transition_job_in(
+                connection, job_id, expected_revision=expected_revision,
+                target_state=target_state, result=result,
+                failure_code=failure_code, failure_message=failure_message,
             )
-            if cursor.rowcount != 1:
-                raise JobConflictError("durable job revision conflict")
-            self._inject("after_job_update", job_id)
-            self._append_event_in(
-                connection,
+
+    def claim_next_job(self, eligible: Sequence[tuple[JobNamespace, str]]) -> DurableJob | None:
+        """Claim one oldest exact registered job in a single write transaction.
+
+        Each namespace query reverse-traverses jobs_listing_idx, retaining only
+        one candidate per registered executor. No queue payloads are preloaded.
+        """
+        if not eligible or len(eligible) > len(JOB_NAMESPACES):
+            raise ValueError("worker eligibility is empty or out of bounds")
+        for namespace, job_type in eligible:
+            if namespace not in JOB_NAMESPACES:
+                raise ValueError("unsupported job namespace")
+            _validate_name(job_type, label="worker job type")
+        with self.database.transaction(write=True) as connection:
+            candidates = []
+            for namespace, job_type in eligible:
+                row = connection.execute(
+                    "SELECT job_id, revision, created_at FROM jobs "
+                    "WHERE namespace = ? AND state = 'queued' AND job_type = ? "
+                    "ORDER BY created_at ASC, job_id ASC LIMIT 1", (namespace, job_type),
+                ).fetchone()
+                if row is not None:
+                    candidates.append(row)
+            if not candidates:
+                return None
+            row = min(candidates, key=lambda candidate: (candidate["created_at"], candidate["job_id"]))
+            return self._transition_job_in(
+                connection, str(row["job_id"]), expected_revision=int(row["revision"]),
+                target_state="running",
+            )
+
+    def _transition_job_in(
+        self, connection: sqlite3.Connection, job_id: str, *, expected_revision: int,
+        target_state: str, result: Mapping[str, object] | None = None,
+        failure_code: str | None = None, failure_message: str | None = None,
+    ) -> DurableJob:
+        timestamp = self._clock()
+        current = self._job_in(connection, job_id)
+        self._assert_revision(current.revision, expected_revision)
+        validate_job_transition(current.state, target_state)
+        if target_state == "succeeded" and any(
+            step.state not in {"succeeded", "skipped"} for step in current.steps
+        ):
+            raise JobTransitionError("a job cannot succeed before every step succeeds or is skipped")
+        if target_state == "succeeded":
+            result_json = _canonical_object(
+                result or {},
+                label="job result",
+                max_bytes=MAX_JOB_RESULT_BYTES,
+                forbidden_values=self._forbidden_secret_values,
+            )
+            safe_failure_code = None
+            safe_failure_message = None
+        elif target_state in {"failed", "interrupted"}:
+            safe_failure_code, safe_failure_message = _validate_failure(
+                failure_code, failure_message, self._forbidden_secret_values
+            )
+            if result is not None and current.namespace != "agent":
+                raise ValueError("failed or interrupted jobs cannot persist a success result")
+            result_json = (
+                _canonical_object(result, label="agent terminal result", max_bytes=MAX_JOB_RESULT_BYTES,
+                                  forbidden_values=self._forbidden_secret_values)
+                if result is not None else None
+            )
+        else:
+            if result is not None or failure_code is not None or failure_message is not None:
+                raise ValueError("running transition cannot persist a result or failure")
+            result_json = None
+            safe_failure_code = None
+            safe_failure_message = None
+        started_at = timestamp if target_state == "running" else current.started_at
+        finished_at = timestamp if target_state in TERMINAL_JOB_STATES else None
+        if target_state in {"failed", "interrupted"}:
+            connection.execute(
+                "UPDATE job_steps SET state = ?, revision = revision + 1, finished_at = ? "
+                "WHERE job_id = ? AND state = 'running'",
+                (target_state, timestamp, job_id),
+            )
+        cursor = connection.execute(
+            "UPDATE jobs SET state = ?, revision = revision + 1, updated_at = ?, started_at = ?, "
+            "finished_at = ?, result_json = ?, failure_code = ?, failure_message = ? "
+            "WHERE job_id = ? AND revision = ?",
+            (
+                target_state,
+                timestamp,
+                started_at,
+                finished_at,
+                result_json,
+                safe_failure_code,
+                safe_failure_message,
                 job_id,
-                event_type="state_changed",
-                state=target_state,
-                reason_code=safe_failure_code,
-                progress=current.progress,
-                timestamp=timestamp,
-            )
-            return self._job_in(connection, job_id)
+                expected_revision,
+            ),
+        )
+        if cursor.rowcount != 1:
+            raise JobConflictError("durable job revision conflict")
+        self._inject("after_job_update", job_id)
+        self._append_event_in(
+            connection,
+            job_id,
+            event_type="state_changed",
+            state=target_state,
+            reason_code=safe_failure_code,
+            progress=current.progress,
+            timestamp=timestamp,
+        )
+        return self._job_in(connection, job_id)
 
     def report_progress(
         self,

@@ -99,6 +99,33 @@ or raw transport payload is persisted. There is no multi-agent behavior.
 See [the provider plan](docs/AGENT_PRODUCTION_PROVIDER_PLAN.md) and [the extension plan](docs/AGENT_EXTENSION_PLAN.md)
 for research bounds, partial results and recovery.
 
+SCALE-001 moves durable Agent execution to one application-lifespan worker pool.
+`POST /agent/runs` returns the accepted queued record (201 and its revision),
+independently of execution or client disconnect. The pool atomically claims
+only `agent / bounded_agent_run` from DATA-004 SQLite, oldest creation timestamp
+then job ID first. Two fixed asyncio workers are the default; queued rows do
+not allocate execution tasks. Startup requires `WORKSPACE_MODE=local`,
+`ENABLE_WORKSPACE_EXECUTION=true` and `WORKSPACE_WORKER_ENABLED=true`.
+Disabling workers leaves Agent work queued. Public mode starts no private worker
+and opens no private database. Model/provider resolution occurs after claim;
+the frozen decision and RAG grants still control execution independently.
+
+Worker settings are server-side: `WORKSPACE_WORKER_CONCURRENCY` (1–16, default
+2), `WORKSPACE_WORKER_POLL_INTERVAL_MS` (100–5000, default 500), and
+`WORKSPACE_WORKER_SHUTDOWN_GRACE_MS` (100–60000, default 5000). Shutdown stops
+new claims and grants active owners the configured grace; unresolved execution
+then becomes interrupted. Short SQLite claims/reconciliation finish within the
+existing busy-timeout discipline and are never abandoned after possible commit.
+An in-flight Python thread or provider effect cannot be forcibly killed; late
+output is discarded and no external effect is automatically replayed. Restart
+interrupts claimed running/cancelling work, while never-claimed queued Agent
+work remains eligible. This is one-process execution, not distributed or
+exactly-once external execution. Pipeline stays staging-only, Evaluation keeps
+its existing EVAL-003 response-attached executor/receipts, and model identity
+tests stay synchronous/provider-free. Existing readiness additionally reports
+the safe `worker_ready` flag while the pool exists and returns 503 if a worker
+dies. See [the separate scaling roadmap](docs/SCALING_ROADMAP.md).
+
 The provider-free `native-agent-evaluation` v1 protocol evaluates an existing
 terminal Agent run from its frozen plan, safe events and durable result. It
 returns separate versioned execution, tool, budget, evidence and research

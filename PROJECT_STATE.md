@@ -1,5 +1,43 @@
 # Project State
 
+## SCALE-001 in progress — Durable background Agent workers (2026-09-30)
+
+This new optional scope preserves completed product/Agent/PROVIDER-001 work.
+Starting HEAD is `b13fff6affc919a19f13bda3ddc730c319a705c2`; the separate
+[scaling roadmap](docs/SCALING_ROADMAP.md) records ownership and checkpoints.
+Agent execution moves from response background tasks to a lifespan-owned,
+bounded asyncio pool over DATA-004. The production registry includes only
+`agent / bounded_agent_run`. Pipeline remains staging-only; Evaluation retains
+its synchronous EVAL-003 executor and conservative case/attempt/report receipts;
+model tests remain provider-free synchronous identity checks. No migration,
+dependency, lockfile, new route or production frontend source change is needed.
+
+Claim uses one BEGIN IMMEDIATE transaction and existing revision/event mutation
+authority. Existing jobs_listing_idx supports creation timestamp/job-ID order.
+Defaults are two workers, 500ms polling and five-second shutdown grace, gated
+by explicit local execution; public startup opens no workspace database. Slots
+and tasks stay bounded for a durable backlog. Worker-time provider binding,
+frozen grants, one Agent loop, canonical research and 21 native metrics remain.
+Shutdown stops claims, permits grace and marks unresolved ownership interrupted;
+pending bounded SQLite operations are reconciled rather than abandoned. External
+thread/provider effects remain uncertain and are never automatically replayed.
+Queued unclaimed work survives restart; claimed work becomes interrupted.
+
+Initial new worker/Agent-worker suite passed 49; final focused suite passed
+**51/51** after adding blocked synchronous-tool and transient-claim regressions.
+Shared focused regression passed **486/486** before the last four new cases.
+The final full backend passed **1730/1730 with 188 warnings**, including all
+51 new cases. Frontend remains **94 files /
+818 tests**, TypeScript/build pass and main chunk stays **508.63 kB** with the
+inherited warning. The real worker/API/SDK/SQLite browser campaign passed
+**8/8 Chromium/Firefox**, proving queued/running/terminal/cancel transitions
+without refresh, with zero focused Axe/overflow violations. Screenshots were
+inspected. Initial harness failures were an ambiguous locator and Firefox's
+restricted 4190 preview port; the corrected campaign uses 4191. No browser
+security override or production workaround was added. The preceding live
+provider timeout remains inherited and is not retried. Exact committed clean
+checkout, final audit, completion receipt and normal push remain pending.
+
 ## PROVIDER-001 complete — Production structured decision provider (2026-09-30)
 
 Implementation, primary and source-clean verification are complete. The

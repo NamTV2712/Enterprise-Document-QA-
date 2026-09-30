@@ -140,6 +140,12 @@ class Settings(BaseSettings):
     workspace_runs_dir: Path = Path(".local/workbench/runs")
     workspace_sqlite_busy_timeout_ms: int = Field(default=5000, ge=100, le=30_000)
 
+    # Effective only in explicitly enabled local execution, never public mode.
+    workspace_worker_enabled: bool = True
+    workspace_worker_concurrency: int = Field(default=2, ge=1, le=16)
+    workspace_worker_poll_interval_ms: int = Field(default=500, ge=100, le=5000)
+    workspace_worker_shutdown_grace_ms: int = Field(default=5000, ge=100, le=60_000)
+
     # Public API protection. In-memory limits are appropriate for the single-worker runtime.
     llm_rate_limit_burst: str = "10/minute"
     llm_rate_limit_daily: str = "100/day"

@@ -283,6 +283,17 @@ class AgentDurableService:
             )
         except (JobConflictError, JobTransitionError):
             return self.get(run_id)
+        return await self.execute_claimed(job)
+
+    async def execute_claimed(self, job: DurableJob) -> AgentRunResponse:
+        """Execute only the snapshot handed to the successful DATA-004 owner.
+
+        This internal executor does not claim or replay work. The worker holds
+        its slot until this single existing orchestrator finishes.
+        """
+        if job.namespace != "agent" or job.job_type != AGENT_JOB_TYPE or job.state != "running":
+            raise JobTransitionError("Agent execution requires a claimed Agent job")
+        run_id = _run_id(job.job_id)
         try:
             plan = self._frozen(job)
             job = self.repository.transition_step(

@@ -104,6 +104,8 @@ from src.api.schemas import (
 from src.workspace.collections import SQLiteCollectionRepository
 from src.workspace.database import WorkspaceDatabase
 from src.workspace.jobs import SQLiteJobRepository
+from src.workspace.executors import AgentJobExecutor, ExecutorRegistry
+from src.workspace.worker import WorkerConfig, WorkerSupervisor
 from src.workspace.telemetry import (
     SQLiteTelemetryRepository,
     TelemetryService,
@@ -176,13 +178,40 @@ def _agent_decision_resolution():
 
 def _agent_durable_service() -> AgentDurableService:
     """Open DATA-004 only after private Agent-route authorization."""
+    return _agent_service_for_repository(SQLiteJobRepository.from_settings(settings))
+
+
+def _agent_service_for_repository(repository: SQLiteJobRepository) -> AgentDurableService:
     resolution = _agent_decision_resolution()
     return AgentDurableService(
-        SQLiteJobRepository.from_settings(settings), create_agent_tool_registry,
+        repository, create_agent_tool_registry,
         decision_model_id=resolution.model_id, decision_provider=resolution.identity,
         sensitive_values=resolution.secrets,
         decision_model_factory=lambda frozen_id: model_for_binding(frozen_id, _agent_decision_resolution),
     )
+
+
+@asynccontextmanager
+async def workspace_worker_lifespan():
+    """Recover DATA-004 before starting the explicitly local execution consumer."""
+    supervisor = None
+    if settings.workspace_mode == "local":
+        jobs = await asyncio.to_thread(SQLiteJobRepository.from_settings, settings)
+        while await asyncio.to_thread(jobs.recover_interrupted_jobs):
+            pass
+        if settings.enable_workspace_execution and settings.workspace_worker_enabled:
+            registry = ExecutorRegistry((AgentJobExecutor(lambda: _agent_service_for_repository(jobs)),))
+            supervisor = WorkerSupervisor(jobs, registry, WorkerConfig.from_settings(settings))
+            await supervisor.start()
+            _state["worker_supervisor"] = supervisor
+    try:
+        yield
+    finally:
+        if supervisor is not None:
+            try:
+                await supervisor.stop()
+            finally:
+                _state.pop("worker_supervisor", None)
 
 
 def _terminal_telemetry_service() -> TelemetryService:
@@ -775,14 +804,12 @@ async def lifespan(app: FastAPI):
     ]
 
     logger.info("Hybrid pipeline and decomposer ready after %.1f seconds", time.time() - t0)
-    if settings.workspace_mode == "local":
-        # DATA-004 recovery is terminal: never replay ambiguous provider calls.
-        jobs = SQLiteJobRepository.from_settings(settings)
-        while jobs.recover_interrupted_jobs():
-            pass
-    yield
-    store.close()
-    logger.info("VectorStore closed.")
+    try:
+        async with workspace_worker_lifespan():
+            yield
+    finally:
+        store.close()
+        logger.info("VectorStore closed.")
 
 
 app = FastAPI(
@@ -888,6 +915,9 @@ def _health_payload() -> dict:
         "pipeline_ready": pipeline is not None,
         "memory": memory.get_stats() if memory else {},
     }
+    supervisor = _state.get("worker_supervisor")
+    if supervisor is not None:
+        payload["worker_ready"] = supervisor.healthy
     if _state.get("corpus") is not None:
         payload["corpus"] = dict(_state["corpus"])
     # Optional release metadata: set by the Docker build/runtime. Only the

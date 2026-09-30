@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 from dataclasses import dataclass
 from typing import Any, Callable, Literal
@@ -64,7 +65,9 @@ class AgentToolRegistry:
         except (ValidationError, TypeError, ValueError) as error:
             raise AgentToolError("invalid_arguments") from error
         try:
-            result = tool.execute(body)
+            # Discovery/catalog work is synchronous. Keep it off the application
+            # event loop; each worker awaits its one admitted call before another.
+            result = await asyncio.to_thread(tool.execute, body)
             if inspect.isawaitable(result):
                 result = await result
             data = tool.output_model.model_validate(result)

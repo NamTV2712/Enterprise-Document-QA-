@@ -52,7 +52,7 @@ The optional `src/agent/` package binds four in-process tools to the same
 Search, Retrieval inspection, document catalog/chunk index and RAG services.
 Its registry validates strict inputs, labels observations as untrusted data and
 requires an explicit tool allowlist; RAG additionally requires an explicit
-provider-execution policy. One request-local orchestrator accepts strict
+provider-execution policy. One run-local orchestrator accepts strict
 structured decisions from one abstract decision model, applies step/tool and
 observation bounds, validates final evidence IDs and returns a typed result.
 Decision-model provider permission is independent of RAG provider permission.
@@ -96,6 +96,55 @@ owner, reads durable run/result/event state and renders the 21 native metric
 results without calculating a score. See
 [`docs/AGENT_EXTENSION_PLAN.md`](docs/AGENT_EXTENSION_PLAN.md) for the separate
 optional sequence.
+
+### Durable Agent worker ownership (SCALE-001)
+
+Agent run creation now only admits/freeze-queues work; no Agent execution is
+attached to the HTTP response. The application lifespan recovers DATA-004
+running/cancelling jobs before starting one `WorkerSupervisor`. Startup is gated
+by local workspace mode, execution enablement and the worker switch. Public
+startup never opens SQLite; module imports never create worker tasks.
+
+The immutable `ExecutorRegistry` is closed over application-owned callables,
+with exactly `agent / bounded_agent_run` eligible in production. No persisted
+namespace string imports code. Workers claim oldest `created_at ASC, job_id ASC`
+using the existing listing index, a BEGIN IMMEDIATE write transaction and the
+same revision/state/event primitive. The transaction closes before provider or
+tool execution. The successful claim snapshot goes to `AgentJobExecutor`, which
+resolves current runtime configuration, then `AgentDurableService.execute_claimed`
+and the one existing AgentOrchestrator. Frozen policies/binding and durable
+cancellation remain authoritative. Synchronous tool adapters are awaited in
+thread offloads rather than blocking the shared event loop.
+
+The default two fixed asyncio consumers (hard range 1–16) bound active Agent
+execution; each holds its slot until its namespace executor returns. Each poll
+retains at most one candidate per registry entry, not the queued payload set.
+Idle/error polling waits on a stop-aware event for 500ms by default. There is no
+per-queued-job execution task, memory queue, global queue cap, second database,
+lease, heartbeat, automatic retry or job requeue. Executor failure is sanitized,
+uncommitted owned work becomes interrupted, and the consumer continues. An
+unexpected consumer death is logged without exception content, stops further
+claims and makes existing readiness fail through a safe optional worker flag.
+
+Shutdown stops claims, waits five seconds by default, then cancels unresolved
+async owners and commits interruption. A pending short SQLite claim is shielded:
+if cancellation races its commit, the bounded operation finishes and its owned
+row is reconciled. Cleanup can therefore additionally wait for outstanding
+SQLite busy-timeout operations. In-flight thread/provider effects remain
+uncertain and may finish independently; cancellation does not claim they were
+forcibly terminated. Startup interrupts all claimed running/cancelling work
+without replay, including a crash before the first call or after an external
+effect and before result commit. Never-claimed queued Agent work can execute
+after restart. Ownership prevents competing concurrent execution in the known
+single-process model; it does not promise exactly-once external effects.
+
+Evaluation remains on its existing synchronous EVAL-003 response background
+executor, preserving conservative attempted-slot/case/report receipts. Migrating
+that thread/provider shutdown contract is separately scoped. The new registry
+never steals Evaluation jobs. Pipeline remains queue/staging-only; model tests
+remain bounded synchronous provider-free identity checks. Product routes stay
+90; SQLite v7 and dependencies stay unchanged. No broker/distributed topology
+or load/SLA claim is added. See [SCALING_ROADMAP](docs/SCALING_ROADMAP.md).
 
 `src/api/app.py` owns FastAPI creation, lifespan/bootstrap, shared runtime
 state, middleware, exception handling, and route registration. Existing

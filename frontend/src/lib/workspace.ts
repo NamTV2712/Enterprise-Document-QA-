@@ -14,6 +14,7 @@ export type WorkspaceView =
   | "system"
   | "models"
   | "pipeline"
+  | "agent"
   | "datasets";
 
 export type WorkspaceIcon = Extract<SemanticIconKey,
@@ -91,6 +92,7 @@ export const WORKSPACE_NAV_SECTIONS: readonly WorkspaceNavSection[] = [
       { view: "retrieval", labelKey: "nav.retrieval", descriptionKey: "nav.retrievalDescription", icon: "retrieval", accentFamily: "retrieval", keywords: ["bm25", "reranking"] },
       { view: "models", labelKey: "nav.models", descriptionKey: "nav.modelsDescription", icon: "models", accentFamily: "retrieval", keywords: ["embedding", "reranker"] },
       { view: "pipeline", labelKey: "nav.pipeline", descriptionKey: "nav.pipelineDescription", icon: "pipeline", accentFamily: "retrieval", keywords: ["ingestion", "index"] },
+      { view: "agent", labelKey: "nav.agent", descriptionKey: "nav.agentDescription", icon: "pipeline", accentFamily: "retrieval", keywords: ["agent", "activity", "runs"] },
     ],
   },
   {

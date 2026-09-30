@@ -150,6 +150,9 @@ const DatasetsWorkspace = lazy(() =>
 const PipelineConsole = lazy(() =>
   import("./components/PipelineConsole").then(({ PipelineConsole }) => ({ default: PipelineConsole })),
 );
+const AgentWorkspace = lazy(() =>
+  import("./components/agent/AgentWorkspace").then(({ AgentWorkspace }) => ({ default: AgentWorkspace })),
+);
 
 function WorkspacePanelFallback() {
   return (
@@ -2489,6 +2492,13 @@ function AppWorkspace() {
                 selectedRunId={resolvedRoute.id === "pipeline-run" ? resolvedRoute.params.runId ?? null : null}
                 onSelectRun={(runId) => navigate(`/pipeline/runs/${encodeURIComponent(runId)}`)}
                 onClearSelectedRun={() => navigate("/pipeline")}
+              />
+                ) : activeView === "agent" ? (
+              <AgentWorkspace
+                selectedRunId={resolvedRoute.id === "agent-run" ? resolvedRoute.params.runId ?? null : null}
+                onSelectRun={(runId) => navigate(`/agent/runs/${encodeURIComponent(runId)}`)}
+                onClearSelectedRun={() => navigate("/agent")}
+                onOpenDocument={(documentId) => navigate(`/documents/${encodeURIComponent(documentId)}`)}
               />
                 ) : activeView === "system" ? (
               resolvedRoute.id === "logs" ? <LogsPage /> : <SettingsPage

@@ -161,3 +161,32 @@ def test_agent_http_optional_research_contract_is_backwards_compatible(tmp_path,
         "objectives": [{"objective_id": "bad", "question": "Bearer synthetic-secret"}],
     }}, headers={**_headers(), "Idempotency-Key": "invalid-research"})
     assert invalid.status_code == 422
+
+
+def test_agent_evaluation_read_is_private_terminal_and_provider_free(tmp_path, monkeypatch):
+    service, _, calls, _, _ = _service(tmp_path, (
+        _tool("read_document", document_id=DOC),
+        _final("Grounded answer.", ("document_id", DOC)),
+    ))
+    app = FastAPI()
+    app.include_router(create_agent_run_router(lambda: service))
+    _local(monkeypatch)
+    queued = _create(service, key="evaluate-queued")
+    path = f"/agent/runs/{queued.run_id}/evaluation"
+    assert _call(app, "GET", path).status_code == 409
+    assert _call(app, "GET", path, headers=_headers(token=None)).status_code == 401
+    assert _call(app, "GET", path, headers=_headers(origin="http://evil")).status_code == 403
+    assert _call(app, "GET", "/agent/runs/agent_missing/evaluation").status_code == 404
+    asyncio.run(service.run(queued.run_id))
+    before = len(calls)
+    report = _call(app, "GET", path)
+    assert report.status_code == 200, report.text
+    assert report.json()["protocol"] == "native-agent-evaluation"
+    assert report.json()["protocol_version"] == 1
+    assert report.json()["run_id"] == queued.run_id
+    assert len(report.json()["metrics"]) == 21
+    assert report.json()["digest"].startswith("sha256:")
+    assert _call(app, "GET", path).json() == report.json()
+    assert len(calls) == before
+    _local(monkeypatch, execution=False)
+    assert _call(app, "GET", path).status_code == 200

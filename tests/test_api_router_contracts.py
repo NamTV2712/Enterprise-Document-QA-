@@ -99,6 +99,7 @@ EXPECTED_ROUTE_ORDER = [
     ("POST", "/agent/runs"),
     ("GET", "/agent/runs/{run_id}"),
     ("GET", "/agent/runs/{run_id}/results"),
+    ("GET", "/agent/runs/{run_id}/evaluation"),
     ("POST", "/agent/runs/{run_id}/cancel"),
     ("GET", "/agent/runs/{run_id}/events"),
     ("GET", "/analytics/summary"),

@@ -10,11 +10,12 @@ export type AppRouteId =
   | "documents" | "document-detail" | "search" | "collections" | "collection-detail"
   | "retrieval" | "models" | "pipeline" | "pipeline-run" | "reranker"
   | "evaluation" | "evaluation-run" | "analytics" | "datasets" | "settings" | "logs"
+  | "agent" | "agent-run"
   | "not-found";
 
 export type ShellRouteId = Exclude<AppRouteId,
   | "legacy-root" | "chat-conversation" | "research-conversation" | "document-detail"
-  | "collection-detail" | "pipeline-run" | "evaluation-run" | "not-found">;
+  | "collection-detail" | "pipeline-run" | "evaluation-run" | "agent-run" | "not-found">;
 
 export interface AppRouteDefinition {
   id: AppRouteId;
@@ -59,6 +60,8 @@ export const APP_ROUTE_DEFINITIONS: readonly AppRouteDefinition[] = [
   { id: "models", path: "/models", workspaceView: "models" },
   { id: "pipeline-run", path: "/pipeline/runs/:runId", workspaceView: "pipeline" },
   { id: "pipeline", path: "/pipeline", workspaceView: "pipeline" },
+  { id: "agent-run", path: "/agent/runs/:runId", workspaceView: "agent" },
+  { id: "agent", path: "/agent", workspaceView: "agent" },
   { id: "reranker", path: "/reranker", workspaceView: "retrieval" },
   { id: "evaluation-run", path: "/evaluation/runs/:runId", workspaceView: "evaluation" },
   { id: "evaluation", path: "/evaluation", workspaceView: "evaluation" },
@@ -83,6 +86,7 @@ export const SHELL_NAVIGATION_SECTIONS: readonly ShellNavigationSection[] = [
       { routeId: "retrieval", path: "/retrieval", labelKey: "nav.retrieval", descriptionKey: "nav.retrievalDescription", icon: "retrieval", accentFamily: "retrieval", availability: "available" },
       { routeId: "models", path: "/models", labelKey: "nav.models", descriptionKey: "nav.modelsDescription", icon: "models", accentFamily: "retrieval", availability: "available" },
       { routeId: "pipeline", path: "/pipeline", labelKey: "nav.pipeline", descriptionKey: "nav.pipelineDescription", icon: "pipeline", accentFamily: "retrieval", availability: "available" },
+      { routeId: "agent", path: "/agent", labelKey: "nav.agent", descriptionKey: "nav.agentDescription", icon: "pipeline", accentFamily: "retrieval", availability: "available" },
       { routeId: "reranker", path: "/reranker", labelKey: "nav.reranker", descriptionKey: "nav.rerankerDescription", icon: "retrieval", accentFamily: "retrieval", availability: "available" },
     ],
   },
@@ -106,6 +110,7 @@ const LEGACY_VIEW_TO_ROUTE: Readonly<Record<WorkspaceView, ShellRouteId>> = {
   library: "collections", retrieval: "retrieval", architecture: "settings", evaluation: "evaluation",
   analytics: "analytics", system: "settings", models: "models", pipeline: "pipeline",
   datasets: "datasets",
+  agent: "agent",
 };
 
 const DEFERRED_ROUTE_IDS = new Set<AppRouteId>();
@@ -189,7 +194,7 @@ export function primaryRouteId(route: ResolvedAppRoute): ShellRouteId | null {
     chat: "chat", "chat-conversation": "chat", research: "research", "research-conversation": "research",
     documents: "documents", "document-detail": "documents", search: "search", collections: "collections",
     "collection-detail": "collections", retrieval: "retrieval", models: "models", pipeline: "pipeline",
-    "pipeline-run": "pipeline", reranker: "reranker", evaluation: "evaluation", "evaluation-run": "evaluation",
+    "pipeline-run": "pipeline", agent: "agent", "agent-run": "agent", reranker: "reranker", evaluation: "evaluation", "evaluation-run": "evaluation",
     analytics: "analytics", datasets: "datasets", settings: "settings", logs: "logs",
   };
   return mapping[route.id] ?? (route.id === "legacy-root" && route.isKnown ? routeIdForWorkspaceView(route.workspaceView) : null);

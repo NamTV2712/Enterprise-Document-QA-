@@ -1,12 +1,12 @@
 # Frontend Contract
 
-## Current route and authority index (UI-013)
+## Current route and authority index (UI-014)
 
 `frontend/src/app/routes.ts` owns the canonical navigation. Workspace routes
 are `/chat`, `/research`, `/documents`, `/search`, `/collections`, `/retrieval`,
-`/models`, `/pipeline`, `/reranker`, `/evaluation`, `/analytics`, `/datasets`,
+`/models`, `/pipeline`, `/agent`, `/reranker`, `/evaluation`, `/analytics`, `/datasets`,
 `/settings`, and `/logs`. Supported detail routes retain conversation,
-document, collection, Pipeline run and Evaluation run IDs; legacy root/query/hash
+document, collection, Pipeline run, Agent run and Evaluation run IDs; legacy root/query/hash
 links translate through the existing adapter. Browser Back/Forward must preserve
 the selected route identity, not recreate an answer or execute a provider.
 
@@ -20,7 +20,7 @@ and DATA-005 terminal telemetry. A public deployment does not open that DB.
 
 Public catalog, Search, provider-free inspection, registries and published
 evaluation reads carry no local bearer. The explicit local session supplies
-private Pipeline/Evaluation/Analytics/Logs/Settings requests and clears on
+private Pipeline/Agent/Evaluation/Analytics/Logs/Settings requests and clears on
 disconnect or reload; credentials never enter `VITE_*`, URLs, browser storage or
 export. The ordinary Collections and model-test wrappers do not yet consume
 that owner. Their real-browser 401/refusal is a supported current limitation,
@@ -34,6 +34,34 @@ conversation/message/variant and exact cited source. Raw retrieval scores are
 ranking signals, not confidence. `null`/unavailable/unknown differs from
 measured zero or false, and an empty successful result differs from refusal.
 Controls without an API or supported data source are omitted rather than faked.
+
+## Agent workspace acceptance (UI-014)
+
+`/agent` lists only private durable runs; `/agent/runs/:runId` is the canonical
+selected identity. App owns the URL and Documents handoff. The shared local
+session owns the bearer; Agent owns list/detail/result/evaluation request epochs,
+numeric SSE cursor, revision-aware cancellation and bounded creation form. A
+finite event batch is a transport boundary, never a completion signal. A→B→A
+selection and disconnect invalidate late responses. No credential or run content
+is persisted in browser storage or placed in a URL.
+
+The backend owns frozen policy, state, counts, safe action summaries, research
+objectives, typed gaps, canonical source IDs and final result. Research ledger
+identity is shown without manufacturing excerpts; available document IDs link
+to the existing Documents reader. The one private evaluation read applies only
+to terminal runs and returns the 21 AGENT-006 metrics and definitions. React
+does not recompute or aggregate them. `computed` zero/false, `unavailable` and
+`not_applicable` remain distinct, and the report does not claim factual quality.
+
+Creation and cancellation require local execution capability. Creation calls
+the real backend with an idempotency key and explicit 5–500 character goal,
+EN/VI locale and optional 1–6 research objectives. Current production has no
+structured decision provider; the form discloses that a created run will end
+with provider unavailability instead of an answer. Cancellation sends the
+current quoted revision; 409 forces a fresh read without automatic retry.
+Responsive list/detail layout, bilingual labels, visible focus, keyboard
+scrolling, dark/light contrast and zero body/root horizontal overflow are
+required in the Agent surface.
 
 ## Operational workspace acceptance (UI-012)
 

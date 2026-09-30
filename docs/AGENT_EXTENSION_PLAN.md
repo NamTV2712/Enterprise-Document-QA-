@@ -13,7 +13,7 @@ extension. It does not change the status of any completed task.
 | AGENT-004 | Multi-step evidence gathering over current services | Complete |
 | AGENT-005 | Prompt-injection and tool-policy hardening | Complete |
 | AGENT-006 | Agent evaluation protocol | Complete |
-| UI-014 | Agent workspace and safe operational trace | Future |
+| UI-014 | Agent workspace and safe operational trace | Complete |
 | TEST-005 | Cross-layer and adversarial final validation | Future |
 
 ## AGENT-001 authority map
@@ -422,6 +422,96 @@ model, or claim semantic answer quality. The SHA-256 digest detects accidental
 report changes; it is not an authenticity signature. No Agent evaluation API,
 stored evaluation report, schema migration or frontend change was added.
 
-**Exact next optional task: UI-014 — Agent workspace and safe operational
-trace.** Start it only as a separate task; TEST-005 follows UI-014. Do not
-start either task as part of AGENT-006.
+At the AGENT-006 close, UI-014 was the next optional task. It is now complete
+as a separate change; TEST-005 remains future work.
+
+## UI-014-A contract checkpoint (before implementation)
+
+The canonical frontend route is `/agent`, with selected run identity at
+`/agent/runs/:runId`, following Pipeline/Evaluation detail routing. The Agent
+entry belongs in Build beside Pipeline, retaining every existing workspace
+route. This is a new composition from the current shell, Pipeline,
+Evaluation, Research and Retrieval contracts; there is no Agent reference
+screenshot to pixel-match. The hierarchy is private connection and execution
+availability, ordered durable run list, selected run facts/actions, safe
+operational trace, research objectives/gaps/evidence, final result and
+individual evaluation metrics. Desktop uses a bounded list/detail composition;
+tablet and phone stack run selection above detail. List and detail each own
+their scroll region when geometry needs it. At phone width, primary actions
+remain near the top and identity strings wrap.
+
+`AgentDurableService` and DATA-004 remain the only run authority. GET
+`/agent/runs` returns ordered `AgentRunPage` with full bounded run snapshots,
+page/size/total; GET `/agent/runs/{run_id}` returns the frozen plan, revision,
+timestamps, step, optional result and typed failure. GET `/results` returns
+the authoritative terminal result projection. GET `/events` is a finite
+Authorization-header SSE batch; numeric `Last-Event-ID` resumes after the
+last sequence and closure is transport-only. POST `/cancel` requires the
+current quoted positive revision in `If-Match`; 409 requires a fresh read,
+never a forced retry. POST `/agent/runs` requires execution capability and a
+bounded `Idempotency-Key`, with a 5–500 character goal, EN/VI locale and
+optional 1–6 explicit `agent_research_v1` objectives. Frozen limits,
+allowed tools and separate provider permissions are displayed as recorded.
+Research coverage, typed gaps and canonical source associations come only
+from the terminal research summary; generic events may retain truncated
+reference IDs and are not full source excerpts. Existing Documents navigation
+owns any canonical reader handoff.
+
+AGENT-006 is currently in-process only. UI-014 therefore adds exactly one
+private GET `/agent/runs/{run_id}/evaluation` read, thinly serializing the
+existing deterministic evaluator for a terminal run. It requires API-001
+local workspace access and neither executes nor persists Agent work. Active
+runs receive a typed not-yet-applicable response; corrupted/unavailable
+snapshots fail closed. The expected API method/path inventory becomes **90**;
+SQLite remains v7. The frontend displays the returned 21 definitions/results
+with their exact `computed`, `unavailable` and `not_applicable` states, without
+its own metric calculations, an aggregate score or a quality ranking.
+
+App's existing `LocalWorkspaceSessionProvider` is the sole bearer owner.
+The Agent workspace owns transient list, selected-run, event cursor, form and
+request lifetimes; the URL owns only the canonical selected run ID. No
+credential, goal, answer or excerpt enters URL or browser storage. Access
+remains private and execution requires the independent workspace capability.
+The production `AgentDurableService` has no structured decision-model factory:
+creation is a real backend operation that currently terminates with
+`decision_provider_unavailable`, clearly disclosed before submission and
+shown from the returned run state. No scripted browser model or speculative
+availability indicator is introduced. Refresh and finite event batches use
+the existing request lifecycle; no fake progress or aggressive polling.
+
+State ownership: App routes/document handoff; shared session owns access and
+disconnect; Agent workspace owns list/detail/result/evaluation fetch epochs,
+event sequence, cancellation and transient form notices; backend owns every
+run state, revision, objective status, gap, evidence and metric. An operation's
+notice clears on a new selection, session generation or retry. Five review
+risks are stale A→B→A responses, misleading finite SSE closure, conflating
+local access with decision-provider availability, generic-event truncation
+presented as full evidence, and long IDs/Vietnamese labels overflowing the
+phone layout. UI-014 tests and rendered inspection must explicitly cover each.
+
+- UI-014-A complete: route, data/access, event, cancellation, creation, evaluation and responsive ownership contracts recorded before implementation.
+- UI-014-B complete: `/agent` and `/agent/runs/:runId` use the shared shell,
+  Build navigation, canonical selection and existing Documents handoff.
+- UI-014-C complete: the typed private client and memory-only session gate
+  list/detail/result, numeric finite SSE, cancellation and bounded creation.
+- UI-014-D complete: research coverage, typed gaps and canonical evidence IDs
+  render from the durable summary; the safe trace omits reasoning and raw
+  provider output.
+- UI-014-E complete: one private read-only terminal evaluation route exposes
+  the unchanged AGENT-006 evaluator. All 21 metrics and their applicability
+  states render individually without a synthetic score.
+- UI-014-F complete: Chromium and Firefox browser checks cover access,
+  execution gating, creation, cancellation conflicts, route history, EN/VI,
+  light/dark, responsive widths and axe. The production build was visually
+  inspected at desktop and phone size.
+- UI-014-G complete: frontend typecheck, production build and full Vitest;
+  primary full backend, focused route/Agent contracts and route inventory.
+  The managed clean-checkout and commit/push receipt are recorded in
+  `PROJECT_STATE.md`.
+
+The current production runtime still lacks a structured Agent decision
+provider. New real runs record `decision_provider_unavailable`; the workspace
+states that limit before creation. UI-014 adds no tool, model adapter, Agent
+reasoning exposure, database migration, report persistence, dependency or
+multi-agent behavior. The API inventory is 90 unique method/path pairs and
+SQLite remains v7. **TEST-005 is the exact next optional task; stop before it.**

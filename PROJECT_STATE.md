@@ -1,5 +1,53 @@
 # Project State
 
+## UI-014 complete — Optional Agent workspace and safe operational trace (2026-09-30)
+
+The required roadmap remains complete. UI-014 adds the private `/agent` list
+and `/agent/runs/:runId` detail to the independent EN/VI frontend. A user
+explicitly connects through the existing memory-only local bearer owner;
+public or unauthorized deployments do not expose run history. The page reads
+durable run, result, frozen policy and ordered finite event records, then
+shows safe operational actions, research objective coverage, typed gaps,
+canonical evidence IDs, the final outcome and individual native evaluation
+metrics. A document ID hands off to the existing Documents reader. Finite SSE
+closure is never treated as job completion, and no model reasoning, raw
+provider output or invented evidence excerpt is rendered. A selected run ID
+is the only Agent URL state. A→B→A and session changes invalidate old reads.
+
+The backend adds exactly one local-bearer-protected, read-only GET
+`/agent/runs/{run_id}/evaluation` endpoint around the unchanged AGENT-006
+deterministic evaluator. It requires a terminal run, returns the 21 versioned
+metric definitions/results, and fails closed for corrupt snapshots. It does
+not execute a provider, persist a report or change SQLite v7. The FastAPI
+inventory is **90 unique method/path pairs**. The frontend distinguishes
+`computed` zero/false, `unavailable`, and `not_applicable`, shows numerator and
+denominator where provided, and claims no aggregate score or factual quality.
+
+Create and cancel call the real private API only when execution is enabled.
+Creation accepts a bounded goal, EN/VI language and optional explicit
+research objectives with one idempotency key. Current production has no
+structured Agent decision provider adapter, so the form warns before
+submission and the resulting run reports `decision_provider_unavailable`
+without a fabricated answer. Cancellation uses the current quoted revision;
+409 reconciles server state without a forced retry. The Agent extension
+remains single-agent and has no new tool, dependency, migration, Ragas
+integration or network-only test.
+
+Implementation validation: **1583 backend tests passed, 0 failed, 188
+warnings**; focused route/Agent contracts **20 passed**; frontend **94 Vitest
+files / 815 tests** passed; TypeScript passed; production build passed with
+the existing large-chunk warning. The hermetic production-build browser
+campaign passed **14/14** in Chromium and Firefox, including four axe scopes,
+EN/VI, light/dark, 1440×900, 1024×768, 768×900, 390×844 and 1440×700.
+Desktop and phone captures were visually inspected. The prior 12 unrelated
+untracked paths remained untouched. Managed clean-checkout and final
+commit/push receipts follow after the source commit.
+
+TEST-005 is the exact next optional task. Do not start it as UI-014 cleanup.
+The staged Collections/model-test browser bearer integration, manual native
+zoom check, existing chunk-size warning and optional Ragas remain future
+limitations.
+
 ## AGENT-006 complete — Optional native Agent evaluation (2026-09-28)
 
 The required product roadmap remains complete. AGENT-006 adds a separate

@@ -21,7 +21,7 @@ def test_committed_app_lifespan_builds_indexes_and_closes_store(tmp_path, monkey
         assert dict(os.environ) == environment
         routes = [(method, route.path) for route in application.app.routes
                   if isinstance(route, APIRoute) for method in route.methods]
-        assert len(routes) == len(set(routes)) == 89
+        assert len(routes) == len(set(routes)) == 90
         monkeypatch.setattr(application.settings, "workspace_mode", mode)
         monkeypatch.setattr(application.settings, "workspace_db_path", tmp_path / "workspace.sqlite3")
         with TestClient(application.app) as client:

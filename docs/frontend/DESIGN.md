@@ -124,6 +124,18 @@ explicit memory-only local connection. Missing fields use an explicit
 unavailable state rather than a mock value. These rules apply in both themes
 and at every responsive breakpoint.
 
+## Agent operational workspace (UI-014)
+
+Agent follows the shared shell and card tokens. Its hierarchy is connection
+and execution availability, durable run history, selected frozen policy and
+state, safe operational trace, research objectives/gaps/source identities,
+final result and individual native metrics. Desktop uses a bounded history
+column with a flexible detail column. Tablet stacks them; a selected phone run
+shows a Back control and the detail instead of compressing both columns.
+Long IDs wrap, the event list is keyboard scrollable, and status is expressed
+in text as well as color. The existing composer remains part of the shell.
+Both themes and EN/VI use the same authority and responsive rules.
+
 ## PDF representation UX
 
 The PDF reader uses the real PDF.js canvas/text layer and a document-bound

@@ -14,6 +14,19 @@ progressively disclosed so the answer remains the visual focus. The layout is
 responsive for mobile drawers, keyboard navigation, dark mode, and reduced
 motion preferences.
 
+## Agent workspace
+
+`/agent` shows private durable Agent history after an explicit local workspace
+connection; `/agent/runs/:runId` deep links to a selected run. The bearer remains
+in tab memory and is forgotten on reload. The page shows frozen policy, safe
+action and state events, research objective coverage and canonical evidence
+IDs, final result and 21 native evaluation metrics for terminal runs. It does
+not display model reasoning, source excerpts from event metadata, or an
+aggregate quality score. Creation uses the backend only when local execution
+is enabled; current production has no structured decision provider, so new
+runs report provider unavailability instead of an answer. Cancellation uses
+the current run revision and reconciles conflicts.
+
 ## Analytics, Logs and Settings
 
 Analytics reads DATA-005 server summary and UTC buckets for 24h, 7d and 30d.

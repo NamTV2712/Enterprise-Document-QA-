@@ -16,6 +16,8 @@ from src.agent.durable_models import (
     AgentRunCreateRequest, AgentRunEventResponse, AgentRunPage,
     AgentRunResponse, AgentRunResultResponse,
 )
+from src.agent.evaluation import evaluate_durable_agent_run
+from src.agent.evaluation_models import AgentEvaluationReport, CorruptAgentSnapshot
 from src.api.access import AccessGrant, require_execution_access, require_local_workspace_access
 from src.workspace.database import WorkspaceDatabaseError
 from src.workspace.jobs import (
@@ -123,6 +125,22 @@ def create_agent_run_router(get_service: Callable[[], AgentDurableService]) -> A
         result = await _invoke(lambda: get_service().result(run_id))
         response.headers["ETag"] = f'"{result.revision}"'
         return result
+
+    @router.get("/agent/runs/{run_id}/evaluation", response_model=AgentEvaluationReport)
+    async def agent_run_evaluation(
+        run_id: str,
+        _grant: AccessGrant = Depends(require_local_workspace_access),
+    ) -> AgentEvaluationReport:
+        service = get_service()
+        run = await _invoke(lambda: service.get(run_id))
+        if run.state not in ("succeeded", "failed", "cancelled", "interrupted"):
+            raise HTTPException(409, "Agent evaluation requires a terminal run")
+        try:
+            return await run_in_threadpool(evaluate_durable_agent_run, service, run_id)
+        except (JobNotFoundError, JobDataError, WorkspaceDatabaseError, sqlite3.Error, OSError) as error:
+            raise _error(error) from error
+        except (CorruptAgentSnapshot, ValueError) as error:
+            raise HTTPException(503, "Agent evaluation snapshot is unavailable or inconsistent") from error
 
     @router.post("/agent/runs/{run_id}/cancel", response_model=AgentRunResponse)
     async def cancel_agent_run(

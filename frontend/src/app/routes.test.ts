@@ -13,6 +13,7 @@ describe("UI-002 route contract", () => {
     expect(resolveAppRoute("/documents/AAPL%3A10-K%3A2025").params).toEqual({ documentId: "AAPL:10-K:2025" });
     expect(resolveAppRoute("/pipeline/runs/run-9").params).toEqual({ runId: "run-9" });
     expect(resolveAppRoute("/evaluation/runs/eval-2").params).toEqual({ runId: "eval-2" });
+    expect(resolveAppRoute("/agent/runs/agent_abc123").params).toEqual({ runId: "agent_abc123" });
   });
 
   test("maps known legacy views and preserves query/hash identity", () => {
@@ -42,5 +43,11 @@ describe("UI-002 route contract", () => {
     expect(resolveAppRoute("/datasets")).toMatchObject({ isDeferred: false, workspaceView: "datasets" });
     expect(resolveAppRoute("/logs").isDeferred).toBe(false);
     expect(resolveAppRoute("/does-not-exist")).toMatchObject({ id: "not-found", isKnown: false, isDeferred: true });
+  });
+
+  test("keeps one canonical Agent route and selects it from the shared shell", () => {
+    expect(resolveAppRoute("/agent")).toMatchObject({ id: "agent", workspaceView: "agent", isKnown: true });
+    expect(primaryRouteId(resolveAppRoute("/agent/runs/agent_abc123"))).toBe("agent");
+    expect(routeForWorkspaceView("agent")).toBe("/agent");
   });
 });

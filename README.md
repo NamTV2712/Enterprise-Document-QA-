@@ -18,8 +18,8 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 ## Start here — current product
 
 The independent frontend exposes Chat, Research, Documents, Search, Collections,
-Retrieval, Models, Pipeline, Reranker, Evaluation, Analytics, Datasets, Settings,
-and Logs. FastAPI supplies public catalog/search/inspection/report reads; opt-in
+Retrieval, Models, Pipeline, Agent, Reranker, Evaluation, Analytics, Datasets,
+Settings, and Logs. FastAPI supplies public catalog/search/inspection/report reads; opt-in
 local mode adds a private SQLite workspace, queued Pipeline staging, frozen
 native Evaluation jobs, and content-free operational telemetry. Pipeline staging
 does not execute or promote the canonical corpus. Browser conversations and
@@ -74,13 +74,16 @@ conflicting document/chunk source identities when the IDs encode a
 recognizable ticker or SEC filing accession. Invalid structured evidence ends
 the run with a typed `invalid_observation` result instead of entering the
 research ledger. The AGENT-005 adversarial checkpoint is documented in
-[the extension plan](docs/AGENT_EXTENSION_PLAN.md). The six `/agent/runs` routes
+[the extension plan](docs/AGENT_EXTENSION_PLAN.md). The Agent run routes
 support queued creation, detail, results, ordered finite SSE events and
 revision-safe cancellation. Create and cancel require local execution access;
 reads require local bearer access. A deterministic decision model is tested,
 but a real structured provider adapter is still pending, so production runs
-report decision-provider unavailability without calling tools. There is no
-Agent page or multi-agent behavior. See [the extension plan](docs/AGENT_EXTENSION_PLAN.md)
+report decision-provider unavailability without calling tools. The private
+`/agent` page reads durable runs, safe activity, research evidence and the
+native metric report after an explicit memory-only local connection. It can
+create a real recorded run when execution is enabled, with that provider limit
+disclosed before submission. There is no multi-agent behavior. See [the extension plan](docs/AGENT_EXTENSION_PLAN.md)
 for research bounds, partial results and recovery.
 
 The provider-free `native-agent-evaluation` v1 protocol evaluates an existing
@@ -89,7 +92,9 @@ returns separate versioned execution, tool, budget, evidence and research
 metrics with `computed`, `unavailable` and `not_applicable` states, plus a
 canonical report digest. It neither reruns the Agent nor judges factual
 correctness, and it exposes no overall Agent score. Reports are computed
-in-process; no evaluation route or report storage is added.
+through one private read-only `GET /agent/runs/{run_id}/evaluation` route for
+terminal runs. No report storage is added; active runs return 409, and an
+inconsistent snapshot fails closed.
 
 ## Overview
 

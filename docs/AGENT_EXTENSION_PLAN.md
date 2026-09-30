@@ -1,5 +1,10 @@
 # Optional Agent Extension
 
+The subsequent PROVIDER-001 production adapter is tracked separately in
+[AGENT_PRODUCTION_PROVIDER_PLAN.md](AGENT_PRODUCTION_PROVIDER_PLAN.md).
+Provider-unavailable statements below describe the completed extension's
+historical baseline; they are not reopened tasks.
+
 The required product roadmap ended at UI-013. This plan is a separate optional
 extension. It does not change the status of any completed task.
 

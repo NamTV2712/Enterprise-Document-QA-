@@ -114,7 +114,7 @@ def main() -> None:
     with offline_socket_guard(), ExitStack() as stack:
         application, _closed = install_runtime_dependencies(stack, directory)
 
-        def agent_service(repository, registry_factory):
+        def agent_service(repository, registry_factory, **_provider_options):
             if state.mode == "unconfigured":
                 return AgentDurableService(repository, registry_factory)
             return AgentDurableService(

@@ -9,6 +9,7 @@ interface LocalWorkspaceSessionValue {
   status: SessionStatus;
   getToken: () => string | null;
   canExecute: boolean;
+  decisionProviderAvailable: boolean;
   generation: number;
   connect: (candidate: string) => Promise<void>;
   disconnect: () => void;
@@ -19,6 +20,7 @@ const emptySession: LocalWorkspaceSessionValue = {
   status: "disconnected",
   getToken: () => null,
   canExecute: false,
+  decisionProviderAvailable: false,
   generation: 0,
   connect: async () => { throw new Error("The local workspace session provider is unavailable."); },
   disconnect: () => {},
@@ -53,7 +55,8 @@ export function LocalWorkspaceSessionProvider({ children }: { children: React.Re
       const verified = await pipelineApi.verifyLocalWorkspaceToken(candidate);
       if (requestId !== requestGeneration.current) return;
       tokenRef.current = candidate;
-      setConfiguration({ deployment_mode: verified.deployment_mode, capabilities: {
+      setConfiguration({ deployment_mode: verified.deployment_mode,
+        agent_decision_provider: { available: verified.agent_decision_provider?.available === true }, capabilities: {
         public_provider_free: verified.capabilities.public_provider_free,
         local_workspace: verified.capabilities.local_workspace,
         execution_jobs: verified.capabilities.execution_jobs,
@@ -80,11 +83,12 @@ export function LocalWorkspaceSessionProvider({ children }: { children: React.Re
     status,
     getToken,
     canExecute: configuration?.capabilities.execution_jobs === true,
+    decisionProviderAvailable: configuration?.agent_decision_provider?.available === true,
     generation,
     connect,
     disconnect,
     invalidateIfCurrent,
-  }), [configuration?.capabilities.execution_jobs, connect, disconnect, generation, getToken, invalidateIfCurrent, status]);
+  }), [configuration?.capabilities.execution_jobs, configuration?.agent_decision_provider?.available, connect, disconnect, generation, getToken, invalidateIfCurrent, status]);
 
   return (
     <LocalWorkspaceSessionContext.Provider value={value}>

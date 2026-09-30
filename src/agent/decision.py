@@ -103,3 +103,17 @@ class AgentDecisionModel(Protocol):
     requires_provider: bool
 
     async def decide(self, request: DecisionRequest) -> object: ...
+
+
+class DecisionProviderError(DecisionExecutionError):
+    """Allowlisted transport failure; never holds provider text or exceptions."""
+
+    def __init__(self, code: str) -> None:
+        if code not in {
+            "decision_provider_auth_failed", "decision_provider_rate_limited",
+            "decision_provider_timeout", "decision_provider_invalid_response",
+            "decision_provider_schema_violation", "decision_provider_failed",
+        }:
+            raise ValueError("invalid provider failure category")
+        self.code = code
+        super().__init__(code)

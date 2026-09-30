@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from src.agent.research import validate_research_limits
+from src.agent.provider_models import DecisionProviderIdentity
 from src.agent.research_models import ResearchConfig, ResearchSummary
 from src.agent.state import (
     AgentFailure, AgentGoal, AgentLimits, AgentStatus, EvidenceRef, TOOL_NAMES,
@@ -49,6 +50,7 @@ class FrozenAgentPlan(BaseModel):
     schema_version: Literal[1] = 1
     protocol: Literal["bounded_single_agent"] = "bounded_single_agent"
     decision_model_id: str = Field(min_length=1, max_length=64)
+    decision_provider: DecisionProviderIdentity | None = None
     goal: str = Field(min_length=5, max_length=500)
     locale: Literal["en", "vi"]
     allowed_tools: tuple[str, ...] = Field(max_length=4)
@@ -71,6 +73,8 @@ class FrozenAgentPlan(BaseModel):
             raise ValueError("frozen Agent goal contains controls")
         if not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", self.decision_model_id):
             raise ValueError("decision model identity is invalid")
+        if self.decision_provider is not None and self.decision_model_id != self.decision_provider.binding_id:
+            raise ValueError("decision provider binding is inconsistent")
         if len(set(self.allowed_tools)) != len(self.allowed_tools) or not set(self.allowed_tools) <= TOOL_NAMES:
             raise ValueError("frozen tool allowlist is invalid")
         if self.research is not None:

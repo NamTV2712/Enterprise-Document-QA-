@@ -65,8 +65,21 @@ adds the `agent` namespace and bounded event summaries; one atomic job claim
 owns each execution, and startup marks unreconciled active runs interrupted
 without replay. `/agent/runs` reads require local bearer access, while creation
 and cancellation also require execution capability. The runtime resolves a
-decision model at execution; without a structured provider adapter it records
-unavailability rather than a fabricated answer. AGENT-004 adds an optional
+decision model at execution. PROVIDER-001 binds one Groq native strict JSON
+Schema adapter to the existing generator identity/credential authority. It
+freezes safe provider/model/adapter/mechanism/key-policy metadata in the same
+plan JSON, checks the binding at each decision, and leaves old unconfigured
+plans unchanged. The protected configuration-status read exposes capability
+without inference or probing; unsupported or unconfigured bindings fail closed.
+The adapter has no tool execution or research loop: one bounded SDK proposal
+passes strict local transport/semantic validation before existing orchestration
+gates. Separate system control and untrusted goal/observation data are projected
+from typed requests with remaining counts; configured secrets and machine paths
+are refused. One attempt has no SDK or Generator retries, a 60 second total
+deadline and five second connect timeout. Context-scoped SDK logging filters
+prevent debug request/error disclosure without muting concurrent Generator
+logs. Results retain only safe failure categories and execution facts.
+AGENT-004 adds an optional
 versioned research policy to that same loop: caller-declared bounded
 objectives, a canonical source-identity ledger, typed gaps and final coverage
 checks. Research configuration and terminal metadata use the existing frozen

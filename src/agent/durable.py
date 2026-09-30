@@ -19,7 +19,8 @@ from src.agent.durable_models import (
 from src.agent.orchestration import AgentOrchestrator
 from src.agent.policies import AgentExecutionContext, ToolPolicy
 from src.agent.registry import AgentToolRegistry
-from src.agent.state import AgentResult, AgentRunPolicy, AgentTraceEntry
+from src.agent.provider_models import DecisionProviderIdentity
+from src.agent.state import AgentResult, AgentRunPolicy, AgentTraceEntry, contains_protected_value
 from src.workspace.jobs import (
     AgentJobEvent, DurableJob, JobConflictError, JobDataError, JobNotFoundError,
     JobState, JobTransitionError, SQLiteJobRepository,
@@ -89,6 +90,8 @@ class AgentDurableService:
         self, repository: SQLiteJobRepository, registry_factory: Callable[[], AgentToolRegistry],
         *, decision_model_factory: Callable[[str], AgentDecisionModel] | None = None,
         decision_model_id: str = "unconfigured",
+        decision_provider: DecisionProviderIdentity | None = None,
+        sensitive_values: tuple[str, ...] = (),
     ) -> None:
         self.repository = repository
         self.registry_factory = registry_factory
@@ -96,10 +99,13 @@ class AgentDurableService:
         if re.fullmatch(r"[a-z][a-z0-9_]{0,63}", decision_model_id) is None:
             raise ValueError("decision model identity is invalid")
         self.decision_model_id = decision_model_id
+        self.decision_provider = decision_provider
+        self._sensitive_values = sensitive_values
 
     def _plan(self, body: AgentRunCreateRequest) -> FrozenAgentPlan:
         return FrozenAgentPlan(
-            decision_model_id=self.decision_model_id, goal=body.goal.strip(),
+            decision_model_id=self.decision_model_id, decision_provider=self.decision_provider,
+            goal=body.goal.strip(),
             locale=body.locale, allowed_tools=tuple(body.allowed_tools),
             allow_provider_tool_execution=body.allow_provider_tool_execution,
             allow_decision_provider_execution=body.allow_decision_provider_execution,
@@ -110,6 +116,8 @@ class AgentDurableService:
         )
 
     def create(self, body: AgentRunCreateRequest, *, idempotency_key: str) -> AgentRunResponse:
+        if contains_protected_value(body.model_dump(mode="json"), self._sensitive_values):
+            raise ValueError("Agent request contains protected runtime data")
         plan = self._plan(body)
         encoded = plan.model_dump(mode="json", exclude_none=True)
         fingerprint = hashlib.sha256(_canonical_json(encoded)).hexdigest()
@@ -299,6 +307,7 @@ class AgentDurableService:
                     reject_duplicate_calls=plan.reject_duplicate_calls,
                 ),
                 research=plan.research,
+                sensitive_values=self._sensitive_values,
             )
             context = AgentExecutionContext(
                 ToolPolicy(frozenset(plan.allowed_tools), plan.allow_provider_tool_execution),

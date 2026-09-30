@@ -11,7 +11,7 @@ from typing import Protocol
 from pydantic import ValidationError
 
 from src.agent.decision import (
-    AgentDecisionModel, DecisionExecutionError, DecisionProviderUnavailable,
+    AgentDecisionModel, DecisionExecutionError, DecisionProviderUnavailable, DecisionProviderError,
     FinalDecision, ToolDecision, parse_decision,
 )
 from src.agent.errors import AgentToolError
@@ -25,6 +25,7 @@ from src.agent.state import (
     AgentStatus, AgentTraceEntry, DecisionPolicyView, DecisionRequest,
     DecisionToolSpec, EvidenceRef, FailureCode, FailureDomain,
     TOOL_NAMES,
+    contains_protected_value,
 )
 
 
@@ -106,6 +107,7 @@ class AgentOrchestrator:
         self, registry: AgentToolRegistry, decision_model: AgentDecisionModel,
         *, limits: AgentLimits | None = None, policy: AgentRunPolicy | None = None,
         research: ResearchConfig | None = None,
+        sensitive_values: tuple[str, ...] = (),
     ) -> None:
         if type(decision_model.requires_provider) is not bool:
             raise ValueError("decision model provider classification must be explicit")
@@ -113,6 +115,11 @@ class AgentOrchestrator:
             raise ValueError("orchestration requires the four canonical Agent tools")
         self.registry = registry
         self.decision_model = decision_model
+        self._protected_values = tuple(dict.fromkeys((
+            *sensitive_values, *getattr(decision_model, "protected_values", ()),
+        )))
+        if research is not None and contains_protected_value(research.model_dump(), self._protected_values):
+            raise ValueError("research contains protected runtime data")
         self.limits = limits or AgentLimits()
         self._per_tool_limits = dict(self.limits.per_tool_calls)
         self.policy = policy or AgentRunPolicy()
@@ -145,6 +152,8 @@ class AgentOrchestrator:
             ) for tool in available),
             observations=tuple(observation.model_copy(deep=True) for observation in state.observations),
             step_count=state.step_count, tool_call_count=state.tool_call_count,
+            remaining_per_tool_calls={name: max(0, limit - state.per_tool_calls[name])
+                                      for name, limit in self._per_tool_limits.items()},
             research=state.research_view.model_copy(deep=True) if state.research_view else None,
         )
 
@@ -180,6 +189,12 @@ class AgentOrchestrator:
         cancel_event: CancellationSignal | None = None, trace_sink: TraceSink | None = None,
     ) -> AgentResult:
         """One validated decision is one step; only executed tools consume tool budget."""
+        if contains_protected_value(goal, self._protected_values):
+            return AgentResult(status="invalid_decision", step_count=0, decision_call_count=0,
+                tool_call_count=0, per_tool_calls={name: 0 for name in sorted(TOOL_NAMES)},
+                observations=(), trace=(), failure=AgentFailure(domain="model",
+                    code="decision_provider_schema_violation"),
+                research=ResearchSession(self.research, self.limits).summary() if self.research else None)
         state = AgentState(goal=AgentGoal(text=goal), locale=context.locale)
         research = ResearchSession(self.research, self.limits) if self.research else None
 
@@ -213,6 +228,15 @@ class AgentOrchestrator:
                 raw_decision = await self.decision_model.decide(self._request(state, context))
             except DecisionProviderUnavailable:
                 return self._result(state, "unavailable", domain="model", code="decision_provider_unavailable")
+            except DecisionProviderError as error:
+                invalid = error.code in {"decision_provider_invalid_response", "decision_provider_schema_violation"}
+                if invalid:
+                    await record(AgentTraceEntry(
+                        decision_index=state.decision_call_count, kind="invalid",
+                        outcome="rejected", failure_code=error.code,
+                    ))
+                return self._result(state, "invalid_decision" if invalid else "failed",
+                                    domain="model", code=error.code)
             except DecisionExecutionError:
                 return self._result(state, "failed", domain="model", code="decision_execution_failed")
             except Exception:
@@ -335,6 +359,8 @@ class AgentOrchestrator:
                     observation, self.limits,
                     self.limits.max_total_observation_bytes - state.observation_bytes,
                 )
+                if contains_protected_value(projected.model_dump(), self._protected_values):
+                    raise ObservationIntegrityError("observation contains protected runtime data")
             except ObservationLimitError:
                 await record(AgentTraceEntry(
                     decision_index=state.decision_call_count, kind="tool", tool_name=tool.name,

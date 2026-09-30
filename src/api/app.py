@@ -90,6 +90,7 @@ from src.api.routers.telemetry import create_telemetry_router
 from src.api.pipeline import PipelineService
 from src.evaluation.job_service import EvaluationJobService
 from src.agent.durable import AgentDurableService
+from src.agent.provider import resolve_decision_provider, model_for_binding
 from src.api.registry import RegistryService
 from src.api.schemas import (
     DecomposedQueryResponse,
@@ -169,10 +170,18 @@ def _evaluation_job_service() -> EvaluationJobService:
     return EvaluationJobService(SQLiteJobRepository.from_settings(settings))
 
 
+def _agent_decision_resolution():
+    return resolve_decision_provider(settings, getattr(_state.get("pipeline"), "generator", None))
+
+
 def _agent_durable_service() -> AgentDurableService:
     """Open DATA-004 only after private Agent-route authorization."""
+    resolution = _agent_decision_resolution()
     return AgentDurableService(
         SQLiteJobRepository.from_settings(settings), create_agent_tool_registry,
+        decision_model_id=resolution.model_id, decision_provider=resolution.identity,
+        sensitive_values=resolution.secrets,
+        decision_model_factory=lambda frozen_id: model_for_binding(frozen_id, _agent_decision_resolution),
     )
 
 
@@ -928,7 +937,8 @@ def _query_interpretation(original_question: str, normalized: Any) -> QueryInter
     )
 
 
-app.include_router(create_health_router(_health_payload))
+app.include_router(create_health_router(_health_payload,
+    agent_decision_capability=lambda: _agent_decision_resolution().capability()))
 app.include_router(create_workspace_transfer_router(_workspace_transfer_service))
 app.include_router(create_collections_router(_collections_repository))
 

@@ -55,9 +55,16 @@ does not recompute or aggregate them. `computed` zero/false, `unavailable` and
 
 Creation and cancellation require local execution capability. Creation calls
 the real backend with an idempotency key and explicit 5–500 character goal,
-EN/VI locale and optional 1–6 research objectives. Current production has no
-structured decision provider; the form discloses that a created run will end
-with provider unavailability instead of an answer. Cancellation sends the
+EN/VI locale and optional 1–6 research objectives. PROVIDER-001 projects only
+the boolean structured-decision availability from the existing protected
+configuration-status response into the shared memory-only session. It never
+infers capability from model names or displays credentials/provider payloads.
+Missing capability fails closed. Supported configuration is disclosed with
+remote reachability unprobed; execution still requires workspace permission and
+an initially unchecked explicit per-run decision consent. RAG provider permission
+remains separate and disabled in this form. Unavailable runs and historical
+failures retain their truthful result. Disconnect/reconnect clears consent;
+server frozen identity and policies remain authoritative. Cancellation sends the
 current quoted revision; 409 forces a fresh read without automatic retry.
 Responsive list/detail layout, bilingual labels, visible focus, keyboard
 scrolling, dark/light contrast and zero body/root horizontal overflow are

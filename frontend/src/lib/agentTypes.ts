@@ -46,6 +46,13 @@ export interface AgentFrozenPlan {
   schema_version: 1;
   protocol: "bounded_single_agent";
   decision_model_id: string;
+  decision_provider?: {
+    provider: "groq";
+    model_id: "openai/gpt-oss-120b" | "openai/gpt-oss-20b";
+    adapter_version: "groq_json_schema_v1";
+    mechanism: "native_strict_json_schema";
+    credential_policy: "pool" | "key5_only";
+  } | null;
   goal: string;
   locale: "en" | "vi";
   allowed_tools: AgentToolName[];

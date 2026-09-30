@@ -36,10 +36,13 @@ export function AgentWorkspace({ selectedRunId, onSelectRun, onClearSelectedRun,
   const [mode, setMode] = useState<"generic" | "research">("generic");
   const [objectives, setObjectives] = useState<ObjectiveDraft[]>([{ question: "", ticker: "" }]);
   const [formError, setFormError] = useState(false);
+  const [decisionPermission, setDecisionPermission] = useState(false);
   const tokenInput = useRef<HTMLInputElement>(null);
   const goalInput = useRef<HTMLTextAreaElement>(null);
   const detailHeading = useRef<HTMLHeadingElement>(null);
   const listHeading = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => { setDecisionPermission(false); }, [model.session.generation]);
 
   useEffect(() => {
     if (selectedRunId) detailHeading.current?.focus();
@@ -63,6 +66,8 @@ export function AgentWorkspace({ selectedRunId, onSelectRun, onClearSelectedRun,
     setFormError(false);
     const body = {
       goal: cleanGoal, locale: runLocale,
+      ...(decisionPermission && model.session.decisionProviderAvailable && model.session.canExecute
+        ? { allow_decision_provider_execution: true } : {}),
       ...(mode === "research" ? { research: { version: "agent_research_v1" as const,
         objectives: objectives.map((item, index) => ({
           objective_id: `objective_${index + 1}`, question: item.question.trim(), ticker_scope: item.ticker.trim().toUpperCase() || null,
@@ -70,7 +75,7 @@ export function AgentWorkspace({ selectedRunId, onSelectRun, onClearSelectedRun,
     };
     const created = await model.create(body);
     if (created) {
-      setCreateOpen(false); setGoal(""); setMode("generic"); setObjectives([{ question: "", ticker: "" }]);
+      setCreateOpen(false); setGoal(""); setMode("generic"); setDecisionPermission(false); setObjectives([{ question: "", ticker: "" }]);
       onSelectRun(created.run_id);
     }
   };
@@ -93,7 +98,7 @@ export function AgentWorkspace({ selectedRunId, onSelectRun, onClearSelectedRun,
 
     {!connected ? <section className="console-card agent-private-state"><LockKeyhole aria-hidden="true" /><h2>{copy.disconnected}</h2><p>{copy.connectionBody}</p><button type="button" className="console-btn console-btn--primary" onClick={() => setConnectOpen(true)}>{copy.connect}</button></section>
       : <>
-        <div className="agent-runtime-note" role="note"><AlertTriangle aria-hidden="true" /><p>{copy.executionWarning}</p></div>
+        <div className="agent-runtime-note" role="note"><AlertTriangle aria-hidden="true" /><p>{model.session.decisionProviderAvailable ? copy.providerConfigured : copy.executionWarning}</p></div>
         <div className="agent-toolbar">
           <button type="button" className="console-btn" onClick={model.refreshList}><RefreshCw aria-hidden="true" />{copy.refresh}</button>
           {model.session.canExecute && <button type="button" className="console-btn console-btn--primary" onClick={() => { setRunLocale(locale); setCreateOpen(true); }}><Plus aria-hidden="true" />{copy.create}</button>}
@@ -161,9 +166,10 @@ export function AgentWorkspace({ selectedRunId, onSelectRun, onClearSelectedRun,
 
     <ModalDialog open={createOpen} onClose={() => { if (!model.createPending) setCreateOpen(false); }} labelledBy="agent-create-title" initialFocusRef={goalInput} className="agent-dialog agent-create-dialog console-card">
       <div className="agent-dialog-header"><h2 id="agent-create-title">{copy.createTitle}</h2><button type="button" className="console-btn" aria-label={copy.close} onClick={() => setCreateOpen(false)} disabled={model.createPending}><X aria-hidden="true" /></button></div>
-      <p className="agent-notice">{copy.createHint}</p>
+      <p className="agent-notice">{model.session.decisionProviderAvailable ? copy.providerConfigured : copy.createHint}</p>
       <form onSubmit={(event) => void handleCreate(event)}><label htmlFor="agent-goal">{copy.goal}</label><textarea id="agent-goal" ref={goalInput} value={goal} onChange={(event) => setGoal(event.target.value)} maxLength={500} rows={3} /><p className="agent-muted">{copy.goalHint}</p>
         <div className="agent-form-row"><label htmlFor="agent-mode">{copy.mode}<select id="agent-mode" value={mode} onChange={(event) => setMode(event.target.value as "generic" | "research")}><option value="generic">{copy.generic}</option><option value="research">{copy.research}</option></select></label><label htmlFor="agent-language">{copy.language}<select id="agent-language" value={runLocale} onChange={(event) => setRunLocale(event.target.value as "en" | "vi")}><option value="en">English</option><option value="vi">Tiếng Việt</option></select></label></div>
+        <label className="agent-provider-consent"><input type="checkbox" checked={decisionPermission} onChange={(event) => setDecisionPermission(event.target.checked)} disabled={!model.session.decisionProviderAvailable || !model.session.canExecute} />{copy.decisionConsent}</label>
         {mode === "research" && <fieldset className="agent-objective-form"><legend>{copy.objectives}</legend>{objectives.map((item, index) => <div key={index} className="agent-objective-draft"><strong>{copy.objective} {index + 1}</strong><label>{copy.objectiveQuestion}<input value={item.question} maxLength={120} onChange={(event) => setObjectives((current) => current.map((draft, position) => position === index ? { ...draft, question: event.target.value } : draft))} /></label><label>{copy.tickerScope}<input value={item.ticker} maxLength={7} onChange={(event) => setObjectives((current) => current.map((draft, position) => position === index ? { ...draft, ticker: event.target.value.toUpperCase() } : draft))} /></label>{objectives.length > 1 && <button type="button" className="console-btn" onClick={() => setObjectives((current) => current.filter((_, position) => position !== index))}>{copy.removeObjective}</button>}</div>)}<button type="button" className="console-btn" disabled={objectives.length >= 6} onClick={() => setObjectives((current) => [...current, { question: "", ticker: "" }])}>{copy.addObjective}</button></fieldset>}
         {formError && <p role="alert" className="agent-notice">{copy.createInvalid}</p>}{model.createError !== null && <p role="alert" className="agent-notice">{errorMessage(model.createError, copy, copy.detailError)}</p>}
         <button type="submit" className="console-btn console-btn--primary" disabled={model.createPending}>{model.createPending ? copy.creating : copy.createSubmit}</button>

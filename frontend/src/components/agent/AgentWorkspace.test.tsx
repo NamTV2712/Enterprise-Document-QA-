@@ -40,6 +40,42 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.removeItem("sec_qa_locale"); });
 
 describe("private Agent workspace", () => {
+  it("uses backend capability and submits decision permission only after explicit consent", async () => {
+    vi.mocked(pipelineApi.verifyLocalWorkspaceToken).mockResolvedValue({ deployment_mode: "local",
+      capabilities: { public_provider_free: true, local_workspace: true, execution_jobs: true },
+      agent_decision_provider: { available: true } });
+    render(<Harness />);
+    await connect();
+    expect(screen.getByText(/A supported structured decision provider is configured/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Create recorded run" }));
+    const consent = screen.getByRole("checkbox", { name: "Allow bounded decision-provider calls for this run" });
+    expect(consent).not.toBeChecked();
+    expect(consent).toBeEnabled();
+    fireEvent.click(consent);
+    fireEvent.change(screen.getByLabelText("Goal"), { target: { value: "Find current filing evidence." } });
+    fireEvent.click(screen.getByRole("button", { name: "Create run" }));
+    await waitFor(() => expect(agentApi.createRun).toHaveBeenCalledWith(TOKEN, {
+      goal: "Find current filing evidence.", locale: "en", allow_decision_provider_execution: true,
+    }, expect.any(String)));
+    expect(document.body.textContent).not.toContain(TOKEN);
+  });
+
+  it("fails closed for missing capability and cannot enable provider consent", async () => {
+    render(<Harness />);
+    await connect();
+    fireEvent.click(screen.getByRole("button", { name: "Create recorded run" }));
+    expect(screen.getByRole("checkbox", { name: "Allow bounded decision-provider calls for this run" })).toBeDisabled();
+  });
+
+  it("does not turn configured decision capability into workspace execution permission", async () => {
+    vi.mocked(pipelineApi.verifyLocalWorkspaceToken).mockResolvedValue({ deployment_mode: "local",
+      capabilities: { public_provider_free: true, local_workspace: true, execution_jobs: false },
+      agent_decision_provider: { available: true } });
+    render(<Harness />);
+    await connect();
+    expect(screen.getByText("Local access · execution disabled")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Create recorded run" })).not.toBeInTheDocument();
+  });
   it("does not fetch private run history while disconnected and clears the synthetic bearer after connection", async () => {
     const view = render(<Harness />);
     expect(screen.getByRole("heading", { name: "Private workspace disconnected" })).toBeInTheDocument();

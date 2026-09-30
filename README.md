@@ -77,13 +77,26 @@ research ledger. The AGENT-005 adversarial checkpoint is documented in
 [the extension plan](docs/AGENT_EXTENSION_PLAN.md). The Agent run routes
 support queued creation, detail, results, ordered finite SSE events and
 revision-safe cancellation. Create and cancel require local execution access;
-reads require local bearer access. A deterministic decision model is tested,
-but a real structured provider adapter is still pending, so production runs
-report decision-provider unavailability without calling tools. The private
+reads require local bearer access. PROVIDER-001 adds a production Groq strict
+JSON Schema decision adapter for `openai/gpt-oss-120b` and `openai/gpt-oss-20b`.
+It reuses the generator default or loaded model identity and existing
+`GROQ_KEY_POLICY`/Groq credentials. Unsupported models or absent eligible keys
+remain `decision_provider_unavailable` without tool calls. The private
 `/agent` page reads durable runs, safe activity, research evidence and the
 native metric report after an explicit memory-only local connection. It can
-create a real recorded run when execution is enabled, with that provider limit
-disclosed before submission. There is no multi-agent behavior. See [the extension plan](docs/AGENT_EXTENSION_PLAN.md)
+create a real recorded run when execution is enabled. The existing protected
+`/system/configuration-status` reports provider capability without contacting
+Groq. The create form requires explicit decision-provider consent; RAG tool
+provider permission remains separate and disabled in the form. New runs freeze
+safe provider/model/adapter/mechanism/key-policy provenance; changed bindings
+fail closed and historical unconfigured runs retain their original identity.
+The SDK makes one attempt per decision, with retries disabled, a 60 second
+total deadline and five second connect timeout. Cancellation waits for the
+existing safe boundary; restart never replays a claimed call. Strict format
+does not prove answer quality or model resistance to injected text: existing
+tool, evidence, objective and budget checks remain authoritative. No reasoning
+or raw transport payload is persisted. There is no multi-agent behavior.
+See [the provider plan](docs/AGENT_PRODUCTION_PROVIDER_PLAN.md) and [the extension plan](docs/AGENT_EXTENSION_PLAN.md)
 for research bounds, partial results and recovery.
 
 The provider-free `native-agent-evaluation` v1 protocol evaluates an existing
@@ -101,7 +114,9 @@ The optional Agent extension has a final cross-layer validation receipt in
 frontend against real FastAPI Agent routes and temporary SQLite in Chromium
 and Firefox, alongside the closed-tool, lifecycle, adversarial, evaluation,
 access and data-free checkout gates. The scripted successful research model
-is test-only; production still reports decision-provider unavailability.
+is test-only. The subsequent optional PROVIDER-001 extension has its own
+mocked-transport verification and provider plan; TEST-005 remains a completed
+historical baseline.
 
 ## Overview
 

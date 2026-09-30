@@ -1555,6 +1555,7 @@ export interface PipelineRunEvent {
 
 export interface LocalWorkspaceConfigurationStatus {
   deployment_mode: string;
+  agent_decision_provider?: { available: boolean };
   capabilities: {
     public_provider_free: boolean;
     local_workspace: boolean;

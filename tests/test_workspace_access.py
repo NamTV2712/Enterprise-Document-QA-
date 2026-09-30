@@ -355,7 +355,7 @@ def test_configuration_status_is_protected_and_redacts_all_secrets(
     combined = response.text + invalid.text + caplog.text
 
     assert response.status_code == 200
-    assert response.json() == {
+    assert {key: response.json()[key] for key in ("deployment_mode", "capabilities")} == {
         "deployment_mode": "local",
         "capabilities": {
             "public_provider_free": True,
@@ -366,7 +366,9 @@ def test_configuration_status_is_protected_and_redacts_all_secrets(
     assert invalid.status_code == 401
     assert WORKSPACE_TOKEN not in combined
     assert PROVIDER_SECRET not in combined
-    assert "groq" not in response.text.casefold()
+    capability = response.json()["agent_decision_provider"]
+    assert capability["reachability"] == "not_probed"
+    assert set(capability) == {"available", "reason", "identity", "reachability"}
 
 
 def test_configuration_status_fails_closed_in_public_mode(monkeypatch) -> None:

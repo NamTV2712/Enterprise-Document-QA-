@@ -1,5 +1,7 @@
 export const agentCopy = {
   en: {
+    providerConfigured: "A supported structured decision provider is configured. Grant decision execution below to allow bounded provider calls. Remote availability has not been probed; RAG generation remains blocked.",
+    decisionConsent: "Allow bounded decision-provider calls for this run",
     title: "Agent workspace", subtitle: "Recorded local Agent runs, safe activity, research evidence and operational evaluation.",
     connect: "Connect local workspace", disconnect: "Disconnect", connected: "Connected · local", disconnected: "Private workspace disconnected",
     connectionBody: "Connect with a local workspace token to inspect private Agent history.",
@@ -31,6 +33,8 @@ export const agentCopy = {
     toolSearch: "Search documents", toolInspect: "Inspect retrieval", toolRead: "Read document", toolRag: "Ask RAG",
   },
   vi: {
+    providerConfigured: "Đã cấu hình provider quyết định có cấu trúc được hỗ trợ. Cấp quyền bên dưới để cho phép gọi provider có giới hạn. Chưa kiểm tra kết nối từ xa; tạo câu trả lời RAG vẫn bị chặn.",
+    decisionConsent: "Cho phép gọi provider quyết định có giới hạn cho lần chạy này",
     title: "Không gian Agent", subtitle: "Lần chạy cục bộ đã ghi, hoạt động an toàn, bằng chứng nghiên cứu và đánh giá vận hành.",
     connect: "Kết nối workspace cục bộ", disconnect: "Ngắt kết nối", connected: "Đã kết nối · cục bộ", disconnected: "Workspace riêng tư chưa kết nối",
     connectionBody: "Kết nối bằng token workspace cục bộ để xem lịch sử Agent riêng tư.",

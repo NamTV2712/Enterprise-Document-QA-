@@ -23,6 +23,18 @@ def contains_sensitive_text(value: str) -> bool:
     return bool(_CREDENTIAL.search(value) or _MACHINE_PATH.search(value))
 
 
+def contains_protected_value(value: object, secrets: tuple[str, ...]) -> bool:
+    """Check configured runtime secrets without serializing or echoing them."""
+    if isinstance(value, str):
+        return any(secret and secret in value for secret in secrets)
+    if isinstance(value, dict):
+        return any(contains_protected_value(key, secrets) or contains_protected_value(item, secrets)
+                   for key, item in value.items())
+    if isinstance(value, (list, tuple)):
+        return any(contains_protected_value(item, secrets) for item in value)
+    return False
+
+
 class AgentGoal(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
     text: str = Field(min_length=5, max_length=500)
@@ -116,6 +128,8 @@ class AgentObservation(BaseModel):
 FailureDomain = Literal["model", "policy", "tool", "system"]
 FailureCode = Literal[
     "decision_provider_required", "decision_provider_unavailable", "decision_execution_failed",
+    "decision_provider_auth_failed", "decision_provider_rate_limited", "decision_provider_timeout",
+    "decision_provider_invalid_response", "decision_provider_schema_violation", "decision_provider_failed",
     "malformed_decision", "unknown_tool", "tool_not_allowed", "tool_provider_required",
     "invalid_arguments", "tool_unavailable", "tool_execution_failed", "final_without_observation",
     "invalid_evidence_reference", "invalid_citation", "duplicate_tool_call", "max_steps",
@@ -197,6 +211,7 @@ class DecisionRequest(BaseModel):
     observations: tuple[AgentObservation, ...]
     step_count: int
     tool_call_count: int
+    remaining_per_tool_calls: dict[str, int] = Field(default_factory=dict)
     research: ResearchView | None = None
 
 

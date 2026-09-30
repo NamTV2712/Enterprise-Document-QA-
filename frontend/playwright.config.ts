@@ -10,7 +10,7 @@ export default defineConfig({
   // Integration-over-HTTP and dedicated local-backend specs run through their
   // own configs so the regular hermetic browser gate never depends on a
   // task-owned harness or a real API process.
-  testIgnore: /(integration|workspace\.local|test-004-product|test-005-agent-product)\.spec\.ts/,
+  testIgnore: /(integration|workspace\.local|test-004-product|test-005-agent-product|provider-001)\.spec\.ts/,
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: true,

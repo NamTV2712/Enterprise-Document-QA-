@@ -1,5 +1,36 @@
 # Project State
 
+## PROVIDER-001 — Production structured decision provider (2026-09-30)
+
+Implementation and primary verification are complete; source-clean release
+verification is the remaining checkpoint. This is a new optional scope in
+[the provider plan](docs/AGENT_PRODUCTION_PROVIDER_PLAN.md), preserving every
+completed roadmap/Agent milestone. The production adapter uses Groq native
+strict JSON Schema for explicit GPT OSS 120b/20b capability, the existing
+generator identity and eligible-key policy, one existing bounded loop and
+strict local execution gates. It adds safe frozen provider provenance and
+capability to the existing protected configuration-status response, plus an
+explicit EN/VI create-form decision grant. RAG grant stays separate.
+
+Configured secrets are refused before goal/research persistence, observation
+state admission and transport/final validation. SDK diagnostic logging is
+suppressed only in the Agent call context; no provider bodies or reasoning
+are durable. Cancellation/one-owner/restart behavior and native Agent v1's
+21 metrics are unchanged. Product routes remain 90; SQLite remains v7;
+Groq 1.5.0 and all dependency files remain unchanged. The primary frontend
+passed 94 files / 818 tests, TS and build. The provider product campaign
+passed 20/20 in Chromium/Firefox across EN/VI, dark/light, phone/desktop,
+with zero focused Axe violations or horizontal overflow. Existing UI-014 and
+TEST-005 browser regressions passed 14/14 and 12/12.
+
+One optional authorized key5 live smoke **FAILED with
+`decision_provider_timeout`** at the 60 second deadline, with one attempt,
+zero tools and no retry. Live reachability/interoperability remains unverified;
+mocked SDK/HTTP gates are provider-free and mandatory. The existing build
+warning (about 508.63 kB), Collections/model-test bearer staging, native zoom
+manual checks, optional Ragas and single-process workspace deployment remain.
+The same 12 unrelated untracked paths are preserved.
+
 ## TEST-005 complete — Final optional Agent extension validation (2026-09-30)
 
 The required roadmap remains complete. TEST-005 closed the separate optional

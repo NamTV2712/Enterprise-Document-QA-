@@ -13,7 +13,8 @@ from src.api.access import (
 )
 
 
-def create_health_router(health_payload: Callable[[], dict[str, Any]]) -> APIRouter:
+def create_health_router(health_payload: Callable[[], dict[str, Any]], *,
+                         agent_decision_capability: Callable[[], dict[str, object]] | None = None) -> APIRouter:
     router = APIRouter()
 
     @router.get(
@@ -29,7 +30,10 @@ def create_health_router(health_payload: Callable[[], dict[str, Any]]) -> APIRou
         _grant: AccessGrant = Depends(require_local_workspace_access),
     ) -> dict[str, object]:
         """Return only allowlisted local workspace capability flags."""
-        return workspace_configuration_status()
+        payload = workspace_configuration_status()
+        if agent_decision_capability is not None:
+            payload["agent_decision_provider"] = agent_decision_capability()
+        return payload
 
     @router.get("/health/ready")
     async def health_ready() -> dict:

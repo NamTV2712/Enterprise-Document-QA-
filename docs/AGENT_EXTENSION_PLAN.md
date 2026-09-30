@@ -14,7 +14,7 @@ extension. It does not change the status of any completed task.
 | AGENT-005 | Prompt-injection and tool-policy hardening | Complete |
 | AGENT-006 | Agent evaluation protocol | Complete |
 | UI-014 | Agent workspace and safe operational trace | Complete |
-| TEST-005 | Cross-layer and adversarial final validation | Future |
+| TEST-005 | Cross-layer and adversarial final validation | In progress |
 
 ## AGENT-001 authority map
 
@@ -514,4 +514,59 @@ provider. New real runs record `decision_provider_unavailable`; the workspace
 states that limit before creation. UI-014 adds no tool, model adapter, Agent
 reasoning exposure, database migration, report persistence, dependency or
 multi-agent behavior. The API inventory is 90 unique method/path pairs and
-SQLite remains v7. **TEST-005 is the exact next optional task; stop before it.**
+SQLite remains v7. At UI-014 close, TEST-005 was the next optional task; its
+validation checkpoint follows.
+
+## TEST-005-A final validation checkpoint (2026-09-30)
+
+TEST-005 is validation and minimal repair of the completed AGENT-001–006 and
+UI-014 stack. Repository truth supplies the closed four-tool registry, one
+bounded orchestrator, DATA-004 v7 durable authority, `agent_research_v1`,
+AGENT-005's source-identity guard, the 21-metric provider-free protocol, seven
+private Agent routes and `/agent` UI. The current plan had only a Future row
+for TEST-005; this checkpoint and `docs/TEST_005_AGENT_FINAL_RECEIPT.md`
+record its detailed contract. No feature, provider adapter, tool, migration,
+dependency, Ragas, browser search or second Agent loop is authorized.
+
+The final matrix is in the receipt. Its 12 layers bind a scenario to the
+owning source and a deterministic gate; final results remain pending until
+observed. Expected starting baselines are backend 1583 passed/188 warnings;
+data-free backend 1549 passed/34 artifact skips; 90 API method/path pairs;
+SQLite v7; frontend 94 files/815 tests with TypeScript/build passing;
+UI-014 browser 14/14 Chromium/Firefox and clean Chromium 7/7. The same 12
+unrelated untracked paths must remain untouched.
+
+Browser authority is the built Vite app plus real FastAPI handlers and a
+temporary SQLite database. The existing TEST-004 harness already supplies
+offline corpus/provider dependencies and two isolated local/public servers;
+TEST-005 may add a dedicated Agent harness that injects deterministic
+decision models while preserving real Agent routes, storage, events,
+cancellation, evaluation, access checks and frontend client. Production mode
+must independently show `decision_provider_unavailable`. Run Chromium and
+Firefox with controlled workers, then a focused responsive/Axe sweep across
+1440×900, 1024×768, 768×900, 390×844 and 1440×700 in representative EN/VI
+and light/dark states. Native browser zoom remains unverified unless tested.
+
+The UI journey starts at `/agent`: inspect private run history after explicit
+local connection, select the URL-owned run ID, inspect backend-owned evidence
+and metrics, then optionally create or request cancellation. The shared session
+owns the memory-only bearer; Agent owns request epochs, event cursor, form and
+notices; DATA-004 owns run state. Recovery distinguishes refusal, missing run,
+stream closure, stale revision and terminal outcome. Scroll belongs to the
+shell, run list, activity list and detail. Review risks are: route-mocked data
+mistaken for real integration; scripted success mistaken for production model
+availability; A→B→A late paints; identity/prose mistaken for evidence; and
+private bearer or generated artifact leakage.
+
+Every candidate P0–P2 defect needs a deterministic reproduction and failing
+regression before the smallest production fix, followed by focused and final
+gates. P0 covers auth/secret/arbitrary capability or destructive corruption;
+P1 covers unauthorized provider/tool execution, duplicate durable execution,
+cross-run leak or wrong lifecycle mutation; P2 covers reproducible semantics,
+evidence, cancellation, evaluation or significant UI/accessibility faults.
+Unresolved deterministic P0–P2 blocks completion. A clean managed checkout
+at the final committed HEAD must have no `.env`, `data/`, runtime DB or
+untracked source and must pass the owned import, route, migration, frontend
+and real-backend browser smoke gates. Final completion requires the matrix,
+full suites, artifact/secret audit, final receipt, exact-HEAD push and remote
+verification. Optional future work remains separately scoped.

@@ -26,6 +26,7 @@ function Harness({ id }: { id: string | null }) {
     <output data-testid="goal">{model.run?.frozen.goal ?? "none"}</output>
     <output data-testid="answer">{model.result?.result?.answer ?? "none"}</output>
     <output data-testid="evaluation">{model.evaluation?.run_id ?? "none"}</output>
+    <output data-testid="evaluation-digest">{model.evaluation?.digest ?? "none"}</output>
     <output data-testid="events">{model.events.map((item) => item.event_id).join(",")}</output>
     <output data-testid="notice">{model.cancelNotice ?? "none"}</output>
     <output data-testid="state">{model.run?.state ?? "none"}</output>
@@ -94,6 +95,7 @@ describe("Agent selected-run lifetimes", () => {
     });
     expect(screen.getByTestId("answer")).toHaveTextContent("A2 answer.");
     expect(screen.getByTestId("evaluation")).toHaveTextContent("agent_alpha");
+    expect(screen.getByTestId("evaluation-digest")).toHaveTextContent(agentEvaluation.digest);
   });
 
   it("aborts an old finite event batch when returning to A in a new lifetime", async () => {

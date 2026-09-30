@@ -111,3 +111,12 @@ zero retry. No provider body/answer/credential was printed or retained. This
 does not gate deterministic completion; live reachability remains unverified.
 The probe allowed no tools and requested only a short final transport check,
 with observation requirement disabled solely for that diagnostic.
+
+The source-clean implementation checkout passed 1645 tests, 34 expected
+artifact-dependent skips and 148 historical warnings; fresh frozen Bun
+installation, TS/build and 94 files / 818 tests passed without lock drift.
+API imports resolved to that checkout, unavailable capability was provider-free,
+and the inventory remained 90 routes. Release review replaced the newly used
+Python 3.11-only `asyncio.timeout` with `asyncio.wait_for` to preserve the
+documented Python 3.10+ contract. The existing deadline/resource-closure test
+verifies the same bounded behavior; final verification will cover this fix.

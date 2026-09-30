@@ -191,17 +191,21 @@ class GroqDecisionModel:
             raise DecisionProviderUnavailable
         messages = build_messages(request, self._secrets)
         token = _agent_transport.set(True)
+
+        async def completion():
+            async with self._client_factory(api_key=self._api_key, max_retries=0,
+                                           timeout=Timeout(TIMEOUT_SECONDS, connect=5.0)) as client:
+                return await client.chat.completions.create(
+                    model=self.identity.model_id, messages=messages,
+                    response_format={"type": "json_schema", "json_schema": {
+                        "name": "agent_decision_v1", "strict": True, "schema": decision_schema(),
+                    }}, include_reasoning=False, stream=False, n=1,
+                    max_completion_tokens=4096,
+                )
+
         try:
-            async with asyncio.timeout(TIMEOUT_SECONDS):
-                async with self._client_factory(api_key=self._api_key, max_retries=0,
-                                               timeout=Timeout(TIMEOUT_SECONDS, connect=5.0)) as client:
-                    response = await client.chat.completions.create(
-                        model=self.identity.model_id, messages=messages,
-                        response_format={"type": "json_schema", "json_schema": {
-                            "name": "agent_decision_v1", "strict": True, "schema": decision_schema(),
-                        }}, include_reasoning=False, stream=False, n=1,
-                        max_completion_tokens=4096,
-                    )
+            # wait_for preserves the documented Python 3.10 compatibility.
+            response = await asyncio.wait_for(completion(), timeout=TIMEOUT_SECONDS)
             choices = getattr(response, "choices", None)
             if not isinstance(choices, list) or len(choices) != 1 or getattr(choices[0], "finish_reason", None) != "stop":
                 raise DecisionProviderError("decision_provider_invalid_response")
@@ -211,7 +215,7 @@ class GroqDecisionModel:
             return parse_provider_content(getattr(message, "content", None), self._secrets)
         except (DecisionProviderError, DecisionProviderUnavailable):
             raise
-        except (TimeoutError, APITimeoutError):
+        except (TimeoutError, asyncio.TimeoutError, APITimeoutError):
             raise DecisionProviderError("decision_provider_timeout") from None
         except APIStatusError as error:
             code = ("decision_provider_auth_failed" if error.status_code in (401, 403)

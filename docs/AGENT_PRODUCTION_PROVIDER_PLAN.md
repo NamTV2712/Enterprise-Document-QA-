@@ -1,6 +1,8 @@
 # PROVIDER-001: production structured decision provider
 
-Status: checkpoints A–D implemented; final verification in progress. This optional extension
+Status: **COMPLETE** — implementation and verification. Exact final SHA and
+normal upstream release verification are reported in the final chat receipt.
+This optional extension
 starts at `5a002d0c7f41c595f5a2ebd866dedd09a0a8f907` on
 `codex/bilingual-research-workspace`. The required roadmap and AGENT-001–006,
 UI-014 and TEST-005 remain complete.
@@ -120,3 +122,25 @@ and the inventory remained 90 routes. Release review replaced the newly used
 Python 3.11-only `asyncio.timeout` with `asyncio.wait_for` to preserve the
 documented Python 3.10+ contract. The existing deadline/resource-closure test
 verifies the same bounded behavior; final verification will cover this fix.
+
+Primary and clean full suites must run serially. One mistaken parallel release
+run raced the existing HTTP/SSE free-port probes and shared session/rate buckets,
+producing the same two fixture-state failures in each suite. The release gate
+is repeated serially, with no production/test assertion changes or skipped
+failures. This incident is recorded in the final receipt.
+
+## Completion
+
+- A complete: explicit installed/official capability audit and bounded contract.
+- B complete: production adapter/resolver and strict wire/semantic tests.
+- C complete: safe failures, secret/state refusal, binding, ownership/cancel/restart.
+- D complete: existing private capability/run API and explicit bilingual consent.
+- E complete: 1679 primary passes / 188 warnings; 1645 clean passes / 34
+  artifact skips / 148 warnings; 96 provider tests; 94 frontend files / 818
+  tests; TS/build; provider browser 20/20 and inherited 14/14 + 12/12.
+- F completion evidence: intended-file commits, clean source/dependency/build
+  validation and preserved unrelated paths. Final exact-HEAD verification,
+  archival cleanup and normal upstream SHA match are reported in chat.
+
+Full details: [PROVIDER_001_FINAL_RECEIPT.md](PROVIDER_001_FINAL_RECEIPT.md).
+No next optional task is started. Next action after release: **STOP**.

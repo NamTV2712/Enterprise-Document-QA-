@@ -1,9 +1,10 @@
 # Project State
 
-## PROVIDER-001 — Production structured decision provider (2026-09-30)
+## PROVIDER-001 complete — Production structured decision provider (2026-09-30)
 
-Implementation and primary verification are complete; source-clean release
-verification is the remaining checkpoint. This is a new optional scope in
+Implementation, primary and source-clean verification are complete. The
+[final receipt](docs/PROVIDER_001_FINAL_RECEIPT.md) records the contract, tests,
+changes, live limitation and release boundary. This is a new optional scope in
 [the provider plan](docs/AGENT_PRODUCTION_PROVIDER_PLAN.md), preserving every
 completed roadmap/Agent milestone. The production adapter uses Groq native
 strict JSON Schema for explicit GPT OSS 120b/20b capability, the existing
@@ -30,6 +31,18 @@ mocked SDK/HTTP gates are provider-free and mandatory. The existing build
 warning (about 508.63 kB), Collections/model-test bearer staging, native zoom
 manual checks, optional Ragas and single-process workspace deployment remain.
 The same 12 unrelated untracked paths are preserved.
+
+Final serial primary backend: **1679 passed, zero failed, 188 warnings**.
+Final serial clean backend: **1645 passed, 34 expected artifact skips, zero
+failed, 148 warnings**. The 96 new adapter/API tests all run without provider
+credentials or network. Clean frontend frozen Bun installation, TS/build and
+94 files / 818 tests pass without lock drift. Source imports and unavailable
+capability are verified in the data/env-free checkout. One mistaken parallel
+full-suite rerun collided on the existing HTTP/SSE fixture port probes; both
+affected session/rate-limit assertions passed on the final serial reruns. No
+assertion was weakened. Release review also replaced the new Python 3.11-only
+deadline API with `asyncio.wait_for`, preserving documented Python 3.10+
+compatibility. Exact final SHA/upstream push verification is reported in chat.
 
 ## TEST-005 complete — Final optional Agent extension validation (2026-09-30)
 

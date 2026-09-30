@@ -6,10 +6,14 @@ The required roadmap remains complete. TEST-005 closed the separate optional
 AGENT-001–006/UI-014 extension with a 12-layer contract and adversarial
 matrix in [the final receipt](docs/TEST_005_AGENT_FINAL_RECEIPT.md). It added
 test-only real-server Agent journeys and strengthened the A→B→A stale
-evaluation assertion. No production behavior, tool, metric, route, migration,
-dependency or provider adapter changed. No deterministic production P0/P1/P2
+evaluation assertion. It also keeps the server-dependent spec out of the
+default hermetic browser runner. No production behavior, tool, metric, route,
+migration, dependency or provider adapter changed. No deterministic production P0/P1/P2
 defect was reproduced; early browser failures were two overly broad test
-locators for a valid two-chunk evidence ledger.
+locators for a valid two-chunk evidence ledger. The completion audit reproduced
+and fixed one P2 test-runner isolation regression by extending the existing
+dedicated-spec exclusion. Default discovery excludes TEST-005; its dedicated
+runner retains all 12 tests.
 
 The focused Agent backend suite passed **188/188**. The primary full backend
 passed **1583/1583**, with **188 historical warnings**. Product route inventory
@@ -26,9 +30,9 @@ violations. The inherited UI-014 browser campaign passed **14/14**.
 A managed source-clean checkout without `.env`, `data/`, prior dependencies,
 build output or untracked source passed **1549 backend tests, 34 expected
 artifact skips, 148 warnings**. Frozen Bun installation caused no lockfile
-drift. The clean frontend passed TypeScript, **94 Vitest files / 815 tests**, production
-build and real-server scripted research smoke in both engines. The final
-documentation-only HEAD is revalidated from its own clean checkout before
+drift. The clean frontend passed TypeScript, **94 Vitest files / 815 tests**,
+production build and real-server scripted research smoke in both engines. The final
+HEAD is revalidated from its own clean checkout before
 push; exact remote identity is reported with the final task result.
 
 Production still has no structured Agent decision provider. Cancellation is

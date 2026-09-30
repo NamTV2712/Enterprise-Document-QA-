@@ -589,8 +589,12 @@ expected artifact-dependent skips and 148 warnings, fresh/reopened SQLite v7,
 815 frontend tests, production build and real-server scripted research smoke
 in both engines. The final committed HEAD receives the same clean-checkout
 gate before the exact upstream push. No production defect, migration, tool,
-metric, provider adapter, dependency or second loop was introduced. The only
-test correction narrowed locators to two valid evidence cards. The same 12
+metric, provider adapter, dependency or second loop was introduced. Test
+corrections narrowed locators to two valid evidence cards and excluded the new
+server-dependent spec from the default hermetic runner. The latter was a
+reproduced P2 validation-runner regression; default/dedicated inventories and
+both browser gates verify its repair. Focused shared lifecycle/access checks
+passed 150/150 and Agent frontend checks passed 20/20. The same 12
 unrelated untracked paths in the main tree remain untouched.
 
 AGENT-001–006, UI-014 and TEST-005 are complete. The required roadmap was

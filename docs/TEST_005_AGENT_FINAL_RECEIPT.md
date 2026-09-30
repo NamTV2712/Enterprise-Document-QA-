@@ -22,8 +22,8 @@ deterministic success; the production route must report unavailability.
 | 8 Frontend client | `agentApi.ts`, `agentTypes.ts`; wire unions, header bearer, numeric SSE and error boundary | Vitest plus real HTTP; no broad `any` or contract drift | Pass: TypeScript, 94 files/815 Vitest; built client crossed real HTTP boundaries |
 | 9 Agent UI | `AgentWorkspace`, sections/hook; truthful state, research, metrics, cancellation and A→B→A | Component tests and built browser; no stale paint, fabricated evidence or CoT | Pass: UI-014 14/14, strengthened stale evaluation digest check, real UI/axe 12/12 |
 | 10 Real product journey | built Vite + real FastAPI + temp SQLite; unavailable, scripted research, cancel, interrupted | Chromium/Firefox, controlled servers; real durable/event/evaluation reads in UI | Pass: TEST-005 12/12 (six journeys per engine), five responsive viewports |
-| 11 Clean checkout | final committed HEAD without `.env`, `data/`, prior dist or untracked source | Imports, fresh/reopen v7, full owned suites, built real-server Agent smoke | Pass at source checkpoint: 1549/34 backend, 815 frontend, v7/90, two-engine research smoke; final-HEAD replay is required before push |
-| 12 Hygiene | repository/git and browser storage; 12 unrelated paths, no secrets or generated artifacts | status/diff/secret audit, bearer reload/disconnect; exact HEAD pushed | Pass for source checkpoint and browser credential scan; final staged-file and remote-HEAD audit required at push |
+| 11 Clean checkout | final committed HEAD without `.env`, `data/`, prior dist or untracked source | Imports, fresh/reopen v7, full owned suites, built real-server Agent smoke | Pass: 1549/34 backend, 94/815 frontend, v7/90, 12/12 real-server journeys; exact final SHA is in the task report |
+| 12 Hygiene | repository/git and browser storage; 12 unrelated paths, no secrets or generated artifacts | status/diff/secret audit, bearer reload/disconnect; exact HEAD pushed | Pass: clean tracked trees, 12 preserved paths, no generated files/secrets in intended changes, memory-only credentials; exact remote SHA is in the task report |
 
 Expected baselines: primary backend **1583 passed, 188 warnings**; clean
 data-free backend **1549 passed, 34 artifact-dependent skips**; **90** API
@@ -51,6 +51,14 @@ production/provider/evaluation/zoom/load limitations.
 ## B–G — Observed gates and defect disposition
 
 The seven focused Agent backend modules passed **188/188** (one warning).
+The breakdown is tools **19**, orchestration **25**, durability **16**,
+research **21**, security **73**, evaluation **29**, and Agent API **5**.
+Focused shared workspace jobs/persistence, Pipeline staging, Evaluation jobs
+and CORS, registries/model tests, and local access passed **150/150** (one
+warning). The four focused Agent frontend modules passed **20/20**: client
+**5**, sections/metrics **5**, selected-run hook/races **4**, and workspace
+**6**. Existing native RAG evaluation utilities were unchanged; their
+regressions passed as part of the full backend suite.
 The final primary backend passed **1583/1583** with the historical **188
 warnings**. `tests/test_agent_durable.py` uses `threading.Event` for its
 two-contender claim race and verifies one model/tool execution. The Agent
@@ -102,8 +110,20 @@ defects: one chunk ID appeared in two UI elements and the real ledger had two
 evidence cards rather than one. The assertions were narrowed to the canonical
 chunk code and a specific card's document handoff; both engines then passed.
 No deterministic production P0/P1/P2 defect was reproduced, and no production
-Agent behavior was changed. TEST-005 added only a test harness, browser
-regression and one stronger selected-run unit assertion.
+Agent behavior was changed. TEST-005 added a test harness, browser
+regression, one stronger selected-run unit assertion, and runner isolation.
+
+The completion audit also reproduced a **P2 validation-runner regression**:
+the default hermetic Playwright config discovered the new real-server spec.
+`bunx playwright test -c playwright.config.ts e2e/test-005-agent-product.spec.ts
+--project=chromium -g 'A disconnected' --workers=1` failed because it used the
+default 4173 preview instead of the dedicated 4187/server harness. The smallest
+fix adds `test-005-agent-product` to `frontend/playwright.config.ts`'s existing
+dedicated-spec exclusion. The default inventory then contained **570 tests /
+32 files**, with no TEST-005 spec; its dedicated config retained **12** tests.
+The final gates exercise UI-014 through the default config and TEST-005 through
+its dedicated config. This runner defect did not affect Agent production
+behavior and is resolved.
 
 Production still lacks a structured Agent decision-provider adapter. A
 cancellation request is cooperative and an in-flight call can finish; restart
@@ -130,9 +150,12 @@ temporary SQLite and scripted decision model passed the successful-research
 smoke in **Chromium and Firefox (2/2)**. The worktree remained tracked-clean
 after ignored dependencies and browser captures were generated.
 
-The final documentation commit changes only the plan, receipt, README and
-project journal. The final committed HEAD must be validated in its own clean
-checkout and match the upstream branch exactly. Generated test databases,
+The documentation checkpoint also received a fresh clean checkout: **1549
+passed, 34 expected skips, 148 warnings**, **94/815** frontend, TypeScript,
+build, v7/90 and **12/12** real-server browser journeys. The runner-isolation
+fix is included in the final committed HEAD, which receives its own clean
+checkout validation and must match the upstream branch exactly. Generated test
+databases,
 WAL/SHM, reports, screenshots, traces, `dist`, dependencies and local corpus
 are excluded from the intended commit set. The main checkout's 12 pre-existing
 untracked paths are preserved. The exact final HEAD and push verification are

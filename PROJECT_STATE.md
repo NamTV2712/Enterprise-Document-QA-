@@ -1,5 +1,31 @@
 # Project State
 
+## SCALE-002 in progress — Load/concurrency/capacity characterization (2026-09-30)
+
+Starting HEAD `009b04e699bc9e61b4dd37722076e1ad6237c567`, branch/upstream match;
+90 routes, SQLite v7 and SCALE-001 defaults (2 workers/500ms/5000ms) verified.
+The separate [benchmark protocol](docs/SCALE_002_BENCHMARK_PROTOCOL.md) binds
+real loopback HTTP, DATA-004, lifespan workers, Agent/provider/event/evaluation
+contracts, synthetic SDK latency, monotonic commit boundaries and safe metadata.
+No production source, runtime dependency, migration or frontend change is planned.
+
+The first benchmark harness suite passed 48 tests; focused harness/SCALE-001/
+provider gate passed 195. Initial fixture/monitor errors were corrected (rollback
+hook name; intentionally stopped warmup pool). HTTP-only Uvicorn configuration
+avoids unnecessary WebSocket import warnings; this does not change product config.
+A development admission smoke and an optional artifact-backed offline research
+smoke passed. Development timings do not substitute for a committed primary
+campaign. Local corpus/index and cached models are available; artifact results
+remain a distinct optional series. No live provider was called.
+
+Primary campaign follows the versioned protocol: warmup excluded, three trials,
+stateless concurrency through 100, default-worker full-run ladders through 50,
+worker 1/2/4/8 comparison, live finite-batch SSE, mixed/cancellation/degraded
+profiles. Raw results stay under ignored .local/benchmarks/scale-002; databases
+are disposable. Bottleneck attribution and any next-task recommendation await
+measurements. This is development capacity characterization, no production SLA.
+SCALE-001 stays complete and SCALE-003 is not started.
+
 ## SCALE-001 complete — Durable background Agent workers (2026-09-30)
 
 This new optional scope preserves completed product/Agent/PROVIDER-001 work.

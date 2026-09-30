@@ -6,7 +6,7 @@ milestones remain complete. Starting HEAD: `b13fff6affc919a19f13bda3ddc730c319a7
 | Task | Scope | Status |
 | --- | --- | --- |
 | SCALE-001 | Bounded background workers / durable Agent execution | COMPLETE |
-| SCALE-002 | Load, concurrency and SLA benchmark | Not started |
+| SCALE-002 | Load, concurrency and capacity characterization | In progress |
 | SCALE-003 | Evidence-backed caching and resource optimization | Not started |
 
 ## SCALE-001-A: ownership audit and contract
@@ -138,3 +138,17 @@ verification, file inventory and limitations. The final chat release receipt
 records the exact documentation HEAD, its final committed clean gate and normal
 upstream push verification. Required/product/Agent/provider milestones stay
 complete. **STOP. SCALE-002 and SCALE-003 are not started.**
+
+## SCALE-002 A/B: protocol and tested harness
+
+Starting SHA `009b04e699bc9e61b4dd37722076e1ad6237c567`. The
+[versioned protocol](SCALE_002_BENCHMARK_PROTOCOL.md) records architecture,
+workloads, instrumentation, warmup/trials, percentile validity, safety and release
+gates. A loopback CLI runs real application/Agent/worker/SQLite/SSE contracts
+with deterministic SDK transport, finite safe report JSON and temporary DBs.
+The first 48 harness tests and 195-case shared gate passed. Two initial harness
+fixture/monitor issues were corrected; no product defect/optimization is assumed.
+Development admission and optional local-artifact research smokes passed. The
+primary campaign must run against committed source before final attribution.
+No production SLA claim, live-provider load, caching, broker or DB migration.
+SCALE-003 remains not started.

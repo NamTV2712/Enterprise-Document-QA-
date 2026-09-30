@@ -5,13 +5,13 @@ milestones remain complete. Starting HEAD: `b13fff6affc919a19f13bda3ddc730c319a7
 
 | Task | Scope | Status |
 | --- | --- | --- |
-| SCALE-001 | Bounded background workers / durable Agent execution | Current |
+| SCALE-001 | Bounded background workers / durable Agent execution | COMPLETE |
 | SCALE-002 | Load, concurrency and SLA benchmark | Not started |
 | SCALE-003 | Evidence-backed caching and resource optimization | Not started |
 
 ## SCALE-001-A: ownership audit and contract
 
-Agent POST currently queues then attaches `service.run` to Starlette's response
+At the starting HEAD, Agent POST queued then attached `service.run` to Starlette's response
 background tasks. Each request can create another execution; DATA-004 CAS
 prevents duplicate claims, but no global pool bounds task creation. Queued
 Agent work has no startup consumer. Evaluation similarly attaches its existing
@@ -118,4 +118,23 @@ Routes remain **90**; fresh/reopened SQLite remains **v7**; import starts no poo
 Existing TEST-005 browser regression passed **12/12**. Its first launch used
 the system Python and failed before tests (missing slowapi); selecting the
 existing project interpreter resolved the harness setup without dependencies.
-Final committed clean verification, completion receipt and upstream push follow.
+
+## F: completion and release boundary
+
+Implementation commit: `a2002a3fc426a59a2e2b1a506483104fc6c98c19`.
+Browser revision synchronization: `769be884bff86a4a9090ef3aff8caa558810b727`.
+The committed source-clean backend passed **1696 / 34 skips / 148 warnings**;
+clean frontend **94 files / 818 tests**, TypeScript and build passed. The first
+concurrent frontend run timed out one existing case; isolated full rerun passed.
+Routes remain **90**, initialize/reopen returns **v7/v7**, imports start no pool.
+The first clean browser campaign exposed a stale-revision 409 between claim and
+step start. The UI correctly reloaded; the test now awaits the held provider's
+revision in the UI before requesting cancellation. The corrected committed
+clean campaign passed **8/8** in Chromium/Firefox with zero focused Axe/overflow
+violations. No product change/retry.
+
+[SCALE-001 receipt](SCALE_001_FINAL_RECEIPT.md) records complete implementation,
+verification, file inventory and limitations. The final chat release receipt
+records the exact documentation HEAD, its final committed clean gate and normal
+upstream push verification. Required/product/Agent/provider milestones stay
+complete. **STOP. SCALE-002 and SCALE-003 are not started.**

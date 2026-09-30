@@ -1,6 +1,6 @@
 # Project State
 
-## SCALE-001 in progress — Durable background Agent workers (2026-09-30)
+## SCALE-001 complete — Durable background Agent workers (2026-09-30)
 
 This new optional scope preserves completed product/Agent/PROVIDER-001 work.
 Starting HEAD is `b13fff6affc919a19f13bda3ddc730c319a705c2`; the separate
@@ -35,8 +35,20 @@ without refresh, with zero focused Axe/overflow violations. Screenshots were
 inspected. Initial harness failures were an ambiguous locator and Firefox's
 restricted 4190 preview port; the corrected campaign uses 4191. No browser
 security override or production workaround was added. The preceding live
-provider timeout remains inherited and is not retried. Exact committed clean
-checkout, final audit, completion receipt and normal push remain pending.
+provider timeout remains inherited and is not retried.
+
+Committed clean backend passed **1696 / 34 artifact-dependent skips / 148
+warnings**. Clean frontend passed **94 / 818**, TypeScript/build, routes **90**
+and fresh/reopened SQLite **v7/v7**. An initial concurrent frontend run timed
+out one existing history test; the unmodified isolated rerun passed all 818.
+A clean Firefox cancellation test correctly encountered a stale-revision 409;
+the test now waits for the held provider revision to reach the UI. The corrected
+committed clean browser campaign passed **8/8**. Existing
+provider and TEST-005 browser regressions passed **20/20** and **12/12**.
+The [completion receipt](docs/SCALE_001_FINAL_RECEIPT.md) records architecture,
+counts, exclusions, failures/corrections and scope. Final committed HEAD and
+normal push verification are reported in the final chat release receipt.
+SCALE-002/003 remain not started; stop after the SCALE-001 release.
 
 ## PROVIDER-001 complete — Production structured decision provider (2026-09-30)
 

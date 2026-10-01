@@ -119,6 +119,10 @@ jobs:
         working-directory: frontend
         run: bun run test:e2e-integration
 
+      - name: Run Agent shell sweep with its local harness
+        working-directory: frontend
+        run: bunx playwright test -c playwright.agent-sweep.config.ts
+
       - name: Upload HTTP/SSE integration artifacts
         if: failure()
         uses: actions/upload-artifact@v4
@@ -126,5 +130,6 @@ jobs:
           name: playwright-http-integration-failure-artifacts
           path: |
             frontend/test-results/integration/
+            frontend/test-results/agent-001/
             frontend/playwright-report/
           retention-days: 14

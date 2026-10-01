@@ -15,6 +15,18 @@ async function elapsed(page: Page, action: () => Promise<void>): Promise<number>
   return (await page.evaluate(() => performance.now())) - start;
 }
 
+async function waitForVisibleFrame(page: Page, selector: string): Promise<void> {
+  // A latency sample must not include the assertion retry backoff. Observe
+  // the same rendered condition on browser frames, then retain the explicit
+  // visibility assertion. The 10s bound matches this suite's expect timeout.
+  await page.waitForFunction((target) => {
+    const element = document.querySelector(target);
+    if (!element || getComputedStyle(element).visibility !== "visible") return false;
+    const box = element.getBoundingClientRect();
+    return box.width > 0 && box.height > 0;
+  }, selector, { polling: "raf", timeout: 10_000 });
+}
+
 function report(label: string, samples: number[], budget?: number): void {
   const p50 = percentile(samples, 0.5);
   const p95 = percentile(samples);
@@ -196,8 +208,10 @@ test("records synthetic frontend baselines for warm controls and workspace paths
   for (let index = 0; index < 30; index += 1) {
     viewSamples.push(await elapsed(page, async () => {
       await page.locator('[data-route-id="documents"]').click({ force: true });
+      await waitForVisibleFrame(page, ".document-explorer");
       await expect(page.locator(".document-explorer")).toBeVisible();
       await page.locator('[data-route-id="research"]').click({ force: true });
+      await waitForVisibleFrame(page, ".overview-panel");
       await expect(page.locator(".overview-panel")).toBeVisible();
     }));
   }

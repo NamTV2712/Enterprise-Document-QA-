@@ -314,6 +314,7 @@ test.describe("Truthful workbench reference receipts", () => {
       "retrieval",
       "models",
       "pipeline",
+      "agent",
       "reranker",
       "evaluation",
       "analytics",

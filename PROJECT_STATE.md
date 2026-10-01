@@ -1,5 +1,55 @@
 # Project State
 
+## CRED-001 complete - Groq credential consolidation (2026-10-01)
+
+Bounded optional configuration task on main, starting
+`46c06ebd024cebdc6b02b4df6a364112fd08a966`; implementation
+`d76fed562a2f7ea4a2c2c657fae6f59d44331343`. The required roadmap and completed
+Agent/provider/scaling milestones remain COMPLETE. OBS-001 has not started;
+its unused branch remains at the starting SHA. See the
+[credential receipt](docs/CRED_001_FINAL_RECEIPT.md) for per-reference audit,
+selection semantics, local migration, validation and manual security follow-up.
+
+Settings and Compose now expose only primary `GROQ_API_KEY` and optional
+`GROQ_API_KEY_FALL_BACK`. The ignored local former KEY5 value became primary;
+the existing first fallback was preserved, numbered slots and second fallback
+removed. Unrelated dotenv settings/lines remained unchanged. No credential value
+was displayed, copied into diagnostics or committed; no remote revocation or
+live provider request occurred.
+
+Shared `pool` selects unique nonblank primary then fallback (max two clients),
+including fallback-only normal generation. Historical `key5_only` remains the
+frozen identity literal and now resolves primary only, failing closed without
+it. Existing binding calculation, durable terminal records and evaluation reads
+remain compatible. New metadata aliases are primary/fallback; old telemetry
+aliases remain readable. Generator round-robin/cooldown/429 failover is unchanged;
+Agent decision transport remains one attempt, retries disabled, total deadline
+60 seconds, no fallback rotation. Generation/judging share eligible credentials
+with separate existing accounting; legacy CLI and planner diagnostics use the
+shared authority. Secret guards protect both current credentials.
+
+New credential suite **33 passed**; initial provider/generator/evaluation/Compose
+suite **172 passed / 1 warning**; Agent/provider/permissions/storage/worker/
+evaluation/scale regressions **581 passed / 1 warning**. Full primary
+**1814 passed / 188 warnings**, committed implementation clean checkout
+**1780 passed / 34 expected artifact skips / 148 warnings**, zero failures.
+Clean credential suite 33 passed; compile/import, no-credential Agent refusal,
+90 unique routes and SQLite fresh/reopen v7/v7 PASS. No production frontend,
+dependency, lockfile, route or migration changes; inherited frontend 94/818 and
+TypeScript/build PASS were not rerun. Final documentation HEAD clean gate and
+normal exact-HEAD GitHub push with 0/0 upstream are recorded in closing chat.
+
+All tracked credential references were audited/classified; unexplained active
+legacy references **0**. Dated journal/receipts and completed plans remain
+historically accurate. GitHub workflows contain no old Groq secret references;
+external deployment secret stores were not changed. Windows gates do not certify
+Linux CI; its previously observed OpenAPI hash mismatch remains a separate gap.
+The same 12 unrelated untracked paths are preserved; no generated/private artifact
+is committed. Consider manual revocation of obsolete credentials only after
+external-use checks. Exact next task: **OBS-001 - Performance Attribution & Safe
+Observability**, separately authorized. No OBS implementation. **STOP** after
+release verification.
+
 ## SCALE-002 complete - Load/concurrency/capacity characterization (2026-10-01)
 
 Starting SHA `009b04e699bc9e61b4dd37722076e1ad6237c567`; benchmarked runtime

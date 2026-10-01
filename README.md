@@ -99,6 +99,12 @@ or raw transport payload is persisted. There is no multi-agent behavior.
 See [the provider plan](docs/AGENT_PRODUCTION_PROVIDER_PLAN.md) and [the extension plan](docs/AGENT_EXTENSION_PLAN.md)
 for research bounds, partial results and recovery.
 
+CRED-001 consolidates server-side Groq configuration to one primary and one
+optional fallback. The historical `key5_only` identifier retains frozen Agent
+bindings and now selects primary only. See [Local Setup](#local-setup) and the
+[credential receipt](docs/CRED_001_FINAL_RECEIPT.md) for migration and compatibility
+checks; no live provider call or remote key revocation was required.
+
 SCALE-001 moves durable Agent execution to one application-lifespan worker pool.
 `POST /agent/runs` returns the accepted queued record (201 and its revision),
 independently of execution or client disconnect. The pool atomically claims

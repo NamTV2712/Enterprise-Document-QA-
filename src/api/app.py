@@ -194,6 +194,13 @@ def _agent_service_for_repository(repository: SQLiteJobRepository) -> AgentDurab
     )
 
 
+def _notify_agent_work() -> None:
+    """Composition-only hint; private admission has already committed."""
+    supervisor = _state.get("worker_supervisor")
+    if supervisor is not None:
+        supervisor.notify_work()
+
+
 @asynccontextmanager
 async def workspace_worker_lifespan():
     """Recover DATA-004 before starting the explicitly local execution consumer."""
@@ -2144,7 +2151,7 @@ app.include_router(
 app.include_router(create_pipeline_router(_pipeline_service))
 app.include_router(create_evaluation_router())
 app.include_router(create_evaluation_job_router(_evaluation_job_service))
-app.include_router(create_agent_run_router(_agent_durable_service))
+app.include_router(create_agent_run_router(_agent_durable_service, notify_work=_notify_agent_work))
 app.add_middleware(PerformanceMiddleware, enabled=lambda: settings.enable_performance_attribution and settings.workspace_mode == "local",
                    sink=_publish_performance)
 app.include_router(create_telemetry_router(_terminal_telemetry_service))

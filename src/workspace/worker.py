@@ -47,6 +47,8 @@ class WorkerSupervisor:
         self.registry = registry
         self.config = config
         self._stop = asyncio.Event()
+        self._wake = asyncio.Event()
+        self._loop: asyncio.AbstractEventLoop | None = None
         self._tasks: tuple[asyncio.Task[None], ...] = ()
         self._active: set[str] = set()
         self._stopping = False
@@ -69,6 +71,8 @@ class WorkerSupervisor:
         if self._tasks:
             raise RuntimeError("worker supervisor has already started")
         self._stop.clear()
+        self._wake.clear()
+        self._loop = asyncio.get_running_loop()
         self._stopping = False
         self._tasks = tuple(asyncio.create_task(self._worker(), name=f"durable-worker-{index}")
                             for index in range(self.config.concurrency))
@@ -79,15 +83,33 @@ class WorkerSupervisor:
     def _worker_done(self, task: asyncio.Task[None]) -> None:
         if not self._stopping:
             self._stop.set()
+            self._wake.set()
             logger.error("durable_worker_stopped_unexpectedly")
         if not task.cancelled():
             task.exception()  # Retrieve without exposing exception content.
 
-    async def _idle(self) -> None:
+    def notify_work(self) -> bool:
+        """Coalesced, payload-free hint on the owning loop after durable admission.
+
+        Foreign threads/loops and inactive pools discard hints. Periodic SQLite
+        claims remain the fallback; notification never owns or executes a job.
+        """
         try:
-            await asyncio.wait_for(self._stop.wait(), self.config.poll_interval_ms / 1000)
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return False
+        if loop is not self._loop or self._stopping or not self.healthy:
+            return False
+        self._wake.set()
+        return True
+
+    async def _idle(self) -> str:
+        try:
+            await asyncio.wait_for(self._wake.wait(), self.config.poll_interval_ms / 1000)
         except asyncio.TimeoutError:
-            pass
+            return "shutdown" if self._stop.is_set() else "poll_timeout"
+        self._wake.clear()
+        return "shutdown" if self._stop.is_set() else "durable_admission_signal"
 
     def _interrupt(self, job_id: str) -> None:
         # Bounded CAS retries reconcile cancellation/terminal commits; no work retry.
@@ -185,6 +207,7 @@ class WorkerSupervisor:
     async def stop(self) -> None:
         self._stopping = True
         self._stop.set()
+        self._wake.set()
         if not self._tasks:
             return
         _, pending = await asyncio.wait(self._tasks, timeout=self.config.shutdown_grace_ms / 1000)

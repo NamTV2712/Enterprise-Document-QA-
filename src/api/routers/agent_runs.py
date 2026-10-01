@@ -4,6 +4,7 @@ from __future__ import annotations
 from src.workspace.attribution import span
 
 import json
+import logging
 import re
 import sqlite3
 from collections.abc import Callable, Iterator
@@ -31,6 +32,7 @@ _REVISION = re.compile(r'^(?:([1-9][0-9]*)|"([1-9][0-9]*)")$')
 _SEQUENCE = re.compile(r"^(?:0|[1-9][0-9]*)$")
 _IDEMPOTENCY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$")
 MAX_SEQUENCE = 9_223_372_036_854_775_807
+logger = logging.getLogger(__name__)
 
 
 def _error(error: Exception) -> HTTPException:
@@ -85,7 +87,8 @@ def _frames(events: tuple[AgentRunEventResponse, ...]) -> Iterator[str]:
         yield frame
 
 
-def create_agent_run_router(get_service: Callable[[], AgentDurableService]) -> APIRouter:
+def create_agent_run_router(get_service: Callable[[], AgentDurableService], *,
+                            notify_work: Callable[[], object] | None = None) -> APIRouter:
     router = APIRouter()
 
     @router.get("/agent/runs", response_model=AgentRunPage)
@@ -106,6 +109,13 @@ def create_agent_run_router(get_service: Callable[[], AgentDurableService]) -> A
             raise HTTPException(422, "A bounded Idempotency-Key header is required")
         service = get_service()
         run = await _invoke(lambda: service.create(body, idempotency_key=idempotency_key))
+        # The threadpool operation has returned after its durable commit. Notify
+        # on this HTTP event loop; a lost hint cannot change the admission result.
+        if run.state == "queued" and notify_work is not None:
+            try:
+                notify_work()
+            except Exception:
+                logger.warning("durable_admission_notification_failed")
         response.headers["ETag"] = f'"{run.revision}"'
         return run
 

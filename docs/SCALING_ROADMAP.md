@@ -9,8 +9,40 @@ milestones remain complete. Starting HEAD: `b13fff6affc919a19f13bda3ddc730c319a7
 | SCALE-002 | Load, concurrency and capacity characterization | COMPLETE |
 | OBS-001 | Content-free performance attribution and fixed hermetic measurements | COMPLETE |
 | DB-SCALE-001 | Reduce repeated initialization and repository contention under mixed load | COMPLETE |
-| WORKER-002 | Bounded queue/scheduling and admission fairness attribution; recommended next task | Not started |
+| WORKER-002 | Bounded queue/scheduling and admission fairness attribution with durable admission hints | COMPLETE |
+| CAPACITY-001 | Bounded Agent service capacity and provider concurrency policy; recommended next task | Not started |
 | SCALE-003 | Evidence-backed caching and resource optimization | Not started |
+
+## WORKER-002: admission wake and remaining service capacity
+
+[Protocol](WORKER_002_PROTOCOL.md) and [receipt](WORKER_002_FINAL_RECEIPT.md).
+Starting main `d7bd0d4…`; measured runtime `8f5d9a8…`. Equivalent 26-point/78-trial
+campaigns per stage, identical drivers/environment, all-zero correctness/missing/
+drop counters. One payload-free supervisor Event, injected after authorized durable
+HTTP commit on the owning loop, wakes fixed consumers for unchanged SQLite claims.
+Lost/foreign/stopped hints are safe; poll 500ms fallback and defaults 2/500/5000 stay.
+No task per admission, timer, queue mirror, DB/provider policy or route/schema change.
+
+Idle single queue p95 **502.753→9.340ms**; idle checks/s **3.496→3.507**, no
+idle CPU/task regression. Saturated research/mixed serving overlap after
+**93.976/92.093%**, queue p95 **3667.924/10199.134ms**; provider occupancy material.
+Mixed claim lock p95 improves **182.367→21.611ms**. Retained burst 50 queue tail
+**2422.872→2536.370ms**, admission/service tails and larger-worker local/API costs
+are explicit counter-evidence. A nine-trial 20ms delay control worsens idle queue
+and mixed claim delay; rejected. Shorter poll/larger default controls rejected.
+
+Focused **656 passed**, 20 new tests; primary **1919/188 warnings**, measured-runtime
+clean **1885/34 expected skips/148 warnings**, zero failures. Exact final
+documentation HEAD clean/push closure and literal SHA/results are in the closing
+report. Routes 90/SQLite v7, no dependencies/lockfiles/frontend/migration changes;
+all prior milestones stay COMPLETE; SCALE-003 remains NOT STARTED.
+
+Recommend exactly **CAPACITY-001**, NOT STARTED: decompose bounded service and
+provider occupancy plus finite admission overlap, define operational provider
+concurrency and resource/cancel/deadline acceptance before changing defaults.
+Synthetic wait throughput alone is insufficient; local costs worsen at 8,
+caching/engine dominance and real-provider limits remain unproven. Implement
+no next task automatically. STOP after release.
 
 ## DB-SCALE-001: accepted repository concurrency change
 

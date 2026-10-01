@@ -25,7 +25,10 @@ for 30 days in the existing DATA-005 SQLite database. Protected
 and quality metrics retain their existing meanings. See the
 [OBS-001 protocol](docs/OBS_001_ATTRIBUTION_PROTOCOL.md) for phase definitions,
 bounds and the hermetic benchmark. Workers remain two with 500ms polling and
-5000ms shutdown grace. This does not certify a production SLA.
+5000ms shutdown grace. Authorized queued Agent admission also supplies a
+payload-free hint to the existing local worker owner after durable commit.
+Hints coalesce; missed hints and restart work are discovered through SQLite
+polling. This does not certify a production SLA.
 
 Private workspace factories reuse integrity/schema validation for the same live
 database file and migration contract. Each operation still opens and closes its
@@ -37,8 +40,12 @@ See the [DB-SCALE-001 protocol](docs/DB_SCALE_001_PROTOCOL.md) for lifecycle and
 measurement boundaries. Public mode retains lazy private-storage refusal.
 The [final receipt](docs/DB_SCALE_001_FINAL_RECEIPT.md) records the comparable
 before/after campaign, snapshot correctness and finite admission contention
-tradeoff. Mixed event-append wait p95 falls from 350.401ms to 4.180ms; queue
-scheduling remains a separately scoped next investigation.
+tradeoff. Mixed event-append wait p95 falls from 350.401ms to 4.180ms.
+The [WORKER-002 receipt](docs/WORKER_002_FINAL_RECEIPT.md) records subsequent
+scheduling measurements: idle-confirmed default queue p95 falls from 502.753ms
+to 9.340ms; saturated queueing, finite admission overlap and some service tails
+remain. Worker and poll defaults are unchanged; larger synthetic worker counts
+also raise possible provider concurrency and local/API costs.
 
 The independent frontend exposes Chat, Research, Documents, Search, Collections,
 Retrieval, Models, Pipeline, Agent, Reranker, Evaluation, Analytics, Datasets,

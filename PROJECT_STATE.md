@@ -1,5 +1,65 @@
 # Project State
 
+## WORKER-002 complete — durable admission hints and capacity attribution (2026-10-01)
+
+Optional task on main, starting `d7bd0d4f66a03bc00be05876059a1b1ed1f04877`;
+accepted measured runtime **`8f5d9a819ca52e6f04ebfa1343437ef11a1c06e3`**.
+[Receipt](docs/WORKER_002_FINAL_RECEIPT.md) and
+[protocol](docs/WORKER_002_PROTOCOL.md) record equivalent 26-point/78-trial
+before/after campaigns, identical driver bytes/environment and all-zero
+correctness/missing/drop populations. Required roadmap, Agent/UI/TEST, provider/
+CRED and SCALE-001/002/OBS/DB-SCALE remain COMPLETE. SCALE-003 is NOT STARTED.
+Exact final documentation HEAD clean/push closure and literal SHA/results are in
+the closing report; failure blocks release.
+
+After authorized durable queued admission, the async HTTP router calls an injected
+composition notifier on the worker's owning loop. One payload-free supervisor
+Event coalesces hints; existing fixed consumers perform unchanged SQLite claims.
+No per-admission task, timer, queue mirror or provider retry. Foreign/stopped/lost
+hints are safe; poll 500ms remains the durable fallback. Stop/failure wakes idle
+consumers; claim reconciliation, ordering, CAS/cancellation and restart/no-effect-
+replay are unchanged. Defaults **2/500/5000**, routes **90**, SQLite
+**v7/WAL/NORMAL/busy5000**; DB-SCALE receipts/snapshots/writer serialization intact.
+
+Default idle single queue p50/p95 **475.494/502.753→5.513/9.340ms**; baseline
+99.564% idle-consumer overlap, zero full serving capacity. Staggered 100/250/750ms
+queue p95 **402.286/456.894/481.481→7.362/9.598/6.797ms**. Idle empty checks/s
+**3.496→3.507**, 14/trial, no CPU/task regression. Burst 50 coalesces 48/50 hints.
+Sparse admission can wake both fixed consumers and adds bounded companion checks
+in a shorter window; no empty spin. Restart and completely lost hints pass.
+
+Research/mixed queue p95 **3693.558/11162.564→3667.924/10199.134ms**; after full
+serving overlap **93.976/92.093%**, utilization **0.957/0.928**, any provider
+overlap **90.144/88.473%**, provider peak 2. Overlaps are independent, not a causal
+partition. Mixed claim lock p95 **182.367→21.611ms**, later claim max
+**80.379→73.003ms**; no sustained starvation. Retained counterexamples include
+burst 50 queue p95 **2422.872→2536.370ms**, admission tails and default instant
+service p95 **105.101→208.454ms**, while its E2E p95 improves
+**1814.683→1400.310ms**. Service timing is inclusive; pure engine cost unisolated.
+
+After workers 1/2/4/8 at synthetic 250ms yield **1.763/3.282/5.566/8.471jobs/s**,
+with provider concurrency 1/2/4/8; at 0ms **16.336/15.190/15.414/13.120jobs/s**.
+Eight workers worsen local/API/loop costs. Reject larger defaults and shorter
+poll defaults. An excluded nine-trial bounded 20ms debounce control worsens single
+queue p95 **9.340→43.458ms** and mixed claim max **73.003→141.318ms**; rejected,
+no timer retained. No universal throughput/tail improvement or real quota claim.
+
+Broad focused **656 passed / 1 inherited warning**, including 20 new tests;
+primary **1919 passed / 188 warnings**, measured-runtime data-free clean
+**1885 passed / 34 expected skips / 148 warnings**, zero failures, serial full
+suites. Compile/import, public startup with model stubs/no private DB/pool,
+route inventory and v7 reopen/integrity pass. Frontend 94 files/818 tests and
+TypeScript/build PASS inherited, not rerun. No frontend/dependency/lockfile/
+migration change. Same 12 unrelated paths and local data/.env untouched; raw
+artifacts ignored `.local/worker-002/`.
+
+Recommend exactly **CAPACITY-001 — bounded Agent service capacity and provider
+concurrency policy**, NOT STARTED: decompose provider/local tool/DB/telemetry and
+finite admission/service overlap, establish operational concurrency and resource/
+cancel/deadline acceptance before changing defaults. Counter-evidence is local
+degradation at 8; caching/engine dominance and real provider limits remain unproven.
+Implement no next task or SCALE-003. STOP after release.
+
 ## DB-SCALE-001 complete — guarded initialization and WAL snapshots (2026-10-01)
 
 Optional repository concurrency task on main, starting

@@ -37,6 +37,22 @@ WAL/NORMAL, busy timeout 5000ms, schema v7, DATA-004 CAS/events/recovery and DAT
 authority are unchanged. See the [DB-SCALE-001 protocol](docs/DB_SCALE_001_PROTOCOL.md)
 and [measured acceptance receipt](docs/DB_SCALE_001_FINAL_RECEIPT.md).
 
+WORKER-002 adds one payload-free Event to the existing lifespan supervisor.
+After an authorized Agent create returns from the threadpool with a queued
+durable result, the async router calls an injected composition notifier on the
+HTTP loop. It looks up the existing local execution owner; notification cannot
+start workers, select a row or bypass access/eligibility. Only the owning loop
+may set the hint; foreign/stopped hints are discarded, and failures preserve the
+durable admission response. Existing fixed consumers wake and call unchanged
+SQLite claims. Hints coalesce; no per-admission task, timer or queue mirror is
+created. Shutdown also wakes sleepers. Periodic 500ms polling, restart discovery,
+shielded claims/reconciliation, cancellation and no ambiguous-effect replay
+remain authoritative. Defaults stay workers 2/grace 5000ms, with no extra route,
+schema or production telemetry. The benchmark-only numeric occupancy facts in
+the [protocol](docs/WORKER_002_PROTOCOL.md) supplement unchanged durable queue
+timing; the [receipt](docs/WORKER_002_FINAL_RECEIPT.md) records the low-load benefit
+and retained admission/service-tail costs under load.
+
 ```mermaid
 flowchart LR
     Browser[Vite React Frontend]

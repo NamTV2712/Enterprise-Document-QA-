@@ -1,5 +1,47 @@
 # Project State
 
+## CAPACITY-001 — operating policy and exact-SHA release gate (2026-10-01)
+
+Main-only starting `e6d4d0f66ae49cd5bc9911f46d58a3d4deda31f9`; accepted measured
+runtime `8f2af8edf760e1958ec21f8a64004131e1baf394`. The
+[protocol](docs/CAPACITY_001_PROTOCOL.md) and
+[receipt](docs/CAPACITY_001_FINAL_RECEIPT.md) record 30 points / 86 trials,
+2,075 succeeded measured jobs, with zero correctness/missing/drop counters.
+Complete fixed 1/2/4/8 × 0/100/250/500ms matrix, Research10 and Mixed25 anchors,
+all four tool envelopes, native evaluation, idle/restart and provider-limit controls.
+Existing OBS interval unions give valid exclusive service occupancy; inclusive
+phases and post-service telemetry remain separate. No production runtime change.
+
+Default **2** retained; ordinary recommendation **1–2**. Existing supported
+configuration/hard bounds **1–16**, benchmark samples **1/2/4/8**, maximum tested
+8. Synthetic 250ms throughput 1→8 workers: **1.784→9.120 jobs/s**, provider peak
+1→8. At 0ms: **17.603→13.923 jobs/s**, service p95 **43.122→568.053ms**, lag p95
+**9.109→77.430ms**. Mixed API p95 **187.987/318.344/581.896ms** at 2/4/8.
+Four workers with a diagnostic two-permit decision limit add useful local overlap
+(about 11.8% worker / 16.3% mixed throughput), with higher service/API tails.
+Eight adds little at the same provider bound. No production semaphore/config,
+larger default or arbitrary hard limit retained. No Groq quota/SLA certification.
+Workers bound normal awaited Agent decisions, not every provider in the process:
+other routes and synchronous RAG work surviving timeout are outside that claim.
+The offline query-boundary probe ended both held threads after release; real
+retrieval/generation costs remain synthetic/unmeasured in this campaign.
+
+Resolved benchmark-only defects: legacy inspector metadata shape; a late warmup
+callback crossing reset (26 callbacks for 25 measured jobs). Exact measured
+durable IDs now select occupancy, with a regression. Entire initial partial
+campaign excluded; no merged populations. **18 new tests PASS**, focused prior
+regressions **319/1 warning**, primary **1949/188 warnings**, frontend **94/819**,
+frozen install/TypeScript/build PASS. Routes 90 / SQLite v7 unchanged. Exact final
+receipt-commit clean gates, normal push equality and both complete CI successes
+are mandatory release closure and are reported literally in the closing report.
+Both CI path filters include the new receipt; existing gates are unchanged.
+No dependency/lockfile/migration/index/production frontend changes. Same 12
+historical untracked paths and `.env`/`data/` preserved; raw task artifacts ignored.
+
+Required roadmap and CRED/OBS/DB-SCALE/WORKER/CI-FIX stay COMPLETE. CAPACITY-001
+is complete once its exact-SHA closure passes. **UX-AGENT-001 is NEXT**;
+FINAL-IMPROVE NOT STARTED, SCALE-003 NOT STARTED / DEFERRED. STOP after release.
+
 ## CI-FIX-001 release fixes — final exact-SHA gate (2026-10-01)
 
 Main-only task starting `eb962e8acd4f5a94dff3d49713a9bc5f27ea499b`;

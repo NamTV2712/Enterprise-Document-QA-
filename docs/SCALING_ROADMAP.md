@@ -7,11 +7,43 @@ milestones remain complete. Starting HEAD: `b13fff6affc919a19f13bda3ddc730c319a7
 | --- | --- | --- |
 | SCALE-001 | Bounded background workers / durable Agent execution | COMPLETE |
 | SCALE-002 | Load, concurrency and capacity characterization | COMPLETE |
+| CRED-001 | Primary/fallback credential consolidation and frozen binding compatibility | COMPLETE |
 | OBS-001 | Content-free performance attribution and fixed hermetic measurements | COMPLETE |
 | DB-SCALE-001 | Reduce repeated initialization and repository contention under mixed load | COMPLETE |
 | WORKER-002 | Bounded queue/scheduling and admission fairness attribution with durable admission hints | COMPLETE |
-| CAPACITY-001 | Bounded Agent service capacity and provider concurrency policy; recommended next task | Not started |
-| SCALE-003 | Evidence-backed caching and resource optimization | Not started |
+| CI-FIX-001 | Authoritative backend/frontend release gates and exact-SHA CI | COMPLETE |
+| CAPACITY-001 | Bounded Agent service capacity and provider concurrency policy | COMPLETE once exact-SHA release gates pass |
+| UX-AGENT-001 | Next bounded Agent UX task | NEXT |
+| FINAL-IMPROVE | Final current-round closure | NOT STARTED |
+| SCALE-003 | Future evidence-backed caching/resource work, outside current round | NOT STARTED / DEFERRED |
+
+## CAPACITY-001: close capacity investigation
+
+[Protocol](CAPACITY_001_PROTOCOL.md), [receipt](CAPACITY_001_FINAL_RECEIPT.md).
+Starting main `e6d4d0f…`, accepted measured runtime `8f2af8e…`. Complete
+30-point/86-trial campaign, 2,075 succeeded jobs and zero correctness/missing/drop
+counters. Worker 1/2/4/8 at all 0/100/250/500ms delays, research/mixed anchors,
+all four synthetic tool envelopes/evaluation, idle/restart and fixed provider
+limit controls. Exclusive service occupancy uses existing OBS interval unions;
+inclusive phases and post-service telemetry are separate.
+
+Default two and ordinary operating recommendation 1–2 retained. Existing hard/
+supported configuration 1–16; benchmark samples 1/2/4/8, maximum tested eight.
+At 250ms, jobs/sec rises 1.784→9.120 and decision transport peak 1→8; at zero
+delay, throughput falls 17.603→13.923 and local service/lag tails worsen.
+Mixed API p95 rises 187.987→581.896ms at 2→8. Diagnostic provider limit two with
+four workers permits modest useful local overlap, but higher service/API tails;
+eight adds little at that limit. No runtime gate, config/default/budget/provider/
+retrieval/schema/dependency change justified. No Groq quota or global Generator
+capacity claim, including synchronous query work surviving cancellation.
+
+18 new tests; primary 1949/188 warnings, frontend 94/819, TypeScript/build PASS.
+Final exact receipt-commit clean tests, normal main push equality and both full
+GitHub workflows SUCCESS are required release closure, with literal SHA/results
+in the closing report. Receipt paths trigger both unchanged complete workflows.
+Same 12 historical untracked paths preserved. Required and completed optional
+milestones remain complete. Performance investigation ends here; exactly
+**UX-AGENT-001 is NEXT**, then FINAL-IMPROVE. STOP; start neither automatically.
 
 ## WORKER-002: admission wake and remaining service capacity
 

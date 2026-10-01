@@ -6,7 +6,7 @@ milestones remain complete. Starting HEAD: `b13fff6affc919a19f13bda3ddc730c319a7
 | Task | Scope | Status |
 | --- | --- | --- |
 | SCALE-001 | Bounded background workers / durable Agent execution | COMPLETE |
-| SCALE-002 | Load, concurrency and capacity characterization | In progress |
+| SCALE-002 | Load, concurrency and capacity characterization | COMPLETE |
 | SCALE-003 | Evidence-backed caching and resource optimization | Not started |
 
 ## SCALE-001-A: ownership audit and contract
@@ -137,18 +137,34 @@ violations. No product change/retry.
 verification, file inventory and limitations. The final chat release receipt
 records the exact documentation HEAD, its final committed clean gate and normal
 upstream push verification. Required/product/Agent/provider milestones stay
-complete. **STOP. SCALE-002 and SCALE-003 are not started.**
+complete. At the SCALE-001 release, SCALE-002 and SCALE-003 were not started.
 
-## SCALE-002 A/B: protocol and tested harness
+## SCALE-002 A-F: completed characterization
 
-Starting SHA `009b04e699bc9e61b4dd37722076e1ad6237c567`. The
-[versioned protocol](SCALE_002_BENCHMARK_PROTOCOL.md) records architecture,
-workloads, instrumentation, warmup/trials, percentile validity, safety and release
-gates. A loopback CLI runs real application/Agent/worker/SQLite/SSE contracts
-with deterministic SDK transport, finite safe report JSON and temporary DBs.
-The first 48 harness tests and 195-case shared gate passed. Two initial harness
-fixture/monitor issues were corrected; no product defect/optimization is assumed.
-Development admission and optional local-artifact research smokes passed. The
-primary campaign must run against committed source before final attribution.
-No production SLA claim, live-provider load, caching, broker or DB migration.
-SCALE-003 remains not started.
+Runtime `23702743ee6e3e807dad4004c68ff77cb6006bef` owns the committed
+[protocol](SCALE_002_BENCHMARK_PROTOCOL.md), deterministic loopback CLI and 49
+harness tests. The [receipt](SCALE_002_FINAL_RECEIPT.md) records 52 distinct
+scenarios/156 complete trials: 153 hermetic plus 3 separate artifact trials.
+Admission/read 100, default-worker full runs 50, comparative workers 1/2/4/8,
+SSE 50, mixed 5/25/50, cancellation and controlled failure all passed bounded
+correctness. An interrupted two-trial worker point stayed incomplete/excluded;
+its full three-trial point was rerun. No development or partial timing is pooled.
+
+Admission/read plateau around 60 requests/sec; worker=2 moderate throughput near
+3.1 worker / 2.2 research jobs/sec, queue tails rise with outstanding demand.
+Eight workers help injected waits; instant local throughput does not consistently
+scale. Mixed 50 reaches queue p95 43.64s with substantial Python lock waiting,
+shorter transaction time and zero SQLite busy/errors. All 498 subscribers pass
+order/resume/terminal checks; all DBs reopen v7/integrity/no active rows.
+This is measured development capacity, no production SLA or maximum-user claim.
+
+Final harness 49, focused 196, primary backend 1779/188 warnings and committed
+source-clean 1745/34 artifact skips/148 warnings passed. Routes 90/schema 7/default
+2/500ms/5000ms preserved. Frontend 94/818/TS/build inherited unchanged; no production
+source/config/dependency/lockfile/migration/frontend change. Final documentation
+HEAD, its final committed clean CLI/full suite and exact normal push verification
+are recorded in final chat. No live provider or optimization was implemented.
+
+Proposed next scope: OBS-001, attribution of Agent API/stream/serialized-access
+cost under the retained hermetic fixtures, before choosing caching or a DB change.
+Required/Agent/provider/SCALE-001/002 COMPLETE. **SCALE-003 NOT STARTED. STOP.**

@@ -1,30 +1,56 @@
 # Project State
 
-## SCALE-002 in progress — Load/concurrency/capacity characterization (2026-09-30)
+## SCALE-002 complete - Load/concurrency/capacity characterization (2026-10-01)
 
-Starting HEAD `009b04e699bc9e61b4dd37722076e1ad6237c567`, branch/upstream match;
-90 routes, SQLite v7 and SCALE-001 defaults (2 workers/500ms/5000ms) verified.
-The separate [benchmark protocol](docs/SCALE_002_BENCHMARK_PROTOCOL.md) binds
-real loopback HTTP, DATA-004, lifespan workers, Agent/provider/event/evaluation
-contracts, synthetic SDK latency, monotonic commit boundaries and safe metadata.
-No production source, runtime dependency, migration or frontend change is planned.
+Starting SHA `009b04e699bc9e61b4dd37722076e1ad6237c567`; benchmarked runtime
+**`23702743ee6e3e807dad4004c68ff77cb6006bef`**, branch
+codex/bilingual-research-workspace. The [protocol](docs/SCALE_002_BENCHMARK_PROTOCOL.md)
+and [receipt](docs/SCALE_002_FINAL_RECEIPT.md) bind real TCP/access/SQLite/workers/
+Agent/SDK/events/evaluation to safe deterministic fixtures and monotonic commit
+boundaries. Three trials, warmup excluded, explicit nearest-rank sample minima.
+No production source/frontend/default/dependency/lockfile/route/migration change.
 
-The first benchmark harness suite passed 48 tests; focused harness/SCALE-001/
-provider gate passed 195. Initial fixture/monitor errors were corrected (rollback
-hook name; intentionally stopped warmup pool). HTTP-only Uvicorn configuration
-avoids unnecessary WebSocket import warnings; this does not change product config.
-A development admission smoke and an optional artifact-backed offline research
-smoke passed. Development timings do not substitute for a committed primary
-campaign. Local corpus/index and cached models are available; artifact results
-remain a distinct optional series. No live provider was called.
+Accepted: 51 hermetic scenarios / 153 trials plus three separate artifact-backed
+trials. Admission/read levels 1/5/10/25/50/100, default-worker full-run levels
+1/2/5/10/25/50, comparative workers 1/2/4/8 at fixed 25 clients, SSE 1/10/25/50,
+mixed 5/25/50, selected cancellation and one deterministic failed job per degraded
+trial. Artificial decision delays 0/250ms are synthetic, not Groq timings.
+Optional artifact path measures discovery/BM25/chunk reading, not dense/reranker
+performance; no corpus regeneration. Interrupted worker=8/moderate point's two
+trials were excluded and the entire point rerun with three fresh trials.
 
-Primary campaign follows the versioned protocol: warmup excluded, three trials,
-stateless concurrency through 100, default-worker full-run ladders through 50,
-worker 1/2/4/8 comparison, live finite-batch SSE, mixed/cancellation/degraded
-profiles. Raw results stay under ignored .local/benchmarks/scale-002; databases
-are disposable. Bottleneck attribution and any next-task recommendation await
-measurements. This is development capacity characterization, no production SLA.
-SCALE-001 stays complete and SCALE-003 is not started.
+Admission/read throughput plateaus around 54-66/57-62 requests/sec, with 100-client
+p95 3.22/3.35s. At worker=2/moderate, worker/research throughput plateaus near
+3.1/2.2 jobs/sec from 5-50 clients while queue p95 reaches 13.29/19.72s. At fixed 25
+clients, workers 1/2/4/8 moderate throughput 1.74/3.06/5.21/8.52 jobs/sec; instant
+13-17 jobs/sec shows no consistent gain from additional workers. Mixed 50 falls
+to 1.06 jobs/sec with queue p95 43.64s; transaction p95 6.63ms but serialized Python
+lock wait p95 540.39ms. Those distinguish synthetic waiting, serialized access and
+incompletely attributed local overhead. No SQLite busy/claim/integrity failures;
+no database migration or default change follows. Highest tested successful levels
+are benchmark regions, not production maximum users/SLA.
+
+All 156 trials passed recorded correctness, capacity, owner/call/event/cancel/
+resume/terminal-mutation and same-DB v7 integrity/reopen gates. 498/498 subscribers
+succeeded; no missing/duplicate/order/resume failures. Selected terminal failures
+and stale 409s were expected. No reproducible P0-P2 product defect was found.
+Initial P3 harness rollback-hook/stopped-warm-pool/deadline issues were corrected
+before canonical measurement. Raw outputs remain ignored, only summaries committed.
+
+New harness 49 passed; focused harness/SCALE-001/provider 196 passed. Full primary
+**1779 / 188 warnings**; committed source-clean **1745 / 34 expected artifact skips /
+148 warnings**, zero failures and unchanged warnings. Primary/clean imports,
+90 unique routes, v7/v7 and integrity verified. Frontend inherited 94/818, TS/build
+PASS is unchanged and not rerun. Final documentation closure/committed clean gate
+and normal GitHub push of exact HEAD, matching upstream/remote and 0/0 ahead-behind
+are recorded in final chat. Same 12 unrelated untracked paths preserved; no secrets,
+raw artifacts, dependencies, private DB or model cache committed.
+
+**Proposed next task: OBS-001 - Attribute Agent API, stream and serialized-access
+overhead under fixed hermetic load**, including separated client/server CPU,
+initialization, validation/serialization, evaluation and lock/SQL boundaries.
+The measurements do not yet select caching or DB migration. No implementation.
+SCALE-001/002 COMPLETE; SCALE-003 NOT STARTED; **STOP** after release verification.
 
 ## SCALE-001 complete — Durable background Agent workers (2026-09-30)
 

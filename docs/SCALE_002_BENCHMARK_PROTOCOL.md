@@ -11,8 +11,9 @@ semantics and completed milestones remain unchanged.
 Real FastAPI routes, middleware, API-001 Host/Origin/loopback/bearer/execution
 authorization, DATA-004, WorkerSupervisor, closed Agent executor, frozen plan,
 AgentOrchestrator, tools, event persistence, cancellation and native evaluation
-remain in the measured path. Existing DATA-005 request telemetry stays enabled;
-its writes are part of the cost. No duplicate production telemetry is added.
+remain in the measured path. Existing request telemetry stays enabled. The
+DATA-005 route catalog excludes Agent routes, so no persisted Agent request
+telemetry write cost is claimed. No duplicate production telemetry is added.
 The only production eligible executor remains `agent / bounded_agent_run`.
 Pipeline, Evaluation and model-test remain excluded.
 
@@ -33,8 +34,10 @@ claims. Other-process/multi-host contention is outside this protocol.
   bootstrap, replacing only Generator and decision transport. Requires local
   index, manifest and source availability, offline cached models, and exclusive
   local Qdrant access. Uses the first catalog document/ticker for bounded local
-  evidence; results are a separate artifact-dependent series, never mixed with
-  hermetic results. Missing prerequisites are a recorded skip. Startup failure
+  evidence. The chosen search/read path exercises corpus discovery/BM25 and chunk
+  reading; initialized dense/reranker components do not establish measured
+  dense/reranker performance. Results are a separate artifact-dependent series,
+  never mixed with hermetic results. Missing prerequisites are a recorded skip. Startup failure
   is recorded rather than represented as successful performance evidence.
   The CLI launches artifact mode as an isolated child with an external command
   deadline (campaign budget + 120s), so synchronous cached-model startup cannot

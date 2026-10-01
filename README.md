@@ -126,6 +126,11 @@ tests stay synchronous/provider-free. Existing readiness additionally reports
 the safe `worker_ready` flag while the pool exists and returns 503 if a worker
 dies. See [the separate scaling roadmap](docs/SCALING_ROADMAP.md).
 
+SCALE-002 records measured development capacity using real HTTP/workers/SQLite
+with mocked provider transport. See the [load characterization receipt](docs/SCALE_002_FINAL_RECEIPT.md)
+and [reproducible protocol](docs/SCALE_002_BENCHMARK_PROTOCOL.md) for environment,
+workloads, saturation evidence and limitations. No production SLA is certified.
+
 The provider-free `native-agent-evaluation` v1 protocol evaluates an existing
 terminal Agent run from its frozen plan, safe events and durable result. It
 returns separate versioned execution, tool, budget, evidence and research

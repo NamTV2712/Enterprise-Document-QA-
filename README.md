@@ -19,7 +19,7 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 
 Optional content-free Agent performance attribution is disabled by default.
 For an authorized local workspace, set server-side
-`ENABLE_PERFORMANCE_ATTRIBUTION=true` to retain bounded terminal timing summaries
+`ENABLE_PERFORMANCE_ATTRIBUTION=true` to retain bounded sampled API/all-worker timing summaries
 for 30 days in the existing DATA-005 SQLite database. Protected
 `/analytics/summary` exposes a separate performance population; public metrics
 and quality metrics retain their existing meanings. See the

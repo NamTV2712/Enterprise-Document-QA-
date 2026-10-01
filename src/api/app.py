@@ -41,7 +41,7 @@ from src.retrieval.query_normalizer import normalize_retrieval_question
 from src.retrieval.vector_store import VectorStore
 from src.api.telemetry import RequestTelemetry
 from src.api.attribution import PerformanceMiddleware
-from src.workspace.attribution import timed
+from src.workspace.attribution import persist_selected, timed
 from src.api.proxy import get_rate_limit_key
 from src.api.content_presentation import build_chunk_presentation
 from src.api.catalog import (
@@ -184,7 +184,6 @@ def _agent_durable_service() -> AgentDurableService:
     return _agent_service_for_repository(SQLiteJobRepository.from_settings(settings))
 
 
-@timed("api.service_init")
 def _agent_service_for_repository(repository: SQLiteJobRepository) -> AgentDurableService:
     resolution = _agent_decision_resolution()
     return AgentDurableService(
@@ -227,9 +226,19 @@ def _terminal_telemetry_service() -> TelemetryService:
 async def _publish_performance(trace, *, correlation_id: str, route_template: str) -> None:
     """After product locks/body completion: best effort DATA-005 terminal summary."""
     summary = trace.summary()
-    await asyncio.to_thread(lambda: _terminal_telemetry_service().repository.record_performance_terminal(
-        summary=summary, correlation_id=correlation_id, route_template=route_template))
-    telemetry.record_attribution(trace, correlation_id=correlation_id, route_template=route_template)
+    persisted = False
+    if persist_selected(trace.source):
+        def persist():
+            database = WorkspaceDatabase.from_settings(settings)
+            # Authorized Agent service/worker owns initialization. Early DTO or
+            # header rejection must not create a store merely for measurement.
+            if not database.path.is_file():
+                return False
+            SQLiteTelemetryRepository.from_settings(settings, initialize=False).record_performance_terminal(
+                summary=summary, correlation_id=correlation_id, route_template=route_template)
+            return True
+        persisted = await asyncio.to_thread(persist)
+    telemetry.record_attribution(trace, correlation_id=correlation_id, route_template=route_template, persisted=persisted)
 
 
 def _resolved_route_template(request: Request) -> str:

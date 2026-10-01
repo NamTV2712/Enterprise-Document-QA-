@@ -8,7 +8,13 @@ complete. No optimization, production load certification or quality score.
 
 `ENABLE_PERFORMANCE_ATTRIBUTION=false` is the default. Opt in on the server in
 local workspace mode. Authorized Agent HTTP requests and successful Agent worker
-claim/execution cycles emit one terminal summary after product locks are released.
+claim/execution cycles capture bounded traces after product locks are released.
+Durable API summaries use server-random one-in-ten selection, independent of
+client correlation IDs; successful worker cycles are all selected. Private
+analytics labels `api_one_in_ten_worker_all`: counts are sampled records, not
+estimates of all requests. The benchmark completion seam captures every trace
+and reports selected durable record count/bytes separately. No sampling counter,
+raw trace queue or second aggregate store is retained in production.
 Unauthorized/public requests cannot open a private store through this feature.
 No import-time worker starts. Workers remain two, polling 500ms, grace 5000ms.
 
@@ -119,7 +125,7 @@ disabled then enabled with the same workloads. Four separate low-concurrency
 worker campaigns: one client, 20 sequential jobs, 100/250/500/1000ms temporary
 polling, three trials each. Ordered campaigns are not randomized; cache/machine
 noise and same-process client/server coupling limit causal overhead claims.
-Deadlines: per-trial workload bound plus at most 90s startup/shutdown allowance;
+Deadlines: OBS workload bound 120-240s plus at most 90s startup/shutdown allowance;
 campaign 1800s by default, max 3600s. Checkpoints stay incomplete until all gates
 pass. At most 4096 traces/client correlations and 65,536 spans per trial;
 budget/dropped/missing observations block a canonical result.
@@ -134,7 +140,7 @@ and can include client/event-loop/scheduling overhead: **not network latency**.
 SSE commit-to-client-frame delivery and server batch work have different windows;
 compare them separately, not by subtracting unrelated percentiles. CPU/RSS/lag
 scope is the combined server/client process. Enabled volume includes actual
-DATA-005 writes; disabled still runs the common no-op boundary wrappers and
+sampled API/all worker DATA-005 writes; disabled still runs the common no-op boundary wrappers and
 SCALE-002 observers, so the comparison is the opt-in capture/persistence cost.
 
 Correctness gates cover ownership/capacity/provider attempts, durable outcomes,
@@ -142,3 +148,22 @@ event order, SSE duplicates/missing/resume, mutation after terminal, database
 busy/integrity, same-database reopen v7 and zero active jobs after shutdown.
 No optimization follows measurement automatically. The final receipt selects
 one next task from the evidence and records uncertainty.
+
+## Rejected initial observer
+
+The initial implementation at `023ec89b4b8e37b0dd657f760ff71a9b36feb4e5`
+reinitialized/integrity-checked the workspace for every new summary and persisted
+every API poll. An enabled mixed-25 trial exceeded the initial 58s deadline;
+a 240s diagnostic still left 21 queued jobs and two interrupted owners at shutdown.
+The feedback from growing telemetry rows and repeated full-store integrity checks
+made this observer unsuitable. Its 27 earlier completed trials and unfinished
+mixed point are **excluded**, not merged into the final campaign.
+
+The corrected sink uses the already initialized DATA-005 store, skips storage
+creation for early validation failures, and selects one in ten API summaries
+with server randomness. Product service initialization, lock ordering, queue,
+worker defaults and provider semantics are unchanged. `api.service_init` covers
+the one outer API factory, avoiding a mixed population of nested factory spans.
+This repairs an observer-induced progress defect; it does not optimize the
+underlying product repository or perform the recommended next task. CLI failures
+emit a fixed safe message and retain an incomplete bounded checkpoint.

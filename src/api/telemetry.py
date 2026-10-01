@@ -9,7 +9,7 @@ from typing import Any
 
 
 class RequestTelemetry:
-    def record_attribution(self, trace, *, correlation_id: str, route_template: str) -> None:
+    def record_attribution(self, trace, *, correlation_id: str, route_template: str, persisted: bool = False) -> None:
         """Completion seam for hermetic attribution; raw spans are not retained here.
 
         Private bounded summaries are persisted by the DATA-005 owner. The

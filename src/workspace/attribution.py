@@ -7,6 +7,7 @@ import inspect
 import itertools
 import math
 import time
+import uuid
 from collections import Counter
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -36,6 +37,14 @@ MAX_DURATION_MS = 86_400_000
 MAX_SUMMARY_BYTES = 16384
 AGENT_ROUTES = frozenset({"/agent/runs", "/agent/runs/{run_id}", "/agent/runs/{run_id}/results",
     "/agent/runs/{run_id}/evaluation", "/agent/runs/{run_id}/events", "/agent/runs/{run_id}/cancel"})
+PERSISTENCE_SAMPLING = "api_one_in_ten_worker_all"
+
+
+def persist_selected(source):
+    """Server randomness, independent of client IDs; no retained counter/map."""
+    if source not in ("api", "worker"):
+        raise ValueError("unsupported attribution source")
+    return source == "worker" or uuid.uuid4().int % 10 == 0
 
 
 def statistics(values, *, signed=False):
@@ -60,6 +69,7 @@ def aggregate_summaries(summaries, *, truncated=False):
             count.append(phase.count)
             outcomes.update({name: getattr(phase, name) for name in OUTCOMES})
     return {"protocol": PROTOCOL, "terminal_count": len(summaries), "truncated": truncated,
+            "persistence_sampling": PERSISTENCE_SAMPLING,
             "dropped_spans": sum(summary.dropped for summary in summaries),
             "population": "inclusive_phase_total_per_terminal",
             "phases": [{"source": source, "phase": phase, "operation": operation,

@@ -25,6 +25,16 @@ measurements. Completion, bottleneck selection, clean release and normal main
 push remain pending. Raw diagnostics are ignored under `.local/obs-001/`; the
 12 historical untracked paths remain untouched. No live provider or data mutation.
 
+The initial observer/campaign at `023ec89b4b8e37b0dd657f760ff71a9b36feb4e5`
+is rejected: per-summary initialization plus full API persistence introduced
+mixed-workload progress starvation. Its 27 completed trials are not final results.
+The corrected observer reuses the initialized DATA-005 store and selects durable
+API summaries one in ten using server randomness, retaining all worker summaries
+and full benchmark capture. Product repository initialization/defaults are
+unchanged. Three focused regressions cover selection, initialization reuse and
+early rejection without creating a store. OBS + DATA-005 gate: 99 passed / one
+inherited warning. Fresh committed-runtime measurements remain pending.
+
 ## CRED-001 complete - Groq credential consolidation (2026-10-01)
 
 Bounded optional configuration task on main, starting

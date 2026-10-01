@@ -17,7 +17,7 @@ from src.agent.evaluation import evaluate_durable_agent_run
 from src.agent.registry import AgentToolRegistry, build_tool_registry
 from src.api import app as application
 from src.api.routers.agent_runs import _frames
-from src.workspace.attribution import MAX_API_SPANS, PhaseSummary, TimingSummary, capture, span, statistics
+from src.workspace.attribution import MAX_API_SPANS, PhaseSummary, TimingSummary, capture, persist_selected, span, statistics
 from src.workspace.database import WorkspaceDatabase
 from src.workspace.executors import AgentJobExecutor, ExecutorRegistry
 from src.workspace.jobs import SQLiteJobRepository
@@ -306,6 +306,40 @@ def test_root_survives_budget_and_signed_difference_statistics():
     assert statistics([-2, 3], signed=True)["p50"] == -2
     assert statistics(range(19))["p95"] is None
     with pytest.raises(ValueError): statistics([float("nan")], signed=True)
+
+
+def test_sampling_is_closed_server_owned_and_workers_always_persist(monkeypatch):
+    from types import SimpleNamespace
+    from src.workspace import attribution
+    for integer in range(10):
+        monkeypatch.setattr(attribution.uuid, "uuid4", lambda: SimpleNamespace(int=integer))
+        assert persist_selected("api") == (integer == 0)
+        assert persist_selected("worker")
+    with pytest.raises(ValueError): persist_selected("user_input")
+
+
+def test_performance_sink_reuses_initialized_store_without_rechecking_integrity(tmp_path, monkeypatch):
+    _configure_local(monkeypatch, tmp_path)
+    database = WorkspaceDatabase(tmp_path / "workspace.sqlite3")
+    database.initialize()
+    monkeypatch.setattr(application, "persist_selected", lambda _source: True)
+    monkeypatch.setattr(WorkspaceDatabase, "initialize", lambda _self: pytest.fail("observer reinitialized product store"))
+    with capture("api") as trace:
+        with span("api.total"):
+            pass
+    asyncio.run(application._publish_performance(trace, correlation_id="req_owned", route_template="/agent/runs"))
+    with database.connection() as connection:
+        assert connection.execute("SELECT COUNT(*) FROM telemetry_events").fetchone()[0] == 1
+
+
+def test_early_validation_measurement_never_initializes_a_new_store(tmp_path, monkeypatch):
+    _configure_local(monkeypatch, tmp_path)
+    monkeypatch.setattr(application, "persist_selected", lambda _source: True)
+    with capture("api") as trace:
+        with span("api.total"):
+            pass
+    asyncio.run(application._publish_performance(trace, correlation_id="req_owned", route_template="/agent/runs"))
+    assert not (tmp_path / "workspace.sqlite3").exists()
 
 
 @pytest.mark.parametrize("field,value", [("total_ms", float("inf")), ("max_ms", float("nan")), ("phase", "document_content"), ("count", 513)])

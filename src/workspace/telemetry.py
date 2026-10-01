@@ -323,9 +323,10 @@ class SQLiteTelemetryRepository:
         self._forbidden_secret_values = tuple(value for value in configured if value)
 
     @classmethod
-    def from_settings(cls, configured: Settings, **kwargs: object) -> "SQLiteTelemetryRepository":
+    def from_settings(cls, configured: Settings, *, initialize: bool = True, **kwargs: object) -> "SQLiteTelemetryRepository":
         database = WorkspaceDatabase.from_settings(configured)
-        database.initialize()
+        if initialize:
+            database.initialize()
         if "forbidden_secret_values" not in kwargs:
             kwargs["forbidden_secret_values"] = _configured_secret_values(configured)
         return cls(database, **kwargs)

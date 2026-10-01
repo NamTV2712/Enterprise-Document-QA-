@@ -8,7 +8,7 @@ and engineering decisions, and `AGENTS.md` for repository operating rules.
 
 OBS-001 adds opt-in content-free timing at existing Agent API, repository,
 worker/provider/tool, native evaluation and SSE boundaries. Inclusive monotonic
-spans are bounded and discarded after a typed terminal summary is written to
+spans are bounded and discarded after a typed sampled API/all-worker summary is written to
 DATA-005's existing `telemetry_events` table (30-day retention, SQLite v7).
 Python serialization wait, critical-section hold, connection opening, transaction
 and read scopes are measured separately; instrumentation emits after product

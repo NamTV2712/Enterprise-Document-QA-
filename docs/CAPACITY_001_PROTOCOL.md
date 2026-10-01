@@ -45,6 +45,9 @@ subtraction in this explicit priority: provider (`agent.provider` and
 intervals, unattributed remainder. Tools exclude nested provider work; persistence
 excludes work already assigned; workspace excludes all prior unions. The partition
 sums exactly to that individual service root, within floating point rounding.
+The OBS service root includes the executor's return and terminal reconciliation;
+the lifecycle service metric ends at the durable terminal commit. These are
+different windows and their percentile rows must not be subtracted or combined.
 Inclusive per-job decision/provider/tool/persistence unions are reported separately.
 Do not add inclusive phases or percentile rows. Unattributed time includes
 orchestration, scheduling, decision serialization/parsing and diagnostic gate wait;
@@ -55,8 +58,10 @@ The existing content-free publish callback is timed outside worker service to
 report post-service DATA-005 telemetry occupancy. This includes thread scheduling,
 summary creation and persistence; do not insert it into the service partition.
 Benchmark-only maps hold at most 256 completed jobs; raw record budgets and all
-existing missing/drop gates stay fixed. Warmup maps clear at the existing measured
-window reset. Missing, duplicate, incomplete or dropped captures fail closed.
+existing missing/drop gates stay fixed. Select completed captures using the exact
+measured durable IDs returned by the existing verifier, excluding every warmup
+even if its telemetry callback crosses the measured-window reset. Missing,
+duplicate, incomplete or dropped captures fail closed.
 
 Nearest-rank p50/p95/p99 require 2/20/100 samples. Summaries are medians of per-trial
 statistics, never pooled percentiles. Per-job zero tool occupancy means not invoked;

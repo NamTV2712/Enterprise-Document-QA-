@@ -73,6 +73,14 @@ def occupancy(trace):
     return result
 
 
+def select_completed(captured, telemetry, identities):
+    """Match the durable verifier population, independent of callback completion order."""
+    selected = set(identities)
+    if len(selected) != len(identities) or selected - captured.keys() or selected - telemetry.keys():
+        raise runtime.BenchmarkFailure("missing_capacity_workers")
+    return [captured[key] for key in selected], [telemetry[key] for key in selected]
+
+
 @dataclass(frozen=True)
 class Point:
     name: str
@@ -186,15 +194,10 @@ async def trial(point, directory, index):
     from src.api.telemetry import RequestTelemetry
     from src.api import app as application
     original = RequestTelemetry.record_attribution
-    original_reset = runtime.Observer.reset
     original_publish = application._publish_performance
     captured = {}
     telemetry_ms = {}
-
-    def reset(observer):
-        original_reset(observer)
-        captured.clear()
-        telemetry_ms.clear()
+    probe = worker.SchedulerProbe()
 
     async def publish(trace, *, correlation_id, route_template):
         started = time.perf_counter()
@@ -212,20 +215,21 @@ async def trial(point, directory, index):
 
     # OBS invokes the class completion seam and excludes warmup IDs itself.
     with patch.object(RequestTelemetry, "record_attribution", completed), \
-            patch.object(runtime.Observer, "reset", reset), \
+            patch.object(worker, "SchedulerProbe", lambda: probe), \
             patch.object(application, "_publish_performance", publish), \
             tool_variant(point.tool), provider_control(point.provider_limit):
         result = await worker.measured_trial(point.worker_point(), directory, index)
     measured_count = result["correctness"]["terminal_statuses"].get("succeeded", 0)
-    values = list(captured.values())
-    if len(values) != measured_count or len(telemetry_ms) != measured_count:
+    identities = [job.job_id for job in probe.jobs]
+    if len(identities) != measured_count:
         raise runtime.BenchmarkFailure("missing_capacity_workers")
+    values, publish_values = select_completed(captured, telemetry_ms, identities)
     if point.provider_limit is not None and result["scheduler"]["peak_provider_calls"] > point.provider_limit:
         raise runtime.BenchmarkFailure("diagnostic_provider_bound")
     result["occupancy"] = {"population": "per_completed_worker_service",
         "exclusive_priority": ["provider", "tools", "persistence", "workspace", "unattributed"],
         "phases_ms": {key: statistics([v[key] for v in values]) for key in values[0]} if values else {}}
-    result["post_service_telemetry_ms"] = statistics(list(telemetry_ms.values()))
+    result["post_service_telemetry_ms"] = statistics(publish_values)
     validate_report(result)
     return result
 

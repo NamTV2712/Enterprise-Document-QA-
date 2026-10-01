@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from scripts.benchmarks.capacity_001 import occupancy, points, union_length
+from scripts.benchmarks.capacity_001 import occupancy, points, select_completed, union_length
 from scripts.benchmarks.scale_002_runtime import BenchmarkFailure
 from src.agent.orchestration import AgentOrchestrator
 from src.agent.policies import AgentExecutionContext, ToolPolicy
@@ -53,6 +53,18 @@ def test_matrix_covers_delays_workers_anchors_and_tool_controls():
     assert {p.delay_ms for p in matrix if p.kind == "research"} == {0, 250, 500}
     assert {p.tool for p in matrix if p.tool} == {"inspect_retrieval", "ask_rag"}
     assert all(p.operations >= 20 for p in matrix)
+
+
+def test_late_warmup_callback_cannot_enter_measured_durable_population():
+    rows = {"warmup": {"service": 100}, "measured": {"service": 7}}
+    telemetry = {"warmup": 9, "measured": 2}
+    assert select_completed(rows, telemetry, ["measured"]) == ([{"service": 7}], [2])
+    assert select_completed(rows, telemetry, []) == ([], [])
+    for ids in (["missing"], ["measured", "measured"]):
+        with pytest.raises(BenchmarkFailure, match="missing_capacity_workers"):
+            select_completed(rows, telemetry, ids)
+    with pytest.raises(BenchmarkFailure, match="missing_capacity_workers"):
+        select_completed(rows, {}, ["measured"])
 
 
 @pytest.mark.parametrize("value", [-1, 1000000, "many", None])

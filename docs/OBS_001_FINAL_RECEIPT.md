@@ -12,7 +12,7 @@ SHA/results in the closing report.
   `6faacd5bfdd4259e7cb6d9504943ca392aa69f4f`.
 - Measured runtime and harness SHA:
   **`6ea9d534ba55f24fc3f094095eefede74f526bf1`**.
-- Final HEAD: the documentation commit introducing this receipt. Resolve with
+- Final HEAD: the latest documentation commit updating this receipt. Resolve with
   `git log -1 --format=%H -- docs/OBS_001_FINAL_RECEIPT.md`; the closing report
   supplies the literal final/local/upstream/remote SHA after exact-HEAD validation.
 - Protocol **obs-001-attribution-v1**, workload/statistics authority
@@ -123,7 +123,7 @@ Two configured workers; all anchors poll 500ms. Admission/read have 200 operatio
 
 ### API server and paired client attribution (enabled)
 
-Every number below is milliseconds; counts are per trial. Routes: create/list `/agent/runs`; detail `/agent/runs/{run_id}`; result/evaluation/events append the named suffix. SSE batch/resume both use `/agent/runs/{run_id}/events`. No raw URL or query dimension.
+Every number below is milliseconds; counts are per trial. Routes: create/list `/agent/runs`; detail `/agent/runs/{run_id}`; result `/agent/runs/{run_id}/results`; evaluation `/agent/runs/{run_id}/evaluation`. SSE batch/resume both use `/agent/runs/{run_id}/events`. No raw URL or query dimension.
 
 | Scenario / endpoint | Window | Count | p50 | p95 | p99 | Max |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -427,7 +427,9 @@ Commits:
    `feat(obs): add safe performance attribution and fixed benchmark`.
 2. `6ea9d534ba55f24fc3f094095eefede74f526bf1`
    `fix(obs): prevent observer-induced worker starvation` — measured runtime.
-3. Final documentation commit: `docs(obs): record performance attribution findings`;
+3. `12be777f232f269c8075f3252359cea27d70ed59`
+   `docs(obs): record performance attribution findings`.
+4. Final documentation clarification: `docs(obs): clarify result route identity`;
    literal SHA and exact normal push verification in closing report.
 
 Tracked/staged tree initially clean; same 12 historical untracked paths preserved.

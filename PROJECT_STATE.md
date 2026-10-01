@@ -109,6 +109,28 @@ coverage. Three separate fresh frozen-install full suites each 94/819 PASS,
 history 974/487/797ms; TypeScript/build PASS. Committed exact-SHA gates remain
 mandatory. All diagnostics removed.
 
+Closure candidate `4bc2ce2545c67b38dd07a17983b2a9eea5d9871b` failed its final
+Frontend CI **36859067562**: 94/819 units/type/build/contrast, 16 HTTP/SSE and 32
+Agent pass, but Firefox warm navigation p95 211ms/retry243ms exceeds 200ms
+(517 browser pass/1 fail/4 inherited skips). Backend **36859067791 SUCCESS**,
+1897/34/149. Exact committed clean backend/frontend pass; remote failure blocks
+completion. Both focus regressions pass. Preserve this failure and its traces.
+One CI worker excludes concurrent-test contention. Trace attribution proves
+p50 driver gaps about 50-51ms between six calls, while assertions are now about
+7ms. Record trusted pointer-to-visible-route time in the browser, sum both legs
+of the same 30 round trips under the same 200ms budget, and retain driver timing
+separately. No paint/speed improvement claim. Native clicks/assertions/recording
+remain. A negative delayed-readiness case protects the budget (two engine cases,
+regular 524 + dedicated 32; original population intact). Reject the first
+sampler draft (six failed first-frame barriers); await the first observed frame
+before navigating again. Second campaign: 19/19 navigation and 20/20 negative
+cases pass; one prior input gate fails on cold initial fills. Warm that control
+once before all 40 measured fills, retaining its 100ms budget. Final combined
+campaign **40/40 PASS**, zero retries: 20 full baselines + 20 negative cases,
+ten of each per engine. Input p95 15.8-35ms; browser route p95 24-65.9ms; driver
+p95 102.3-148ms reported separately. Different boundaries do not show a product
+speed improvement. New exact-SHA gates are mandatory. No runtime/dependency change.
+
 Both workflows now include the receipt path so the
 documentation closure SHA also receives complete workflows. Final literal SHA,
 committed clean results and both exact-SHA SUCCESS conclusions belong to the

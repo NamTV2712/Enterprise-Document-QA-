@@ -56,8 +56,10 @@ abort and rejection of late terminal events. Install declared Python requirement
 in a fresh environment and use Bun 1.3.14 with the frozen frontend lockfile for
 release validation; an existing development environment may contain other versions.
 CI runs the Agent shell sweep through its dedicated local fixture harness. Warm
-navigation checks retain the 200ms budget and observe visibility on browser frames
-before the explicit assertions, avoiding assertion polling delay in the samples.
+navigation checks retain the 200ms budget, native clicks and explicit assertions.
+Browser timestamps measure pointer input to visible routes; driver timing is
+reported separately. The warm input check warms the control once before its
+40 measured fills under the unchanged 100ms budget.
 Citation nodes retain focus across answer updates, and a new pointer or keyboard
 interaction cancels stale inspector focus restoration.
 

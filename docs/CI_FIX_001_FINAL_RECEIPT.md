@@ -298,6 +298,61 @@ warm reruns. Primary TypeScript/full 94-file 819-test suite/build also pass
 after this final fixture change (history 1202ms). The final committed clean gate
 remains mandatory before release.
 
+## Closure candidate failure and browser timing attribution
+
+Do not accept closure SHA `4bc2ce2545c67b38dd07a17983b2a9eea5d9871b` as complete.
+[Backend CI 36859067791](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/runs/36859067791)
+SUCCESS, job 110358508811: 1897/34/149, original contract/compile pass.
+[Frontend CI 36859067562](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/runs/36859067562)
+FAILURE, test job 110358507668: 94/819 units, type/build/contrast pass;
+regular browser 517 passed/1 failed/4 inherited skips. The only failure is
+Firefox warm-navigation p95 **211ms** (existing retry **243ms**) against the
+unchanged 200ms threshold. Input gate passes (55ms, then 42ms); both focus
+regressions pass. HTTP job 110358508068 SUCCESS: 16 HTTP/SSE + 32 Agent pass.
+The exact committed clean suites had passed backend 1897/34/149 and frontend
+frozen install/type/94 files/819 tests/build, with routes/DB/defaults unchanged;
+this does not substitute for the failed remote gate. The push was verified 0/0.
+
+CI already runs one browser worker. Downloaded original and retry traces attribute
+route-click p50 to 38.95/40.15ms, visibility assertion p50 to 7.17/7.54ms, and
+frame polling p50 to 10.69/11.86ms. The earlier assertion backoff is gone.
+Six measured native action/readiness/assertion calls have p50 sums 121.33/127.39ms;
+gaps between those calls add p50 **49.76/51.27ms**, p95 **60.26/66.45ms**, plus
+outer clock calls. Locator preparation and trace/driver scheduling are also
+included in the original proxy. These are not frontend rendering time.
+
+Observe trusted native pointer input and the same positive-size visible route
+condition using browser timestamps and animation frames. Sum both navigation
+legs for each of the same 30 round trips and enforce the same 200ms p95 budget.
+Native clicks, explicit visibility assertions, route warm-up, recording and all
+functional cases remain. Report driver elapsed separately without claiming a
+production speed improvement or first paint. The frontend contract separates
+frontend rendering from network/protocol and calls this a warm UI budget.
+A focused negative case holds route readiness beyond 200ms using frame polling
+(timing itself is under test), proves no early sample completes, then verifies
+that the delayed sample exceeds the budget. It adds two browser cases, one per
+engine: regular population 524, dedicated Agent 32; all original 554 remain.
+
+The first sampler draft was rejected: in an interrupted campaign, eight warm
+cases completed (two passed/six failed), seven negative cases passed, and one
+case was interrupted. The driver could navigate away before the first sampler
+frame; `waitForFunction` can test immediately before any frame. Await the first
+observed route frame before the second native gesture. No timeout change.
+The corrected sampler completed 19/19 navigation runs and 20/20 negative cases;
+one of 20 full baseline cases failed earlier at the unchanged warm input gate
+(p95 110ms). Its trace shows the first six native fills including 84.21/92.43/
+72.59/53.18/76.35ms, followed by 9-14ms fills. Warm that native control once,
+await its value and next rendered frame before collecting all 40 existing input
+samples, analogous to the existing route warm-up. The 100ms input budget and
+its original driver measurement remain unchanged. Final combined campaign:
+**40/40 PASS**, retries=0 (20 full warm-control/navigation cases and 20 negative
+cases, ten of each per engine). Warm input p95 15.80-35.00ms; browser route
+round-trip p95 24.00-65.90ms; separately reported driver p95 102.30-148.00ms.
+These are different measurement boundaries, not a product speed improvement.
+Primary TypeScript, full **94 files / 819 tests**, and production build also
+pass after this timing correction. New exact-commit/remote gates remain
+mandatory; no previous failures are erased.
+
 ## Files, preservation and remaining limits
 
 ### Reproduced inspector focus race

@@ -27,6 +27,59 @@ async function waitForVisibleFrame(page: Page, selector: string): Promise<void> 
   }, selector, { polling: "raf", timeout: 10_000 });
 }
 
+type ViewTimingWindow = Window & {
+  __viewTiming?: {
+    samples: number[];
+    started?: number;
+    dispose: () => void;
+  };
+};
+
+async function armViewTiming(page: Page, targets: { route: string; selector: string }[]): Promise<void> {
+  await page.evaluate((expected) => {
+    const host = window as ViewTimingWindow;
+    host.__viewTiming?.dispose();
+    let frame = 0;
+    let measuring = false;
+    const state = {
+      samples: [] as number[],
+      started: undefined as number | undefined,
+      dispose: () => {
+        cancelAnimationFrame(frame);
+        document.removeEventListener("pointerdown", onInput, true);
+      },
+    };
+    const onInput = (event: PointerEvent) => {
+      const target = expected[state.samples.length];
+      const link = event.target instanceof Element
+        ? event.target.closest("[data-route-id]") : null;
+      if (!event.isTrusted || measuring || !target || link?.getAttribute("data-route-id") !== target.route) return;
+      measuring = true;
+      state.started = performance.now();
+      const observe = () => {
+        const element = document.querySelector(target.selector);
+        const box = element?.getBoundingClientRect();
+        if (element && getComputedStyle(element).visibility === "visible" && box && box.width > 0 && box.height > 0) {
+          state.samples.push(performance.now() - state.started!);
+          measuring = false;
+          if (state.samples.length === expected.length) state.dispose();
+        } else {
+          frame = requestAnimationFrame(observe);
+        }
+      };
+      frame = requestAnimationFrame(observe);
+    };
+    host.__viewTiming = state;
+    document.addEventListener("pointerdown", onInput, true);
+  }, targets);
+}
+
+async function readViewTiming(page: Page, count: number): Promise<number[]> {
+  await page.waitForFunction((expected) => (window as ViewTimingWindow).__viewTiming?.samples.length === expected,
+    count, { polling: "raf", timeout: 10_000 });
+  return page.evaluate(() => [...(window as ViewTimingWindow).__viewTiming!.samples]);
+}
+
 function report(label: string, samples: number[], budget?: number): void {
   const p50 = percentile(samples, 0.5);
   const p95 = percentile(samples);
@@ -190,6 +243,13 @@ test("records synthetic frontend baselines for warm controls and workspace paths
   await setupSynthetic(page);
 
   const input = page.getByRole("textbox", { name: "Research question" });
+  // Warm the native control once, including its first visible update, just as
+  // the lazy route is warmed below. Keep all 40 measured fills and the budget.
+  await input.fill("Warm input control");
+  await expect(input).toHaveValue("Warm input control");
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  }));
   const inputSamples: number[] = [];
   for (let index = 0; index < 40; index += 1) {
     inputSamples.push(await elapsed(page, () => input.fill(`Warm input sample ${index}`)));
@@ -205,16 +265,31 @@ test("records synthetic frontend baselines for warm controls and workspace paths
   await expect(page.locator(".overview-panel")).toBeVisible();
 
   const viewSamples: number[] = [];
+  const driverViewSamples: number[] = [];
   for (let index = 0; index < 30; index += 1) {
-    viewSamples.push(await elapsed(page, async () => {
+    // The UI budget measures trusted pointer input to the same rendered route
+    // condition. Keep driver elapsed separately: locator preparation, assertions
+    // and protocol gaps are not frontend rendering time.
+    await armViewTiming(page, [
+      { route: "documents", selector: ".document-explorer" },
+      { route: "research", selector: ".overview-panel" },
+    ]);
+    driverViewSamples.push(await elapsed(page, async () => {
       await page.locator('[data-route-id="documents"]').click({ force: true });
       await waitForVisibleFrame(page, ".document-explorer");
       await expect(page.locator(".document-explorer")).toBeVisible();
+      // A second gesture must wait for the first route's observed frame; the
+      // driver can otherwise navigate away before its RAF sampler runs.
+      await readViewTiming(page, 1);
       await page.locator('[data-route-id="research"]').click({ force: true });
       await waitForVisibleFrame(page, ".overview-panel");
       await expect(page.locator(".overview-panel")).toBeVisible();
     }));
+    const legs = await readViewTiming(page, 2);
+    expect(legs).toHaveLength(2);
+    viewSamples.push(legs[0] + legs[1]);
   }
+  report("warm view switch driver elapsed", driverViewSamples);
   report("warm view switch", viewSamples, 200);
   expect(percentile(viewSamples)).toBeLessThan(200);
 
@@ -231,6 +306,22 @@ test("records synthetic frontend baselines for warm controls and workspace paths
   console.log("[performance] Scope editor mount on the empty overview: UNVERIFIED; existing ScopeEditor unit/interaction tests cover its lifecycle.");
   console.log("[performance] 60-second stream with simultaneous typing: UNVERIFIED in this provider-free baseline");
   console.log("[performance] Network/provider timing: UNVERIFIED here; local endpoint timings are recorded by the LOCAL BACKEND test.");
+});
+
+test("view timing includes delayed route readiness after trusted pointer input", async ({ page }) => {
+  await page.setContent('<a href="#" data-route-id="probe">Open probe</a><section class="probe-panel" hidden>Ready</section>');
+  await armViewTiming(page, [{ route: "probe", selector: ".probe-panel" }]);
+  await page.getByRole("link", { name: "Open probe" }).click();
+  // Timing is the contract under test. Hold readiness beyond the unchanged
+  // budget, then prove the sample cannot finish early or omit that delay.
+  await page.waitForFunction(() => {
+    const state = (window as ViewTimingWindow).__viewTiming;
+    return state?.started !== undefined && performance.now() - state.started > 200;
+  }, undefined, { polling: "raf", timeout: 10_000 });
+  expect(await page.evaluate(() => (window as ViewTimingWindow).__viewTiming!.samples)).toHaveLength(0);
+  await page.locator(".probe-panel").evaluate((element) => { (element as HTMLElement).hidden = false; });
+  const samples = await readViewTiming(page, 1);
+  expect(samples[0]).toBeGreaterThan(200);
 });
 
 test("records source switching, reader warm/cold paths, and final Markdown render", async ({ page }) => {

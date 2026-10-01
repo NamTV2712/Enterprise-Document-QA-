@@ -3,13 +3,48 @@
 Vite + React + TypeScript client for the Enterprise Document QA FastAPI backend. The frontend displays streamed answers, source citations, supported ticker filters, saved local conversations, session history, and decomposed sub-queries.
 
 The research workspace uses a warm paper/navy palette with calmer indigo action
-accents and teal verification states in both light and dark themes.
+accents and teal verification states in both light and dark themes. The UI can
+follow the browser language or be pinned to English or Vietnamese; the choice
+is stored locally and the answer language can be selected independently per
+question.
 
 The workspace keeps the primary question flow compact: advanced retrieval
 settings, interpreted queries, decomposition traces, and filing evidence are
 progressively disclosed so the answer remains the visual focus. The layout is
 responsive for mobile drawers, keyboard navigation, dark mode, and reduced
 motion preferences.
+
+## Agent workspace
+
+`/agent` shows private durable Agent history after an explicit local workspace
+connection; `/agent/runs/:runId` deep links to a selected run. The bearer remains
+in tab memory and is forgotten on reload. The page shows frozen policy, safe
+action and state events, research objective coverage and canonical evidence
+IDs, final result and 21 native evaluation metrics for terminal runs. It does
+not display model reasoning, source excerpts from event metadata, or an
+aggregate quality score. Creation uses the backend only when local execution
+is enabled; current production has no structured decision provider, so new
+runs report provider unavailability instead of an answer. Cancellation uses
+the current run revision and reconciles conflicts.
+
+## Analytics, Logs and Settings
+
+Analytics reads DATA-005 server summary and UTC buckets for 24h, 7d and 30d.
+Rates retain their numerator/denominator; null duration is not measured and
+zero remains real. The former browser-local Analytics writer is retired without
+deleting stored user history. Logs reads only the sanitized seven-day request/job
+projection, with category/severity filters, safe detail and opaque cursor paging.
+Neither page polls; use Refresh. URL selectors support Back/Forward.
+
+Private reads reuse the app-level local connection from Pipeline/Evaluation.
+The bearer stays in memory, is cleared on disconnect/reload, and never goes on
+public system/model reads. Public deployments show unavailable, not false zeros.
+Settings edits browser theme/language and reuses real backup preview/import,
+export and writer recovery. Retention (30 days), log window (7 days), provider
+presence, deployment/capabilities and current system facts are read-only.
+No retention, log-clear, model/provider switch or workspace-settings write API
+exists; no fake mutation controls are offered. Architecture/help remains at
+`/settings?panel=architecture`.
 
 ## Conversation Library
 
@@ -51,10 +86,16 @@ the header documents usage and shortcuts.
 
 Answers expose a per-answer Bookmark control, and the Library's "Bookmarked
 answers" filter opens the exact message. Each evidence panel has a literal,
-case-insensitive search that filters excerpts while keeping the original
+case- and accent-insensitive search that filters excerpts while keeping the original
 `[Source N]` numbering, plus a per-excerpt copy button that includes the
 citation, company, section, and filed date. Filed dates are document metadata
 and are never presented as the fiscal period of a number.
+
+The Library also supports a versioned JSON backup. Exported records omit
+deletion tombstones and are imported with fresh local conversation/session IDs,
+so importing a file cannot overwrite an existing conversation. The import is
+limited to the repository's 25 MiB budget and validates its format before any
+record is written.
 
 ## Local Development
 
@@ -91,9 +132,11 @@ and session history remain fresh requests.
 
 ## Browser Verification
 
-Browser tests run against the production build with fully mocked API routes;
-no test reaches a real backend or provider. Display assertions check real
-rendered state (bounding box plus the opacity/visibility ancestor chain) and
+The default `test:e2e` suite uses mocked API routes against a production build.
+Separate `test:e2e-integration`, `test:e2e-local`, and `test:e2e-product` suites
+use deterministic real FastAPI HTTP handlers; the product suite also uses a
+temporary SQLite workspace. None requires a live provider. Display assertions
+check real rendered state (bounding box plus the opacity/visibility ancestor chain) and
 never force animation state; under `prefers-reduced-motion` entrance
 animations are disabled so content is visible immediately.
 
@@ -101,6 +144,14 @@ animations are disabled so content is visible immediately.
 VITE_API_BASE_URL=http://127.0.0.1:8000 bun run test:e2e
 bun e2e/token-contrast.mjs
 ```
+
+For real-handler verification, activate the backend test environment or set
+`HARNESS_PYTHON` to its interpreter path, then run `bun run test:e2e-product`.
+The TEST-004 receipt records 24 Chromium/Firefox journeys against the built app
+and local public/private API. The integration and local
+reader suites are available as `bun run test:e2e-integration` and
+`bun run test:e2e-local`. Their corpus/model/provider dependencies are
+controlled test doubles, not live SEC or Groq calls.
 
 `test:e2e` builds, serves `dist/` with `vite preview`, and runs Playwright
 across Chromium and Firefox: streaming and dropped-stream normalization,
@@ -139,6 +190,7 @@ All request and response bodies are JSON except the SSE stream. Query requests u
            "financial_statements" | "financial_table" | null;
   top_k: number;             // 1-10
   session_id: string | null;
+  answer_language: "en" | "vi";
 }
 ```
 
@@ -170,3 +222,8 @@ Session history responses may include an optional `context` object
 (`status: "available" | "missing"`, `retained_turns`,
 `ttl_remaining_seconds`). Older backends without `context` are supported:
 the frontend infers availability from the turns array.
+
+Vietnamese retrieval uses a conservative lexical normalizer for labelled
+financial terms and preserves complex entities and comparative intent. The
+answer contract is selected explicitly with `answer_language`; evidence stays
+verbatim and citations retain their original `[Source N]` form.

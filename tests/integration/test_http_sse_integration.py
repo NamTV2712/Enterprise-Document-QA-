@@ -197,7 +197,7 @@ def test_non_streaming_query_returns_cited_answer_and_sources(harness) -> None:
     assert payload["sources"][0]["ticker"] == "AAPL"
 
 
-def test_streaming_query_emits_sources_tokens_then_done(harness) -> None:
+def test_streaming_query_emits_stages_sources_tokens_then_done(harness) -> None:
     import httpx
 
     events: list[dict] = []
@@ -214,11 +214,41 @@ def test_streaming_query_emits_sources_tokens_then_done(harness) -> None:
                 events.append(json.loads(line[len("data: "):]))
 
     types = [event["type"] for event in events]
-    assert types[0] == "sources"
+    assert types[:2] == ["stage", "stage"]
+    assert types.index("sources") > types.index("stage")
     assert "token" in types
     assert types[-1] == "done"
+    stage_events = [event["data"] for event in events if event["type"] == "stage"]
+    assert [event["stage_id"] for event in stage_events] == [
+        "query_preparation",
+        "query_preparation",
+        "retrieval",
+    ]
+    assert [event["sequence"] for event in stage_events] == [1, 2, 3]
+    assert stage_events[-1]["counters"]["source_count"] == 1
+    assert events[types.index("sources")]["data"][0]["chunk_id"] == "MSFT_harness_0000"
     answer = "".join(event["data"] for event in events if event["type"] == "token")
     assert "[Source 1]." in answer
+
+
+def test_document_catalog_and_chunk_reader_preserve_harness_identity(harness) -> None:
+    import httpx
+
+    catalog = httpx.get(f"{harness['app']}/documents", params={"ticker": "AAPL"}, timeout=5)
+    assert catalog.status_code == 200
+    assert catalog.json()["items"][0]["document_id"] == "AAPL:HARNESS"
+
+    listing = httpx.get(f"{harness['app']}/documents/AAPL:HARNESS/chunks", timeout=5)
+    assert listing.status_code == 200
+    assert [item["chunk_id"] for item in listing.json()["items"]] == [
+        "AAPL_harness_0000",
+        "AAPL_harness_0001",
+    ]
+
+    detail = httpx.get(f"{harness['app']}/chunks/AAPL_harness_0000", timeout=5)
+    assert detail.status_code == 200
+    assert detail.json()["document_id"] == "AAPL:HARNESS"
+    assert detail.json()["text"] == "Harness indexed excerpt for AAPL."
 
 
 def test_stream_through_rechunking_proxy_parses_mid_utf8_chunks(harness) -> None:

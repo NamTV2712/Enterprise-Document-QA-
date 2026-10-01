@@ -1,4 +1,5 @@
 import React from "react";
+import { useLocale } from "../lib/i18n";
 
 interface ConnectionStatusProps {
   isBackendConnected: boolean | null;
@@ -11,23 +12,26 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
   isPipelineReady,
   companyCount,
 }) => {
+  const { locale } = useLocale();
   const isChecking = isBackendConnected === null || isPipelineReady === null;
   const isReady = isBackendConnected === true && isPipelineReady === true;
   const label = isChecking
-    ? "Connecting"
+    ? locale === "vi" ? "Đang kết nối" : "Connecting"
     : !isBackendConnected
-      ? "API offline"
+      ? locale === "vi" ? "API ngoại tuyến" : "API offline"
       : isPipelineReady
-      ? "Pipeline: Ready"
-        : "Pipeline loading";
+      ? locale === "vi" ? "Nghiên cứu: Sẵn sàng" : "Research ready"
+        : locale === "vi" ? "Chỉ mục chưa sẵn sàng" : "Index not ready";
 
   return (
     <div
       role="status"
       aria-live="polite"
-      aria-label={`Backend connection status: ${label}`}
+      aria-label={`${locale === "vi" ? "Trạng thái kết nối backend" : "Backend connection status"}: ${label}`}
       title={label}
-      className="inline-flex min-h-8 items-center gap-2 rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300"
+      className={`connection-status header-compact-status connection-status--${
+        isChecking ? "checking" : isReady ? "ready" : !isBackendConnected ? "offline" : "loading"
+      }`}
     >
       <span
         aria-hidden="true"
@@ -41,10 +45,10 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
                 : "connection-dot--loading"
         }`}
       />
-      <span className="hidden whitespace-nowrap sm:inline">{label}</span>
-      {isReady && companyCount ? (
-        <span className="hidden sm:inline text-slate-400 dark:text-slate-500">
-          · {companyCount} indexed
+        <span className="hidden whitespace-nowrap sm:inline">{label}</span>
+      {isReady && typeof companyCount === "number" ? (
+        <span className="hidden sm:inline connection-status__meta">
+          · {companyCount} {locale === "vi" ? "công ty có thể tìm kiếm" : "searchable companies"}
         </span>
       ) : null}
     </div>

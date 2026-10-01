@@ -4,68 +4,72 @@
  */
 
 import React from "react";
-import { RefreshCw } from "lucide-react";
-import { HealthResponse } from "../types";
+import { Database, LockKeyhole } from "lucide-react";
+import { ConversationStorageMode, WriterStatus } from "../lib/conversationStore";
+import type { SaveIndicator } from "../hooks/useConversationLibrary";
+import { useLocale } from "../lib/i18n";
 
 interface SidebarFooterProps {
-  healthData: HealthResponse | null;
-  isClearingSession: boolean;
-  onNewConversation: () => void;
+  storageMode: ConversationStorageMode;
+  storageWarning: string | null;
+  saveIndicator?: SaveIndicator;
+  writerStatus?: WriterStatus;
+  isCompact?: boolean;
 }
 
 export const SidebarFooter = React.memo<SidebarFooterProps>(
-  ({ healthData, isClearingSession, onNewConversation }) => (
-    <div className="sidebar-footer">
-      <div className="space-y-2.5 text-xs relative z-10" role="status" aria-live="polite">
-        <div className="flex items-center justify-between">
-          <span className="text-slate-500 dark:text-slate-400 font-semibold text-xs">
-            System metrics
-          </span>
-          <span className="sidebar-footer__pulse" aria-hidden="true" />
+  ({ storageMode, storageWarning, saveIndicator = "idle", writerStatus, isCompact }) => {
+    const { locale } = useLocale();
+    const storageLabel = storageMode === "memory"
+      ? locale === "vi" ? "Chỉ trong phiên" : "Session only"
+      : locale === "vi" ? "Lưu trên trình duyệt" : "Browser storage";
+    const storageDetail = storageWarning ?? (
+      storageMode === "memory"
+        ? locale === "vi" ? "Bộ nhớ trình duyệt chưa khả dụng; dữ liệu không bền vững." : "Browser storage is unavailable; data is not durable."
+        : locale === "vi" ? "Thư viện hội thoại lưu cục bộ trong trình duyệt này." : "Conversation library is stored locally in this browser."
+    );
+    const saveLabel = saveIndicator === "saved"
+      ? locale === "vi" ? "Đã lưu" : "Saved"
+      : saveIndicator === "volatile"
+        ? locale === "vi" ? "Chỉ trong phiên" : "Session only"
+        : locale === "vi" ? "Chưa có thay đổi" : "No pending save";
+    const writerLabel = writerStatus?.readOnly
+      ? locale === "vi" ? "Tab chỉ đọc" : "Read-only tab"
+      : null;
+
+    if (isCompact) {
+      return (
+        <div className="sidebar-footer p-2 flex flex-col items-center gap-2" title={`${storageLabel}: ${storageDetail}`}>
+          <Database className="h-4 w-4 text-slate-400" aria-hidden="true" />
+          <span className="sr-only">{storageLabel}</span>
         </div>
+      );
+    }
 
-        {healthData?.memory && (
-          <div className="grid grid-cols-2 gap-2 text-xs border-t border-slate-200 dark:border-slate-800/80 pt-2.5">
-            <div className="sidebar-metric-card">
-              <div className="text-slate-500 dark:text-slate-450 font-sans font-bold">
-                Active Sessions
-              </div>
-              <div className="text-[#26324A] dark:text-[#FCFBF8] font-bold mt-1 text-xs font-mono">
-                {healthData.memory.active_sessions}
-              </div>
-              <div className="mt-1 text-xs leading-tight text-slate-400 dark:text-slate-500 font-sans">
-                In-memory conversations
-              </div>
+    return (
+      <div className="sidebar-footer px-3 py-3 border-t border-[var(--border-subtle)] flex flex-col gap-3 shrink-0">
+        <div className="sidebar-storage-widget rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-2.5 text-left">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-[var(--text-primary)]">
+              <Database className="h-3.5 w-3.5 shrink-0 text-[var(--accent-text)]" aria-hidden="true" />
+              <span>{locale === "vi" ? "Lưu trữ" : "Storage"}</span>
             </div>
-            <div className="sidebar-metric-card">
-              <div className="text-slate-500 dark:text-slate-450 font-sans font-bold">
-                Total Turns
-              </div>
-              <div className="text-[#26324A] dark:text-[#FCFBF8] font-bold mt-1 text-xs font-mono">
-                {healthData.memory.total_turns}
-              </div>
-              <div className="mt-1 text-xs leading-tight text-slate-400 dark:text-slate-500 font-sans">
-                Retained messages
-              </div>
-            </div>
+            <span className="text-[10px] text-[var(--text-subtle)]">{storageLabel}</span>
           </div>
-        )}
+          <p className="mt-1.5 text-[11px] leading-snug text-[var(--text-subtle)]">{storageDetail}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-[var(--text-muted)]">
+            <span>{saveLabel}</span>
+            {writerLabel && (
+              <span className="inline-flex items-center gap-1">
+                <LockKeyhole className="h-3 w-3" aria-hidden="true" />
+                {writerLabel}
+              </span>
+            )}
+          </div>
+        </div>
       </div>
-
-      <button
-        type="button"
-        id="new-convo-btn"
-        disabled={isClearingSession}
-        onClick={onNewConversation}
-        className="sidebar-new-conversation"
-      >
-        <RefreshCw
-          className={`w-3.5 h-3.5 ${isClearingSession ? "animate-spin" : ""}`}
-        />
-        <span>{isClearingSession ? "Resetting..." : "New conversation"}</span>
-      </button>
-    </div>
-  ),
+    );
+  },
 );
 
 SidebarFooter.displayName = "SidebarFooter";

@@ -7,8 +7,11 @@ execute them in parallel, and aggregate the results
 import json
 import logging
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
+from threading import Event
+from typing import Any, Callable
 
 from configs.tickers import TICKERS
 from src.generation.comparative_context import (
@@ -133,6 +136,26 @@ Rules:
    without presenting retrieved sources as relevant.
 9. Do not speculate or use external knowledge."""
 
+VIETNAMESE_SYNTHESIS_SYSTEM_PROMPT = (
+    SYNTHESIS_SYSTEM_PROMPT
+    + "\n10. Respond in Vietnamese. Preserve company names, values, periods, "
+    "and [Source N] citations exactly."
+)
+
+StageCallback = Callable[[str, str, float | None, dict[str, Any] | None, dict[str, Any] | None], None]
+
+
+class QueryCancelled(Exception):
+    """Internal signal used to stop comparative work after client disconnect."""
+
+
+def synthesis_prompt_for_language(answer_language: str = "en") -> str:
+    return (
+        VIETNAMESE_SYNTHESIS_SYSTEM_PROMPT
+        if answer_language == "vi"
+        else SYNTHESIS_SYSTEM_PROMPT
+    )
+
 
 @dataclass
 class SubQuery:
@@ -180,9 +203,38 @@ class QueryDecomposer:
         ticker: str | None = None,
         section: str | None = None,
         session_id: str | None = None,
+        answer_language: str = "en",
+        stage_callback: StageCallback | None = None,
+        cancel_event: Event | None = None,
     ) -> DecomposedResponse:
         """Entry point: Decide for yourself whether decomposition is necessary."""
-        plan = self._plan(question)
+        def emit(
+            stage_id: str,
+            status: str,
+            elapsed_ms: float | None = None,
+            counters: dict[str, Any] | None = None,
+            metadata: dict[str, Any] | None = None,
+        ) -> None:
+            if stage_callback is not None:
+                stage_callback(stage_id, status, elapsed_ms, counters, metadata)
+
+        def ensure_active() -> None:
+            if cancel_event is not None and cancel_event.is_set():
+                raise QueryCancelled()
+
+        ensure_active()
+        plan_started = time.perf_counter()
+        emit("decomposition_plan", "running")
+        try:
+            plan = self._plan(question)
+        except QueryCancelled:
+            emit("decomposition_plan", "cancelled")
+            raise
+        except Exception:
+            emit("decomposition_plan", "failed")
+            raise
+        emit("decomposition_plan", "success", (time.perf_counter() - plan_started) * 1000)
+        ensure_active()
 
         if not plan.get("needs_decomposition"):
             # Simple query: use the existing pipeline path.
@@ -192,6 +244,7 @@ class QueryDecomposer:
                 ticker=ticker,
                 section=section,
                 session_id=session_id,
+                answer_language=answer_language,
             )
             return DecomposedResponse(
                 answer=response.answer,
@@ -219,6 +272,7 @@ class QueryDecomposer:
                 ticker=ticker,
                 section=section,
                 session_id=session_id,
+                answer_language=answer_language,
             )
             return DecomposedResponse(
                 answer=response.answer,
@@ -234,7 +288,36 @@ class QueryDecomposer:
         )
 
         # Execute sub-queries in parallel
-        sub_queries = self._execute_parallel(sub_queries, top_k=top_k)
+        retrieval_started = time.perf_counter()
+        emit("subquery_retrieval", "running", counters={"subquery_count": len(sub_queries)})
+        try:
+            if stage_callback is None and cancel_event is None:
+                # Preserve the narrow helper seam used by existing callers and
+                # tests that replace _execute_parallel with a two-argument stub.
+                sub_queries = self._execute_parallel(sub_queries, top_k=top_k)
+            else:
+                sub_queries = self._execute_parallel(
+                    sub_queries,
+                    top_k=top_k,
+                    stage_callback=stage_callback,
+                    cancel_event=cancel_event,
+                )
+            ensure_active()
+        except QueryCancelled:
+            emit("subquery_retrieval", "cancelled")
+            raise
+        except Exception:
+            emit("subquery_retrieval", "failed")
+            raise
+        emit(
+            "subquery_retrieval",
+            "success",
+            (time.perf_counter() - retrieval_started) * 1000,
+            counters={
+                "subquery_count": len(sub_queries),
+                "source_count": sum(len(sub_query.retrieved_chunks) for sub_query in sub_queries),
+            },
+        )
 
         # Deduplicate and synthesis
         all_chunks = self._deduplicate(sub_queries)
@@ -248,7 +331,12 @@ class QueryDecomposer:
                 sorted(missing_tickers),
             )
             return DecomposedResponse(
-                answer=INSUFFICIENT_DECOMPOSED_CONTEXT_ANSWER,
+                answer=(
+                    "Tôi không tìm thấy đủ thông tin trong các tài liệu hiện có "
+                    "để trả lời câu hỏi này với độ tin cậy cần thiết."
+                    if answer_language == "vi"
+                    else INSUFFICIENT_DECOMPOSED_CONTEXT_ANSWER
+                ),
                 sub_queries=sub_queries,
                 all_chunks=all_chunks,
                 model_used=self.generator.model,
@@ -258,7 +346,18 @@ class QueryDecomposer:
         synthesis_chunks = self._select_comparative_context(
             sub_queries, all_chunks
         )
-        answer = self._synthesize(question, synthesis_chunks)
+        synthesis_started = time.perf_counter()
+        emit("synthesis", "running", counters={"source_count": len(synthesis_chunks)})
+        try:
+            answer = self._synthesize(question, synthesis_chunks, answer_language)
+            ensure_active()
+        except QueryCancelled:
+            emit("synthesis", "cancelled")
+            raise
+        except Exception:
+            emit("synthesis", "failed")
+            raise
+        emit("synthesis", "success", (time.perf_counter() - synthesis_started) * 1000)
 
         return DecomposedResponse(
             answer=answer,
@@ -389,12 +488,21 @@ class QueryDecomposer:
         self,
         sub_queries: list[SubQuery],
         top_k: int,
+        stage_callback: StageCallback | None = None,
+        cancel_event: Event | None = None,
     ) -> list[SubQuery]:
         """Retrieve for all sub-queries in parallel.
         ThreadPoolExecutor is suitable because retrieval is I/O-bound
         (Qdrant + cross-encoder inference)."""
-        def retrieve_one(sq: SubQuery) -> SubQuery:
+        def retrieve_one(index_and_query: tuple[int, SubQuery]) -> SubQuery:
+            index, sq = index_and_query
+            stage_id = f"subquery_{index + 1}_retrieval"
+            started_at = time.perf_counter()
+            if stage_callback is not None:
+                stage_callback(stage_id, "running", None, None, {"subquery_index": index + 1})
             try:
+                if cancel_event is not None and cancel_event.is_set():
+                    raise QueryCancelled()
                 shaped = shape_retrieval_query(sq.query)
                 sq.retrieved_chunks = self.retriever.retrieve(
                     query=shaped.retrieval_query,
@@ -406,6 +514,18 @@ class QueryDecomposer:
                     "Sub-query '%s...' -> %d chunks",
                     shaped.retrieval_query[:60], len(sq.retrieved_chunks)
                 )
+                if stage_callback is not None:
+                    stage_callback(
+                        stage_id,
+                        "success",
+                        (time.perf_counter() - started_at) * 1000,
+                        {"source_count": len(sq.retrieved_chunks)},
+                        {"subquery_index": index + 1},
+                    )
+            except QueryCancelled:
+                if stage_callback is not None:
+                    stage_callback(stage_id, "cancelled", None, None, {"subquery_index": index + 1})
+                raise
             except Exception:
                 logger.exception(
                     "Sub-query FAILED: '%s' (ticker=%s, section=%s)",
@@ -414,10 +534,21 @@ class QueryDecomposer:
                     sq.section,
                 )
                 sq.retrieved_chunks = []
+                if stage_callback is not None:
+                    stage_callback(
+                        stage_id,
+                        "failed",
+                        (time.perf_counter() - started_at) * 1000,
+                        None,
+                        {"subquery_index": index + 1},
+                    )
             return sq
 
         with ThreadPoolExecutor(max_workers=min(len(sub_queries), 4)) as executor:
-            futures = {executor.submit(retrieve_one, sq): sq for sq in sub_queries}
+            futures = {
+                executor.submit(retrieve_one, (index, sq)): sq
+                for index, sq in enumerate(sub_queries)
+            }
             results = []
             for future in as_completed(futures):
                 results.append(future.result())
@@ -442,11 +573,14 @@ class QueryDecomposer:
         self,
         original_question: str,
         all_chunks: list[RetrievedChunk],
+        answer_language: str = "en",
     ) -> str:
         """Generate a synthesized answer from all retrieved chunks."""
         if not all_chunks:
             return (
-                "I could not find sufficient information to answer this "
+                "Tôi không tìm thấy đủ thông tin để trả lời câu hỏi so sánh này."
+                if answer_language == "vi"
+                else "I could not find sufficient information to answer this "
                 "comparative question. Please ensure the companies you're "
                 "asking about are in the document corpus."
             )
@@ -480,7 +614,10 @@ class QueryDecomposer:
             response = self.generator._create_groq_chat_completion(
                 model=self.generator.model,
                 messages=[
-                    {"role": "system", "content": SYNTHESIS_SYSTEM_PROMPT},
+                    {
+                        "role": "system",
+                        "content": synthesis_prompt_for_language(answer_language),
+                    },
                     {"role": "user", "content": prompt},
                 ],
                 max_tokens=1024,
@@ -515,4 +652,9 @@ class QueryDecomposer:
                 original_question[:80],
                 len(all_chunks),
             )
-            return SYNTHESIS_ERROR_ANSWER
+            return (
+                "Đã xảy ra lỗi khi tổng hợp câu trả lời từ các nguồn đã tìm thấy. "
+                "Vui lòng diễn đạt lại câu hỏi."
+                if answer_language == "vi"
+                else SYNTHESIS_ERROR_ANSWER
+            )

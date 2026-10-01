@@ -1,0 +1,49 @@
+.operations-page { color: var(--text-primary); display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.operations-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.operations-header h1 { font-size: 24px; font-weight: 700; margin: 4px 0; }
+.operations-page p { font-size: 13px; line-height: 1.6; color: var(--text-secondary); }
+.operations-card { padding: 18px; border: 1px solid var(--border-subtle); border-radius: 12px; background: var(--surface-raised); min-width: 0; }
+.operations-card h2, .operations-state h2 { font-weight: 650; font-size: 14px; margin-bottom: 10px; }
+.operations-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; }
+.operations-metrics strong { display: block; font-size: 25px; line-height: 1.4; overflow-wrap: anywhere; }
+.operations-groups { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.operations-controls, .operations-connection, .operations-connection form { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; }
+.operations-connection { justify-content: space-between; }
+.operations-connection form { min-width: 0; }
+.operations-page label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; min-width: 0; }
+.operations-page input, .operations-page select { height: 44px; max-width: 100%; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text-primary); padding: 0 12px; font-size: 14px; }
+.operations-page button, .operations-page summary, .operations-page a { min-height: 44px; }
+.operations-page :is(.primary-action-button,.secondary-action-button) { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 650; }
+.operations-page .secondary-action-button { border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-primary); }
+.operations-page .secondary-action-button:hover { background: var(--surface-hover); }
+.operations-page a { display: inline-flex; align-items: center; text-decoration: underline; }
+.operations-state { border: 1px dashed var(--border-strong); border-radius: 12px; padding: 24px; }
+.operations-page dl { font-size: 13px; margin: 12px 0; }
+.operations-page dl > div { display: flex; justify-content: space-between; gap: 20px; padding: 7px 0; border-bottom: 1px solid var(--border-subtle); }
+.operations-page dt { color: var(--text-secondary); }
+.operations-page dd { text-align: right; overflow-wrap: anywhere; min-width: 0; }
+.operations-page details { margin-top: 12px; }
+.operations-page summary { cursor: pointer; display: list-item; align-content: center; font-size: 13px; }
+.operations-chart { width: 100%; height: auto; max-height: 220px; color: var(--text-secondary); margin: 16px 0; }
+.operations-chart text { font-size: 11px; }
+.operations-table-scroll { max-height: 380px; overflow: auto; }
+.operations-page table { width: 100%; font-size: 12px; text-align: left; border-collapse: collapse; }
+.operations-page caption { text-align: left; padding: 10px; }
+.operations-page th, .operations-page td { padding: 10px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+.operations-logs { list-style: none; display: grid; gap: 10px; padding: 0; }
+.operations-log-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 13px; }
+.operations-log-heading h2 { margin: 0; }
+.operations-log-heading time { margin-left: auto; font-size: 12px; color: var(--text-secondary); overflow-wrap: anywhere; }
+.operations-logs p { overflow-wrap: anywhere; margin-top: 10px; }
+.operations-level { padding: 4px 9px; border: 1px solid var(--border-strong); border-radius: 6px; font-weight: 650; }
+.operations-level--info { border-color: var(--accent-text); }
+.operations-level--warning { background: var(--surface-muted); border-color: var(--warning); }
+.operations-level--error { border-color: var(--danger); border-style: double; border-width: 3px; }
+.operations-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.operations-page :is(button,input,select,summary,a):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+.operations-page button:disabled { opacity: .6; cursor: not-allowed; }
+.operations-window { overflow-wrap: anywhere; }
+@media (max-width:1100px) { .operations-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width:650px) { .operations-metrics,.operations-groups { grid-template-columns: minmax(0,1fr); } .operations-card { padding: 14px; } .operations-controls label,.operations-connection form,.operations-connection label { width: 100%; } .operations-page input,.operations-page select { font-size: 16px; width:100%; } .operations-log-heading time { width: 100%; margin-left: 0; } .operations-header { flex-wrap: wrap; } }
+@media (prefers-reduced-motion:reduce) { .operations-page *, .operations-page *::before, .operations-page *::after { animation: none !important; transition: none !important; } }
+@media (max-width:650px) { .operations-chart text { display: none; } }

@@ -446,6 +446,7 @@ def test_comparative_synthesis_uses_oracle_free_context_selector(
         "Compare Apple and Microsoft's cloud revenue",
         [executed_sub_queries[0].retrieved_chunks[0],
          executed_sub_queries[1].retrieved_chunks[0]],
+        "en",
     )
     assert result.all_chunks == [
         executed_sub_queries[0].retrieved_chunks[0],
@@ -502,6 +503,7 @@ def test_comparative_selector_falls_back_if_it_drops_a_company_branch(
             executed_sub_queries[0].retrieved_chunks[0],
             executed_sub_queries[1].retrieved_chunks[0],
         ],
+        "en",
     )
     assert result.all_chunks == [
         executed_sub_queries[0].retrieved_chunks[0],

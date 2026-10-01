@@ -1,5 +1,2815 @@
 # Project State
 
+## SCALE-002 complete - Load/concurrency/capacity characterization (2026-10-01)
+
+Starting SHA `009b04e699bc9e61b4dd37722076e1ad6237c567`; benchmarked runtime
+**`23702743ee6e3e807dad4004c68ff77cb6006bef`**, branch
+codex/bilingual-research-workspace. The [protocol](docs/SCALE_002_BENCHMARK_PROTOCOL.md)
+and [receipt](docs/SCALE_002_FINAL_RECEIPT.md) bind real TCP/access/SQLite/workers/
+Agent/SDK/events/evaluation to safe deterministic fixtures and monotonic commit
+boundaries. Three trials, warmup excluded, explicit nearest-rank sample minima.
+No production source/frontend/default/dependency/lockfile/route/migration change.
+
+Accepted: 51 hermetic scenarios / 153 trials plus three separate artifact-backed
+trials. Admission/read levels 1/5/10/25/50/100, default-worker full-run levels
+1/2/5/10/25/50, comparative workers 1/2/4/8 at fixed 25 clients, SSE 1/10/25/50,
+mixed 5/25/50, selected cancellation and one deterministic failed job per degraded
+trial. Artificial decision delays 0/250ms are synthetic, not Groq timings.
+Optional artifact path measures discovery/BM25/chunk reading, not dense/reranker
+performance; no corpus regeneration. Interrupted worker=8/moderate point's two
+trials were excluded and the entire point rerun with three fresh trials.
+
+Admission/read throughput plateaus around 54-66/57-62 requests/sec, with 100-client
+p95 3.22/3.35s. At worker=2/moderate, worker/research throughput plateaus near
+3.1/2.2 jobs/sec from 5-50 clients while queue p95 reaches 13.29/19.72s. At fixed 25
+clients, workers 1/2/4/8 moderate throughput 1.74/3.06/5.21/8.52 jobs/sec; instant
+13-17 jobs/sec shows no consistent gain from additional workers. Mixed 50 falls
+to 1.06 jobs/sec with queue p95 43.64s; transaction p95 6.63ms but serialized Python
+lock wait p95 540.39ms. Those distinguish synthetic waiting, serialized access and
+incompletely attributed local overhead. No SQLite busy/claim/integrity failures;
+no database migration or default change follows. Highest tested successful levels
+are benchmark regions, not production maximum users/SLA.
+
+All 156 trials passed recorded correctness, capacity, owner/call/event/cancel/
+resume/terminal-mutation and same-DB v7 integrity/reopen gates. 498/498 subscribers
+succeeded; no missing/duplicate/order/resume failures. Selected terminal failures
+and stale 409s were expected. No reproducible P0-P2 product defect was found.
+Initial P3 harness rollback-hook/stopped-warm-pool/deadline issues were corrected
+before canonical measurement. Raw outputs remain ignored, only summaries committed.
+
+New harness 49 passed; focused harness/SCALE-001/provider 196 passed. Full primary
+**1779 / 188 warnings**; committed source-clean **1745 / 34 expected artifact skips /
+148 warnings**, zero failures and unchanged warnings. Primary/clean imports,
+90 unique routes, v7/v7 and integrity verified. Frontend inherited 94/818, TS/build
+PASS is unchanged and not rerun. Final documentation closure/committed clean gate
+and normal GitHub push of exact HEAD, matching upstream/remote and 0/0 ahead-behind
+are recorded in final chat. Same 12 unrelated untracked paths preserved; no secrets,
+raw artifacts, dependencies, private DB or model cache committed.
+
+**Proposed next task: OBS-001 - Attribute Agent API, stream and serialized-access
+overhead under fixed hermetic load**, including separated client/server CPU,
+initialization, validation/serialization, evaluation and lock/SQL boundaries.
+The measurements do not yet select caching or DB migration. No implementation.
+SCALE-001/002 COMPLETE; SCALE-003 NOT STARTED; **STOP** after release verification.
+
+## SCALE-001 complete — Durable background Agent workers (2026-09-30)
+
+This new optional scope preserves completed product/Agent/PROVIDER-001 work.
+Starting HEAD is `b13fff6affc919a19f13bda3ddc730c319a705c2`; the separate
+[scaling roadmap](docs/SCALING_ROADMAP.md) records ownership and checkpoints.
+Agent execution moves from response background tasks to a lifespan-owned,
+bounded asyncio pool over DATA-004. The production registry includes only
+`agent / bounded_agent_run`. Pipeline remains staging-only; Evaluation retains
+its synchronous EVAL-003 executor and conservative case/attempt/report receipts;
+model tests remain provider-free synchronous identity checks. No migration,
+dependency, lockfile, new route or production frontend source change is needed.
+
+Claim uses one BEGIN IMMEDIATE transaction and existing revision/event mutation
+authority. Existing jobs_listing_idx supports creation timestamp/job-ID order.
+Defaults are two workers, 500ms polling and five-second shutdown grace, gated
+by explicit local execution; public startup opens no workspace database. Slots
+and tasks stay bounded for a durable backlog. Worker-time provider binding,
+frozen grants, one Agent loop, canonical research and 21 native metrics remain.
+Shutdown stops claims, permits grace and marks unresolved ownership interrupted;
+pending bounded SQLite operations are reconciled rather than abandoned. External
+thread/provider effects remain uncertain and are never automatically replayed.
+Queued unclaimed work survives restart; claimed work becomes interrupted.
+
+Initial new worker/Agent-worker suite passed 49; final focused suite passed
+**51/51** after adding blocked synchronous-tool and transient-claim regressions.
+Shared focused regression passed **486/486** before the last four new cases.
+The final full backend passed **1730/1730 with 188 warnings**, including all
+51 new cases. Frontend remains **94 files /
+818 tests**, TypeScript/build pass and main chunk stays **508.63 kB** with the
+inherited warning. The real worker/API/SDK/SQLite browser campaign passed
+**8/8 Chromium/Firefox**, proving queued/running/terminal/cancel transitions
+without refresh, with zero focused Axe/overflow violations. Screenshots were
+inspected. Initial harness failures were an ambiguous locator and Firefox's
+restricted 4190 preview port; the corrected campaign uses 4191. No browser
+security override or production workaround was added. The preceding live
+provider timeout remains inherited and is not retried.
+
+Committed clean backend passed **1696 / 34 artifact-dependent skips / 148
+warnings**. Clean frontend passed **94 / 818**, TypeScript/build, routes **90**
+and fresh/reopened SQLite **v7/v7**. An initial concurrent frontend run timed
+out one existing history test; the unmodified isolated rerun passed all 818.
+A clean Firefox cancellation test correctly encountered a stale-revision 409;
+the test now waits for the held provider revision to reach the UI. The corrected
+committed clean browser campaign passed **8/8**. Existing
+provider and TEST-005 browser regressions passed **20/20** and **12/12**.
+The [completion receipt](docs/SCALE_001_FINAL_RECEIPT.md) records architecture,
+counts, exclusions, failures/corrections and scope. Final committed HEAD and
+normal push verification are reported in the final chat release receipt.
+SCALE-002/003 remain not started; stop after the SCALE-001 release.
+
+## PROVIDER-001 complete — Production structured decision provider (2026-09-30)
+
+Implementation, primary and source-clean verification are complete. The
+[final receipt](docs/PROVIDER_001_FINAL_RECEIPT.md) records the contract, tests,
+changes, live limitation and release boundary. This is a new optional scope in
+[the provider plan](docs/AGENT_PRODUCTION_PROVIDER_PLAN.md), preserving every
+completed roadmap/Agent milestone. The production adapter uses Groq native
+strict JSON Schema for explicit GPT OSS 120b/20b capability, the existing
+generator identity and eligible-key policy, one existing bounded loop and
+strict local execution gates. It adds safe frozen provider provenance and
+capability to the existing protected configuration-status response, plus an
+explicit EN/VI create-form decision grant. RAG grant stays separate.
+
+Configured secrets are refused before goal/research persistence, observation
+state admission and transport/final validation. SDK diagnostic logging is
+suppressed only in the Agent call context; no provider bodies or reasoning
+are durable. Cancellation/one-owner/restart behavior and native Agent v1's
+21 metrics are unchanged. Product routes remain 90; SQLite remains v7;
+Groq 1.5.0 and all dependency files remain unchanged. The primary frontend
+passed 94 files / 818 tests, TS and build. The provider product campaign
+passed 20/20 in Chromium/Firefox across EN/VI, dark/light, phone/desktop,
+with zero focused Axe violations or horizontal overflow. Existing UI-014 and
+TEST-005 browser regressions passed 14/14 and 12/12.
+
+One optional authorized key5 live smoke **FAILED with
+`decision_provider_timeout`** at the 60 second deadline, with one attempt,
+zero tools and no retry. Live reachability/interoperability remains unverified;
+mocked SDK/HTTP gates are provider-free and mandatory. The existing build
+warning (about 508.63 kB), Collections/model-test bearer staging, native zoom
+manual checks, optional Ragas and single-process workspace deployment remain.
+The same 12 unrelated untracked paths are preserved.
+
+Final serial primary backend: **1679 passed, zero failed, 188 warnings**.
+Final serial clean backend: **1645 passed, 34 expected artifact skips, zero
+failed, 148 warnings**. The 96 new adapter/API tests all run without provider
+credentials or network. Clean frontend frozen Bun installation, TS/build and
+94 files / 818 tests pass without lock drift. Source imports and unavailable
+capability are verified in the data/env-free checkout. One mistaken parallel
+full-suite rerun collided on the existing HTTP/SSE fixture port probes; both
+affected session/rate-limit assertions passed on the final serial reruns. No
+assertion was weakened. Release review also replaced the new Python 3.11-only
+deadline API with `asyncio.wait_for`, preserving documented Python 3.10+
+compatibility. Exact final SHA/upstream push verification is reported in chat.
+
+## TEST-005 complete — Final optional Agent extension validation (2026-09-30)
+
+The required roadmap remains complete. TEST-005 closed the separate optional
+AGENT-001–006/UI-014 extension with a 12-layer contract and adversarial
+matrix in [the final receipt](docs/TEST_005_AGENT_FINAL_RECEIPT.md). It added
+test-only real-server Agent journeys and strengthened the A→B→A stale
+evaluation assertion. It also keeps the server-dependent spec out of the
+default hermetic browser runner. No production behavior, tool, metric, route,
+migration, dependency or provider adapter changed. No deterministic production P0/P1/P2
+defect was reproduced; early browser failures were two overly broad test
+locators for a valid two-chunk evidence ledger. The completion audit reproduced
+and fixed one P2 test-runner isolation regression by extending the existing
+dedicated-spec exclusion. Default discovery excludes TEST-005; its dedicated
+runner retains all 12 tests.
+
+The focused Agent backend suite passed **188/188**. The primary full backend
+passed **1583/1583**, with **188 historical warnings**. Product route inventory
+is **90** unique method/path pairs, including seven private Agent routes;
+fresh and reopened SQLite are **v7**. Frontend TypeScript, **94 Vitest files /
+815 tests**, and the production build passed. The real built frontend plus
+FastAPI and temporary SQLite Agent campaign passed **12/12** across Chromium
+and Firefox. It verified disconnected/public access, production
+`decision_provider_unavailable`, scripted search→read→final research,
+revisioned cancellation, interrupted read/evaluation, and five responsive
+viewports with zero body/root horizontal overflow and zero focused Axe A/AA
+violations. The inherited UI-014 browser campaign passed **14/14**.
+
+A managed source-clean checkout without `.env`, `data/`, prior dependencies,
+build output or untracked source passed **1549 backend tests, 34 expected
+artifact skips, 148 warnings**. Frozen Bun installation caused no lockfile
+drift. The clean frontend passed TypeScript, **94 Vitest files / 815 tests**,
+production build and real-server scripted research smoke in both engines. The final
+HEAD is revalidated from its own clean checkout before
+push; exact remote identity is reported with the final task result.
+
+Production still has no structured Agent decision provider. Cancellation is
+cooperative, restart marks interrupted without replay, Agent metrics do not
+judge factual or semantic quality, native zoom remains manually unverified,
+Collections/model-test browser bearer integration is staged, Ragas is optional,
+and Vite still warns on the **508.30 kB** main chunk. These remain separate
+future limitations. The same 12 unrelated untracked paths in the main tree
+remain untouched.
+
+## UI-014 complete — Optional Agent workspace and safe operational trace (2026-09-30)
+
+The required roadmap remains complete. UI-014 adds the private `/agent` list
+and `/agent/runs/:runId` detail to the independent EN/VI frontend. A user
+explicitly connects through the existing memory-only local bearer owner;
+public or unauthorized deployments do not expose run history. The page reads
+durable run, result, frozen policy and ordered finite event records, then
+shows safe operational actions, research objective coverage, typed gaps,
+canonical evidence IDs, the final outcome and individual native evaluation
+metrics. A document ID hands off to the existing Documents reader. Finite SSE
+closure is never treated as job completion, and no model reasoning, raw
+provider output or invented evidence excerpt is rendered. A selected run ID
+is the only Agent URL state. A→B→A and session changes invalidate old reads.
+
+The backend adds exactly one local-bearer-protected, read-only GET
+`/agent/runs/{run_id}/evaluation` endpoint around the unchanged AGENT-006
+deterministic evaluator. It requires a terminal run, returns the 21 versioned
+metric definitions/results, and fails closed for corrupt snapshots. It does
+not execute a provider, persist a report or change SQLite v7. The FastAPI
+inventory is **90 unique method/path pairs**. The frontend distinguishes
+`computed` zero/false, `unavailable`, and `not_applicable`, shows numerator and
+denominator where provided, and claims no aggregate score or factual quality.
+
+Create and cancel call the real private API only when execution is enabled.
+Creation accepts a bounded goal, EN/VI language and optional explicit
+research objectives with one idempotency key. Current production has no
+structured Agent decision provider adapter, so the form warns before
+submission and the resulting run reports `decision_provider_unavailable`
+without a fabricated answer. Cancellation uses the current quoted revision;
+409 reconciles server state without a forced retry. The Agent extension
+remains single-agent and has no new tool, dependency, migration, Ragas
+integration or network-only test.
+
+Implementation validation: **1583 backend tests passed, 0 failed, 188
+warnings**; focused route/Agent contracts **20 passed**; frontend **94 Vitest
+files / 815 tests** passed; TypeScript passed; production build passed with
+the existing large-chunk warning (main chunk **508.30 kB**). The hermetic
+production-build browser
+campaign passed **14/14** in Chromium and Firefox, including four axe scopes,
+EN/VI, light/dark, 1440×900, 1024×768, 768×900, 390×844 and 1440×700.
+Desktop and phone captures were visually inspected. The prior 12 unrelated
+untracked paths remained untouched. Source, tests and documentation were
+committed as `eb5affa54c4d19ebcab6b99f91c5b2f567b14db1`.
+
+A managed clean checkout of that commit contained no `.env`, `data/` or
+untracked source. With frozen Bun dependencies and the existing Python venv,
+the full backend passed **1549, 34 expected artifact-dependent skips, 148
+warnings**; the frontend passed **94 Vitest files / 815 tests**, TypeScript,
+the **2079-module production build**, and **7/7 Chromium** UI-014 browser
+checks. The clean production main chunk was **508.30 kB** and retains Vite's
+500 kB warning. Primary Chromium/Firefox UI-014 checks passed **14/14**.
+This clean worktree remained source-clean after validation; generated
+dependencies, build output and browser captures were ignored. The final
+documentation commit records this clean-checkout receipt, with no source
+changes or TEST-005 work.
+
+At UI-014 close, TEST-005 was the next optional task; its completion is
+recorded above.
+
+The staged Collections/model-test browser bearer integration, manual native
+zoom check, existing chunk-size warning and optional Ragas remain future
+limitations.
+
+## AGENT-006 complete — Optional native Agent evaluation (2026-09-28)
+
+The required product roadmap remains complete. AGENT-006 adds a separate
+provider-free `native-agent-evaluation` v1 protocol for one terminal durable
+Agent run. It reads the frozen plan, bounded terminal result and ordered safe
+events without replay, tool invocation, provider call, filing text or network.
+There is no Agent evaluation route, persisted report, SQLite migration,
+dependency, frontend change or Ragas integration. The Agent route inventory
+remains **89 unique method/path pairs** and the workspace schema remains
+**v7**. Production still has no structured Agent decision provider adapter.
+
+The protocol defines **21 versioned metrics** without an overall score:
+completion; recorded tool decisions, admission, invalid attempts, policy
+denials, duplicate rejections, tool failures and unavailability; invalid final
+attempts; step and tool budget use and exhaustion; decision-provider
+unavailability; evidence identity and final reference identity; research
+objective coverage, unresolved gaps, evidence entries and distinct document
+and chunk counts. Each definition states type, bounds, direction,
+applicability, source fields, numerator/denominator, meaning and nonmeaning.
+`computed` includes actual zero or false, while `not_applicable` denotes a
+zero denominator or irrelevant research metric and `unavailable` denotes
+missing durable prerequisites. Ratios retain integer operands and a
+four-decimal value. Generic durable events can truncate source pairs or
+reference sets; the evaluator reports `unavailable` when current-run identity
+cannot be proved from them. Research-ledger identity and frozen objective
+thresholds are checked exactly. Invalid ordering, counters, plan fingerprint,
+coverage, scope or source pairs raise corruption instead of producing a low
+score. Typed terminal facts and gap counts remain separate from metrics.
+
+Reports bind the run to canonical SHA-256 hashes of the frozen plan, safe
+events and terminal result and include a deterministic report digest. A
+strict parser rejects unsupported versions, altered definitions, malformed
+values, duplicate JSON keys, non-finite numbers, mismatched facts and changed
+digests. The digest detects change; it is not an authenticity signature.
+V1 evaluates one run and does not aggregate cases or judge factual
+correctness, semantic claim support, source-label mapping from persisted
+generic traces, or optimal tool selection.
+
+Source, test and design commit `fa86d431fb4de2d1a36673e5df768cbaa89b33a9`
+added `src/agent/evaluation_models.py`, `src/agent/evaluation.py`, 29 hermetic
+tests and protocol documentation. The new test module passed **29/29** with
+zero warnings. Focused Agent/native EVAL regressions passed **260/260**;
+the Agent-only clean-checkout suite passed **187/187**. Primary full backend
+passed **1582, 0 failed, 188 warnings**, up from AGENT-005's 1553.
+A managed clean checkout at the source commit had no `.env`, `data/` or
+untracked source and passed **1548, 34 artifact-dependent skips, 148
+warnings**. Agent/API compilation and import checks passed, and route
+inventory remained 89. Full backend suites ran serially because the
+integration harness uses fixed localhost ports.
+
+Frontend source, tests and build inputs were unchanged; the last verified
+frontend baseline remains **90 Vitest files / 792 tests**, TypeScript and
+production build passed. No lockfile, migration, corpus or evaluation data
+changed. The same 12 unrelated untracked paths in the primary checkout
+remain untouched. Collections/model-test browser bearer integration remains
+staged; native zoom remains manual/unverified; the ~506.92 kB build warning
+and optional Ragas work remain separate.
+
+**Exact Next Action = UI-014 — Agent workspace and safe operational trace,
+as a separate optional task. STOP before UI-014 or TEST-005 here.**
+
+## AGENT-005 complete — Optional Agent Security Hardening (2026-09-28)
+
+The required product roadmap remains complete. AGENT-005 added a hermetic
+adversarial campaign over the existing four-tool single-Agent architecture;
+it did not add a tool, route, provider adapter, UI, multi-agent role, network
+access, migration or dependency. The threat model and 20-class attack matrix
+were written in `docs/AGENT_EXTENSION_PLAN.md` before production changes.
+
+One reproducible **P2 evidence-integrity defect** was found. A structured
+tool result could supply separately canonical but contradictory document and
+chunk IDs, allowing a Microsoft chunk to be attributed to an Apple filing or
+an Apple chunk to a different Apple accession in the research ledger. Two
+deterministic regressions failed before the fix. `src/agent/observation.py`
+now checks recognizable ticker prefixes and standard SEC accession identity
+at the observation boundary; conflicting pairs fail with the existing
+`invalid_observation` result before entering Agent observations or research
+state. Matching standard IDs and legacy synthetic IDs remain valid. This is
+identity consistency, not proof that a source's text or metadata is true.
+No other reachable P0–P2 Agent security defect was reproduced.
+
+The new `tests/test_agent_security.py` passes **73** parameterized cases.
+It exercises direct, indirect and nested injection; exact tool lookup and
+strict arguments; independent provider permissions; copied policy and tool
+metadata views; frozen research objectives and budgets; source labels,
+cross-run citations and RAG prose; safe error handling; synthetic secret
+absence from decision context, terminal state, events, API output and logs;
+network/file/shell capability spies; Unicode and size limits; durable event
+and cancellation forgery; and API-001 bearer, Host, Origin, loopback,
+forwarded-header, execution-gate and numeric cursor behavior. Existing
+AGENT-001/002/003/004 and DATA-004 tests remain green. The decision model is
+scripted: there is still no production structured provider adapter and no
+claim about live-model prompt-injection reliability. Application-owned
+registry internals are not exposed to model or filing content. A model's
+attempt to mutate the policy or tool-schema view did not change enforcement.
+
+Source/test/plan commit `edbca09069aeb1b99295574a0f8b102599278889`
+contains the minimal production check and adversarial suite. Final working
+checkout backend validation: **1553 passed, 0 failed, 188 warnings** versus
+AGENT-004's **1480/188**. Focused Agent, DATA-004, Discovery, Retrieval and
+Document regressions: **236 passed, 13 warnings**. Agent/API compile and
+imports pass; inventory remains **89 unique method/path pairs** and four
+canonical Agent tools. A managed clean checkout of `edbca09` had no `.env`,
+`data/` or untracked source: Agent tests **158 passed, 1 warning**; full
+backend **1519 passed, 34 artifact-dependent skips, 148 warnings**; compile,
+imports, 89 routes and fresh SQLite **v7** initialization passed. The clean
+checkout was clean after validation. Final `git diff --check` passed.
+Full backend suites in separate worktrees must run serially: the integration
+HTTP harness uses fixed localhost ports `8765`, `8766` and `8900`. A
+simultaneous validation attempt made session and rate-limit tests share those
+servers and fail transiently; the subsequent serial clean-checkout run passed.
+
+Frontend source, tests and build inputs were unchanged; the last verified
+frontend baseline remains **90 Vitest files / 792 tests**, TypeScript and
+production build passed. No dependency, lockfile, migration, corpus or
+evaluation artifact changed. The same 12 unrelated untracked paths in the
+primary checkout were preserved outside the commit. The historical staged
+Collections/model-test browser bearer integration, native zoom manual check,
+~506.92 kB build warning and optional Ragas limitation remain separate.
+
+**Exact Next Action = AGENT-006 — Agent Evaluation Protocol, as a separate
+optional task. STOP before AGENT-006, Agent UI or multi-agent behavior.**
+
+## AGENT-004 complete — Optional bounded Agentic Research (2026-09-28)
+
+The required roadmap remains complete. AGENT-004 adds optional
+`agent_research_v1` policy/state to the sole AGENT-002 decision/execution
+loop. There is no second Agent loop, new tool, new route, UI, multi-agent role,
+provider adapter or dependency. The caller declares 1–6 bounded objectives
+in the optional `research` request field; each has a safe ID, at most 120
+characters of user question intent and an optional ticker scope. At most five
+distinct scopes are accepted. A validated structured tool decision identifies
+one frozen objective. Retrieved filing text is untrusted data and cannot add
+an objective, choose a tool or change policy. The decision model receives a
+bounded research view with coverage, gaps, prior action outcomes and source
+identities, while AGENT-002 still enforces every step/tool/provider,
+observation and cancellation boundary.
+
+The deterministic ledger keeps at most six first-seen canonical
+`(document_id, chunk_id)` entries, within frozen AGENT-002 observation
+capacity. Identical IDs merge objective associations; distinct documents or
+chunks remain separate regardless of textual similarity. Canonical ticker
+attribution comes from a valid document ID prefix, and a scoped objective
+receives only matching evidence. Search, provider-free Retrieval inspection,
+indexed Document previews and authorized RAG citations may contribute source
+records. Generated RAG prose cannot become documentary evidence. No excerpts,
+raw provider responses, score-derived confidence or hidden reasoning enter
+the durable ledger. In-memory history holds at most ten safe action summaries
+and exact canonical argument fingerprints. Per-objective search attempts are
+at most two and never exceed the frozen global search ceiling; exact repeated
+work is rejected before another service call.
+
+Coverage `none`/`some`/`sufficient` means only a frozen 1–2 distinct-entry
+threshold (default one), not proof of a complete or correct answer. Typed
+gaps are `no_evidence`, `below_threshold`, `search_exhausted` and
+`ledger_full`, at most six. The model may use another allowed tool to pursue
+a gap within the existing hard bounds. Final structured references must be
+retained in this run's ledger and pass AGENT-002's canonical ID and
+`[Source N]` checks; every sufficient objective must have a cited ledger
+entry. A final decision explicitly lists exactly the unresolved objective
+IDs. Partial answers keep the existing `completed` status with structured
+gaps and an appended disclosure. With no source evidence, a deterministic
+no-evidence answer replaces model prose. Research final answers are capped
+at 1200 UTF-8 bytes before disclosure and 12 references to fit AGENT-003's
+8192-byte durable result. Semantic claim verification remains out of scope.
+
+AGENT-003 freezes the research version, objective list and thresholds in its
+existing SHA-256-bound plan, stores the bounded terminal summary in existing
+result JSON and includes a safe optional objective ID in keyed decision
+events. Older generic plans and AGENT-003 events remain readable. A cancelled
+run can retain evidence gathered before acknowledgement; startup still marks
+active work interrupted without replay. Full mid-run ledgers are not
+checkpointed; existing events retain bounded source references and objective
+IDs. SQLite migration remains **v7**. The six `/agent/runs` routes remain
+unchanged, with an optional backward-compatible research request/result
+schema. Production still has no structured Agent decision adapter and returns
+`decision_provider_unavailable` without invoking tools or fabricating work.
+
+Source/test commit `4df1f22` added typed research policy and ledger, optional
+AGENT-002/003 integration and 19 hermetic tests. Follow-up test commit
+`a82e6c3` added three source-association, cross-run and partial-result
+boundary tests. Focused Agent/DATA tests **93 passed**; targeted Search,
+Retrieval, Document, cross-layer, router and bootstrap regressions
+**239 passed, 13 warnings**. The final full backend
+gate is **1480 passed, 0 failed, 188 warnings** versus AGENT-003's
+1458/188. Agent/API compile and imports pass; the product inventory remains
+**89 unique routes**. Frontend source and tests were not changed; the last
+full frontend baseline remains **90 files/792 tests**. The 12 existing
+unrelated untracked paths remain outside commits. No migration, dependency,
+lockfile or corpus/evaluation data changed. A managed clean checkout at source
+commit `4df1f22` had no `.env`, `data/` or untracked source; three scripted
+single-objective, comparative and durable-reopen research smokes passed there,
+as did Agent/API imports, four-tool registry construction and the 89-route
+inventory. The intended source diff contains only Agent policy/model/runtime,
+the existing safe event allowlist, and hermetic tests; its hostile text and
+credential-shaped strings are synthetic fixtures, not secrets. This closes
+AGENT-004-F.
+
+**Exact Next Action = AGENT-005 — Prompt-injection and tool-policy
+hardening, as a separate optional task. STOP before AGENT-005.**
+
+## AGENT-003 complete — Optional durable Agent runs, events and cancellation (2026-09-28)
+
+The required roadmap remains complete. AGENT-003 wraps the unchanged
+AGENT-002 decision/tool loop in one `AgentDurableService`; DATA-004 remains the
+only lifecycle, revision, idempotency and event authority. Transactional,
+checksum-tracked migration **v7** widens the existing `jobs` namespace to
+`agent` and adds keyed bounded decision summaries to `job_events`, preserving
+Pipeline, Evaluation, model-test and existing event/step rows. No second SQLite
+database, parallel job framework, new dependency or lockfile was added.
+External `agent_<opaque>` run IDs differ from DATA-004's internal `job_<opaque>`
+IDs; no row IDs or search/request IDs are reused. One coarse `execute_agent`
+step and an atomic `queued -> running` revisioned claim admit one execution
+owner. A frozen SHA-256-bound plan stores goal, locale, protocol version,
+server-owned decision-model identity, four-tool allowlist, independent decision
+and RAG provider permissions, final-reference policy, duplicate-call policy
+and every AGENT-002 limit. DATA-004 stores only a hash of the idempotency key.
+
+The coordinator resolves a decision model at execution and calls
+`AgentOrchestrator.run`; it contains no second Agent loop. Production has no
+strict structured decision adapter, so its default model returns a typed
+`unavailable` outcome and the durable job fails with
+`decision_provider_unavailable`, without invoking a tool or inventing an
+answer. Scripted fake models drive hermetic tests. The AGENT-002 trace sink
+persists at most 20 keyed `agent_decision` summaries, each at most 2048 UTF-8
+bytes; DATA-004 event IDs and per-run sequences order them with lifecycle
+events. A decision event includes safe action kind, tool, argument *names*,
+outcome, bounded canonical evidence IDs/count and counters, never source text,
+raw model output, credentials or chain-of-thought. The durable terminal result
+is limited to 8192 UTF-8 bytes and stores the final answer only on completion,
+validated evidence references, actual counters and typed failure status.
+Full AGENT-002 observations are not persisted. Transport closure of finite SSE
+does not imply success; run detail/state is authoritative.
+
+Private GET list/detail/results/events reuse API-001 local bearer, loopback,
+exact Host and Origin checks. POST create/cancel additionally require execution
+capability. Six `/agent/runs` routes use bounded typed DTOs,
+`Idempotency-Key`, revision `If-Match`, and resumable `Last-Event-ID` from an
+Authorization-header-protected finite SSE fetch; no bearer is accepted in a
+URL. Create queues and dispatches with the existing current-process background
+task pattern. Queued work left before claim is not automatically scheduled on
+restart; a repeat of the same idempotent create can redispatch it. Running or
+cancelling work at startup becomes `interrupted` across all recovery pages,
+with no automatic replay. Running cancellation remains `cancelling` until the
+AGENT-002 boundary sees it and DATA-004 acknowledges it; an in-flight
+decision/RAG call is not promised immediate interruption. A crash after a
+provider/tool effect but before event or terminal commit leaves an ambiguous
+external effect; exactly-once provider execution is not claimed.
+
+Source/test commit `0783511` added the v7 migration, durable coordinator and
+models, thin private router, AGENT-002 trace sink and focused migration,
+claim, event, cancellation, crash, API and access tests. Focused AGENT-003
+tests **19 passed**; AGENT-001/002 tests remain **44 passed**. The full backend
+gate is **1458 passed, 0 failed, 188 warnings** versus the AGENT-002 baseline
+1432/188. Agent/API compile and import pass; the product route inventory is
+**89 unique method/path pairs** versus 83. The shared frontend contract tests
+passed **83/83**; no frontend source, UI or Agentic Research work changed.
+The last full frontend baseline remains 90 files/792 tests. The 12 existing
+unrelated untracked paths remain outside commits. A managed clean checkout
+at source commit `0783511` had no `.env`, `data/` or untracked source; its
+v6→v7 migration and scripted durable-run smokes passed, as did Agent,
+registry and API imports and the 89-route inventory. The staged artifact
+audit found only intentional synthetic secret/hostile strings in tests. This
+closes AGENT-003-G.
+
+**Exact Next Action = AGENT-004 — Agentic Research / bounded multi-step
+evidence gathering, as a separate optional task. STOP before AGENT-004.**
+
+## AGENT-002 complete — Optional bounded single-Agent orchestration (2026-09-28)
+
+The required roadmap remains complete. AGENT-002 adds exactly one in-memory,
+request-local `AgentOrchestrator` over the four AGENT-001 tools. One abstract
+`AgentDecisionModel` returns strictly discriminated structured tool or final
+decisions; a scripted fake is used in deterministic tests. The current
+generator cannot guarantee structured Agent output, so a real provider adapter
+is deferred. Free-form Markdown/prose is never parsed into actions and no live
+provider quota was used. No Agent route, UI, durable run, migration, dependency,
+lockfile, multi-agent role or Ragas integration was added.
+
+Default bounds are 8 validated decisions, 5 executed tool calls, per-tool
+ceilings of Search 2 / Retrieval inspection 2 / Document read 3 / RAG 1,
+5 observations, 8 evidence records per observation, 160 excerpt characters,
+4096 bytes per observation and 16384 observation bytes per run. Schema ceilings
+prevent arbitrarily large overrides. A validated decision is one step; only
+an executed tool consumes tool-call budget. Tool, per-tool and observation-count
+ceilings are checked before execution. Exact repeated canonical calls are
+rejected. The default research policy requires an observation before final;
+an explicit generic policy permits zero-tool final. Decision-model provider
+permission and provider-backed `ask_rag` permission are independent.
+
+The model request separates system policy, user goal, truthful tool schemas
+and projected observations marked `untrusted_data`. Projection bounds text and
+record count, redacts credential/path patterns, and preserves whole canonical
+search/document/chunk IDs plus score family names and values. Unsafe identities
+or non-finite scores cause a typed tool failure. Final structured references
+must have appeared in the current run; `[Source N]` labels must resolve
+unambiguously to observed evidence and cited IDs. Duplicate or unseen
+references fail closed. This is identity validation, not semantic claim
+judging. The safe operational trace has indexes, tool names, argument *names*,
+outcomes, evidence IDs and content-free failure codes; it contains no hidden
+chain-of-thought, raw provider response or credential. Terminal statuses
+distinguish completed, invalid decision, policy denial, budget exhaustion,
+unavailable dependency, failure and request-local cancellation. Cancellation
+is checked between calls, not inside an in-flight model/provider call.
+
+Source/test commit `5b31a5d` added the strict decision and state/result models,
+observation projection, orchestrator and 25 scripted tests. AGENT-002 focused
+tests **25 passed**; combined AGENT-001 + AGENT-002 tests **44 passed**. Full
+backend **1432 passed, 0 failed, 188 warnings** versus AGENT-001's
+1407/188. Agent package compile/import passes; FastAPI product inventory
+remains **83 unique method/path pairs**. Frontend remains unchanged at the
+last verified **90 files/792 tests**, with TypeScript/build PASS from AGENT-001;
+those frontend checks were not rerun for this backend-only stage. The 12
+unrelated pre-existing untracked paths remain outside commits. A clean managed
+checkout had no `.env` or `data/`; it imported `src.agent` and `src.api.app`,
+constructed the four-tool registry, passed a scripted orchestration smoke,
+and retained 83 product routes. The staged artifact/secret audit found only
+intentional synthetic adversarial test strings. This closes AGENT-002-F.
+
+**Exact Next Action = AGENT-003 — durable Agent runs, events and cancellation,
+as a separate optional task. STOP before AGENT-003.**
+
+## AGENT-001 complete — Optional typed tool foundation and bounded UI sweep (2026-09-28)
+
+This is a **new optional extension** after the completed UI-013 roadmap, not a
+reopened requirement. The [extension plan](docs/AGENT_EXTENSION_PLAN.md) is
+authoritative for AGENT-001 through TEST-005. `src/agent/` adds a deterministic
+four-name closed-world registry (`search_documents`, `inspect_retrieval`,
+`read_document`, `ask_rag`), strict Pydantic input validation, typed structured
+observations, explicit access/effect/provider metadata, content-free error
+categories and an allowlist/provider policy. The application binds existing
+in-process services through `create_agent_tool_registry()`; no backend HTTP
+self-call, route, migration, durable Agent job, planning loop, UI, new dependency
+or framework was added. RAG remains explicitly provider-gated, stateless per
+Agent call and tested with a deterministic fake; no live provider was invoked.
+Search retains API-004 snapshot IDs and Unicode offsets, Retrieval retains
+API-005 stages and distinct score families including negative reranker logits,
+and document reads use canonical IDs and bounded indexed previews without
+claiming full source availability. Hostile filing text stays untrusted data and
+cannot select tools or change policy.
+
+The bounded UI sweep inspected all 14 primary routes at 1440×900 and 390×844
+in dark English/Vietnamese, with eight dense routes also at 1024×768, using
+the real production build and deterministic product handlers in Chromium and
+Firefox. It checked body/root overflow, visible control geometry, selected
+screenshots and representative Axe scans. One reproduced phone Chat composer
+defect clipped the wrapped placeholder and expanded the Deep Research visual
+switch to the mobile 44 px hit size. The component now gives the prompt enough
+height and centers a 28×16 visual track inside a 44 px touch target. The same
+composer serves Research. The focused test failed before the repair and passed
+after; final sweep **32/32** and existing light/EN plus dark/VI populated
+responsive/overlay gate **4/4** passed across Chromium/Firefox. No other
+reproducible rendering defect was found in this bounded sweep. Native browser
+zoom is still manual/unverified.
+
+Final original-checkout backend **1407 passed, 0 failed, 188 warnings** (baseline
+1388/188); selected touched-domain tests and the Agent tests passed before the
+final full-suite replay. FastAPI remains
+**83 unique routes**. Frontend remains **90 Vitest files/792 passed**; TypeScript
+and 2074-module production build PASS. The aggregate index warning is now
+about 507.13 kB, still non-blocking. The same 12 pre-existing unrelated
+untracked paths are preserved; generated browser assets, `data/`, `.env`,
+dependencies and lockfiles are outside commits. No historical benchmark was
+changed or promoted.
+
+**Exact Next Action = AGENT-002 — Bounded single-agent orchestration, as a
+separate optional task. STOP: AGENT-002 has not started.**
+
+## UI-013 complete — Cleanup, documentation and handoff (2026-09-28)
+
+UI-013-A through F are COMPLETE. Starting source HEAD `d71a458` had no
+tracked/staged changes and 12 unrelated untracked paths. The exact master-plan
+gate allows deletion only after zero references, replacement tests and
+compatibility/rollback proof. App still imports `EvidenceWorkspaceRail`;
+legacy route/document/conversation readers, Evaluation report metadata and the
+nonstreaming decomposed path have live callers or tests. The former
+browser-local Analytics writer is already gone. **No safe source/CSS deletion
+was required.** UI-013 makes no runtime, route, migration, dependency or
+lockfile change. No optional Ragas capability was added.
+
+Current product: Vite/React/TypeScript with Bun serves 14 workspace routes
+(Chat, Research, Documents, Search, Collections, Retrieval, Models, Pipeline,
+Reranker, Evaluation, Analytics, Datasets, Settings, Logs) and canonical detail
+routes. FastAPI has **83 unique method/path pairs**. SQLite migration **v6**
+owns local workspace records, DATA-004 durable jobs and DATA-005 content-free
+terminal telemetry; browser conversations/preferences remain separately
+on-device. Public catalog/Search/provider-free inspection/registries and
+published reports do not require a private DB. Private reads/writes require
+local mode, a loopback peer, allowed Host/Origin and bearer; execution adds a
+separate gate. The shared browser connection keeps the token in memory for
+Pipeline/Evaluation/Analytics/Logs/Settings and loses it on reload. Pipeline
+stages isolated queued work, not automatic corpus promotion. Native Evaluation
+is EVAL-001 protocol → EVAL-002 public analytics → EVAL-003 frozen jobs → UI-011;
+job completion is not automatic report publication. DATA-005 feeds UI-012
+Analytics/Logs, not process-log ingestion.
+
+Verified pre-UI-013 source baseline: original checkout backend **1388 passed,
+188 warnings**; clean data-free checkout **1354 passed, 34 artifact-dependent
+skips, 148 warnings**; frontend **90 files/792 passed**, TypeScript and
+production build PASS (2074 modules). TEST-004 real-handler product journeys
+**24/24** across Chromium/Firefox, with 16/16 separate HTTP/SSE, 6/6 local
+reader, 4/4 TEST-002 browser and 30/30 affected TEST-003 cases. A subsequent
+read-only audit on the same source HEAD reran backend 1388/188, frontend
+90/792, TypeScript/build and product browser 24/24. The final committed-HEAD
+smoke is separate evidence, not a re-run of every earlier campaign.
+
+Disposition of remaining limits: Collections and model-test browser bearer
+integration are **supported current limitations / future integration**, not
+permission to weaken API-001; EVAL-004/Ragas and always-on deployment or new
+evaluation experiments are **optional future work**. Native zoom125/150/200 is
+a **manual unverified visual gate**. The ~506.92 kB aggregate bundle warning
+and historical parser/dependency warnings are **non-blocking tooling findings**.
+No live-provider, production load/SLA, blanket WCAG or security certification
+is claimed. Corpus-backed serving needs local `data/` and configured models,
+while the hermetic tests/product harness can run without them.
+
+Current-facing README, ARCHITECTURE, frontend contract/design and browser-test
+instructions were reconciled; historical TEST-002/003/004 receipts remain
+untouched. Local links, named files/scripts, nine tracked references, route
+count and migration version passed UI-013 checks. A managed detached checkout
+of committed docs HEAD `450a51c` had no `.env` or `data/`; FastAPI imported with
+83 unique routes/migration v6, frontend TypeScript and 2074-module build passed,
+and nine core-document local link sets had zero missing targets. This uses a
+provisioned Python interpreter and existing frozen frontend dependencies, not a
+fresh Python install. The final docs-only closure HEAD is replayed before
+handoff; resolve its exact SHA with `git rev-parse HEAD`.
+
+**Required roadmap COMPLETE. Exact Next Action = optional/future work only;
+there is no remaining mandatory UI rebuild task.** The main future product
+integration is Collections browser bearer wiring (and the related model-test
+wrapper), with explicit authority and memory-only credential handling. Optional
+EVAL-004/Ragas does not block native Evaluation. Earlier “Exact Next Action”
+statements below are chronological task receipts, not current instructions.
+
+## TEST-004 complete — Full product validation (2026-09-28)
+
+TEST-004-A through H COMPLETE. [Final product receipt](docs/TEST_004_FINAL_PRODUCT_RECEIPT.md)
+is authoritative for the 13-surface matrix, commands, repaired defects and
+remaining limits. Started at `e4c6710` on `codex/bilingual-research-workspace`;
+source/test commits `defec4f6` and `0609e2f`, followed by a separate closure
+documentation commit and a test-only send-readiness correction exposed by the
+final-HEAD replay. The final source was replayed in a managed detached,
+data-free checkout with no `.env` or untracked source: app import/startup and
+shutdown PASS, 83 unique routes, frontend frozen install/TypeScript/build PASS.
+The original 12 unrelated untracked paths remain untouched in the main tree.
+
+Backend final baseline: original checkout **1388 passed/188 warnings/0 failed**;
+clean data-free checkout **1354 passed/34 skipped/148 warnings/0 failed**. All
+34 skips are explicit local corpus/evaluation-artifact requirements, not
+deterministic failures. Focused final migrations/persistence, transfer, API-001,
+collection atomicity, Search, native jobs, telemetry, TEST-002 and bootstrap
+**360 passed/1 warning**. Fresh/reopen/upgrade SQLite, WAL/FK/busy settings,
+job/telemetry versions, portable canonical transfer exclusion and public no-DB
+mode remain intact. Local bearer, exact Host port, Origin, loopback and
+forwarded-header protections remain intact; a real-browser synthetic-token
+check found no token in storage, IndexedDB, cookie, URL, DOM, backup or logs,
+and reload lost the memory-only connection.
+
+Frontend: **90 Vitest files/792 passed**, TypeScript PASS, production build
+2074 modules PASS, existing aggregate ~506.92 kB chunk warning. Product
+runtime is a built Vite app using real FastAPI lifespan/handlers, SQLite,
+Search/Retrieval/Chat/Research, registries, staging, native Evaluation and
+server telemetry with only bounded corpus/model/provider dependencies doubled.
+Final A–F product campaign **24/24** (12 Chromium, 12 Firefox), 14 direct routes,
+96 responsive combinations, 120 whole-page axe analyses with zero reported
+A/AA violations, zero body/root overflow and selected screenshot inspection.
+Separate real HTTP/SSE **16/16**, local reader **6/6**, TEST-002 browser **4/4**,
+focused TS contracts/components **118/118** and affected TEST-003
+Chat/Research/Evaluation native/responsive **30/30** pass. This is not a full
+repeat of TEST-003's 300 tests/648 combinations or a blanket WCAG claim.
+
+Four reproduced P2 regressions were repaired: clipped/unusable scope popover,
+controlled scope dismissal reopening, low-contrast light source score and
+low-contrast dark Evaluation hover metadata. Focused tests failed before each
+repair and passed after; no P0/P1/P2 acceptance regression remains. The
+browser Collections/model-test bearer integration remains staged: the
+Collections API works under local auth and the current wrapper truthfully
+refuses, with no bypass. Native zoom125/150/200 is manual/unverified. Existing
+backend dependency warnings and bundle warning remain. No live provider,
+corpus mutation, Ragas, new feature, load/SLA or broad security certification.
+No generated DB/log/report/trace/screenshot/dist, secret or lockfile change
+entered Git. Final tracked tree is clean at handoff.
+
+Actual master graph: TEST-004 depends on TEST-002/TEST-003 and precedes UI-013.
+**Exact Next Action = UI-013 — Cleanup/documentation. STOP: not implemented.**
+Earlier journal entries are historical.
+
+## TEST-003 complete — Nine-reference visual validation (2026-09-27)
+
+TEST-003-A through H COMPLETE. [Measured visual receipt](docs/TEST_003_VISUAL_RECEIPT.md)
+maps all nine authoritative PNGs to native dimensions/routes/selected fixture
+states. All-nine baseline-before-repair and final native Chromium/Firefox plus
+side-by-side review are recorded. Deliberate closeness retains truthful data,
+six native metrics, five ingestion stages, configured/loaded/unknown model facts,
+readable evidence pane minimums and real submitted retrieval controls instead
+of forcing unsupported screenshot values or dense inaccessible geometry.
+Reranker received affected-consumer smoke only, not a tenth reference.
+
+Implementation `acd9487`: verified semantic colour corrections, independent
+splitter handle/menu, mobile44px controls/16px input text, focused keyboard
+scroll for Pipeline stages and useful phone reader with existing Back recovery.
+Source cards no longer fabricate page numbers by index or Risk Factors for an
+unlocated section; absent section is explicit. No new capability, dependency,
+API/DTO/backend, auth, request identity or persistence change. The rag-ui-ux
+skill guided rendered/semantic/mobile review; document-provenance rules required
+removing unsupported source location rather than manufacturing metadata.
+
+Known dark Search findings resolved: button2.27→4.71:1 in rest/hover/keyboard
+focus, BM25 label4.32→8.25; shared connection subtitle4.46→7.60. Only one
+light token value changed (--text-subtle); all nine themes/locales and existing
+operational/Reranker consumers were revalidated. Native geometry otherwise
+retains the documented B/D/E differences; no exact pixel-identity claim.
+
+Actual final validation: TypeScript PASS, Vitest90 files/790 passed/0 failed
+(15.51s), build PASS (2074 modules,3.15s; index506.91kB warning remains).
+Production browser90 visual +204 focused domains/route/shell/contracts +6
+layout =300 passed/0 failed,150 per engine. Visual gate:18 native checks,
+648 populated responsive combinations, dark/light × EN/VI; body/root overflow0.
+Whole-page axe162 analyses,0 reported A/AA violations, supplemented by keyboard,
+mobile targets, screenshot review and reader clipping/recovery. An earlier
+bounding-box assertion missed the clipped phone reader; manual inspection led
+to a strengthened ancestor-clipping test, not weakened acceptance. Interrupted
+preview/animation diagnostic runs are UNKNOWN, excluded from final evidence.
+Never overwrite the preview dist with a parallel build; the final hermetic
+harness blocks external origins/fonts and uses existing fixture APIs only.
+
+Native browser zoom125/150/200 is external manual / UNVERIFIED (no supported
+native app UI automation), explicitly allowed as a limitation by this task;
+responsive viewport checks are not native zoom proof. This is not blanket WCAG,
+security, live-provider or final-product certification. Staged real Collections/
+model-test bearer integration, aggregate build warning and historical backend
+warnings remain. Backend TEST-002 baseline1384/188 warnings/83 routes unchanged,
+NOT rerun here. No data regeneration, provider/corpus run or benchmark promotion.
+
+Original12 unrelated untracked paths preserved; tracked/staged task closure is
+clean. Source/tests and textual receipt/checkpoint/README/journal only were
+selectively committed; no generated screenshots/traces/reports/dist, secrets,
+runtime DB, caches or canonical data. No deleted files or deterministic final
+regressions. Closure documentation is a separate commit from implementation.
+
+Actual master-plan graph verified: TEST-004 depends on TEST-002 and TEST-003,
+then UI-013. Exact Next Action = TEST-004 — Full product validation.
+STOP: TEST-004 has not started. Earlier journal entries remain historical.
+
+## TEST-002 complete — Cross-layer contracts (2026-09-27)
+
+TEST-002-A through G are COMPLETE. [Detailed receipt](docs/TEST_002_CONTRACT_RECEIPT.md)
+records authority ownership for Access, Documents/Search/Retrieval, Collections,
+Models, Datasets, Pipeline, native metrics/analytics/jobs, Telemetry/Logs and
+Settings/transfer. Small test-only catalogs validate live routes/OpenAPI/models,
+independent compiler-resolved TS unions and actual client request construction;
+no runtime schema package or codegen system was added.
+
+Coverage: 53 named route/access pairs (83 registered routes unchanged), 26
+selected response references, 11 bodies, 31 literal unions, 52 real transports,
+seven shared responses and six Unicode snippets. Existing transfer fixtures and
+Python/TS digest algorithms are reused. SQLite→domain→HTTP checks preserve IDs,
+revisions, two zero-based durable Evaluation steps, frozen plan, attempt-slot
+budget, computed zero/false results, terminal outcome/severity and null/zero
+duration. Existing conflict/tombstone/privacy/recovery tests remain authoritative.
+
+Repairs: CL-01 maps casefold match positions back to original Unicode code points
+and slices snippets by code point in TS; CL-02 maps Collection list 404 to the
+existing unavailable-capability state in the evidence-save dialog, without
+changing record 404 or auth; CL-03 corrects synthetic Evaluation step ordinals
+from 1/2 to stored 0/1. All were reproduced before repair. Commits: `7d1c937`
+and `59c56f2`; documentation closure is separate.
+
+Actual full validation: backend 1384 passed / 188 warnings / zero failures
+(95.47s); frontend 89 files / 788 passed (13.69s); TypeScript and production
+build passed. Focused backend 351, frontend 230 and affected components 76
+passed. Focused production Chromium/Firefox contracts 4/4; all four screenshots
+inspected. No full visual campaign, provider run or benchmark promotion claimed.
+Working/staged diff checks and selective source/test/artifact review passed.
+
+The same 12 unrelated untracked paths are preserved. No data regeneration,
+secret/runtime DB/generated schema/build/screenshot/trace was committed. Known
+limits remain: staged Collections/model-test bearer integration; existing 188
+backend warnings and aggregate build-size warning; unchanged dark Search
+button/BM25 label contrast findings for TEST-003; native zoom unverified. These
+checks are not a blanket security or visual certification.
+
+Actual graph verified: Exact Next Action = TEST-003 — Nine-reference visual
+validation. TEST-003 was not started; TEST-004 still depends on both branches.
+
+## UI-012 complete — Analytics, Logs and Settings (2026-09-27)
+
+UI-012-A through H are COMPLETE. Implementation: `5c41f7f` (`feat(ui):
+integrate server analytics logs and supported settings`). Documentation closure
+is a separate commit. The older UI-012-A/foundation notes and audit receipts
+below describe their historical state and are preserved.
+
+Analytics is DATA-005 server truth: protected summary and UTC timeseries,
+24h/7d/30d, hour/day and all five metrics. Rates retain numerator/denominator,
+duration known/unknown populations preserve null and measured zero, and jobs
+retain namespace/outcome aggregation. Observations are not interpolated or
+smoothed and have a bounded table equivalent. The browser-local Analytics
+writer/store/range modules and obsolete tests are retired; stored history is
+untouched. Range changes read summary/series; metric/interval changes read
+series only. Explicit Refresh, no polling.
+
+Logs consumes protected `GET /logs`: seven-day API records, not process logs.
+Request/job category, returned severity and domain outcome remain independent.
+Category/level/cursor are URL-owned; filters reset cursor; page limit is 50.
+Opaque cursors pass unchanged, API order is retained, and detail disclosures
+perform no request. No hidden research/provider/credential fields enter state.
+
+Settings support matrix: theme/language are editable browser preferences;
+backup preview/confirmed import/export and writer recovery reuse existing
+owners. Connection reuses the UI-010 memory-only session, clears its input on
+submit, shares across routes and clears on disconnect/reload. Protected
+configuration status is read-only; public system/model reads have no bearer.
+Provider presence/unknown availability is not health. Fixed 30-day telemetry
+and seven-day Logs policy are read-only. No workspace-settings mutation API
+exists; no fake Save/retention/log-clear/model/provider/key controls were added.
+Architecture/help remains `/settings?panel=architecture`.
+
+Read lifetimes use abort plus monotonic epochs and selection/session identity,
+including A→B→A. Error bodies are never reflected; extra JSON fields are
+projected away before state. Public/private unavailable, unauthorized, denied,
+backend failure, invalid selectors, real empty and unmeasured are distinct.
+Analytics/Logs query selectors and direct routes preserve Back/Forward.
+
+Actual final validation on the committed implementation:
+
+- Task-focused Vitest: transport 27, Analytics 19, Logs 13, Settings 12 and
+  shared session 3 = 74/74 across five files.
+- Full Vitest: 85 files / 688 tests passed; TypeScript `bun run lint` passed.
+- Playwright production builds passed (existing aggregate >500 kB warning).
+- `e2e/ui-012-operations.spec.ts` + `e2e/ui-routing.spec.ts`: 34/34,
+  17 Chromium + 17 Firefox (28 UI-012 + six route/shell cases), 51.9s.
+- Changed guided-navigation regression: 2/2, one per browser, 12.0s.
+- Selected Pipeline/Evaluation shared-session neighbors: 6/6, three per browser,
+  16.1s. No broader reference or integration campaign is claimed.
+- Both browsers: all three routes at 1586×992, 1440×900, 1280×856, 1024×768,
+  768×900, 390×844, 1440×700, 1366×768 and 1920×1080; light/EN and dark/VI,
+  reduced motion, focus/reachable lower actions and zero body/root overflow.
+  Focused workspace axe A/AA scans returned zero violations.
+- Screenshots inspected for each route at desktop light/EN and phone dark/VI,
+  including scrolled lower content. Cards stack, log records stay readable and
+  the bucket table/pagination/help actions remain reachable.
+
+No dedicated Analytics/Logs/Settings reference exists in the nine-PNG inventory.
+`evaluation-ui-reference-dark-v1.png` (1586×992) informed shared chrome/card
+language only, not borrowed metrics or a parity target. Native browser zoom
+125/150/200% remains an external manual check; viewport tests do not certify it.
+
+UI-012 changes no backend, dependencies, canonical data, provider execution or
+official benchmark. The separate intervening audit committed backend/privacy
+and frontend race fixes; its final backend is 1234 passed / 188 warnings / 83
+unique API method/path routes, not a UI-012 test-count increase. UI-011's
+historical frontend baseline was 84 files / 619 tests; current 85 / 688 includes
+the audit's four frontend regressions.
+
+Artifact/index review and diff checks passed. Only explicit UI-012 source,
+tests and docs were staged. Screenshots, traces, bundles, DB/WAL/SHM, caches,
+real credentials and all 12 unrelated untracked paths remain excluded.
+Original UI-012 start: clean tracked/staged tree + 12 unrelated untracked paths.
+Post-audit resumption: 19 tracked dirty + 21 untracked, no staging.
+Final closure: clean tracked/staged tree + the same 12 unrelated untracked paths.
+
+Known limits: fixed read-only operational policy; Logs is not process-log
+ingestion; descriptive provider flags do not probe health; native zoom remains
+manual; existing bundle/parser/dependency warnings and the audit's separate
+Unicode-highlight/Collections-auth/multi-process caveats are unchanged.
+
+Exact Next Action: TEST-002 — Cross-layer contracts, verified from the master
+graph. TEST-003 follows the completed UI dependencies; TEST-004 waits on both.
+Optional EVAL-004/Ragas is not required. STOP: none of these tasks was started.
+
+## Current engineering audit and repairs (2026-09-27)
+
+This audit started at `cbfdfda`, with 19 tracked dirty entries, 21 untracked
+entries and no staged changes. API-006 is already complete. UI-012 work was
+already in progress in the worktree and remains uncommitted; this audit neither
+completes nor commits it. Historical completion receipts below are unchanged.
+
+Four independently reproduced defects are repaired in scoped commits:
+
+- AUD-08 / P1: public system metadata disclosed raw local model-cache paths and
+  unsafe build values. `762bda6` reuses the registry identifier allowlist;
+  rejected model values become null and unsafe build values are omitted.
+- AUD-05 / P2: separate database instances could apply the same pending
+  migration snapshot. `da2a2a5` holds the existing per-path reentrant lock
+  across the complete initialization operation.
+- AUD-06 / P2: old Search page success/error could overwrite a newer search;
+  old paging could start during submission. `fbf433b` invalidates its epoch,
+  checks abort, and suspends paging until the new snapshot settles.
+- AUD-07 / P2: Stop discarded answer tokens awaiting the render flush.
+  `ec0ef58` preserves the owning message's buffer before stopping and clears it.
+
+Actual final gates: frontend 85 files / 688 tests, TypeScript and production
+build PASS; affected backend slices 151 and 103 passed; paired-browser Search
+and streaming gate 30/30. Final full backend result is recorded in the authored
+[audit report](docs/ENGINEERING_AUDIT_2026-09-27.md).
+No P0 was verified; these checks are not exhaustive security assurance.
+
+Existing UI-012 and unrelated dirty work remain preserved. Collections bearer
+integration remains staged; the known Unicode highlight defect remains P3;
+migration serialization is in-process, not a multi-process migration protocol.
+Next action: return to UI-012 validation/documentation/closure under its own
+scope, then the graph's cross-layer/visual gates. Do not restart API-006.
+
+## DATA-005 terminal telemetry/logs (2026-09-27)
+
+Implementation commit `2fd839a` (`feat(data): add terminal telemetry
+foundation`) adds one private, content-free operational substrate over the
+existing DATA-001 workspace SQLite database. Deterministic migration v6 extends
+the v3 `telemetry_events` placeholder with schema version, subsystem, severity,
+safe correlation/domain IDs, error code, canonical allowlisted metadata, and
+query indexes. There is no second database, JSON-lines sink, browser writer,
+external observability dependency, or frontend change.
+
+Persisted `request_terminal` records cover only `/query`,
+`/query/decomposed`, both query streams, `/search`, and
+`/retrieval/inspect`. They preserve a server record ID, terminal UTC time,
+route template, capability, independent outcome/severity, safe request
+correlation, measured whole-operation duration or null, and small typed
+metadata. Streaming writes occur at done, error, timeout, disconnect/cancel, or
+incomplete close rather than header return. Writes are immutable/idempotent by
+record ID and best-effort relative to the source response; storage failure
+cannot rewrite or fail the operation, so cross-process exactly-once is not
+claimed.
+
+DATA-004 remains the sole authority for Pipeline, Evaluation, and model-test
+jobs. DATA-005 projects terminal job rows at read time instead of duplicating
+job events. Succeeded, failed, cancelled, interrupted, and
+`budget_exhausted` remain distinct; budget exhaustion is warning severity, not
+provider/model error. Job/projected durations remain null because DATA-004 does
+not own a separate measured duration. Collection activity, ordered job events,
+request telemetry, and process logging remain separate domains. Telemetry and
+job/log history are excluded from portable workspace transfer.
+
+Protected `GET /analytics/summary`, `GET /analytics/timeseries`, and
+`GET /logs` reuse API-001 bearer/loopback/exact Host/Origin access. Public mode
+returns 404 without opening/creating SQLite. Summary rates expose exact
+numerators/denominators and known/unknown duration populations. Timeseries uses
+closed range/interval/metric enums, at most 720 UTC buckets, count zero only
+where defined, and null for duration buckets without samples. Logs are a
+seven-day, SQL-bounded, deterministic `occurred_at DESC, record_id DESC`
+cursor view; telemetry itself retains 30 days and is pruned on repository use.
+
+Ingress is allowlisted rather than blob-redacted after persistence. Credential
+keys/values and bearer/API-key-shaped strings, configured secrets, absolute
+Windows/POSIX paths, control/newline input, unsafe request IDs, unsupported or
+oversized metadata, provider bodies, stack traces, and research content fail
+before insert. Unsafe `X-Request-ID` is replaced before persistence/response;
+the legacy opt-in in-memory metrics snapshot now uses route templates rather
+than dynamic private IDs. No cost, token count, provider-health, resource,
+throughput, confidence, or quality value is fabricated.
+
+Focused DATA-005 domain/API coverage is **37/37**. DATA-001/002/004, access,
+Pipeline, Evaluation jobs, router and legacy API regressions passed **256/256**.
+The full hermetic backend passed **1217 tests, 0 failures, 188 warnings** versus
+1179/0/188 before DATA-005. Compile/import passed; the collision-free route
+inventory is **83** (80 + the three protected reads). `git diff --check` passed.
+No frontend file, dependency, provider, canonical data, runtime database/log,
+or optional Ragas code changed.
+
+Known limits: terminal persistence is deliberately best-effort after the source
+operation; fixed 30-day telemetry and seven-day log windows are not yet mutable
+settings; aggregates scan only bounded time ranges but do not implement an
+external metrics engine; conventional process logs are not ingested; and
+UI-012 has not yet connected the current browser-local Analytics compatibility
+view to these private APIs.
+
+Exact next graph task: `UI-012 — Analytics / Logs / Settings`. Optional
+EVAL-004/Ragas remains off the required spine and was not started.
+
+## UI-011 native Evaluation workspace (2026-09-27)
+
+Implementation commit `ae81384` (`feat(ui): build native evaluation workspace`)
+replaces the historical report/demo console with one typed consumer/control
+surface for EVAL-001/002/003. `/evaluation` owns definitions, validated
+publication history/detail, backend comparison, grouped trends, native failure
+analysis, and protected frozen jobs. `/evaluation/runs/:runId` remains the
+canonical selected route; `?source=job` explicitly distinguishes a private job
+from a public report and is preserved by direct navigation and browser history.
+No backend route, schema, dependency, worker, provider, publication, benchmark,
+canonical data, or optional Ragas integration changed.
+
+The metric strip uses exactly the six native-v1 identities/meanings. Computed
+zero and false remain real values, while unavailable and not-applicable remain
+separate labelled states with their backend denominators/counts. Comparison
+uses only returned `candidate_minus_baseline` and compatibility facts. Trend
+points stay in backend binding groups with no interpolation, smoothing, merge,
+or forecast. Failure analysis uses exactly the four EVAL-002 categories and
+states that an unavailable prerequisite is not automatically model failure.
+Legacy publications are metadata-only; no client-side evaluator or native
+publication path remains in the workspace.
+
+Private job calls reuse UI-010's app-level memory-only token owner. Creation is
+one duplicate-protected POST with one logical Idempotency-Key and adopts the
+server canonical queued identity/revision/frozen plan. Budget is displayed only
+as `provider_attempt_slot`; the two durable steps are `execute_cases` and
+`aggregate_report`; unknown progress stays unknown. Detail/results/events and
+cancellation are selection/session/page epoch-bound. Finite SSE close is
+non-terminal, ordered replay uses Last-Event-ID, cancellation sends If-Match and
+reconciles 409 without overwrite, and interrupted offers no resume/retry. Raw
+private question, answer, ground-truth and evidence fields are projected away
+inside the typed API client before React state.
+
+Validation is hermetic and synthetic. Evaluation-focused Vitest coverage is
+**82 tests** (35 API, 11 metric/results, 17 job/event/cancel, 6 public request
+lifetimes, 13 workspace); the full frontend is **84 files / 619 tests**, with
+TypeScript and the production build passing. The dedicated production-browser
+gate is **24/24** (12 Chromium + 12 Firefox) and covers the prompt's 24 required
+areas, both languages/themes, axe, reduced motion, and all seven required
+viewports with zero body/root overflow. Controlled Chromium route/shell,
+legacy-privacy and Evaluation reference checks passed **5/5** after adding the
+public metric/default-404 fixture contract; the canonical route suite then
+passed **3/3**. Rendered default/report, compare, empty/real trends, failures,
+private unavailable, queued/running/results, budget/cancel/interrupted, VI, and
+responsive receipts were inspected and remain ignored test output.
+
+The authoritative `evaluation-ui-reference-dark-v1.png` is 1586×992 (sidebar
+~204px, topbar 56px, content origin ~221×80, metric/history/rail gaps ~12px).
+The implementation preserves its compact metric strip, dense history/detail
+split, state chips, radii and typography where backend truth allows. It adds a
+labelled keyboard tab row for the actual public analytics/private job surfaces,
+uses six native cards instead of five unsupported screenshot metrics, and does
+not reproduce screenshot-only groundedness, latency, pass-rate, benchmark,
+quota, or arbitrary failure data. One selected-row dark contrast defect found
+by the rendered axe gate was corrected from 4.16:1 to the tokenized secondary
+text color; final workspace scans have no reported A/AA violation.
+
+Known limitations: job execution still depends on a separately running local
+backend worker/provider configuration; there is deliberately no job resume,
+retry, publication or monetary-cost API. Legacy public publications remain
+metadata-only, and native history/trends remain honestly empty until reports
+are explicitly published. The build retains the existing >500 kB aggregate
+chunk warning outside the lazy Evaluation chunk; this task added no dependency.
+
+Exact next graph task: `DATA-005 — Terminal telemetry/logs`. Optional EVAL-004
+Ragas is not on the required spine and was not started.
+
+## Post-rebuild correctness audit and repairs (2026-09-26)
+
+This pass started at `8dfdb3f`, not the historical UI-008 recovery baseline.
+Tracked source was clean; the same 12 unrelated untracked paths were preserved.
+API-006 through EVAL-003 are complete, and UI-011 remains the next product task.
+The old clean-checkout source-closure problem is already closed; required router,
+workspace, frontend route, and evaluation-job modules are tracked. No roadmap
+feature, canonical data mutation, provider run, dependency upgrade, or cleanup
+was performed.
+
+Four issues were reproduced before their corresponding production fixes:
+
+- **AUD-04 / P1:** the required EVAL-003 `Idempotency-Key` header failed browser
+  CORS preflight with HTTP 400. `7a3e596` (`fix(api): admit evaluation idempotency
+  preflights`) adds exactly that header, retaining explicit origin/method/header
+  allowlists and bearer/loopback/Host/execution checks. Six new hermetic tests
+  protect admission, denied preflights, and unauthorized creation without DB access.
+- **AUD-01 / P1:** list/detail rejected duplicate validated legacy/native run IDs,
+  while native results/compare/failures/trends silently selected native input.
+  `05f87ce` (`fix(eval): reject ambiguous publications across analytics`) applies
+  the same HTTP 409 boundary to all consumers, including trend history before
+  filters. Four adversarial API regressions failed with HTTP 200 before the fix.
+- **AUD-02 / P2:** native listings returned `status=complete`, but filtering by
+  that status failed with HTTP 422. The same evaluation repair adds the missing
+  literal without changing legacy promotion statuses or native report semantics.
+  A regression protects completeness/legacy filtering and invalid selectors.
+  The OpenAPI test asserts precisely this enum addition, then retains the original
+  frozen operation digest for every other field; it is not a blind hash refresh.
+- **AUD-03 / P2:** Collections' "Show more" replaced the page, offered no way
+  back, could advance beyond the last page, and used all-collection totals for
+  Favorites pagination. `d1519a3` (`fix(ui): bound collection paging to the active
+  result count`) adds bounded Previous/Next navigation, separates active/all
+  counts, and reconciles a page beyond a shrinking result set. Epoch guards,
+  collection selection, revisions, tombstones, and persistence remain unchanged.
+  Two unit regressions and paired desktop dark/EN + mobile light/VI browser
+  regressions cover the journey, keyboard access, filtered counts, and no writes.
+
+Final actual gates: backend **1179 passed, 0 failed, 188 warnings**; frontend
+**80 files / 541 tests passed**; TypeScript passed; production builds passed;
+Collections browser neighbors **38/38 passed** (19 Chromium + 19 Firefox),
+including the four new paired-browser cases. Dedicated evaluation analytics/
+legacy/OpenAPI focus passed **41/41**; CORS/jobs/collections/access focus passed
+**63/63**; Collections unit focus passed **25/25**. Compile checks, import,
+diff checks, and the **80-route** collision-free inventory passed. Production
+screenshots were inspected and remain ignored, not committed. The first full
+Vitest run had one 5-second session-history timeout (538 pass / 1 fail); its
+isolated rerun and final full run passed without timeout/assertion changes.
+Early browser-test failures exposed fixture locale setup and unsettled animation
+contrast; correct locale, reduced motion, and the existing settled-paint gate
+passed without CSS changes. A separate existing h1-to-h3 card-heading warning
+is a P3 follow-up, not a claim of full accessibility conformance.
+
+Remaining: Collections bearer integration is explicitly staged, not bypassed
+(UI-010 attaches the memory-only token only to private Pipeline calls). A P3
+Unicode discovery highlight defect was reproduced: casefold expansion in
+`Straße revenue` produces `[8,15]` and highlights `evenue`; backend code-point
+versus frontend UTF-16 indexing also needs an explicit contract. No ranked
+evidence/identity or stored data is changed by that display defect. Broad
+dependency/penetration, native browser zoom, full browser, Docker, clean-checkout
+rebuild, and live-provider gates were not rerun; do not infer them from these
+results. No P0 was verified, and this is not a whole-repository security guarantee.
+The authored [audit report](docs/ENGINEERING_AUDIT_2026-09-26.md) records boundary
+coverage, repair order, commands, limitations, and dirty-tree ownership.
+UI-011 remains next; API-006 must not be restarted.
+
+## EVAL-003 frozen budgeted native jobs (2026-09-26)
+
+Implementation: `fb85da1` (`feat(eval): add frozen budgeted native evaluation
+jobs`). EVAL-003 adds exactly the six master-plan private job routes, not a
+generic scheduler, public publisher, Evaluation UI, or Ragas adapter. Reads
+are API-001 L; creation/cancellation are J with existing bearer, loopback,
+exact Host-port, Origin, and execution-capability checks. Creation requires
+an Idempotency-Key and registered artifact/engine/metrics/mode/budget. It
+freezes then queues/dispatches; no start/resume endpoint exists. Cancellation
+uses If-Match and events replay through Last-Event-ID. Typed private results
+include exact case inputs, native metrics, definitions, aggregates, and
+denominators. Public EVAL-002 analytics remain separate and unchanged.
+
+DATA-004 remains the sole job state/identity/revision/step/event/progress/
+idempotency/cancellation/recovery owner. Schema v5 adds linked immutable
+private artifact, attempted-slot, case-result, and report tables in that same
+workspace SQLite database. Original Phase 1 bytes are content-addressed and
+copied before execution. The canonical credential-free snapshot binds native
+protocol/engine v1, all six metric versions/definition digest, full API-006
+dataset revision, complete TestCase-derived IDs, frozen case order/content/
+rendered-evidence hashes, generator/judge identity, retrieval fingerprints,
+prompts, completion profile, runtime source semantics, and budget. Later
+dataset/artifact/configuration changes cannot silently change a run: case
+execution reads frozen data, semantic code drift fails closed, and equivalent
+idempotent creation returns the original snapshot before reading current
+inputs. Conflicting key reuse fails explicitly; raw keys are never persisted.
+
+Budget unit is `provider_attempt_slot`, not money or tokens. Preflight
+requires three slots per case for draft, at most one shared correction, and
+judge, with 200 cases/16 MB artifact/15,000 slots maximum. The atomic SQLite
+reservation reads the cap and case identity from the immutable job payload;
+it cannot be enlarged by a worker argument. A unique job/case/phase receipt
+prevents duplicate attempts. Every reservation is charged before transport;
+SDK/transport/case retries are disabled. A crash can consume a slot without
+proving that transport began, so this is a conservative call upper bound,
+not an exact monetary/transport-success measure. Exhaustion is explicit and
+cannot become success, provider failure, or a metric zero.
+
+Steps are `execute_cases` and `aggregate_report`. Frozen artifact order is
+deterministic. Shared Phase 2 evidence rendering, prompt/provider plumbing,
+answer completion, and judge policy (including KEY5-only configuration) are
+reused; EVAL-001 computes local metrics and creates/validates the unchanged
+native report. Generation, local metrics, and judging see the same rendered
+evidence. Zero/false stay computed and absent prerequisites never become
+zero. Failure categories distinguish snapshot, budget, provider, case, report
+validation, and infrastructure failures with fixed sanitized messages. Case
+results and valid private reports commit atomically and are not overwritten.
+
+Cancellation stops new reservations; an already-reserved/in-flight call can
+finish. Acknowledgement follows actual worker stop, including cancellation/
+terminal-failure revision races. Completed cases remain. Progress is the last
+durable DATA-004 receipt and may lag a just-committed case at a cancel/crash
+boundary; private result counts are authoritative. Startup recovery marks
+running/cancelling jobs terminal `interrupted`, preserving snapshot, consumed
+slots, completed cases, and any valid report already committed. No ambiguous
+provider call is automatically replayed. Queued jobs can be redispatched by
+equivalent creation. Local workspace startup recovery assumes one serving
+process; independent jobs can run concurrently, without a global quota
+scheduler. A provider success before result persistence remains an unknown
+crash outcome, not exactly-once external execution.
+
+Publication is not owned by the six EVAL-003 route rows. Reports remain
+private and digest-validated; no file is written to `data/public_evaluations`,
+no job becomes official, and native trends remain honestly empty. Parity is
+frozen Phase 2 evidence parity, not full live-serving request parity. Remote
+model identity is frozen, but the provider exposes no pinned weight revision.
+Unreferenced content-addressed artifacts can remain after a failed job commit;
+no automatic private-data garbage collection was introduced. Credential/path
+checks include escaped values and duplicate-key rejection; this does not
+claim immunity to indirect prompt injection in filing evidence.
+
+Final validation: **22/22 EVAL-003 tests**, **182/182 native/job/DATA-004/
+pipeline/API/access regressions**, and **64/64 API-006/shared Phase 2
+regressions** passed. The final full hermetic backend passed **1168/1168,
+zero failures, 188 warnings**, versus 1146/1146 and 188 warnings. Compile/
+import and diff checks passed; exact route inventory is **80** versus 74,
+with names/models/access/order/collision checks. A read-only preflight of the
+existing 30-case Phase 1 artifact passed; no live provider evaluation ran.
+The artifact audit staged no database/WAL/SHM, credential, runtime report,
+provider output, cache, trace, log, screenshot, or data artifact. Frontend and
+dependencies were unchanged, and all 12 unrelated untracked paths were
+preserved. Checkpoint EVAL-003-A..G and README carry the contract/closure
+receipt. No new deterministic regression or warning growth was found.
+Exact next graph task: `UI-011 — Evaluation`; it was not started. EVAL-004/
+Ragas remains outside this work.
+
+## EVAL-002 native comparison, trends, and failures (2026-09-23)
+
+EVAL-002 adds a provider-free public analytical layer over EVAL-001's
+`native-evaluation` protocol-v1 reports, implemented in commits `78b726e`
+(`feat(eval): add native report comparison and analysis`) and `40dd144`
+(`fix(eval): validate analytics sort and query selectors`). It neither
+recomputes nor renames any of the six version-1 native metrics. Explicit
+baseline/candidate comparison uses absolute `candidate_minus_baseline`
+deltas only when metric identity/version, dataset identity/revision, context
+binding, case universe, and per-metric computed case coverage are compatible.
+Judge metrics also require the same judge model/prompt definition. Both
+original aggregate denominators and unavailable/not-applicable counts remain
+visible. Computed zero and false are valid; missing values never become zero.
+Cases pair by ID, with unpaired sides and null deltas when only one report has
+a case. Incomplete or ineligible comparisons are not official results.
+
+Read-only native publication discovery uses bounded, digest-validated
+`*.native.json` envelopes in the existing configured public-report directory.
+The envelope supplies an explicit timezone-aware publication timestamp;
+there is no EVAL-002 publisher, job, or data store. The directory is currently
+absent, so the real native history remains empty. Trends group only reports
+with the same dataset, case universe, computed metric coverage, context
+binding, metric version, and judge definition where applicable. They order by
+publication timestamp/run ID/digest, one run per point, without interpolation
+or forecasting. Findings are limited to false fallback expectation, invalid
+citation indices, missing explicit keywords, and separately labelled
+unavailable prerequisites. There is no judge-score quality threshold,
+hallucination category, citation-support claim, Recall@K claim, significance
+test, or composite winner.
+
+Four public read/analysis routes were added: `GET /evaluation/runs/{id}/results`,
+`POST /evaluation/compare`, `GET /evaluation/metrics/trends`, and
+`GET /evaluation/failures`. The compare POST does not write. Native list/detail
+projections are version-discriminated, and native detail omits case arrays;
+case results/failures/comparisons/trends are paged. Historical
+public-report-v1 list/detail behavior remains, while legacy files are
+explicitly unsupported for native analytics. Native outputs contain stored
+safe IDs/hashes/results/provenance only, not question, answer, ground truth,
+evidence, prompt, credential, or private path. Details and bounds are in
+`docs/EVALUATION_ANALYTICS_PROTOCOL.md` and checkpoint EVAL-002-A..F.
+
+Validation: focused EVAL-002/EVAL-001/public-report/API-005/route regressions
+84/84 passed with one existing warning; full hermetic backend 1146/1146
+passed, zero failures, 188 warnings, compared with EVAL-001's 1127/1127 and
+188 warnings. Compile/import passed. The application has 74 routes, four more
+than EVAL-001. Frontend, dependencies, `data/`, evaluation workers/jobs,
+and Ragas were untouched. The 12 pre-existing unrelated untracked paths
+remain. Source and artifact audit found no committed runtime report, hidden
+case text, local dataset, credential, generated output, or private machine
+path. This journal update belongs to the documentation closure commit.
+The next verified graph task is `EVAL-003 — Frozen budgeted jobs`; it was not
+started.
+
+## EVAL-001 native metrics/protocol (2026-09-23)
+
+EVAL-001 introduces the canonical provider-free native evaluation protocol,
+`native-evaluation` version 1, without running an evaluation or changing the
+official benchmark. Six master-plan metric IDs each have explicit semantic
+version 1: `native.faithfulness`, `native.answer_relevancy`,
+`native.context_precision`, `native.citation_index_validity`,
+`native.keyword_recall_proxy`, and `native.fallback_correctness`. The first
+three record complete precomputed native-judge scores only; this layer never
+calls a provider. The other three reuse the existing citation-index,
+required-keyword, and fallback functions against the exact rendered context.
+Citation index validity is not claim support, and keyword recall proxy is
+not Recall@K. All metrics have `[0,1]` computed range and higher-is-better
+direction; fallback is boolean per case and a success rate in aggregate.
+There is no new overall score, threshold, or cross-metric weighting.
+
+The typed private report preserves metric definitions, per-case statuses and
+context hashes, aggregates with computed/unavailable/not-applicable counts,
+dataset/model/retrieval/context/judge provenance, and a canonical SHA-256
+digest. Zero and false remain computed values; missing ground truth, evidence,
+generation, or judge score is unavailable, while absent citations/keyword
+requirements/fallback expectations are not applicable. Only computed cases
+enter each denominator. Means use stable sorted summation and final
+four-decimal rounding; empty sets, duplicate IDs, malformed/non-finite values,
+mixed bindings, context-hash drift, unsafe provenance, unsupported versions,
+and inconsistent digests/aggregates fail closed. The report stores no
+question, answer, ground truth, or evidence text. A provider-free preflight
+reports bound and unjudged eligible cases without pricing or executing
+future judge work.
+
+API-006 and EVAL-001 now share the exact previous ordered-full-`TestCase`
+SHA-256 revision algorithm for `evaluation-test-set` version
+`evaluation-test-set-v1`; no second dataset identity was introduced. Public
+`GET /evaluation/metrics` exposes typed definitions and capability flags.
+Existing public-report-v1 and Phase 2 checkpoint/result formats are retained
+as historical contracts, not silently converted or republished. EVAL-002
+must define explicit publication/comparability adaptation; EVAL-003 owns
+workers, provider attempt budgets, and execution. No Ragas, frontend, job
+runner, or data artifact was added. The full protocol is documented in
+`docs/EVALUATION_NATIVE_PROTOCOL.md` and checkpoint EVAL-001-A..F.
+Implementation commit: `a20b77c` (`feat(eval): define native metric report
+protocol`); this project-state update belongs to the documentation closure
+commit.
+
+Validation: focused native/evaluation/API-005/API-006/route regressions
+151/151 passed; native protocol/API focused 27/27 passed; full hermetic
+backend 1127/1127 passed with the same
+188 warnings as the 1100-test baseline. Python compile/import passed, and
+the application route count is 70 (one new public read). `git diff --check`
+and commit/artifact audit are recorded in the checkpoint closure. The next
+verified dependency/priority task is `EVAL-002 — Compare/trends/failures`;
+it was not started.
+
+## UI-010 Pipeline workspace (2026-09-23)
+
+UI-010 implementation is commit `c1318cd` (`feat(ui): build truthful pipeline
+staging workspace`); this project-state update belongs to the following docs
+closure commit. UI-010 replaces the frontend's serving-corpus Pipeline
+snapshot with the real API-007 staging workspace. The page uses public `GET /pipeline` for the
+five-stage definition and, after an explicit local connection, protected
+list/detail/stage/cancel/events routes for durable DATA-004 runs. The canonical
+`/pipeline/runs/:runId` route and backend ID own selection. Stage submits only
+registered inputs with the `isolated` profile, accepts the returned queued
+ID/revision, and displays the five backend pending steps. Missing progress,
+timing, and artifacts remain unreported; no execution or promotion is implied.
+
+An app-level `LocalWorkspaceSessionProvider` verifies a manually entered token
+against protected configuration status and keeps it only in a runtime ref.
+Disconnect, invalidation, unmount, and full reload discard it. Only private
+Pipeline client calls receive Authorization; the public definition does not.
+No localStorage, IndexedDB, cookie, URL, or log persistence was added. The
+server still owns host/origin/auth/execution checks. Public/unavailable and
+unauthorized states do not masquerade as an empty run list.
+
+The selected run has one bounded SSE reader with numeric `Last-Event-ID`
+resume, server-detail reconciliation, AbortControllers, and selection epochs.
+Late A or A#1 after A→B→A#2 cannot repaint the current run. Clean stream
+closure/disconnection is not treated as job failure. Cancellation sends the
+current quoted revision, prevents duplicates, retains a 409 conflict without
+force overwrite, and distinguishes `cancelling` from acknowledged
+`cancelled`. Browsing and reconnecting perform no provider/worker action.
+
+Validation: focused API client 5/5, shared-session 3/3, Pipeline component
+10/10; TypeScript pass; full Vitest 80 files/539 tests pass; production build
+pass (existing large-chunk advisory); dedicated hermetic Chromium 8/8 and
+Firefox 8/8 pass; shared Chromium route/reference 18/18 pass. The 1586×992
+reference-native comparison and responsive captures at 1440, 1280, 1024,
+768, 390, and short-height desktop show zero body/root horizontal overflow;
+Pipeline-scoped WCAG 2/2.1 A/AA axe finds zero violations. An earlier
+parallelized full Vitest run passed assertions but exited with unrelated
+DocumentExplorer teardown-timer errors; the isolated rerun exited 0.
+
+No backend code or `data/` changed. API-007 remains staging-only: no worker,
+real execution progress/timing/artifacts, or automatic promotion exists. The
+shared header has a pre-existing borderline contrast chip outside this page's
+scope. Detailed UI-010-A..H receipts and file/commit audit are in
+`docs/UI_REBUILD_PLAN_CHECKPOINT.md`. The verified next master-plan task is
+`EVAL-001 — Metrics/native protocol`; it has not started.
+
+## API-007 pipeline staging (2026-09-23)
+
+API-007 is complete in implementation commit `c9735f5` (`feat(api): expose
+isolated pipeline staging`). The six routes from the master plan are registered
+in order: public/provider-free definition; local-only run history, detail, and
+events; and execution-gated staging and cancellation. The API uses the existing
+DATA-004 v4 SQLite jobs repository, adds no migration, and leaves jobs queued
+with the five ordered ingestion steps pending. Exact request/configuration
+replays reuse the durable job through DATA-004 idempotency; status, steps,
+revision, sanitized failure, and artifact references are projected through
+typed allowlists.
+
+Cancellation follows revision preconditions (`If-Match`/`ETag`) and preserves
+DATA-004 semantics: queued jobs become cancelled, running jobs become
+cancelling. Event reads return bounded ordered SSE batches resumable by numeric
+`Last-Event-ID`. CORS allows those request headers and exposes `ETag` to browser
+clients. Public workspace mode and disabled execution fail before opening or
+mutating the local job database.
+
+This is staging only: no ingestion script, SEC/provider request, worker,
+coordinator, scheduler, retry, canonical corpus/index write, automatic
+promotion, frontend/UI-010 change, or schema migration was added. The README
+and detailed API-007-B..F checkpoint record the request/response and access
+contract. The focused API-007 plus DATA-004/API-001/API-006/access regression
+group passes `117/117` with one existing warning; the full hermetic backend
+suite passes `1100/1100` with the existing `188` warnings. Python compile and
+diff checks pass. The application now has `69` routes, including the six
+planned Pipeline routes. Ruff is unavailable, so no Ruff pass is claimed.
+
+The master dependency/priority graph names `UI-010 — Pipeline` as the direct
+next product task. The memory-only local connection/token owner remains staged
+architecture and is not listed as a separate predecessor; its scope must be
+resolved at the UI-010 boundary before browser access to protected local routes
+is claimed. UI-010, auth-owner work, and EVAL were not started here.
+
+## REPAIR-007 enforce configured workspace Host ports (2026-09-23)
+
+`LOCAL_WORKSPACE_ALLOWED_HOSTS` accepts optional ports, but API-001 parsed and
+discarded the port before comparing the request Host. With the explicit
+allowlist `localhost:8000`, a request carrying `Host: localhost:9000` was
+incorrectly authorized when it also had the required loopback peer and valid
+bearer token. The access check now preserves an explicit configured port and
+requires it to match; host-only entries retain their existing behavior.
+Loopback, Origin, bearer-token, execution-grant, and forwarded-header rules are
+unchanged. A focused regression reproduced the mismatch before the fix.
+
+The combined API-001/access, transfer, route-contract, registry, and durable-job
+regression group passes 149 tests with one existing ReportLab deprecation
+warning. No public route behavior, provider flow, or canonical data changed.
+
+## REPAIR-006 bounded workspace import request bodies (2026-09-23)
+
+The workspace import endpoints enforce a 25 MiB backup limit. Previously,
+both handlers called `Request.body()` before checking it, so an oversized
+request was fully buffered before the limit returned HTTP 413. They now reject
+an oversized `Content-Length` before reading and incrementally enforce the same
+byte limit while streaming, including when the header is missing or
+under-reports the body. The exact boundary remains accepted, and rejection
+happens before workspace database construction. API-001 authorization and the
+import format/digest contract are unchanged.
+
+Regression coverage proves early header rejection, bounded handling of a
+chunked under-reported body, exact-limit acceptance, and 413 responses from
+both import routes without creating SQLite state. The focused transfer and
+access group passes 81 tests with one existing ReportLab deprecation warning.
+No network/provider, canonical corpus, or frontend behavior was exercised or
+changed. The full backend suite was not rerun because this is a narrow HTTP body
+reader change; see the commit and session receipt for exact commands.
+
+Repository recovery at the start of this repair found actual HEAD `3df8323`
+(`docs(data): close durable jobs milestone`), not the stale `1858924` snapshot
+in the attached audit prompt. DATA-004, API-006, and UI-009 are complete in the
+current source/history. API-007 is now active but incomplete: its checkpoint
+contract map is an uncommitted working-tree change, and untracked
+`src/api/pipeline.py` / `src/api/pipeline_models.py` drafts are not wired to an
+HTTP router or application route. Preserve those drafts; finish API-007 as the
+next product task after this bounded repair.
+
+## DATA-004 durable jobs (2026-09-22)
+
+DATA-004 is complete at implementation commit `986aca8` (`feat(data): add
+durable job persistence`). The one authoritative DATA-001 SQLite database now
+owns durable `pipeline`, `evaluation`, and `model_test` jobs through additive
+schema migration v4 and the typed `SQLiteJobRepository`. The backend route
+count remains 67; no API route, coordinator, worker, provider call, pipeline or
+evaluation execution, frontend file, browser writer, second database, or
+canonical-data mutation was added.
+
+The persisted contract has opaque stable job/step/event IDs; SHA-256-only
+idempotency-key storage; canonical request matching; configuration
+fingerprints; ordered step and event histories; optimistic job/step revisions;
+bounded stage plus optional current/total progress; bounded safe result JSON;
+sanitized failure code/message; logical artifact references; and UTC lifecycle
+timestamps. Credential-like fields/values, configured secret values, absolute
+machine paths, control characters, non-finite JSON, oversized records, and
+path-shaped artifact references fail before persistence. New rows carry an
+explicit record schema version. Ambiguous pre-DATA-004 v3 job rows are retained
+but fail closed when read.
+
+State transitions are deliberately narrow: queued work starts or cancels;
+running work succeeds, fails, is interrupted, or enters cancelling; cancelling
+work becomes cancelled only on acknowledgement or interrupted on restart.
+Terminal states do not restart. There is no retry/requeue, lease, heartbeat,
+worker identity, deletion, retention cleanup, or background scheduler contract.
+Atomic queued-to-running plus expected revision is the claim boundary, and a
+two-contender test proves only one stale-revision writer can win.
+
+Restart reconciliation is explicit rather than an open-time side effect.
+Queued jobs remain queued; running/cancelling jobs and their running steps are
+atomically marked interrupted, while pending steps remain pending. Creation,
+state/progress/step updates, cancellation, acknowledgement, and recovery each
+write their event in the same transaction. Deterministic failure injection
+proves rollback for every logical mutation. Job state and job artifacts remain
+private/local and are excluded from DATA-002 portable backups.
+
+Validation is hermetic and provider-free. The focused durability plus existing
+persistence/transfer/collection/access/matrix regressions pass 151/151 with one
+existing dependency warning. The full backend suite passes 1077/1077 with the
+same 188 warnings as the 1050-test starting baseline, so DATA-004 contributes
+27 passing tests and no new failure or warning. Compile/import checks pass,
+`git diff --check` passes, and the application still reports 67 routes. Ruff is
+not installed in the repository environment, so no Ruff result is claimed.
+
+Known limitations are intentional boundaries: DATA-004 persists and validates
+state but does not execute work or expose it over HTTP; job types remain bounded
+consumer-owned identifiers until their later adapters register concrete
+vocabularies; recovery must be invoked once by the future coordinator startup;
+and retention/deletion policy is deferred because the saved contract does not
+define one. The exact next dependency/priority action is `API-007 — Pipeline
+staging`. It has not started.
+
+## UI-009 Models/Datasets workspace (2026-09-22)
+
+UI-009 is complete. `/models` and `/datasets` are now available product routes
+over the completed API-006 registry contract. The implementation commit is
+`b35e1b5` (`feat(ui): build truthful model and dataset registries`). The backend
+and its 67-route contract are unchanged. Public/frontend contracts and the
+validation record are commit `34b5b72` (`docs(ui): close UI-009 registry
+workspace`).
+
+Models reads `GET /models` with the API's optional role filter and selects by
+the stable backend ID. Generator, embedding, and reranker entries keep
+configured identity/revision, observed runtime identity/revision, load,
+availability, and credential presence separate. Unknown remains unknown; the
+page does not fabricate reachability, health, latency, cost, quality,
+throughput, context length, or benchmark data. The only write-shaped request is
+an explicit user-initiated `POST /models/{id}/tests` for `runtime_identity`.
+It is never sent while browsing, is duplicate-protected and selection-bound,
+reports `provider_executed=false`, and classifies local-access, deployment-mode,
+validation, and unexpected failures without presenting them as provider
+failure.
+
+Datasets reads `GET /datasets` with the optional kind filter and
+`GET /datasets/{id}` for page-local detail. The stable `serving-corpus` and
+`evaluation-test-set` IDs own selection. Corpus coverage and allowlisted index
+provenance preserve available, degraded, unavailable, missing, invalid,
+mismatch, recorded zero, and unknown/null semantics. Evaluation renders only
+aggregate category/priority/ticker/section coverage and the deterministic
+revision; questions, expected answers, ground truth, and judge labels never
+enter the browser. There is no upload, delete, reindex, model switch,
+installation, download, provider configuration, or job action.
+
+Both pages use request epochs plus `AbortController` ownership so older filter,
+detail, or test completions cannot repaint the active identity. Selection is
+page-local because the route contract defines no model/dataset detail URLs;
+direct `/models` and `/datasets`, sidebar navigation, and browser Back/Forward
+remain coherent. Ordinary browsing issues GETs only and invokes no provider,
+generation, embedding, reranking, SEC request, download, cache mutation, or
+dataset mutation.
+
+The Models visual authority is
+`docs/ui-references/models-ui-reference-dark-v1.png` at 1586×992. The rendered
+page preserves its measured 205px navigation, 58px topbar, compact tab/filter,
+dense selected registry, detail-card rhythm, blue selection, and dark surface
+language while removing unsupported routing, benchmark, pricing, health, and
+mutation controls. Datasets has no dedicated reference and deliberately uses
+the same registry/detail language without inventing a baseline. Receipts cover
+1586×992, 1440×900, 1280×856, 1024×768, 768×900, 390×844, and short-height
+1440×700 in Chromium and Firefox; body/root horizontal overflow is zero, the
+detail remains reachable, and Models switches from its table to touch-friendly
+cards at 800px and below. Focused dark-theme axe checks have no critical or
+serious violations.
+
+Validation: API/route/component focus passed 47/47; the two registry component
+files plus the existing Collections timing check passed 29/29 after making the
+new dataset assertion await its detail payload. The final full Vitest gate
+passed 77 files / 521 tests. TypeScript passed. Production build passed with
+2061 transformed modules and only the existing >500 kB chunk advisory. The
+dedicated UI-009 spec passed Chromium 7/7 and Firefox 7/7; the broader UI-002
+routing regression passed 6/6 across both engines. `git diff --check` passed.
+Temporary Playwright receipts, traces, videos, build output, and audit material
+remain ignored and uncommitted.
+
+Known limitations: the bounded model identity test still requires the existing
+local execution capability and therefore truthfully reports unavailable in a
+public deployment; remote generator reachability remains unknown without a
+future provider operation; model and dataset detail are intentionally not
+deep-linkable because UI-009 defines no such route. The master-plan dependency
+graph identifies the exact next task as `DATA-004 — Durable jobs`. It has not
+started.
+
+## API-006 model/dataset registries (2026-09-22)
+
+API-006 is complete. Four additive typed routes now provide the future UI-009
+Models/Datasets pages with authoritative backend data: public provider-free
+`GET /models` (optional `role` filter), execution-gated local
+`POST /models/{model_id}/tests`, public provider-free `GET /datasets` (optional
+`kind` filter), and public provider-free `GET /datasets/{dataset_id}`. The
+application now composes 67 routes. No frontend runtime file changed.
+
+The model registry has three stable IDs in fixed order: `generator`,
+`embedding`, and `reranker`. It reads the generator's shared default/runtime
+identity, configured embedding/reranker IDs and revisions, existing loaded
+pipeline objects, and provider-key presence only. Configuration, load,
+credential presence, and availability are distinct. A configured Groq model is
+not claimed reachable: without a provider operation its availability remains
+unknown; absent credentials, unsafe identities, or configuration/runtime
+mismatches are unavailable. Local models are available only when an actual
+runtime object is loaded with the configured identity/revision. The sole
+bounded test is `runtime_identity`; it reports `provider_executed=false` and
+does not infer, embed, rerank, download, mutate caches, or contact a provider.
+
+The dataset registry has two stable IDs in fixed order: `serving-corpus` and
+`evaluation-test-set`. Serving document/company/chunk/year/section and
+configured-company counts reuse API-003 `build_stats`. Index provenance comes
+from the configured Qdrant manifest and is reconciled against catalog chunk
+count, embedding binding, and a fingerprint of the loaded retrieval corpus.
+Unavailable catalog state is not represented as an empty dataset; missing,
+invalid, or mismatched manifests and a genuinely empty catalog are explicit
+degraded states. The evaluation entry exposes only aggregate coverage and a
+deterministic SHA-256 revision derived from the source-controlled `TEST_SET`;
+questions and ground truth are not returned.
+
+All response models are allowlists. API keys, bearer/authorization values,
+settings dumps, database/cache paths, developer-machine paths, and unsafe
+manifest/model identifiers are excluded. Adversarial tests inject synthetic
+secret-looking and private-path values and verify that serialization cannot
+contain them. Registry read tests install fail-on-call model/provider mocks,
+proving ordinary reads are hermetic and provider-free. Public access uses the
+API-001 provider-free grant; the test POST uses the existing execution grant
+and fails closed with 404 in public mode. No switching, installation,
+load/unload, upload/delete/reindex, durable job, pipeline execution, retrieval,
+or generation behavior was added.
+
+Implementation and focused tests are commit `de907a7`
+(`feat(api): add truthful model and dataset registries`). Focused API-006 and
+relevant API-001/API-002/API-003, manifest, embedding, index, and model
+regressions pass 175/175 with five existing warnings. The full hermetic suite in
+the main worktree passes 1050/1050 with 188 existing dependency/parser warnings
+and zero failures; its higher count than the clean-checkout baseline reflects
+the preserved local git-ignored artifacts. Compile/import checks pass and the
+application reports the four expected registry routes. No network, SEC, Groq,
+Hugging Face, or Qdrant Cloud call was made.
+
+Public contract, architecture, validation, and checkpoint records are commit
+`4fd5577` (`docs(api): record registry contracts and validation`).
+
+Known limitations: generator reachability is intentionally unknown without an
+explicit provider test; model health, latency, and quality are not fabricated;
+the serving dataset is degraded when its manifest cannot be reconciled; the
+registry is descriptive and cannot mutate models or datasets. The exact next
+task in the master-plan dependency graph is `UI-009 — Models/Datasets`; it has
+not started.
+
+## UI-008 Collections workspace (2026-09-22)
+
+UI-008 is complete. `/collections` and `/collections/:collectionId` are rebuilt
+against `docs/ui-references/collections-ui-reference-dark-v1.png` (1586x992) as
+the typed workspace collections UI over the DATA-003 API; the previous
+browser-store Collections console is gone.
+
+Composition: measured on the reference (nav ≈209, content padding ≈15, main
+column ≈750, rail ≈583 at the reference width, cards ≈160 tall with a ≈13 gap).
+The page header band carries the title, subtitle, a real search field, a sort
+select backed by the API's own sort fields, a list/grid density switch, and the
+"New Collection" action; the tab row carries All Collections and Favorites with
+live API counts plus the preserved Conversations tab; the rail carries the
+selected collection's header, a three-cell stat strip (items, updated, privacy),
+the Contents/Notes/Activity/Settings tabs, the member list and the footnote
+naming the revision. Nothing from the reference that has no capability is
+rendered: no Share tab, no "Shared with Me", no owner, storage meter, plan
+upsell, avatars or processing states.
+
+Typed behavior: members show the kind DATA-003 stored (`document`, `evidence`,
+`answer`, `note`), the Contents tab filters by that kind through the API, and a
+member opens by its stored identity — documents through the catalogue reader
+with a new `returnView: "library"` origin (the reader's back control says "Back
+to Collections"), evidence through the existing evidence reader with its
+captured snapshot and no retrieval re-run, answers through their originating
+conversation message, notes in the Notes tab. A member with no openable identity
+states why instead of opening something nearby. Every member read, note read and
+activity read is a plain GET: browsing, searching, sorting, switching tabs and
+selecting a collection write nothing.
+
+Writes: create (POST), rename and settings (PATCH with the revision the page last
+read), favourite toggle, delete (DELETE with revision, confirmed in Settings),
+member removal (per-member revision), notes (POST/PATCH/DELETE) and the
+attributes/tags edit form. Each refusal keeps its own state — 401 local token
+required, 403 not this machine, 404 capability unavailable in this deployment
+mode (rendered as an unavailable panel, never an empty list), 410 tombstoned and
+not recreatable, 409 stale revision with a reload action, 422 a refused bound,
+kind or reference. Requests are guarded per resource (epoch + AbortController),
+so a slower response can never repaint a newer selection, and every mutation is
+an explicit user action.
+
+Save flow: "Save evidence" / "Add to Collection" from Documents, Search,
+Retrieval and Reranker now opens the collection target dialog (choose an existing
+collection or create one) and writes one typed `evidence` member with the
+source's own identities; the conversation surfaces keep their on-device library,
+so there is no dual write. "+ Add Documents" on the page picks real catalogue
+documents (API-003) and writes `document` members with the canonical
+`document_id`. Export writes the workspace's own JSON or Markdown document and
+mutates nothing.
+
+Accessibility and responsiveness: the page passes an axe scan
+(color-contrast/label/button-name/link-name/aria-input-field-name) at the
+reference viewport, its dialogs are real modal dialogs with focus trapping and
+Escape handling, and the receipts assert zero body/root horizontal overflow at
+1586x992, 1440x900, 1280x856, 1024x768, 390x844 and 1440x700. Two dark-theme
+contrast defects this page exposed were fixed in its own stylesheet: primary
+buttons now use the button token (white on `--primary` was 3.38:1) and the
+selected card's description uses the stronger text tone (4.16:1 before).
+
+Validation: the new UI-008 spec has 15 tests and passes 15/15 on Chromium and
+Firefox; the unit suite grew to 75 files / 495 tests (from 74/460) with `tsc`
+clean and the production build green; the controlled full browser gates at four
+workers ran 165 passed / 2 skipped / 1 failed on Chromium and 163 passed / 2
+skipped / 3 failed on Firefox, where every failure is the documented
+load-sensitive class (`regression.spec.ts:65`, `:656`, `:1039`,
+`workspace-performance.spec.ts:176`) and each one passes in isolation; the
+nine-reference receipt harness stays at 30/30 with the library receipt driving
+the new save-to-collection flow. The backend is untouched: 1018 passed / 0
+failed / 188 warnings.
+
+## DATA-003 typed collections (2026-09-22)
+
+DATA-003 is complete. The local workspace now has a typed collection domain,
+repository and protected HTTP surface, built for the Collections interface
+(UI-008) without a second persistence design.
+
+Typed model: a collection carries id/name/description/tags/favorite/private
+visibility/revision/timestamps, and its members are typed by kind — `document`,
+`evidence`, `answer` or `note`, exactly the four the rebuild plan defines. Each
+kind declares the identity its reference must carry (a document needs a
+`document_id`; an answer needs a conversation, message or answer identity;
+evidence needs a real `EvidenceRef` with at least one document/chunk/source
+identity; a note may be unbound or bound to an `EvidenceRef`). The declared kind
+decides the rule, so an incompatible reference is refused deterministically and
+nothing is inferred from a reference's shape or coerced into another kind.
+Collections carry their own fields; items are immutable references or snapshots
+(the plan gives them only create and delete) and notes are editable.
+
+Persistence: typed records live in the DATA-001 versioned-record store, so
+revisions, revision preconditions, tombstones, no-resurrection, canonical
+payloads and secret-field rejection are inherited rather than re-implemented.
+Records keep the DATA-002 transfer wrapper and the typed truth lives in `data`,
+and storage keys are the transfer's own deterministic mapping, so a collection
+keeps one key across create, restart, export, import and repeated import.
+**No migration and no schema change were needed**, and the four unused
+foundation tables from migration v2 stay unused on purpose: writing them would
+create a second source of truth and break the export path. One allowlisted
+entity type (`collection_activity`) was added for append-only recorded
+operations; nothing else in DATA-001 changed.
+
+Semantics: stale revisions are conflicts (409) and never overwrite; deleting is
+atomic and tombstones the collection with its members and notes; deleted records
+report themselves as gone (410), re-deletion is not a conflict, and recreation
+is refused; item deletion requires the owning collection; duplicate identifiers
+are conflicts, not silent merges; listing filters on search, tags and
+favorite (both true and false) with bound sort/page; activity records real
+operations and is bounded; per-collection export returns the truth as JSON or
+Markdown and mutates nothing.
+
+Transfer: typed collections and their members round-trip through the existing
+version 1 workspace backup with the same canonicalization and digest —
+export → validate → import → repeat import → export preserves types, identities,
+membership, metadata, revisions and favourites, repeated import is idempotent,
+an older backup cannot resurrect a tombstoned collection, and an older backup
+cannot overwrite a newer revision. Notes and activity are reported as an
+unsupported source in that envelope rather than silently dropped, because the
+backup format has no record type for them; they remain fully covered by the
+per-collection export. The backup format, its version, its canonical
+serialization and the Python/TypeScript digest parity are unchanged.
+
+HTTP: `/collections…` is registered under the API-001 `L` local-workspace grant,
+reads included, with list/create/get/patch/delete collections, list/add/delete
+items, list/add/patch/delete notes, list activity and export. Domain outcomes map
+to 404 (unknown), 410 (tombstoned), 409 (revision conflict) and 422 (bounds,
+kind, membership, or request validation). Public mode answers 404 and never opens
+the private database.
+
+Validation: 49 new focused tests (18 domain, 13 repository, 6 transfer, 12 API)
+plus the focused DATA-001/DATA-002 regressions (105 tests) and the route
+inventory contract, which grew to include the new protected routes. Full hermetic
+backend suite: 1018 passed, 0 failed, 188 warnings — the warning count is
+unchanged from the baseline.
+
+Committed as `d0ffd91` (17 files). That commit also carries the still-untracked
+predecessor modules the surface imports at module scope
+(`src/workspace/{database,migrations,repository,transfer}.py`,
+`src/workspace/__init__.py`, `src/api/access.py`); the rest of the rebuilt API
+surface stays untracked, so a clean checkout of the commit cannot yet import
+`src.api.app`. A detached worktree at that commit runs the 37
+domain/repository/transfer tests and resolves the collections import closure,
+while the API-level tests need the working tree. The post-commit Mimosa deep
+scan attributes no finding to any DATA-003 file; its one high SQL-injection
+finding is `src/workspace/database.py`'s `PRAGMA busy_timeout`, which
+interpolates an `int` clamped to 100..30000 from operator configuration and is
+not reachable from a request.
+
+## UI-007 Retrieval and Reranker (2026-09-22)
+
+UI-007 is complete. The Retrieval page is rebuilt against
+`docs/ui-references/retrieval-ui-reference-dark-v1.png` (1586x992) and the
+Reranker page now exists as its own route; both consume the real API-005
+inspection trace through a typed model. **There is no reranker reference
+screenshot** — the reference matrix has none and says so — so that page follows
+the master-plan bullets and reuses the Retrieval page's own visual language,
+with one trace answering both questions.
+
+Trace semantics: the client types the whole response (`trace_version`,
+`score_semantics`, `production_parity`, `scope`, `filter_values`, stage
+statuses, per-candidate ranks and `dropped_reason`) and a new pure
+`src/lib/traceModel.ts` holds every rule, so pages never reinterpret data. Score
+families stay distinct: BM25, dense similarity, RRF, and the cross-encoder logit
+are shown with their own scale and the API's own definitions, a missing score
+says "Not reported" (never 0), a negative logit stays negative, a stage that did
+not run is labelled, `structured_promotion` reports `not_executed` with its
+reason, and a dropped reason is only ever the one the trace supplied. A bounded
+eligible-document list is described as bounded.
+
+Retrieval: query card with the real request axes (company, year, document,
+section, preset, and the true top-k/candidate-pool bounds), the existing JSON
+and CSV export of the completed trace, four metric cards built from the trace's
+own counts and stage durations, a ranked table whose score column names the
+family it shows (with a view-order control limited to the families the trace
+reported and an explicit status column for selected/dropped), the stage list
+with truthful statuses, the score-semantics and production-parity disclosures,
+and an evidence preview rail that previews the top-ranked candidate until a row
+is picked. Removed as unsupported or superseded: the analyst/advanced mode tabs,
+the compare-preset double-POST feature, and the reference's dead "Advanced
+Filters" button and page actions.
+
+Reranker: one submitted comparison runs exactly one inspection, and the fusion
+order (`rrf_score`, `fusion_rank`) and cross-encoder order
+(`cross_encoder_score`, `final_rank`) come from that single same-pool response,
+so the page never reranks a second time. It reports the reranker stage status,
+its duration (or "Not reported"), the model only when the stage ran, how many
+candidates carry a reranker score, and a comparison table with fusion rank,
+reranker score, and named rank movement; a preset that never reranks shows the
+stage as skipped with the API's reason instead of drawing an absent score. The
+route's navigation availability moved from "partial" to "available".
+
+Query lifecycle: typing only edits a draft; one submit is one POST; selecting a
+candidate, reordering, paging, opening disclosures, and opening a document run
+nothing. An unchanged configuration cannot be submitted twice while a run is
+open, while an edited one can be committed immediately — the earlier request is
+aborted and its late response is ignored, proven by a browser test that releases
+a held request after a newer submission. Identity stays canonical
+(`chunk_id`/`document_id`, `retrieval-document-workspace-<chunk>` focus ids,
+"Back to Retrieval" focus return), and nothing writes workspace, conversation, or
+provider state.
+
+Delegation: one bounded presentational task (the candidate table, the page-owned
+stylesheet skeleton, and its tests) was delegated to OpenCode with Muse Spark 1.3
+at XHigh reasoning, with the exact props contract and "do not" rules. Primary
+review found and fixed a real semantic defect in it — the score pill's emphasis
+used the row's position on the page instead of its position in the displayed
+order, so page two's first row looked like the top result.
+
+Validation: `traceModel` 19 tests, `CandidateTable` 8, `RetrievalPanel` 15,
+`RerankerPanel` 7; the full suite is 74 files / 460 tests; tsc and build pass;
+`frontend/e2e/ui-007-retrieval.spec.ts` passes 14/14 on Chromium and Firefox at
+a controlled four workers (it times out under the default 14 workers, the
+documented load-sensitive class); retrieval and reranker receipts cover six
+viewports on both engines; the nine-reference receipt is 30/30 with r5-retrieval
+driving the rebuilt page; V5-07, the retrieval regression test, and the route
+availability assertion were re-pointed at the new pages.
+
+## UI-006 discovery Search (2026-09-22)
+
+UI-006 is complete. The Search page is the reference composition
+(`docs/ui-references/search-ui-reference-dark-v1.png`, 1586x992) built on
+API-004 discovery snapshots. It replaces the previous diagnostic substitute,
+which called `POST /retrieval/inspect` with hybrid/dense/BM25 presets and
+rendered a retrieval trace instead of discovery search.
+
+Snapshot lifecycle (the core of this task): typing only edits a draft and
+issues no request; one submit creates exactly one `POST /search` snapshot;
+paging and the page-size control read that same snapshot through
+`GET /search/{search_id}`; opening a result, saving evidence, and every purely
+visual change issue no further search. A newly committed query, filter scope,
+or grouping is a new snapshot (grouping is stored in the snapshot, so switching
+it POSTs again with the same query and scope). Request-id guards plus an
+`AbortController` per request keep a late response from replacing a newer
+submission, and a reload does not silently re-run the query because snapshots
+stay runtime-only. Draft filters are visible immediately but say so: the
+results toolbar states that new filters apply on the next search, and the
+results always show the snapshot's own submitted query.
+
+Truthfulness: every card comes from API-004 — real `chunk_id`, `document_id`,
+ticker, section, filing date, `hit_count`, BM25 score, and the snippet with its
+character ranges. Highlights are the API's ranges sliced into React nodes, so no
+returned text is ever interpreted as HTML. Counts are bounded and labelled as
+bounded: with `limited_by_ceiling` the list states that discovery ranked the
+first 200 candidates rather than claiming a corpus total, and no fabricated
+total appears. Scores stay raw BM25 numbers labelled `BM25`; there is no
+percentage, confidence, or "high relevance" wording, and the engine's own
+definition is reachable in the rail. A `410` snapshot expires into an explicit
+expired state with a rerun action (never an empty result list), `404` reports an
+unknown snapshot, `429` reports the rate limit once without retrying, and `422`
+shows the API's validation message. Reference controls with no capability behind
+them stay absent: saved searches, search examples, the collection/filing-type
+chip row, advanced filters, a sort selector, a latency tile, and filing-type
+checkboxes.
+
+Validation: `searchModel` has 15 unit tests, `DiscoverySearchPage` has 15
+(including snapshot reuse, stale-response protection, draft-vs-submitted
+queries, grouping, bounded counts, and the expired/unknown/rate-limited
+states), and the hermetic spec `frontend/e2e/ui-006-search.spec.ts` has 9 tests
+covering the reference composition, real results and highlights, the
+no-second-POST guarantees, filters/grouping/zero results, expiry and unknown
+snapshots, keyboard submission with an axe contrast/label scan, read-only
+browsing, and route/reload honesty. Receipts cover 1586x992, 1440x900,
+1280x856, 1024x768, 390x844 and a 1440x700 short viewport on both browsers. The
+e2e fixtures gained hermetic `POST /search` and `GET /search/{id}` handlers whose
+shapes come from a real provider-free corpus probe
+(`scripts/diagnostics/ui006_discovery_probe.py`), and three existing specs
+(V5-07 handoffs, the regression reader handoff, and the reference receipts) were
+re-pointed at the rebuilt page.
+
+Two real defects the tests found: scanning the page for contrast while the
+console entry animation was mid-flight measured blended colors (the scan now
+disables motion first), and the rail's metric tiles put 12px hint text on a
+muted surface, which measured 4.42:1 — the tiles now use the card surface and
+the scan is clean.
+
+## UI-005 Documents workspace (2026-09-22)
+
+UI-005 is complete. The Documents page now renders the reference composition
+(`docs/ui-references/documents-ui-reference-dark-v1.png`, 1586x992) while
+taking every count and filter value from API-003 instead of computing them
+locally.
+
+Catalog truth: the four metric cards read `/documents/stats` (documents,
+companies, chunks, filing-year range) and the filter options read
+`/documents/facets`, so each option carries API-003's count under its
+documented basis `all_filters_except_own_dimension`. A dimension with no
+recorded values is not rendered as a control: the year select only appears once
+the facet reports that dimension as recorded. When statistics are unavailable
+the cards fall back to the health-provided counts and label the state instead
+of showing a fabricated zero.
+
+No form type is named anywhere on the page. The stored artifacts record no
+per-filing form type and API-003 publishes the dimension as `unknown` with a
+reason, so the reference's "Filing Type" column and filter are omitted, and the
+one remaining form-type surface (the metric card and the detail-rail Metadata
+row) reports `Unknown` with that reason. The list request gained `year`, `sort`,
+`direction`, and `page_size`, with a sort control (filing date newest/oldest,
+ticker A-Z, chunks most) and a rows-per-page control (10/20/50) in the card
+header; the document request cache key covers them. `Clear filters` resets
+search, company, section, year, and page at once.
+
+Reference elements with no capability behind them stay absent rather than
+becoming dead controls: Import Documents, Manage Sources, the header overflow
+menu, the ownership toggle, the processing-success metric, and the sidebar
+storage meter.
+
+Validation: `DocumentExplorerPanel` now has 10 focused tests (5 new) covering
+API-003 statistics, the unknown form type, facet counts, sorting, page size,
+filter clearing, and the unavailable-statistics fallback, and the new hermetic
+spec `frontend/e2e/ui-005-documents.spec.ts` (5 tests) asserts the catalog
+facts, facet-count-to-result consistency, query-level sorting and paging, and
+that browsing issues no mutating request (a request listener records every
+non-GET while the page is searched, filtered, sorted, paged, and its detail
+tabs opened). Twelve receipts cover six viewports on both browsers, including
+the reference-native 1586x992 and a 1440x700 short viewport; the receipt test
+asserts the panel is painted before capturing, because the console entry
+animation starts at opacity 0.
+
+Two real defects were found by the new tests and fixed: a blank first receipt
+that raced that entry animation, and `Unknown` breaking mid-word in the
+narrowest stat card (`.console-stat__value--status`). The e2e fixture now
+answers `/documents/stats` and `/documents/facets` for the default corpus,
+which it did not before, so journeys that mount the Documents route no longer
+fail on an unexpected API request; the richer 12-row dataset stays behind
+`catalog: true`.
+
+## UI-004 source/document composition (2026-09-21)
+
+UI-004 is complete. The source/evidence rail and the document pane now compose
+the four-pane workbench the authoritative references show, at the reference's
+own width.
+
+Reference-first geometry: `docs/ui-references/rag-workbench-master-reference-dark.png`
+(1254x856) shows navigation, conversation, "Retrieved Sources" (~335px) and the
+document viewer side by side, and `research-ui-reference-dark-v1.png`
+(1586x992) shows the same composition with wider panes. The previous shell only
+produced four panes above 1384px of content, so its own reference width fell
+back to a contextual overlay. Fixed:
+
+- Pane limits follow the reference rails (sources 300-400px, default 332;
+  document 272-560px, default 400) and the research column minimum is 430px.
+- `deriveEffectivePaneWidths` lets the sources rail keep its preferred width
+  while the document pane narrows toward its minimum, and `WorkbenchLayout`
+  feeds those effective widths into the CSS tracks, so the rendered geometry
+  always matches the mode decision instead of overflowing.
+- Presentation ladder: four panes from ~1254px, context dock for wide-but-short
+  viewports (its Sources/Document tab switcher remains covered), contextual
+  modal surface at 1024px or below the height floor, drawer at 1024px,
+  single-surface below 640px.
+- Real drift fixed while updating the specs: `ContextPanel` hardcoded the pane
+  reset/fallback widths (304/440) instead of the documented limits; both now
+  read `WORKBENCH_PANE_LIMITS`.
+
+Truthfulness: the composition renders the real SourcesPane and the real
+readers (Structured / Normalized text / manifest-gated PDF) with real
+citations, scores, sections and page markers where the data defines them. The
+reference's paper preview and page-level navigation correspond to an official
+PDF representation this corpus does not admit (the live path is an explicit
+`DERIVED_PDF`), so those are omitted rather than fabricated, and the document
+pane keeps its real representation tabs.
+
+Validation: new hermetic spec `frontend/e2e/ui-004-source-document.spec.ts`
+(3 tests) asserts the four-pane mode at 1440 and at the 1254 reference width,
+the sources rail listing the answer's real sources, and zero body/root
+horizontal overflow at 1254/1280/1440/1024/390, with screenshots captured under
+the git-ignored `frontend/test-results/ui-004/`. Contract updates in
+`v5-06-layout.spec.ts` (reference geometry, dock at the wide-but-short target,
+resizer limits/delta/reset) and `v5-03-sources.spec.ts` (the pane switcher is
+conditional because four-pane shows both panes) each carry a comment citing the
+reference or contract they follow. Frontend: 70 files / 398 tests, `tsc` clean,
+production build passed. Browser gates: Chromium 128 passed / 2 intentional
+skips / 0 failed and Firefox 128 passed / 2 intentional skips / 0 failed
+(baseline 125/2; +3 is the new spec). Nine-reference receipt unchanged at
+15/15. Backend untouched, so its 969-test baseline stands.
+
+Exact next task from the master graph: UI-005.
+
+## API-005 inspection metadata (2026-09-21)
+
+API-005 is complete. `POST /retrieval/inspect` (existing endpoint, public,
+rate-limited 10/minute, provider-free) now returns a **versioned trace** with
+the additive document/date filters the master plan specifies, and it labels the
+stages it does not reproduce instead of letting a reader mistake a trace for
+production output.
+
+Trace contract (additive; every pre-existing key keeps its name and meaning):
+
+- `trace_version` = `retrieval-trace-v1` on every trace.
+- Request gained `document_id` (opaque token, path-safe pattern), `filing_date`
+  (`YYYY-MM-DD`), and `year`; the restriction is applied to the eligible pool
+  **before** the stages run — including the store-backed dense stage — so the
+  reported ranks describe the scope the reader asked about.
+- `score_semantics` describes each score family the preset actually produced
+  (lexical BM25, dense similarity, RRF fusion, cross-encoder logit) with its own
+  scale and definition, plus an explicit note that the families are not
+  comparable and that none is a confidence, accuracy, or probability.
+- `production_parity` states that structured financial-row promotion and
+  lexical-ladder merging into the final evidence are `not_executed` in
+  inspection, with the reason: they exist only on the production `/query` path.
+- Every stage carries `status` (`executed` / `skipped` / `not_executed`)
+  alongside the legacy `skipped` flag. A stage that never ran reports
+  `elapsed_ms: null` and a reason, so a duration is never implied; a named
+  `structured_promotion` stage carries the not-executed label.
+- Every candidate carries `dropped_reason` for non-selected rows, limited to
+  reasons the trace can prove (`ranked_below_top_k`, `outside_candidate_pool`,
+  `not_in_selected_preset_stage`); selected rows report `null`.
+- `filter_values` reports the effective filters (including a ticker inferred
+  from the question, which composes with the explicit ones) and `scope` reports
+  the eligible document count with a bounded id list (200, `truncated` flagged)
+  or a truthful unavailable reason.
+
+Semantic preservation: inspection remains observational. Focused tests assert
+that running `inspect()` does not mutate the retriever's chunk lists, BM25
+object, per-ticker indexes, or index map, and that a production
+`retrieve_with_embedding` call returns byte-identical ids, order, and scores
+before and after an inspection. Reported stage scores are asserted to equal the
+underlying doubles' own values.
+
+Defects found by the new tests: the dense stage consulted the vector store
+directly and therefore ignored a document/date restriction (now filtered
+through the same predicate), and a question naming a company infers its ticker
+and composes with explicit filters (asserted rather than assumed away).
+
+Validation: 22 new focused tests; focused regression set 140 passed; full
+hermetic backend suite **969 passed / 0 failed / 188 warnings** (baseline 947,
+warnings unchanged); `compileall` clean; `git diff --check` clean; frontend
+unchanged at 70 files / 397 tests with `tsc` clean after one minimal additive
+type update (`stages[].elapsed_ms` is now `number | null`). No runtime artifact
+was produced, and no dependency was added.
+
+Exact next task from the master graph: UI-004.
+
+## API-004 discovery search snapshots (2026-09-21)
+
+API-004 is complete. Discovery search is now a provider-free, deterministic
+keyword capability over the already-loaded serving corpus, separate from RAG
+answering and from the diagnostic Retrieval Lab.
+
+Endpoints and contract (exactly as the master plan defines them):
+
+- `POST /search` — body: `query`, `mode`, `group_by`, `ticker`, `section`,
+  `year`, `filing_date`, `page`, `page_size`. It runs one discovery pass and
+  returns the snapshot's first page.
+- `GET /search/{search_id}` — pages a stored snapshot without re-running the
+  search, so the result set cannot change under a reader.
+- Both are the plan's public read class (`P`): no authentication, no workspace
+  reach, no corpus mutation.
+
+Snapshot semantics: an opaque `search-<16 hex>` id (validated by pattern, so it
+can never be a filesystem path) identifies an immutable ranked result set with
+its scope, facets, engine identity, `created_at`, `expires_at`, and a 900-second
+TTL. The store is in-process and bounded to 50 entries, evicting the
+earliest-expiring snapshot; a read never extends a TTL. An unknown id returns
+404 and an expired id returns 410, so a client can tell "no such snapshot" from
+"search again".
+
+Matching and ranking: a chunk matches when its indexed text actually contains a
+query term, and the retriever's own BM25 score orders the matches. That split
+matters — a term present in a large share of the corpus has a non-positive
+inverse document frequency, so its score collapses to zero even though the term
+occurs; ranking by score alone would have reported those words as missing. The
+score is labelled as a ranking signal with an explicit definition, never as
+confidence or accuracy.
+
+Honesty of counts: every response states `count_scope`
+(`bounded_candidates` or `no_matches`), the `candidate_ceiling` (200) and
+`limited_by_ceiling`, so a bounded total can never be presented as a whole
+corpus total. The facet payload is API-003's own aggregation for the same
+scope, and focused tests assert that `POST /search` and `GET /documents/facets`
+report the same scoped document count.
+
+Bounds: query 2–200 characters after whitespace normalization (only
+whitespace and case are normalized; no stemming, synonym expansion, or
+provider rewriting), page size 1–50, candidate ceiling 200, 50 resident
+snapshots, TTL 900 s, and a new `SEARCH_RATE_LIMIT` (default `30/minute`)
+applied through the existing slowapi limiter.
+
+Provider-free and read-only: discovery reads the retriever's prebuilt BM25
+index, so a search never embeds a query, runs a cross-encoder, calls a
+provider, touches Qdrant, or reads SEC. The focused tests assert the embedder,
+cross-encoder, model lock, and generator are never invoked. The retriever
+gained three additive read-only helpers (`tokenize_query`, `bm25_scores`,
+`bm25_terms_present`) so discovery cannot drift from the index tokenization;
+no retrieval, ranking, or reranking behaviour changed.
+
+Real-corpus replay (10,053 chunks / 50 documents): `Microsoft Cloud revenue`
+returns the MSFT mdna chunk; `AWS revenue growth` returns
+`AMZN_000101872426000004_mdna_0012` — the chunk carrying `AWS 107,556` and
+`128,725` — as its top hit; `Apple risk factors` scoped to `AAPL` returns one
+document with 62 matching chunks; `quantum computing` returns real BAC/GS
+excerpts; the Vietnamese query `Doanh thu` returns `no_matches`, which is
+truthful because the filings are English.
+
+Validation: 26 focused tests plus one route-ownership contract test; the
+adjacent regression set passed 143 tests; full hermetic backend suite **947
+passed / 0 failed / 188 warnings** (baseline 920, warnings unchanged);
+`compileall` clean; `git diff --check` clean; no runtime artifact produced.
+Commit `a56c39a` adds the discovery service, the search router, the typed
+request/response models, the retriever helpers, the setting, and the tests.
+
+Exact next task from the master graph: API-005.
+
+## API-003 catalog facets and statistics (2026-09-21)
+
+API-003 is complete. The catalog that `/documents`, `/documents/facets`, and
+`/documents/stats` serve now derives from one aggregation module
+(`src/api/catalog.py`) over the startup document catalog, which is built from
+embedded chunk metadata. Everything is public, provider-free, read-only, and
+deterministic: no model, provider, store, reader, or network path is touched,
+and nothing in the corpus, index, evaluation artifacts, or workspace is
+mutated.
+
+Endpoints and contract:
+
+- `GET /documents/facets` — recorded facet values with truthful counts for the
+  applied scope. Count basis is explicit
+  (`all_filters_except_own_dimension`): a company facet reports what selecting
+  a company would leave while the other filters stay applied, and so on. A
+  section facet counts per membership, so it does not sum to the document total
+  when a filing carries several sections.
+- `GET /documents/stats` — totals (documents, companies, chunks), the recorded
+  filing-year range, section coverage in canonical order, and per-dimension
+  availability. `filing_type` reports `unknown` with a reason rather than a
+  fabricated constant: no stored artifact records a per-filing form type, and
+  the corpus-level 10-K contract lives in the ingestion script, not in the
+  metadata. An empty catalog reports every dimension as `unknown` instead of
+  implying a real zero.
+- `GET /documents` gained `year`, `sort`, and `direction` additively, and now
+  shares the same filter and sort helpers as the facet routes. An unsupported
+  sort field returns `422` listing the supported fields.
+
+Route order follows the master plan's rule that static document routes precede
+dynamic ones: `/documents`, `/documents/facets`, `/documents/stats`,
+`/documents/{document_id}`. The frozen route-order contract test records the
+two new entries, and a new ownership test proves they belong to
+`src.api.routers.catalog`, whose factory receives an application-owned callback
+and constructs nothing.
+
+Verified against the real on-disk corpus (no provider, no model
+initialization): 50 documents, 50 companies, 10,053 chunks; sections business
+50, risk_factors 50, mdna 46, financial_statements 46, financial_table 50 —
+matching the documented extraction quality of 46 complete filings plus 4
+degraded but searchable; filing years 2026 (42) and 2025 (8); facet counts
+consistent with the filtered totals.
+
+Validation: 18 new focused tests plus one route-ownership contract test; the
+adjacent regression set (router contract, workspace access/transfer, API)
+passed 168 tests; full hermetic backend suite **920 passed / 0 failed / 188
+warnings** (baseline 901, warnings unchanged); `compileall` clean; `git diff
+--check` clean; no runtime artifact left behind. Commit `3ba64d7` adds the
+aggregation module, the catalog router, and the focused tests; the wiring in
+the shared boundary files (`app.py`, `schemas.py`, the route-order contract
+test) is committed with the task documentation because those files already
+carried validated earlier rebuild content.
+
+Exact next task from the master graph: API-004.
+
+## UI-003 Chat/Research conversation pages (2026-09-21)
+
+UI-003 is complete. Chat and Research are now distinct, mode-aware
+conversation compositions instead of one hardcoded "Research" page.
+
+Mode provenance: `ConversationMode` ("chat" | "research") is captured into the
+request snapshot at send time and stamped onto the conversation record; a
+saved conversation keeps the mode it was started in, and the stored mode wins
+over a mismatched URL family. An unknown stored mode is treated as unreadable
+data rather than silently coerced, and the merge fingerprint includes the mode
+so a browser/IndexedDB merge cannot drop it. Chat and Research share the same
+grounded-answer thread, citations, variants, feedback, notes, and streaming
+lifecycle; they differ only in presentation: Chat is direct with compact
+follow-up chips, Research adds reference-style follow-up tiles and insight
+tiles built only from real answer fields (sources used, total chunks, top
+retrieval score — labelled as a retrieval score, never confidence — and
+response time). Tiles with no backing value are omitted.
+
+New components live under `frontend/src/components/conversation/`
+(`ConversationPageHeader`, `ResearchInsightsRow`, `FollowUpTiles`,
+`ConversationPageShell`); `App.tsx` keeps the thread, request lifecycle,
+evidence identity, scroll behavior, and composer ownership, and passes them
+into the shell. Conversation selection, evidence deep links, bookmarked-answer
+opens, saved-variant opens, and continue-research all reopen in the stored
+conversation's family, and a new chat starts on `/chat` while a new research
+session keeps `/research`.
+
+Composer truthfulness: two dead controls that existed only to mirror the
+reference screenshot were removed — the `Web` search button (this product has
+no web retrieval) and the `Attach document` paperclip (no handler). `Hybrid
+Search` is now a static badge describing the real BM25 + dense + RRF +
+cross-encoder stack instead of a dead dropdown. The reference's model
+selector, account, storage meter, upgrade CTA, and confidence scores remain
+intentionally absent.
+
+Validation: `tsc --noEmit` clean; frontend 70 files / 397 tests (379 baseline +
+18 new: 11 component, 3 store, 4 App); production build passed; full Chromium
+125 passed / 2 intentional skips / 0 failed; full Firefox 125 passed / 2
+intentional skips / 0 failed (a first-run failure of the frozen TEST-001
+timing-sensitive Firefox inspector test passed focused three times and in the
+full rerun); nine-reference receipt 15/15. New hermetic browser spec
+`frontend/e2e/ui-003-conversation-modes.spec.ts` also asserts no body/root
+horizontal overflow at 1440x900, 1280x856, 1024x768, and 390x844, and the
+receipts are captured under the git-ignored `frontend/test-results/ui-003/`.
+The rendered light-theme capture caught and fixed a real defect: the mode title
+was inheriting `text-white` on a token-aliased light surface and was invisible.
+
+Stitch MCP was used as authorized (a bounded probe generation); its output
+completed server-side but was not retrievable in an importable form, so the
+implementation was built from the authoritative local screenshots and existing
+UI-001 primitives, and no Stitch code or fake content was imported.
+
+No backend file, dependency, corpus, index, evaluation artifact, or `data/`
+file was changed. Exact next task from the master graph: API-003.
+
+## DATA-002 workspace import/export completion (2026-09-20)
+
+DATA-002 is complete. The canonicalization work recovered from the interrupted
+2026-09-19 23:16 session is now checkpointed, completed, and fully gated.
+
+Cross-runtime canonical representation: Python `_js_number_text` serializes
+numbers with ECMAScript semantics, `_canonical_json` orders object keys by
+Unicode code point, and unpaired surrogates fail closed; the TypeScript side
+uses `compareUnicodeCodePoints` for key and record ordering (replacing
+`localeCompare`), `canonicalWorkspaceJson`, and the same fail-closed surrogate
+and safe-integer guards. Python additionally rejects floats at or above 2^53
+(every such double is integral and unsafe) so both runtimes accept exactly the
+same numbers. The shared deterministic fixture
+`tests/fixtures/workspace_transfer_roundtrip.json` (three envelopes: minimal;
+Vietnamese/Unicode metadata with integral floats, 1e-7 exponents, and
+astral-versus-U+E000 keys; revision/tombstone/evidence identity) is read by
+both pytest and Vitest; each runtime reproduces the stored digests, so any
+future canonicalization drift fails one side.
+
+Focused C coverage adds 25 backend tests (`tests/test_workspace_transfer_canonical.py`:
+deterministic legacy-ID mapping across independent databases, foreign-record
+conflict without overwrite, no-regression of a newer authoritative record,
+non-portable export accounting, revision-deterministic tombstones, ECMAScript
+number units, surrogate fail-closed; plus HTTP idempotent-receipt and
+surrogate-400 cases) and 12 frontend tests (fixture digests, code-point
+ordering, ECMAScript number contract, surrogate rejection, and six
+authority-gate cases: constructor availability, write-time availability,
+browser-failure non-disconnect semantics, unsaved accumulation with deep-copy
+export, concurrent single-writer dispatch, and explicit re-switch after
+disconnect).
+
+Final gates: full backend suite 901 passed / 0 failed / 188 warnings (876
+baseline + 25); frontend 69 files / 379 tests (367 + 12), `tsc` clean, and the
+production build passed. Browser gates match the frozen UI-002 baseline:
+Chromium 118 passed / 2 intentional skips and Firefox 118 passed / 2 skipped —
+the first combined run had two Firefox-only timing failures that pass focused
+and in the full Firefox rerun (the documented TEST-001 timing-sensitive class;
+DATA-002 changed no page-render code). The nine-reference receipt passed 15/15.
+`git diff --check` is clean, DATA-002 added no dependencies, and the artifact
+audit found no stray SQLite/WAL/SHM or debug files.
+
+Transactional semantics (unchanged from DATA-002-B, now receipt-covered): one
+SQLite transaction with a digest-bound idempotent receipt, plan-based actions
+(create / replace_older / duplicate / conflict / blocked_by_tombstone /
+tombstone_create / tombstone_replace / tombstone_duplicate / tombstone_conflict),
+full rollback on any failure, deterministic legacy-ID mapping, tombstones that
+prevent resurrection, and newer live records that win over older tombstones.
+
+Exact next task from the master graph: UI-003 (Chat/Research conversation
+pages/hooks) — the first dependency-ready task in the master-plan priority
+ordering. API-003 and DATA-003 are also dependency-ready.
+
+## API-002 compatible FastAPI router extraction (2026-09-16)
+
+API-002 is complete. FastAPI creation, lifespan/bootstrap, the single shared
+pipeline/state owner, middleware, exception handling, and registration order
+remain in `src/api/app.py`. Existing health/configuration, supported-ticker,
+system-information, published-evaluation, session, cache, and metrics routes
+now live in six small router modules. Their factories receive callbacks to the
+application-owned objects and never initialize Qdrant, embedders, rerankers,
+generators, RAG pipelines, readers, PDF stores, or evaluation services.
+
+All 38 application routes retain the exact pre-extraction path, method, order,
+endpoint name, and declared status code. The 14 moved paths produce the exact
+same saved OpenAPI operations, including descriptions and validation schemas.
+Existing Pydantic models moved to `src/api/schemas.py` and remain re-exported
+from `src.api.app` for test/harness compatibility. Query and SSE routes,
+retrieval inspection, and all document, chunk, original/structured reader, PDF,
+and location routes intentionally remain in `app.py` to preserve their tightly
+coupled cancellation, rate-limit, evidence, provenance, and artifact behavior.
+`app.py` decreased from 2,249 to 1,933 lines without changing those domains.
+
+Validation remained hermetic: 5 focused API-002 tests, 46 API-001 access/proxy
+tests, 32 DATA-001 persistence tests, and all 64 existing API tests passed. The
+full backend suite increased from the DATA-001 baseline of 853 to 858 passing
+tests solely through the five new structural contract cases; failures remain 0
+and warnings remain 188. No provider or external network request completed, no
+frontend or dependency changed, and no corpus/index, evaluation artifact,
+`data/`, or workspace runtime database was modified. Exact next task from the
+saved graph: `DATA-002`.
+
+## UI-002 router, application shell, and legacy URL compatibility (2026-09-16)
+
+UI-002 is complete. The frontend now uses an explicit React Router contract for
+Chat, Research, Documents, Search, Collections, Retrieval, Models, Pipeline,
+Reranker, Evaluation, Analytics, Datasets, Settings, and Logs, including the
+planned conversation, document, collection, pipeline-run, and evaluation-run
+detail URLs. The existing application owner remains mounted across navigation,
+so request cancellation, conversation persistence, evidence identity, reader
+state, and other domain controllers retain their established ownership.
+
+Legacy root `?view=` links translate once to canonical routes while preserving
+unknown query parameters and the exact evidence hash. Unknown legacy views and
+unknown paths fail closed into truthful unavailable states. The grouped shell
+uses Workspace, Build, Evaluate, and Manage sections with semantic links and
+`aria-current`; deferred Datasets and Logs destinations are labeled without
+inventing capabilities. Desktop navigation is 216px at 1600+, 184px at
+1440-1599, 160px at 1280-1439, and 158px at 1025-1279; 1024px and below uses
+the existing focus-restoring drawer. The header now identifies the truthful
+local workspace/session and contains no fake account, subscription, API-key,
+sharing, or model-switch controls.
+
+`react-router-dom` 7.18.4 is the only UI-002 dependency addition. Vercel now
+rewrites direct application routes to `index.html` while retaining immutable
+asset caching. Final validation passed TypeScript, 65 Vitest files / 355 tests,
+the 2,029-module production build, all 118 active Chromium cases and all 118
+active Firefox cases with two intentional provider/reader skips in each, and
+the focused 15-case Chromium reference receipt covering all nine authoritative
+screens. The frozen TEST-001 integration failures remain pre-existing. No
+backend, persistence, retrieval, evaluation, corpus/index, or page-domain
+migration was performed. Exact next task from the master graph: `API-002`.
+
+## UI-001 design tokens and shared primitives (2026-09-16)
+
+UI-001 is complete. The frontend now has semantic light/dark typography,
+spacing, radius, control, focus, state, and layering tokens plus an additive
+shared UI boundary for panels, headers, metrics, search/filter controls,
+selects, tabs, badges, icon controls, empty/loading states, scores, pagination,
+charts, modal/drawer overlays, tables, detail rails, split panes, and evidence
+cards. The dark roles align with the nine-reference plan while retaining the
+existing reader/workbench compatibility aliases. Inter remains an Inter-first
+local/system stack because no licensed font asset is present and UI-001 did not
+add a package or network dependency; filing and diagnostic roles use the
+planned serif and monospace stacks.
+
+The primitives are controlled and domain-neutral. They own presentation,
+focus, and local overflow only; request epochs, routing, browser persistence,
+evidence identity, readers, notifications, and API state remain with their
+existing owners. Select and overlay behavior reuse the proven SelectField and
+ModalDialog implementations. Responsive rules stack panes and filters, retain
+44px mobile targets, expose visible focus and non-color selection cues, and
+honor reduced motion and forced colors.
+
+Validation passed `tsc --noEmit`, `64` Vitest files / `329` tests, and the Vite
+production build (`2,017` modules). Full Playwright runs passed `115` tests with
+`2` intentional skips in both Chromium and Firefox. The final focused Chromium
+reference receipt passed `15/15`, covering all nine reference screens plus the
+compact light shell. No route, page composition, API, persistence, package,
+lockfile, dependency, reader, or corpus/index behavior changed. UI-002 router,
+shell, and legacy-adapter work has not started.
+
+## DATA-001 SQLite persistence foundation (2026-09-16)
+
+DATA-001 is complete. The local workspace now has a built-in `sqlite3`
+foundation at the configured `.local/workbench/workspace.sqlite3` default, with
+run artifacts reserved under `.local/workbench/runs`. Both paths are isolated
+from canonical `data/`, evaluation, PDF, embedding, and Qdrant storage; `.local/`
+is git-ignored. Public mode neither constructs nor opens the database.
+
+Three deterministic migrations establish schema receipts, generic versioned
+records and tombstones, import receipts, allowlisted settings, conversations,
+collections/items/notes/activity, jobs/steps/events, and content-free telemetry.
+Connections enforce foreign keys, WAL where supported, a bounded busy timeout,
+short transactions, integrity checks, and per-database process serialization.
+Migration checks reject gaps, future versions, checksum/name drift, malformed
+metadata, missing schema objects, unversioned tables, and corrupt database files.
+
+The repository contract provides opaque IDs, canonical JSON, explicit revision
+conflicts, atomic tombstones, and credential field/value guards. It is not wired
+to API routes or browser persistence, so DATA-002 import, DATA-003 collection
+workflows, and DATA-004 orchestration have not started. Validation was hermetic:
+the focused DATA-001 suite passed `32/32`, the combined persistence/API-001 gate
+passed `142/142`, and the full backend suite passed `853` tests with the same
+`188` warnings as the API-001 baseline (`821` tests before DATA-001).
+
+## API-001 local workspace access boundary (2026-09-16)
+
+API-001 is complete. Public deployment remains the default and preserves the
+existing public API behavior. Private workspace reads and writes require
+explicit local mode, a dedicated server-side bearer token, a direct loopback
+socket peer, and exact local Host/Origin allowlists. Forwarding headers do not
+participate in this authorization decision. Execution/jobs require the same
+local grant plus a separate disabled-by-default capability flag.
+
+The protected `/system/configuration-status` response exposes only allowlisted
+mode/capability flags. Secret settings use redacted representations, settings
+validation errors hide input values, and the browser receives neither the
+workspace token nor provider credentials. CORS retains its exact origin and
+method policy while allowing the `Authorization` request header needed by an
+authorized local browser.
+
+Validation was hermetic: the focused workspace/API/trusted-proxy gate passed
+`110` tests, and the full backend suite passed `821` tests with the same `188`
+warnings as the frozen TEST-001 baseline (`793` tests before the 28 API-001
+cases were added). No live provider or external network was used. No DATA-001
+persistence, UI-001 work, API-002 router extraction, dependency change, or
+corpus/index mutation was performed.
+
+## High-fidelity UI reconstruction completion (2026-09-15)
+
+The high-fidelity SEC research-workspace reconstruction is complete on
+`codex/bilingual-research-workspace`. The final receipt suite maps R0-R8 from
+`docs/ui-references` to their canonical routes and captures the rendered
+production build at the target viewports. Its final Chromium output is retained
+under `frontend/test-results/reconstruction-final-final`; it includes populated
+Research, Documents, Search, Collections, and Retrieval handoffs plus sparse,
+truthful Models, Pipeline, Evaluation, and compact light-shell states.
+
+The final pass corrected only verified ownership-level defects. Search preserves
+the distinction between a document handoff and a source-only excerpt; the
+workbench tolerates a cleared route target; New Research keeps the active-work
+confirmation path; the conversation Library no longer loses a bookmark made
+between visible answer completion and deferred durable exchange persistence;
+and Collection row title/metadata now lay out as separate text rows. The
+structured reader derives PDF availability from the manifest once rather than
+showing a hard-coded duplicate/untruthful limitation, and semantic
+`--surface-1`/`--surface-2` aliases now resolve correctly.
+
+Fixture evidence is also provenance-safe: the R0/R1 net-sales answer has its
+own matching Financial Statements source/reader block; the derived-PDF fixture
+is bound to its manifest/content hash; and an evidence block without complete
+PDF rectangle correspondence returns `unavailable` with no overlay. The PDF
+viewer remains usable but never labels an unverified rectangle as verified;
+the generic browser fixture likewise makes only source-supported claims.
+Regression coverage covers each of these fixes, including the bookmark timing
+race and the unmapped-PDF case.
+
+Final frontend verification: `bun run lint`, `bun run test` (`63 files / 324
+tests`), and `bun run build` passed. The explicit final receipt passed `15/15`
+in Chromium. Full one-worker/no-retry Playwright gates passed `115` tests with
+`2` intentional skips in Chromium and the same `115` passed / `2` skipped in
+Firefox. No corpus, embeddings, reranking, Qdrant, chunking, prompts, models,
+ingestion, Docker, deployment, or benchmark state changed. Reference density
+is retained only where authoritative data supports it: the narrower R0 uses its
+responsive context dock, and Models/Pipeline/Evaluation deliberately keep
+their sparse/no-report states rather than inventing records or metrics.
+
+## Truthful SEC research workbench reconciliation (2026-09-14)
+
+The accepted route reconciliation is implemented sequentially on
+`codex/bilingual-research-workspace`. The shell now owns canonical navigation,
+truthful connection/scope/model/account/storage state, responsive drawer/dock
+transitions, bilingual labels, and accessibility closure. Research, Documents,
+Search, Library, Retrieval Lab, Models, Pipeline, and Evaluation retain the
+reference composition where their semantics are supported while omitting
+fabricated identity, quota, model, timing, pipeline, candidate-count, result,
+benchmark, and confidence claims. Models is a read-only `/system/info` view;
+Pipeline is a read-only catalog/health/system serving snapshot; Evaluation has
+no recorded-demo fallback.
+
+The current PDF state is frozen: `pdfjs-dist` 6.3.289 is a frontend dependency;
+`PdfDocumentViewer` is a real PDF.js canvas/text-layer viewer; the backend owns
+the PDF artifact, manifest, content, mapping, and mapping-location routes;
+`DERIVED_PDF` is implemented and manifest/hash gated; `OFFICIAL_PDF` exists in
+schemas/helpers but the current corpus has no admitted official PDF bytes; and
+mapping highlights require exact source/chunk/hash/revision/artifact identity.
+PDF.js is dynamically loaded only after an eligible manifest is available, and
+Structured/Normalized remain the fallback. The current SEC browser allowlist is
+exact HTTPS `www.sec.gov` with `/Archives/edgar/data/` path binding; no suffix
+matching or broad host trust is used.
+
+The frontend covers request races for rapid source switching, rapid Search
+queries, pending route changes, representation switches, collapse/expand during
+reader load, cancellation followed by a new request, stale health responses,
+and storage migration/write failure. The reconciliation browser receipt maps
+each file in `docs/ui-references` to a route and captures before/after native
+viewport screenshots with overflow and truthfulness assertions.
+
+## PDF provenance-bound representation closure (2026-09-14)
+
+PDF-00 through PDF-06 are complete as a separate document-representation
+extension to the V5 workbench. The backend now owns typed `OFFICIAL_PDF` versus
+`DERIVED_PDF` manifests, source/revision/content/artifact identity, bounded
+ReportLab generation, atomic hash-bound storage, mapping sidecars, and exact
+document-bound mapping routes. The frontend uses PDF.js in the shared
+DocumentPane, preserves the selected representation across responsive remounts,
+shows truthful generated-page/official-page semantics and provenance metadata,
+and paints evidence only after exact identity/mapping validation.
+
+The current corpus inventory is still 50 `.html` plus 1 `.htm` source and no
+admitted official PDF bytes. Therefore the live PDF path is explicitly
+`DERIVED_PDF`; generated page numbers are not official SEC pagination. The
+controlled renderer is ReportLab because the backend has no browser runtime;
+this is recorded as a deliberate limitation, not an official-PDF claim.
+
+Final verification: backend `pytest -q` passed `791` tests; frontend Vitest
+passed `60 files / 295 tests`; `tsc --noEmit` and the production build passed;
+the PDF.js fixture passed `1/1` in Chromium and `1/1` in Firefox with inspected
+1440×900, 1920×1080, and 720×900 captures. Local PDF generation measured 72
+pages / 170,516 bytes / 1,515 mapped blocks in 279.9 ms for the AAPL fixture;
+browser first-page/search timings were 207/63 ms Chromium and 344/54 ms
+Firefox. The broader legacy app E2E attempt still encounters its pre-existing
+seeded-demo/template expectations and was not changed as part of PDF work.
+
+## V5.1 Workstation Composition & Visual Fidelity Pass (2026-09-13)
+
+The high-fidelity reconstruction pass matching the target 4-column workbench reference (`media_1789306659378.jpg`) has completed on `codex/bilingual-research-workspace`.
+
+- **4-Column Desktop Layout**: Sidebar with 4 categorized sections (Workspace, Build, Evaluation, Manage), bottom storage meter, and Upgrade Plan promo card; Chat with User & Assistant cards, [1]-[5] citations, action row, Pipeline Execution timeline (5 stages, 3.4s total), and bottom input composer; Retrieved Sources [5] with Insights widget (4 metrics) and Related Questions (4 clickable queries); Document Viewer with Form 10-K white document paper canvas, soft-yellow highlighted cited evidence box, context tabs, and Annotations note widget.
+- **API & Session Continuity**: Resolved offline API cause by starting the backend uvicorn service (50 companies, 10,053 chunks indexed). Resolved false expired session alert by keeping client demo session context fresh.
+- **Verification**: `tsc --noEmit` passed with 0 errors; full vitest suite passed 60/60 files, 292/292 tests; production build passed in 2.49s; full 1440x900 desktop visual capture confirmed at `screenshots/live_workbench_final.png`.
+
+## Current SEC Research Workspace UX closure — P0–P14 (2026-09-08)
+
+The P0–P14 UX, utility, performance, architecture, and KEY5 smoke plan is
+implemented on `codex/bilingual-research-workspace`. The detailed receipt is in
+[`docs/UX_IMPROVEMENT_ROUND_REPORT.md`](docs/UX_IMPROVEMENT_ROUND_REPORT.md).
+
+- The project-local `.agents/skills/rag-ui-ux` skill coordinates the four
+  external UI/UX reference layers and was validated with the skill creator
+  checker. `AGENTS.md` points future UI work to that skill and the frontend
+  design/contract documents.
+- The frontend now has explicit Overview, Conversation, Documents, Search,
+  Library, Retrieval Lab, Architecture, Evaluation, Analytics, and System
+  destinations. Search and Architecture are lazy-loaded; the Tools group keeps
+  advanced RAG diagnostics available without crowding the primary research
+  journey.
+- A safe `GET /chunks/{chunk_id}` reader endpoint returns full indexed source
+  text plus allowlisted metadata without filesystem paths. The evidence reader
+  uses abortable loading and explicit loading/fallback/error states.
+- Archify revision
+  `06bd6fea5752bc06b8170a1f09085c798df5aa13` generated three source-backed
+  diagrams under `docs/architecture/`, with standalone copies under
+  `frontend/public/architecture/`. All three passed showcase validation with
+  zero errors and warnings; final Light/Dark visual checks reported no overflow.
+- The generator now honors the effective `GROQ_KEY_POLICY` when selecting keys;
+  `key5_only` no longer accidentally constructs a multi-key pool. A six-case
+  live smoke ran with `GROQ_API_KEY5` only and is recorded in
+  [`docs/KEY5_SMOKE_RECEIPT.json`](docs/KEY5_SMOKE_RECEIPT.json). No secret
+  values were recorded.
+- Frontend lint, unit tests, production build, backend compile/API/key-policy
+  tests, and the local Chromium/Firefox browser matrix were run. The final
+  frontend unit suite passed `108/108`, and the stateful browser gate passed
+  all `106/106` checks with `--workers=1`; the
+  parallel exploratory run exposed timing sensitivity in IndexedDB/Web Locks,
+  which is why the documented gate remains one worker. This does not change the
+  documented official benchmark or campaign results.
+- No corpus, embedding, Qdrant, benchmark, deployment, or Vercel state was
+  changed. The local `frontend/.env.local` remains configured for the ngrok demo
+  origin; loopback browser verification used an explicit build-time override.
+
+## Latest improvement round — M0-M11 complete (2026-09-07)
+
+The full improvement plan is implemented and verified on
+`codex/bilingual-research-workspace`. The detailed milestone receipt is in
+[`docs/IMPROVEMENT_ROUND_REPORT.md`](docs/IMPROVEMENT_ROUND_REPORT.md).
+
+- Strict provider policy is implemented through `GROQ_KEY_POLICY=key5_only`;
+  every provider-backed campaign call in this round resolved to
+  `GROQ_API_KEY5`. The append-only round budget contains `319/2000` reserved
+  attempts, `316` completed attempts, `3` terminal transport errors, and no
+  unknown reservations.
+- Fresh campaign `bilingual_evaluation_improvement_round7_key5` completed
+  `54/60` requests with both replicates passing (`COMPLETE / GO`). Earlier
+  incomplete or semantic `NO-GO` campaign ledgers remain immutable and are not
+  reclassified. The official benchmark and canonical corpus/index remain
+  unchanged.
+- The workspace now has a compact desktop evidence rail and reader backed only
+  by existing excerpts/metadata, semantic Light/Dark tokens, contrast-safe
+  state colors, lazy tool panels, indexed Library search, debounced/stale-safe
+  Document Explorer requests, analytics ranges, backend metadata indexes, and
+  structured provider/rate-limit errors.
+- Final gates: backend `727 passed` plus compileall; frontend `107/107`,
+  typecheck, lint, and production build; mocked browser `106/106`; HTTP/SSE
+  integration `14/14`; CPU Docker image build and readiness smoke green.
+- No merge, deploy, public benchmark promotion, or corpus/index regeneration
+  was performed.
+
+## Latest continuation — final offline workspace closure and Groq validation (2026-09-07)
+
+This section supersedes older test counts and provider-pending wording below;
+historical entries remain unchanged for provenance.
+
+- The local Library now persists answer feedback categories (`inaccurate`,
+  `incomplete`, `irrelevant`, `citation_issue`, or `other`) through schema v4
+  backup/export validation. Backup import validates and previews the bundle
+  before confirmation, then writes fresh IDs without overwriting existing
+  records.
+- Evaluation reports now support local provenance-preserving JSON and case-level
+  CSV export. Browser coverage now asserts citation deep links survive reload,
+  Markdown retains evidence anchors, the live evaluation fixture renders, and
+  both evaluation export formats download.
+- Two-context Playwright coverage proves that a second tab becomes the Library
+  writer after the first tab closes. The final browser gate is `106/106`
+  Chromium/Firefox checks with one worker; frontend unit coverage is `107/107`,
+  and the production build, lint, and typecheck are green.
+- The production-build Library performance fixture (100 conversations × 100
+  messages, 100 warmed search operations) passed the `p95 < 200 ms` gate at
+  `42.69 ms` in Chromium and `54.08 ms` in Firefox. The provider-free guided
+  portfolio route now reaches research, Retrieval Lab, Evaluation, and System
+  views in both browser engines.
+- The theme cleanup replaced shell/card/composer gradients and glow effects
+  with semantic light/dark surfaces, borders, and shadows. Legacy utility
+  color aliases now resolve through the semantic token layer, so both existing
+  and new controls follow the selected palette.
+- The updated Groq key passed isolated `window_03` and `window_04` probes
+  (2/2 HTTP 200 calls each, complete generation/judging preflight). Bounded
+  Provider B execution still stopped on rate limits: `window_03` at `24/60`
+  and `window_04` at `39/60`, both `INCOMPLETE`. A fresh Provider A
+  `evidence_contract_v3_window_04` manifest was created provider-free but not
+  executed because the continuation had used `67` of the shared `120` real
+  request slots, leaving `53`, which is insufficient for a fresh 60-call run.
+  `GROQ_API_KEY5` is configured locally and is already included in the
+  generation/judging key pools; it does not change the shared campaign cap. A
+  controlled key5-only probe then completed both calls with HTTP 200 and passed
+  quality/acceptance preflight, so there is no evidence that key5 itself is out
+  of quota. The probe used two more slots, bringing the continuation total to
+  `69/120` and leaving `51`.
+- Following the explicit user override to continue with key5 until provider
+  quota stops the work, fresh bounded campaigns were run without resuming old
+  ledgers. Provider A `evidence_contract_v3_window_07_key5` completed at
+  `48/60` with both replicates, legacy comparison, and reproducibility green;
+  its decision is `GO`. Provider B `bilingual_evaluation_v1_window_06_key5`
+  completed at `52/60` with zero transport errors, but both replicates failed
+  semantic bilingual gates, so its decision is `NO-GO`.
+- A runner invocation was initially started without the key5-only environment
+  and was stopped at `21/60`; its ledger is closed. A key5-only A run then
+  reached `36/60` before exposing a runner `ground_truth` lookup bug; that
+  ledger is also closed. The bug was fixed to use versioned Evidence Contract
+  references, regression-tested, and the full backend suite is now `718 passed`
+  with `121` warnings plus compileall.
+- Recorded provider slots across this continuation total `226`: prior `69`,
+  accidental five-key `21`, A key5-only `36`, A key5-only `48`, and B key5-only
+  `52`. No corpus/index rebuild or merge/deploy was performed. The Docker
+  runtime receipt remains a valid previous candidate because Docker copies
+  `src/` and `configs/`, while this fix changed only campaign scripts/tests.
+- The full 120-variant authored query matrix now executes provider-free at the
+  normalizer boundary with explicit period, language, and comparison checks.
+  The new browser backup-import and guided-portfolio routes are also included
+  in the final `106/106` freeze. No corpus/index rebuild, merge, deploy, or new
+  Docker receipt was needed: this closure changed frontend styling/tests and a
+  provider-free diagnostic script only. The official benchmark remains
+  unchanged.
+- The source-bound completion receipt is
+  `data/diagnostics/workspace_completion_manifest_final.json`. It records
+  `provider_calls: 0`, a clean worktree, a passing commit diff check, final
+  production asset hashes, and both Library p95 values below the 200 ms gate.
+- GitHub CI passed for source `4c26727f50741777ffe8923e1e8bb843fbe1df44`:
+  Backend CI #73 and Frontend CI #44/#45. The branch remains pushed with PR #3
+  open; merge and deploy were intentionally not performed.
+
+## Bilingual research workspace and local portability round — IMPLEMENTATION COMPLETE / OFFLINE VALIDATION GREEN (2026-09-07)
+
+This round is implemented on `codex/bilingual-research-workspace` from
+`main` at `108e729`, source commit `4e3e413021826086245f4dfedb08ce4f77f6485a`.
+The goal is to make the existing research workspace
+usable for English and Vietnamese users without changing retrieval defaults or
+rebuilding the canonical corpus/index.
+
+Completed in the current working tree:
+
+- Added an explicit `answer_language` contract (`en`/`vi`) to query requests,
+  responses, streaming metadata, the semantic-cache key, generator prompts,
+  and decomposed synthesis. English remains the default and the legacy English
+  system-prompt fingerprint is unchanged.
+- Added conservative Vietnamese retrieval normalization for labelled metrics,
+  comparisons, and accentless input. Complex questions preserve entities and
+  intent while adding lexical retrieval hints; unsupported intent is not
+  guessed.
+- Added a browser locale provider with English/Vietnamese UI controls,
+  persisted preference, system-language detection, answer-language selection,
+  localized help/glossary, and localized evidence/status/workspace surfaces.
+- Added accent-insensitive search for companies, saved conversations, and
+  evidence excerpts.
+- Added a versioned JSON conversation backup. Imports validate size, format,
+  schema, and messages, then assign fresh local IDs and write through the
+  existing repository so current records are not overwritten.
+- Added a provider-free query interpretation contract to API responses and
+  the UI, including normalized retrieval text, detected ticker, requested
+  periods, and comparison intent.
+- Added multi-tab conversation write coordination with a Web Locks writer
+  guard, BroadcastChannel refresh notifications, and test-safe fallback when
+  the browser does not expose a usable channel.
+- Added read-only `/retrieval/inspect`, `/documents`, document detail/chunk
+  previews, and `/system/info` endpoints. The new Retrieval Lab, Document
+  Explorer, and System & provenance views use only loaded metadata and never
+  rebuild the corpus/index or call an LLM.
+- Added local answer feedback controls, mobile workspace-view navigation, and
+  English/Vietnamese surfaces for the new tools.
+- Added private per-answer notes with bounded input, local conversation
+  persistence, and Markdown export; notes never enter generation prompts or
+  provider requests.
+- Added a strict allowlisted public evaluation report publisher and read-only
+  `/evaluation/runs` and `/evaluation/runs/{run_id}` APIs. The Evaluation view
+  separates validated published reports from a clearly labelled provider-free
+  Recorded demo; invalid schemas, missing provenance, duplicate cases, and
+  arbitrary report paths are rejected or hidden.
+- Added the Analytics view and metadata-only local event ledger. Export and
+  clear operations exclude questions, answers, excerpts, session IDs, and
+  secrets. Added twelve English/Vietnamese research templates, a command
+  palette, local evidence collections, Retrieval Lab preset comparison, and
+  JSON/CSV export.
+- Registered Provider B as a separate bilingual protocol: five authored
+  intents in English and Vietnamese, 12 calibration requests, 40 sentinel
+  generation/judging requests, eight explicit retry slots, SDK retries zero,
+  and ledger-backed append-only checkpoints. The preflight for
+  `bilingual_evaluation_v1_window_02` made zero provider calls; execution is
+  intentionally deferred until a new provider window is available.
+- Added the 40-case × English/Vietnamese/accentless authored query matrix
+  (120 variants), public report tests, campaign manifest/ledger tests, and an
+  architecture/API guide.
+- The pre-existing baseline for this round was `100/100` frontend tests. The
+  post-change offline verification is green: frontend typecheck/lint,
+  `105/105` unit tests across `19/19` files, production build, and light/dark
+  contrast; Chromium + Firefox browser matrix `94/94` using one worker on this
+  Windows host; backend full suite `716 passed` with `121` warnings plus
+  compileall. The provider-free browser harness required an explicit
+  `VITE_API_BASE_URL=http://127.0.0.1:8000` override because the ignored local
+  environment file points at a deployed URL.
+- Docker release preflight is `PASS`, the pinned image builds successfully,
+  Compose readiness reports 50 searchable companies and 10,053 chunks, the
+  new `/documents` catalog reports 50 loaded filings, and `/system/info`
+  reports the expected `hybrid_rerank` default. The source-bound receipt is
+  `data/diagnostics/local_release_receipt_bilingual_workspace.json`, SHA-256
+  `875d28878e24bf36f1ccb35ca1cfa4bdb6024cd3110507d250fcb339b8f6f23d`,
+  for image `edqa-api:4e3e413021826086245f4dfedb08ce4f77f6485a` with
+  `provider_calls: 0` and `overall: PASS`.
+
+The provider campaign is still pending a newly authorized provider
+window/quota, so this branch remains an offline candidate rather than a
+provider-backed GO. The implementation and status commits are pushed through
+branch head `67a2492940e53190ccde5d090489921e7b31f35e` in PR #3; backend,
+frontend, HTTP-integration, and Vercel checks are green. No provider request or
+data/index rebuild has been made in this round. The earlier incomplete
+Evidence Contract v3 ledger remains historical and must not be resumed; after
+quota recovery create fresh campaign IDs for Provider A and Provider B, run
+the preflight first, then execute only within the registered request budget.
+
+## Current working-tree milestone — local Library v4 and evidence UX (2026-09-07)
+
+This working tree extends the bilingual workspace without changing backend
+retrieval defaults, the canonical corpus, index artifacts, or provider ledgers.
+
+- Conversation persistence now normalizes schema v1–v3 to schema v4, adds
+  bounded tags, conversation notes, and saved answer variants, and keeps
+  malformed/future records write-locked rather than silently repairing them.
+- Backup JSON is version 2, remains compatible with version 1, validates
+  request snapshots/references/limits, remaps imported identities, and carries
+  evidence collections with fresh collection/item IDs. Markdown evidence
+  headings expose stable local source anchors for citation focus.
+- Web Locks writer ownership is required for durable Library writes in capable
+  browsers; non-owning tabs remain read/export-only and retry ownership after
+  the writer is released. BroadcastChannel remains notification-only.
+- The Light/Dark workspace palette now uses blue/slate semantic tokens and the
+  browser gate covers keyboard theme selection, reduced motion, responsive
+  widths, persistence, and WCAG serious/critical contrast.
+- Retrieval Lab experiment comparison now rejects incompatible provenance and
+  reports paired bootstrap deltas with `2,000` resamples and seed `42`.
+
+Remaining evidence gaps are deliberately not marked PASS: two-context Web Lock
+handoff/crash coverage, production-render p95 for the 100-conversation search
+fixture, the full 120-variant acceptance freeze, Provider A/B execution, and a
+new Docker receipt for this frontend-only working tree. No provider call, merge,
+deploy, or corpus/index rebuild was made.
+
 ## Current Milestone
 
 ### Local release readiness M3 — candidate GO, CI green (2026-09-06)
@@ -3066,3 +5876,1534 @@ new in-app browser smoke attempt was blocked by the local browser surface with
 hermetic behavioral suite and production build rather than an unverified
 visual screenshot. No provider request, canonical artifact, index, official
 benchmark, or production default was changed in this improvement.
+
+### UX recovery correction pass (2026-09-08)
+
+The screenshots collected after the prior UI round exposed material defects
+that the earlier completion claim did not cover: tool views inherited the
+conversation evidence-rail geometry, saved sidebar width could consume the
+workspace, mobile header controls overlapped, and browser tests were silently
+building against a developer-specific ngrok URL instead of their local API
+fixtures. This correction pass replaces the resizable control sidebar with a
+fixed 216px navigation rail, reserves the evidence rail for conversations
+with evidence only, moves scope/retrieval settings to the composer or tool
+that owns them, and makes tool grids responsive at their own breakpoints.
+
+Documents now distinguish transport failure from an empty result and offer a
+local retry. Retrieval, Search, Documents, Evaluation, and query flows share
+safe action-oriented error presentation; raw browser text such as `Failed to
+fetch` is no longer the user-facing state. The chat view has a genuine empty
+research start state, the composer preserves drafts while offline, and the
+mobile header uses a clear current-view picker rather than overlapping product
+text. Tool-only Architecture now launches validated standalone Archify
+viewers instead of embedding a heavy iframe.
+
+Frontend verification on this binding: `bun run lint`, `bun run test`
+(`110/110`), and `bun run build` passed. Chromium browser checks passed for
+the 320px/640px responsive smokes, keyboard theme menu, guided tool journey,
+wide-tool geometry, and Library-search p95 (`40.59 ms`, budget `<200 ms`).
+Archify architecture delivery passed 9/9 showcase checks; its artifact-bound
+browser visual check passed in Light/Dark through 2048×1320, and the rendered
+light viewer was manually inspected. This pass made no provider, Groq,
+corpus, index, evaluation, or deployment request; `GROQ_API_KEY5` therefore
+was not invoked.
+
+### Evidence-bound execution transparency follow-up (2026-09-09)
+
+The streaming RAG path now emits measured request-local execution stages for
+query preparation, embedding, cache lookup, retrieval, generation, and cached
+answer replay. The frontend renders this payload only when it is returned by
+the backend; it does not infer timings or fabricate pipeline stages. A narrow
+structured metric sidecar is also available only for direct total-net-sales
+questions where one retrieved chunk contains the exact table value, an explicit
+millions unit, and a local evidence quote. Both cache hits and fresh responses
+recompute that sidecar from their own displayed sources, so the evidence action
+continues to open the matching source rather than a guessed document location.
+
+This is additive presentation metadata: retrieval ranking, generation prompts,
+evaluation defaults, corpus data, embeddings, Qdrant data, and official
+benchmark artifacts remain unchanged. Focused backend tests passed `62/62`;
+frontend typecheck, `131/131` Vitest tests, production build, and five updated
+Chromium regression scenarios passed. The intentional storage fault-injection
+warnings in Vitest were retained as assertions of recovery behavior. No live
+provider request, deployment, or secret exposure occurred.
+
+### Verification addendum (2026-09-09)
+
+The current working tree was re-verified after migrating the last four direct
+component color utilities to the semantic token layer and updating one stale
+HTTP/SSE integration selector for the scope popover/listbox contract. Frontend
+typecheck/lint, `131/131` Vitest, and production build passed; the existing
+one-worker production browser matrix remains `108/108`. The real local
+FastAPI/fragmented-SSE integration suite passed `14/14` across Chromium and
+Firefox, and the full hermetic backend suite passed `730` tests with the same
+121 parser warnings. No provider call, corpus/index operation, deployment, or
+secret exposure occurred. The redacted 2026-09-08 six-case `key5_only` receipt
+remains the current live-provider evidence; no new provider run is claimed.
+
+### Plan V2 implementation closure (2026-09-09)
+
+The remaining P2.4-P4.2 execution gates are now implemented. The workspace has
+a citation-ordered indexed ContextPanel with exact chunk/document identity,
+abortable detail loading, pagination/search, verified SEC links, and a bounded
+five-minute/100-entry document cache. Ordinary and comparative requests expose
+request-scoped measured stage events over bounded SSE queues with cancellation;
+the frontend renders those stages without fabricated timing or progress.
+
+Conversation evidence width is keyboard/pointer resizable and persisted, local
+evidence imports preserve provenance, command actions share one typed registry,
+and the final performance/a11y browser coverage includes responsive layouts,
+reduced motion, 200-message input, indexed reader behavior, and contrast.
+
+Final provider-free verification: frontend Vitest `162/162`, typecheck/lint,
+production build, backend `737 passed`, Firefox browser matrix `58/58`, and
+Chromium coverage of all 58 scenarios with the two stateful IndexedDB/Web Locks
+cases passing on isolated reruns. Performance p95 was `51.67 ms` for 100-item
+Library search and `43.30 ms` for 200-message composer input in Chromium; the
+Firefox measurements were `79.08 ms` and `30.00 ms`. No provider, corpus,
+embedding, index, deployment, or secret state was changed.
+
+### Plan V2 execution checkpoint — displayed answer identity (2026-09-10)
+
+V2-B03.4 is complete. Command-palette Copy, Inspect Sources, and Save Source
+now resolve an ID-only transient `{conversationId, messageId, variantId}`
+against current records at invocation time, so an older answer or selected
+saved variant cannot silently fall through to the newest answer. Missing or
+changed variants and conversation switches fail closed with a contextual
+notice. ChatMessage publishes context on answer focus, answer/action pointer
+interaction, and variant selection without publishing per-token stream
+updates; nested citation clicks retain their deep-link behavior.
+
+The final provider-free frontend gates passed: Vitest `198/198`, full
+Chromium/Firefox app coverage `76/76`, regression `60/60`, HTTP/SSE
+integration `14/14`, local-provider `4/4`, typecheck, production build, and
+`git diff --check`. Regression p95 remained within budget for Library search
+(`38.15 ms` Chromium, `109.61 ms` Firefox; budget `<200 ms`) and 200-message
+composer input (`30.20 ms`, `48.00 ms`; budget `<100 ms`). The real local
+FastAPI readiness gate remains unavailable at `127.0.0.1:8000/health/live`,
+as recorded earlier; no provider, corpus, index, deployment, or secret state
+was changed.
+
+### Plan V2 execution checkpoint — honest execution presentation (2026-09-10)
+
+V2-B04.1 is complete. PipelineExecution now presents only reported stage
+events and timing: counters are labelled, server elapsed/final durations are
+explicitly separated from the local 250 ms running-view timer, valid
+same-request parent stages receive bounded indentation, and unknown stages use
+a neutral label/icon. Cache, skipped, cancelled, out-of-order, and trace-only
+states remain visible without fabricated progress. Stage changes use a
+dedicated polite live region while timer ticks remain out of the announcement
+stream.
+
+Provider-free frontend verification passed: Vitest `202/202`, typecheck/lint,
+production build, full Chromium/Firefox app coverage `76/76`, regression
+coverage `60/60`, HTTP/SSE integration `14/14`, local harness `4/4`, and
+`git diff --check`. Regression p95 remained within budget for Library search
+(`42.59 ms` Chromium, `76.22 ms` Firefox; budget `<200 ms`) and 200-message
+composer input (`35.20 ms`, `36.00 ms`; budget `<100 ms`). The production
+preview was visually inspected at the offline overview with no visible
+clipping. The real local FastAPI readiness gate remains unavailable at
+`127.0.0.1:8000/health/live`; no provider, corpus, index, deployment, or
+secret state was changed.
+
+### Plan V2 execution checkpoint — discoverability and metadata parity (2026-09-10)
+
+V2-B04.2 is complete. Overview and tool introductions now use truthful
+service-reported metadata: configured ticker lists are not presented as
+searchable corpus counts, readiness copy does not imply a wait estimate, and
+offline/index-not-ready states remain explicit. Source-panel copy clarifies
+that counts are local retrieved sources and ranking scores are ordering
+signals, not confidence. Search, Documents, Retrieval Lab, Architecture,
+Evaluation, Analytics, System, and Library introductions consume the existing
+workspace registry and semantic icon mapping for their tool identity.
+
+Provider-free frontend verification passed: Vitest `203/203`, typecheck/lint,
+production build, full Chromium/Firefox app coverage `76/76`, HTTP/SSE
+integration `14/14`, local harness `4/4`, and `git diff --check`. Regression
+performance remained within budget for Library search (`49.81 ms` Chromium,
+`90.87 ms` Firefox; budget `<200 ms`) and 200-message composer input
+(`28.50 ms`, `35.00 ms`; budget `<100 ms`). The full regression runner had one
+runner-only Chromium evidence-drawer timing failure (`59/60` in each final
+attempt); the exact scenario passed in a focused Chromium/Firefox rerun before
+the reverted wait experiment. The final production preview showed explicit
+offline readiness copy and no visible narrow-layout clipping. The real local
+FastAPI readiness gate remains unavailable at `127.0.0.1:8000/health/live`;
+no provider, corpus, index, deployment, or secret state was changed.
+
+### Plan V2 execution checkpoint — compact brand refinement (2026-09-10)
+
+V2-B05.1 is complete. The compact mark now uses an original folded filing
+page with one search/evidence connection rather than a filing checkmark. The
+inert glow node is gone; SVG strokes remain `currentColor`; the decorative
+mark stays hidden from assistive technology beside the unchanged product
+lockup; and explicit 16/24/32/48px semantic sizes plus a forced-colors
+monochrome path are covered.
+
+Provider-free frontend verification passed: BrandMark tests `2/2`, typecheck,
+production build, full Vitest with `--retry=2` (`204/204`), and
+`git diff --check`. The retry-free full Vitest run had one timing-sensitive
+failure in the unrelated App session-history test (`203/204`); the isolated
+test passed. Light/dark production-preview screenshots at 1440×900 showed
+legible header/sidebar marks, unchanged lockup text, and no visible clipping.
+No backend, provider, corpus, index, deployment, or secret state changed.
+
+### Plan V2 execution checkpoint — measured optimization decision (2026-09-10)
+
+V2-B02.3 is complete as `NO CODE CHANGE REQUIRED`. Three identical
+provider-free `workspace-performance.spec.ts` runs, each with one worker and
+zero retries, kept warm composer input p95 within `15.00/13.70/15.90 ms`
+(Chromium) and `25.00/39.00/46.00 ms` (Firefox) against the `100 ms` budget.
+Warm view-switch p95 stayed within `139.40/117.40/130.20 ms` and
+`154.00/139.00/153.00 ms` against the `200 ms` budget. No measured hotspot
+justified changing message-row ownership, resize/motion handling, batching,
+or architecture, so the existing implementation remains the evidence-backed
+choice.
+
+Each run passed `4` tests and skipped only the two real-backend cases because
+the local API is unavailable. No source, data, provider, corpus, index,
+deployment, or secret state changed; `git diff --check` passed.
+
+### Plan V2 execution checkpoint — integrated product gates (2026-09-10)
+
+V2-B06.1 reached the final gate with all implementation and available
+provider-free validation green. Closing the evidence inspector now clears its
+URL anchor, so responsive drawer-to-inline transitions cannot reopen a modal
+that the user closed. The regular Playwright config now keeps dedicated
+local-backend specs out of the hermetic browser gate, and the A–G layout test
+waits for transition hit-testing to settle without weakening geometry or focus
+assertions.
+
+Static/unit/build verification passed: typecheck/lint, one-worker Vitest
+`204/204`, and production build. Regular Chromium passed `71` tests with one
+intentional real-backend skip on both required runs; Firefox passed `71` with
+the same skip. Provider-free HTTP/SSE integration passed `14/14`, the local
+harness passed `4/4`, backend pytest passed `738` with `121` existing warnings,
+and `git diff --check` passed. Final browser performance probes remained below
+budget: Library search p95 `42.43 ms` Chromium / `89.88 ms` Firefox and
+200-message composer input p95 `30.10 ms` / `34.00 ms` against `<200 ms` and
+`<100 ms` budgets respectively.
+
+The production preview was inspected at the offline overview with no visible
+clipping across the available browser surface. Native browser zoom at 100%,
+125%, 150%, and 200% could not be driven or observed through the connected
+browser surface, so that mandatory product checkpoint remains `[!]`. The
+real local FastAPI gate also remains `[!]` at
+`127.0.0.1:8000/health/live`; its provider-free local harness is green. No
+provider, corpus, index, deployment, or secret state changed. Per the final
+plan, this is documented partial delivery rather than a completion claim.
+
+### Plan V2 execution checkpoint — real backend gate reopened (2026-09-10)
+
+The local FastAPI process was started from the existing local artifacts and
+models after the earlier unavailable-endpoint receipt. `/health/live`,
+`/health/ready`, and `/health` all returned `200`; readiness reported
+`pipeline_ready=true`, 50 searchable companies, and 10,053 indexed chunks.
+The provider-free real-backend performance/feasibility check passed in both
+Chromium and Firefox with `PLAYWRIGHT_REAL_BACKEND=1` (`2 passed, 4 intentional
+synthetic-test skips`), including documents, chunks, chunk detail, system
+metadata, and retrieval inspection without a generation request. Final
+retrieval-inspect timings were 244.25 ms in Chromium and 256.95 ms in Firefox.
+The API was stopped cleanly after verification.
+
+This clears the real local API blocker for B06.1. The only remaining mandatory
+verification gap is native browser-chrome zoom at 100%, 125%, 150%, and 200%,
+which the connected browser surface cannot drive or observe; CSS-viewport
+equivalents remain green. No source, corpus, index, provider, deployment, or
+secret state changed.
+
+### Plan V2 execution checkpoint — native zoom surface audit (2026-09-10)
+
+The connected-computer inventory still exposes only the Codex in-app browser;
+named Chrome and Edge surfaces are unavailable. The in-app browser can render
+the production preview but does not expose browser-chrome zoom controls or a
+native zoom value. A scoped temporary-profile headed-Chrome/CDP probe was
+attempted, but the environment policy rejected launching the native Chrome
+process; the temporary directory was removed and no user profile was touched.
+The master plan therefore remains `[!]` for native zoom at 100%, 125%, 150%,
+and 200%. CSS viewport equivalents remain verified.
+
+### Plan V2 final closure review (2026-09-10)
+
+Status is `IMPLEMENTATION COMPLETE` and `VALIDATION COMPLETE EXCEPT ONE
+EXTERNAL MANUAL-VERIFICATION GATE`. All V2-B implementation tasks are complete:
+B01.1, B02.4, B02.1, B01.2, B01.3, B01.7, B01.4, B01.5, B01.6, B02.2, B02.5,
+B03.1, B03.2, B03.3, B03.4, B04.1, B04.2, B05.1, B02.3, and the available B06.1
+closure gates. The final evidence remains green: lint, production build,
+one-worker Vitest 204/204, backend pytest 738 passed, two regular Chromium
+runs with 71 passed plus one intentional real-backend skip each, Firefox 71
+passed plus one intentional skip, HTTP/SSE integration 14/14, local harness
+4/4, and real-local backend feasibility in both engines. This evidence covers
+layout, accessibility, source identity, persistence, streaming/cancellation,
+integration, and measured performance; no implementation defect is masked by
+the zoom limitation.
+
+The sole active `[!]` is unchanged native browser zoom at 100%, 125%, 150%,
+and 200%. The in-app browser lacks browser-chrome zoom state/control, named
+Chrome/Edge surfaces are unavailable, and environment policy rejected the
+temporary headed-Chrome/CDP probe. This is an external environment/policy
+limitation, not an implementation defect. A human should build and preview the
+frontend, open it in visible Chrome or Edge, set each exact zoom through the
+browser menu, record the displayed zoom plus `window.innerWidth ×
+window.innerHeight`, capture overview and conversation/evidence screens, and
+check for overflow, overlay, clipping, focus loss, and inaccessible controls.
+No production-code workaround is warranted: CSS/browser-specific changes or a
+simulated zoom test would weaken rather than meet the original requirement.
+
+### V3-C00.1 execution checkpoint (2026-09-11)
+
+V3 execution began with the identity-fixture hard gate. The isolated local
+browser fixture now performs exact chunk lookup and returns an explicit 404 for
+unknown identities; it no longer falls back to the first source. Chromium
+local harness validation passed 3/3 scenarios, including exact indexed-reader
+identity, readiness recovery, and unknown-chunk rejection. No production
+retrieval, corpus, index, provider, or user persistence state changed. Next:
+V3-C01.1.
+
+### V3 final closure review (2026-09-11)
+
+Project status is `IMPLEMENTATION COMPLETE` and `VALIDATION COMPLETE EXCEPT
+ONE EXTERNAL MANUAL-VERIFICATION GATE`.
+
+All V3 implementation tasks are complete in the mandated sequence:
+`V3-C00.1`, `V3-C01.1`, `V3-C02.1`, `V3-C04.1`, `V3-C03.1`, `V3-C06.1`,
+`V3-C07.1`, `V3-C08.1`, `V3-C05.1a`, `V3-C05.1b`, `V3-C05.2`, and `V3-C09.1`.
+`V3-C08.2` was deliberately not executed. The work preserves existing
+retrieval ranking, corpus/index data, conversation behavior, and provider
+boundaries while adding truthful inspection, reader identity, bounded
+normalized original viewing, and lossless evidence-collection persistence.
+
+Final non-environment-dependent evidence is green: backend pytest `752 passed`
+with `136` existing parser/deprecation warnings; frontend typecheck/lint; full
+Vitest `42 files / 211 tests`; production build with `1986 modules
+transformed`; HTTP/SSE integration `14/14`; local identity/readiness harness
+`6/6`; live local-backend Chromium and Firefox feasibility `2 passed` plus
+`4` intentional synthetic skips; and `git diff --check`. The browser matrix
+covered Chromium and Firefox accessibility, layout, source identity,
+persistence, streaming/cancellation, Search/Documents/Library, reader,
+Retrieval Lab, exports, and performance. The initially host-contended
+bookmark/performance observations were re-run with one worker; all affected
+cases passed, including three consecutive Firefox bookmark repetitions and
+the isolated `6/6` performance set. No code, layout, accessibility, backend,
+integration, persistence, source-identity, streaming, cancellation, or
+performance defect is hidden by the remaining gate, and no production code is
+unfinished.
+
+The frontend is currently running at `http://localhost:3000/`. The backend is
+currently running at `http://127.0.0.1:8000` with one worker; readiness reports
+`pipeline_ready=true`, `50` searchable companies, and `10053` indexed chunks.
+
+The only current `[!]` item is native browser-zoom verification. Reason: the
+required native browser-chrome settings of `100%`, `125%`, `150%`, and `200%`
+cannot be driven or observed in the connected Codex in-app browser. Attempted
+verification used CSS-viewport Playwright coverage, in-app browser inspection,
+and a scoped temporary-profile headed-Chrome/CDP probe. The in-app browser has
+no browser-chrome zoom control/value, and environment policy rejected the
+native Chrome launch. This is an external environment/policy limitation, not
+an implementation defect.
+
+Manual verification steps: in a visible Chrome or Edge window, from the repo
+run `cd frontend`, `bun run build`, and
+`bunx vite preview --host 127.0.0.1 --port 4173 --strictPort`; open
+`http://127.0.0.1:4173/`. Set browser zoom through the browser menu to exactly
+`100%`, `125%`, `150%`, and `200%`, checking overview,
+conversation/composer, evidence inspector/source reader, Documents, Search,
+Retrieval Lab, and Library at each value. Confirm no horizontal overflow,
+clipping, overlap, hidden control, focus loss, or inaccessible header,
+navigation, or composer action. Record the browser-reported zoom and
+DevTools `window.innerWidth × window.innerHeight`, and capture screenshots or
+notes for all four checkpoints. Restore `100%` afterward.
+
+The original native-zoom requirement remains unchanged. No production-code
+workaround is warranted or permitted; CSS zoom, browser-specific behavior, or
+simulated zoom tests would weaken the requirement rather than verify it.
+
+### V4-D00.1 execution checkpoint (2026-09-11)
+
+V4 Goal execution began after reading the authoritative objective and final
+V4 plan. The frozen dependency order is preserved. The worktree still has the
+same dirty boundary recorded by the planning audit (26 tracked files modified,
+14 untracked entries; 1,356 insertions and 112 deletions), and unrelated work
+is preserved. V2/V3 closure claims remain historical receipts; current V4
+implementation truth includes the independently reproduced Inspector overlap
+at 1366×768 without native browser zoom.
+
+The old audit services were checked for ownership before reuse. Ports 3000,
+4173, and 8000 currently have no listening process, so no service was reused
+or stopped. D00.1 changed no production code, corpus, index, provider config,
+or user data. Next task: V4-D01.1, the demonstrated reader-layout repair.
+
+### V4-D01.1 execution checkpoint (2026-09-11)
+
+D01.1 is complete. The Evidence Inspector now uses an opaque bounded grid
+shell at desktop and a bounded drawer at short widths. Its source list and
+reader are explicit scroll owners, while the excerpt body is not a nested
+vertical scroller. The implementation also removes silent invalid-source
+fallbacks and adds an app-mounted reader-session controller with generation,
+abort, exact source/document identity, and stale-response guards across
+indexed detail, nearby chunks, normalized manifest/content, location, and
+find requests.
+
+Changed files are `frontend/src/hooks/useReaderSession.ts` and its test,
+`frontend/src/components/ContextPanel.tsx`,
+`frontend/src/components/OriginalDocumentReader.tsx`, `frontend/src/App.tsx`,
+the V4 rules in `frontend/src/styles/components.css`, and
+`frontend/e2e/document-workspace.spec.ts`. Existing retrieval, corpus/index,
+provider, persistence, and public API contracts were preserved.
+
+Validation is green: frontend lint/typecheck, focused Vitest `13/13`, build
+(`1987` modules), Playwright Chromium + Firefox `4/4`, and backend
+reader/presentation pytest `13/13` (only the existing `15` BeautifulSoup
+deprecation warnings). Runtime evidence covered `1366×768`, `768×480`, and
+`390×844`; source/reader boundaries, drawer bounds, SEC-link identity, and
+horizontal overflow checks passed. The full twenty-cycle stress gate remains
+part of the final V4 matrix and is not falsely claimed here. No D01 defect is
+known. Next: `V4-D02.1`.
+
+### V4-D02.1 execution checkpoint (2026-09-11)
+
+D02.1 is complete. The save action is now user-facing `Save answer version`
+and sends the displayed answer identity `{conversationId, messageId,
+variantId}`. Persistence resolves that identity against the latest record,
+captures immutable answer text/ordered sources/request provenance, awaits the
+existing repository queue, deduplicates equivalent snapshots, and reports
+truthful saving outcomes. The UI exposes live saving/saved/already-saved,
+failed, and volatile states; durable states link to Library, while recovery
+states offer retry and never claim a volatile write is saved.
+
+`mutateConversationRecord` was added without replacing the storage engine or
+schema. Autosave, bookmarks, notes, renames, versions, and Library metadata
+now mutate the latest record inside the serialized queue, preserving newer
+fields and existing writer-lock, tombstone, mirror, quota, and deletion
+semantics. A real runtime race was reproduced where autosave could overwrite
+a newly saved version; the latest-record mutation path fixed it, and stable
+identity canonicalization removed duplicate versions.
+
+Validation is green: full Vitest deterministic rerun `43 files / 215 tests`,
+frontend lint/typecheck, production build `1987` modules, and Playwright
+Chromium + Firefox `6/6` covering D01 geometry plus save → duplicate
+deduplication → Library → exact Version 1 reopen. The default parallel Vitest
+run had one existing App cancellation test timing failure under host-shared
+storage contention; the test passed alone and in the required one-worker
+rerun. Backend is N/A for this frontend-only task; the task-owned FastAPI
+service remains ready. No D02 defect is known. Next: `V4-D03.1`.
+
+### V4-D03.1 execution checkpoint (2026-09-11)
+
+D03.1 is complete. The new `src/api/document_reader_models.py` and
+`src/api/document_sources.py` modules define a typed, local-only V4 reader
+manifest. `GET /documents/{document_id}/reader` returns verified filing
+identity, stable source IDs, revision binding, canonical SEC index URL only
+when exact catalog and processed metadata agree, and explicit availability for
+normalized text, structured representation, and PDF. Existing `/original`
+routes and source IDs are preserved.
+
+The resolver requires the exact `ticker:accession` document identity and a
+matching positive integer CIK from the corresponding processed metadata. It
+does not infer CIK prefixes, accession numbers, URLs, or filesystem paths.
+Unknown or mismatched identities are explicit unverified/404 states; indexed
+retrieval is unaffected. IBM runtime exposes primary and companion sources;
+companions keep stable local identity without an invented canonical URL.
+
+The existing viewer cache was corrected to account for UTF-8 encoded bytes on
+eviction. No ingestion, corpus, chunk, embedding, index, retrieval, provider,
+or remote acquisition behavior changed. The current local corpus remains 50
+primary HTML filings plus one HTML companion and no PDF. PDF acquisition and
+official/derived feasibility handling are deferred to D04.1.
+
+Validation is green: focused D03 backend/API/identity/cache selection passed
+`17/17`; the expanded reader selection passed `22` tests with only the
+existing warnings; frontend lint and TypeScript checks passed; production
+build passed with `1987` modules transformed. The owned backend returned
+AAPL verified/available, IBM primary+companion, and unknown identity 404
+runtime results without external network access. No D03 implementation defect
+is known. Next: `V4-D04.1`.
+
+### V4-D04.1 execution checkpoint (2026-09-11)
+
+D04.1 recorded an earlier hermetic experiment for a bounded remote reader
+transport. That experiment was retired by V4-R03.1 because a successful fetch
+did not admit bytes into any reader representation. The supported contract is
+now local-only; no transient remote-body path is exposed.
+
+The implementation enforces the frozen 2 MiB index, 20 MiB source, 40 MiB
+source-set, 5-second connect, 10-second inactivity/read, 30-second operation
+budget, one transient retry, 0.5-second request spacing, one active and four
+pending acquisition limits. It never writes ingestion, Qdrant, or user
+storage; partial/non-HTML/PDF/private-address/wrong-identity/ambiguous/
+rate-limit/redirect responses fail closed. Same-document calls are
+single-flight and bytes are operation-local.
+
+SEC index parsing admits exactly one filing-type HTML row and uses the dashed
+accession index URL. The existing ingestion downloader is untouched. Local
+sources short-circuit resolve; AAPL runtime returned `not_needed`,
+`local_available`, with no network request. Hermetic client/API tests passed
+`24/24`; frontend lint/typecheck and the `1987`-module production build
+passed. No bounded live SEC request is claimed from this run; that external
+gate remains explicit. No D04 defect is known. PDF remains deferred. Next:
+`V4-D05.1`.
+
+### V4-D05.1 execution checkpoint (2026-09-11)
+
+D05.1 is complete. The structured reader now parses bounded, application-owned
+blocks for headings, paragraphs, lists, tables, separators, and explicit
+unsupported-content notices. Executable/remote markup is omitted; source text
+and table order are preserved; excessive bytes, nodes, depth, code points,
+cells, and response size fail safely. Each parsed representation has a stable
+representation revision.
+
+Revision-bound outline/content/search/export routes and an LRU parsed cache were
+added. The cache accounts serialized UTF-8 bytes and validates the current
+source-set/document revisions before serving a hit. No persistence, ingestion,
+Qdrant, indexed chunk, retrieval, or generation behavior changed.
+
+`StructuredDocumentReader` renders semantic React content with outline,
+explicit find, source selection, text scale, wide mode, safe export, Open SEC,
+and honest PDF-unavailable state. Its evidence/session lifecycle remains shared
+with the repaired inspector. E2E found and fixed request churn from unstable
+session/parameter identities and a rail-width overflow caused by viewport-only
+breakpoints; duplicate paragraphs are now retained so ambiguous evidence is
+not silently collapsed.
+
+Validation is green: backend structured/source/API selection `25/25`, frontend
+structured-reader component test `1/1`, production Vite build `1988` modules,
+and hermetic structured-reader Playwright Chromium + Firefox `2/2` (with the
+existing D01 workspace checks also green). Restarted runtime confirms local
+AAPL and IBM manifests are verified and structured-available, with IBM's
+companion exposed; an unlisted JPM identity is correctly `404`. The local
+corpus has no PDF, and no PDF capability is claimed. No D05.1 defect is known.
+Next: `V4-D05.2`.
+
+### V4-D05.2 execution checkpoint (2026-09-11)
+
+D05.2 is complete. Structured evidence correspondence now requires the exact
+chunk ID, SHA-256 text hash, complete declared source set, and matching
+revision-bound structured representation. The result is explicitly
+`exact`/`ambiguous`/`not_found`/`unavailable`/`stale`; only exact results carry
+source, document, representation, and Unicode code-point ranges. Numeric-only
+financial values are never treated as proof. The new reader-location route and
+UI keep evidence marks distinct from search marks and reject late navigation
+responses after manual movement.
+
+Validation is green: backend structured/location/source/API selection `25/25`,
+focused reader component `1/1`, TypeScript, and structured-reader Playwright
+Chromium + Firefox `2/2`. Runtime after restart verified AAPL/IBM manifests and
+exercised a real AAPL location request; the current HTML corpus returned an
+explicit `not_found` where the full table caption/header/unit/row correspondence
+is absent, so the UI made no false exact claim. No persistence, ingestion,
+Qdrant, retrieval, generation, or PDF behavior changed. No D05.2 defect is
+known. Next: V4-D06.1.
+
+### V4-D06.1 execution checkpoint (2026-09-11)
+
+D06.1 is complete. `DocumentWorkspace` is now the shared adaptive composition
+around the existing reader session. It exposes explicit Document, Indexed
+excerpt, and Metadata views without creating a second document state owner.
+Container width selects three-column, two-column, or single-surface reading;
+narrow widths change architecture instead of compressing the document. The
+embedded reader has one vertical scroll owner, tables retain labelled horizontal
+scrolling, and tabs/actions remain keyboard reachable. The existing inspector
+continues to act as the compatibility entry point.
+
+Validation is green: TypeScript, focused reader/rail/workspace component tests
+`11/11`, and Playwright workspace/reader flows Chromium + Firefox `6/6`; the
+production webserver build transformed `1988` modules. Reader APIs,
+persistence, retrieval, source identity, and PDF contracts were preserved. No
+D06.1 defect is known. Next: V4-D07.1.
+
+### V4-D07.1 execution checkpoint (2026-09-11)
+
+D07.1 is complete. Saved evidence remains an independent immutable excerpt
+snapshot carrying chunk and answer lineage, with a bounded plain-text evidence
+note capped at 10,000 characters. Notes use field-scoped collection mutation;
+conversation edits or deletion cannot rewrite saved evidence.
+
+Backup import now validates/remaps collection and item IDs before mutation,
+preflights writer authority and collection capacity before conversation writes,
+preserves malformed bytes, and reports a later evidence-storage failure
+separately instead of claiming a fully successful import. Existing writer locks,
+tombstones, quotas, storage fallback, export recovery, and schema remain in
+place.
+
+Validation is green: TypeScript and focused evidence/library/workspace tests
+`13/13`, including note persistence, lineage round-trip, malformed-storage
+preservation, bounded import preflight, and saved-evidence reopen. No backend,
+reader API, corpus, or retrieval behavior changed. No D07.1 defect is known.
+Next: V4-D08.1.
+
+### V4-D08.1 execution checkpoint (2026-09-11)
+
+D08.1 is complete. Documents and Search now enter the shared full document
+workspace with stable filing, source, chunk, citation, and revision identity.
+The integration does not create a second reader state owner, expose local
+filesystem paths, or alter indexed retrieval.
+
+Validation is green: focused Documents/Search/workspace coverage `11/11` and
+frontend lint/typecheck. Reader, source-identity, and indexed-excerpt
+contracts remained green. No backend, ingestion, persistence, or PDF behavior
+changed. No D08.1 defect is known. Next: V4-D09.1.
+
+### V4-D09.1 execution checkpoint (2026-09-11)
+
+D09.1 is complete. Related research suggestions use only available indexed
+sections and preserve active scope. A selected suggestion fills a non-empty
+composer draft without auto-submitting, keeping query, company, section, and
+send under analyst control.
+
+Validation is green: focused related-research/Chat coverage `14/14` and
+frontend lint/typecheck. No unsupported Web/Deep Research behavior or new
+source, provider, streaming, cancellation, or persistence capability was
+added. No D09.1 defect is known. Next: V4-D10.1.
+
+### V4-D10.1 execution checkpoint (2026-09-11)
+
+D10.1 is complete. Retrieval Lab now has analyst and advanced paths, clear
+preset/Top K/candidate-pool explanations, stage scores and ranks, submitted
+configuration visibility, exact JSON/CSV export, and source actions.
+Comparison diagnostics are truthful and provider-free; immutable source
+identity is preserved.
+
+Validation is green: focused Retrieval Lab/save-evidence coverage `10/10` and
+frontend lint/typecheck. The final browser matrix covered retrieval controls,
+exports, source actions, and persistence. Retrieval ranking and backend
+contracts were not redesigned. No D10.1 defect is known. Next: V4-D11.1.
+
+### V4-D11.1 execution checkpoint (2026-09-11)
+
+D11.1 is complete. System and provenance now provide safe refresh, reader
+availability, provenance, and next-action states. Refresh is asynchronous and
+clipboard actions are guarded; secrets and filesystem paths remain excluded.
+
+Validation is green: focused SystemInfoPanel coverage `2/2`, frontend
+lint/typecheck, and runtime `/system/info` contract checks. No backend security
+or provenance contract was weakened. No D11.1 defect is known. Next: V4-D12.1.
+
+### V4-D12.1 execution checkpoint (2026-09-11)
+
+D12.1 is complete. `docs/EVALUATION_REVIEW_GUIDE.md` documents the analyst
+workflow, and Evaluation now provides live/recorded source choice, status
+filtering, reload, actionable empty-state guidance, and distinct OK/error/
+missing states. Recorded mode remains provider-free; no report, metric,
+confidence, or provider result is fabricated. The guide is linked from
+`README.md`.
+
+Validation is green: focused Evaluation coverage `2/2` and frontend
+lint/typecheck. Evaluation data and benchmark semantics were not changed. No
+D12.1 defect is known. Next: V4-D13.1.
+
+### V4-D13.1 final closure checkpoint (2026-09-11)
+
+D13.1 closes implementation and all non-environment-dependent gates. The
+complete task sequence is green:
+`V4-D00.1`, `V4-D01.1`, `V4-D02.1`, `V4-D03.1`, `V4-D04.1`, `V4-D05.1`,
+`V4-D05.2`, `V4-D06.1`, `V4-D07.1`, `V4-D08.1`, `V4-D09.1`, `V4-D10.1`,
+`V4-D11.1`, `V4-D12.1`, and `V4-D13.1`.
+
+Final frontend receipts: `bun run lint`; Vitest `47 files / 228 tests`;
+production build `1991` transformed modules; hermetic Playwright `152 passed,
+2 skipped` across Chromium and Firefox. Final performance budgets were green,
+including Chromium warm composer/view-switch p95 `17.6/57.1 ms` and Firefox
+`44/160 ms`, plus the measured reader/source, Library, search, and
+200-message composer cases.
+
+Final backend/integration receipts: pytest `771 passed` with `172` existing
+parser/deprecation warnings; SEC live smoke passed for AAPL CIK `320193` and
+accession `0000320193-25-000079`; local identity/readiness `6/6`; real-backend
+feasibility `2 passed` plus `4` intentional synthetic skips. Runtime checks
+returned frontend `200`, healthy live/ready services, `50` searchable
+companies, `50` catalog filings, AAPL `91` chunks, verified reader identity,
+structured representation available, PDF unavailable, `3` reader matches,
+and retrieval `22` candidates with `5` selected. AAPL's empty outline is the
+declared no-heading limitation; content returns structured blocks.
+
+The PDF decision remains explicit and conservative: the local corpus contains
+`50` primary HTML filings plus `1` HTML companion and no PDF. The bounded
+official acquisition path is HTML-only; no fake PDF, page count, confidence,
+or unsupported viewer capability is claimed. A future PDF source needs a new
+verified artifact and contract decision.
+
+Closure review found no code, layout, accessibility, backend, integration,
+persistence, source-identity, streaming, cancellation, or performance defect
+hidden behind the remaining gate. No production code remains unfinished. The
+owned services remain frontend `http://127.0.0.1:3000/` and one-worker backend
+`http://127.0.0.1:8000`.
+
+Project status:
+
+`IMPLEMENTATION COMPLETE`
+
+`VALIDATION COMPLETE EXCEPT ONE EXTERNAL MANUAL-VERIFICATION GATE`
+
+The only remaining `[!]` item is native browser-zoom verification. The reason
+is that the required native browser-chrome values `100%`, `125%`, `150%`, and
+`200%` cannot be established from the connected Codex in-app browser. The
+attempted method was CSS-viewport Playwright coverage, in-app browser
+inspection, and a scoped temporary-profile headed-Chrome/CDP probe. The
+in-app browser exposes no native chrome zoom control/value, and environment
+policy rejected the native Chrome launch. This is an external
+environment/policy limitation, not an implementation defect.
+
+Manual human verification: in visible Chrome or Edge, from the repository run
+`cd frontend`, `bun run build`, and
+`bunx vite preview --host 127.0.0.1 --port 4173 --strictPort`; open
+`http://127.0.0.1:4173/`. Set native browser zoom to exactly `100%`, `125%`,
+`150%`, and `200%`, checking Overview, Conversation/composer, Evidence
+Inspector/source reader, Documents, Search, Retrieval Lab, and Library at
+each value. Confirm no horizontal overflow, clipping, overlap, hidden
+control, lost focus, or inaccessible header/navigation/composer action.
+Record the browser-reported zoom and DevTools
+`window.innerWidth × window.innerHeight`, capture screenshots/notes for all
+four checkpoints, and restore `100%` afterward.
+
+The original native-zoom requirement is preserved; it was not weakened or
+deleted. No production-code workaround is warranted. CSS zoom,
+browser-specific behavior, or a simulated test would alter the requirement
+instead of verifying it.
+
+### Skill architecture reconciliation (2026-09-12)
+
+PASS 2 applied the frozen SEC RAG skill architecture under `.agents/skills/`.
+The existing `rag-ui-ux` was preserved and strengthened with task semantics,
+state ownership, async/stale handling, reader representation honesty, and
+conditional specialist routing. Six project-owned RAG specialists were added;
+Qdrant guidance and backend contracts were merged into retrieval/core
+references. External repositories remain reference-only and no third-party code
+or installer was used.
+
+This governance work does not resolve the current product evidence gaps found
+in PASS 1. The Documents → “Open document workspace” path can first present an
+answer-scoped inspector (“Retrieved sources” / “this answer”) without a
+question; structured search can disagree with normalized prose while reporting
+complete; and acquisition success is not proven reader admission. These are
+dated acceptance findings, not closed implementation claims.
+
+## V4-R00.1 execution checkpoint (2026-09-12)
+
+- Status: `[x] complete`.
+- Task-owned baseline fixtures were added for catalog-origin routing, direct-
+  document chrome, representation coverage, and resolver retirement.
+- Expected baseline failures were reproduced: 2 frontend failures and 2
+  backend failures, each matching a frozen V4-R defect; no unrelated failure
+  appeared.
+- Commands: `cd frontend; bun run test --
+  src/components/DocumentExplorerPanel.test.tsx
+  src/components/DocumentWorkspace.test.tsx` (4 passed, 2 expected failures);
+  `.venv\\Scripts\\python.exe -m pytest
+  tests/test_structured_document.py::test_structured_representation_reports_visible_content_outside_supported_blocks
+  tests/test_api.py::test_reader_resolver_surface_is_retired -q` (2 expected
+  failures).
+- Files changed by this task: `frontend/src/components/DocumentExplorerPanel.test.tsx`,
+  `frontend/src/components/DocumentWorkspace.test.tsx`,
+  `tests/test_structured_document.py`, and `tests/test_api.py`.
+- No API, persistence, corpus, index, retrieval, security, or performance
+  behavior changed. Existing dirty user files were preserved.
+- Existing processes were not started or stopped: one-worker backend PID 11844
+  on 8000; Vite previews PID 7292 on 4173 and PID 2360 on 5173.
+- Exact next task: `V4-R01.1`.
+
+## V4-R01.1 execution checkpoint (2026-09-12)
+
+- Status: `[x] complete`.
+- The frontend now uses a discriminated `WorkspaceTarget`: answer evidence
+  remains answer-scoped, while catalog and search entries open a direct
+  document workspace with stable document identity, representation/tab intent,
+  return view, and return-focus id. `App` owns the target; `useReaderSession`
+  remains the sole reader async owner. Catalog/search paths no longer create a
+  synthetic answer `Source` or answer-inspector chrome.
+- Files changed by this task: `frontend/src/types.ts`,
+  `frontend/src/App.tsx`, `frontend/src/components/DocumentExplorerPanel.tsx`,
+  `frontend/src/components/SearchWorkspace.tsx`,
+  `frontend/src/components/DocumentWorkspace.tsx`, and their three focused
+  component tests.
+- API/DTO contract: no backend endpoints or DTOs changed. The target is
+  frontend-only navigation state; no persistence, cache, acquisition, corpus,
+  retrieval, embedding, Qdrant, or evaluation behavior changed. No new reader
+  async owner or network path was introduced.
+- Validation: `cd frontend; bun run lint` passed; focused Vitest passed `13/13`
+  (`DocumentExplorerPanel`, `SearchWorkspace`, `DocumentWorkspace`); and
+  `$env:VITE_API_BASE_URL='http://localhost:8000'; bun run build` passed with
+  `1991` transformed modules.
+- Browser/runtime receipt: with the owned backend healthy at `127.0.0.1:8000`,
+  Documents opened a direct workspace showing `Back to Documents` without
+  “Retrieved sources”; Search opened a direct workspace showing `Back to
+  Search` without answer wording. Returning to Search preserved the submitted
+  query, results, and trace, and restored focus to the opener. AX inspection
+  confirmed labelled back/tabs and existing keyboard button semantics. Native
+  browser zoom was not rerun; the historical external gate remains optional
+  and does not block this task.
+- Known limitation intentionally carried forward: repeated reader identity /
+  toolbar chrome remains for `V4-R04.1`; structured coverage semantics and the
+  resolver surface remain for `V4-R02.1` and `V4-R03.1`.
+- Existing dirty user files, ignored `data/`, and owned processes were
+  preserved; no process was started or stopped. Exact next task:
+  `V4-R02.1`.
+
+## V4-R02.1 execution checkpoint (2026-09-12)
+
+- Status: `[x] complete`.
+- Reader availability now carries representation-scoped `coverage_status`
+  (`complete|partial|unknown`) and `coverage_reason` fields, with an additive
+  machine-readable reason companion. Structured document, outline, content,
+  and search responses carry the same fields while pagination `complete`
+  remains a separate claim.
+- The bounded structured parser now compares visible, non-executable source
+  text with emitted source-backed blocks and detects omitted unsupported
+  content. A simple `<div>Company Background</div>` fixture is `partial` with
+  `unsupported_visible_content`; safe supported markup is positively
+  `complete`. Representation revisions were incremented to bind the coverage
+  semantics.
+- Manifest construction assesses each admitted structured source through the
+  existing bounded reader service. Normalized text is complete only when its
+  local source set is complete; partial/unknown source availability does not
+  become a complete claim. PDF remains unavailable/unknown. No corpus, index,
+  retrieval, embedding, Qdrant, acquisition, or persistence path changed.
+- The structured reader now discloses the coverage state and, after a no-match
+  under partial/unknown coverage, says `No matches in this structured view.`
+  and offers `Search normalized text`. The existing normalized local reader is
+  mounted in the same document workspace with the shared reader session; its
+  back action returns to the structured view. EN/VI copy and semantic tokens
+  were added without a new async owner.
+- Files changed by this task: `src/api/document_reader_models.py`,
+  `src/api/structured_document.py`, `src/api/document_sources.py`, the reader
+  manifest call sites in `src/api/app.py`, frontend reader/types/workspace
+  files (`StructuredDocumentReader`, `OriginalDocumentReader`,
+  `DocumentWorkspace`, `types.ts`, and reader CSS), plus focused backend and
+  frontend tests.
+- Validation: backend structured/document-source/API contract selection passed
+  `8 passed` (22 existing parser warnings); the combined backend selection was
+  `70 passed, 1 expected V4-R03 resolver-retirement failure`; frontend focused
+  coverage passed `17/17`, `bun run lint` passed, and the production build
+  passed with `1992` transformed modules. The expected remaining failure is
+  only `test_reader_resolver_surface_is_retired`, owned by `V4-R03.1`.
+- Browser/runtime evidence was supplemented by direct local AAPL parsing:
+  normalized coverage is `complete`, structured coverage is `partial` with
+  `unsupported_visible_content`, and PDF is `unknown/unavailable`. The
+  pre-existing backend PID 11844 on port 8000 was not restarted, so its live
+  manifest still reflects the prior process image; no process was started or
+  stopped by this task. The browser fallback path is covered by the focused
+  reader test; native zoom remains the historical optional external gate.
+- Existing dirty user files, ignored `data/`, and user-owned services were
+  preserved. Exact next task: `V4-R03.1`.
+
+## V4-R03.1 execution checkpoint (2026-09-12)
+
+- Status: `[x] complete`.
+- The non-admitting remote reader acquisition experiment was retired rather
+  than replaced. Its request/response models, transport code and tests,
+  frontend client/types, settings, and setup documentation are gone. The
+  repository-wide reference search is clean except for the intentional
+  route-path retirement assertion in `tests/test_api.py`.
+- Local reader behavior remains unchanged and bounded: manifest, normalized
+  text, structured content/search, and canonical SEC links remain available;
+  no remote body, cache, queue, ingestion, persistence, corpus, index,
+  retrieval, embedding, Qdrant, or evaluation behavior was introduced.
+  Security scope is narrower because ordinary reader use can no longer issue
+  an acquisition request or report discarded bytes as admitted content.
+- Files changed by this task: `src/api/app.py`,
+  `src/api/document_reader_models.py`, `configs/settings.py`,
+  `frontend/src/lib/api.ts`, `frontend/src/types.ts`, `.env.example`,
+  `README.md`, and historical implementation notes; files removed:
+  `src/api/sec_reader_client.py` and `tests/test_sec_reader_client.py`.
+- Validation: focused backend `tests/test_api.py tests/test_document_sources.py
+  tests/test_structured_document.py` passed `71` tests with `22` existing
+  parser warnings. Frontend `bun run lint` passed; focused reader tests passed
+  `6/6`; production build passed with `1992` transformed modules. The route
+  retirement guard now passes as part of the backend selection.
+- No network request was made, and no process was started or stopped. The
+  pre-existing one-worker backend PID 11844 on port 8000 and Vite previews PID
+  7292 (4173) and PID 2360 (5173) were preserved. Native zoom remains the
+  historical optional external gate. Exact next task: `V4-R04.1`.
+
+## V4-R04.1 execution checkpoint (2026-09-12)
+
+- Status: `[x] complete`.
+- The direct document workspace now owns the document identity/header and the
+  embedded structured reader contributes only its reading tools, availability
+  state, outline, and content. The embedded reader no longer repeats the
+  `Structured document` identity block or ticker heading, while standalone
+  reader use retains its own header and identity. The normalized fallback keeps
+  the same workspace shell and returns to the structured view through the
+  existing reader session.
+- Files changed by this task: `frontend/src/components/StructuredDocumentReader.tsx`
+  and its focused test, plus the existing reader/workspace styles and
+  workspace components touched by the prior reader integration.
+- Accessibility/responsive checks: the embedded section remains labelled as
+  `Structured document`, the workspace retains labelled back/tabs and keyboard
+  controls, and the first useful toolbar/content canvas is visible in the
+  direct Search → document workspace path. No new focus trap or async owner was
+  introduced; the existing return-focus behavior remains intact.
+- Validation: the focused reader/workspace selection passed `18/18` tests
+  (including the new no-duplicate-identity regression), and the live browser
+  path showed one workspace document heading, zero embedded identity blocks,
+  one visible reading toolbar, and one visible content canvas. No backend/API,
+  persistence, corpus, index, retrieval, embedding, Qdrant, acquisition, or
+  evaluation behavior changed. Native zoom remains the historical optional
+  external gate.
+- Existing dirty user files, ignored `data/`, and user-owned services were
+  preserved; no process was started or stopped. Exact next task: `V4-R05.1`.
+
+## V4-R05.1 execution checkpoint (2026-09-12)
+
+- Status: `[x] complete` for every repository- and harness-verifiable gate.
+- Closure validation is green: frontend full Vitest `47 files / 231 tests`,
+  `bun run lint`, and production Vite build (`1,992` transformed modules);
+  backend full pytest `766 passed` with `178` existing parser/deprecation
+  warnings; and isolated local Playwright `6 passed` across Chromium and
+  Firefox. The focused reader/workspace selection is included in the full
+  frontend receipt and remains `18/18`.
+- Browser receipt: the connected browser verified both Documents and Search
+  direct-workspace back labels, one workspace-owned identity header, no
+  answer-scoped “Retrieved sources” wording, visible embedded toolbar/content,
+  and the unknown-coverage no-match → normalized local-reader fallback.
+  Native browser zoom at exact chrome values remains the previously recorded
+  external manual gate because the connected browser cannot report native
+  chrome zoom.
+- Documentation was aligned in `README.md`,
+  `docs/frontend/FRONTEND_CONTRACT.md`, and
+  `docs/implementation-progress.md` with local-only reader behavior,
+  representation coverage semantics, direct workspace ownership, retired
+  acquisition surface, and the final receipts. Exact reference search for
+  retired resolver symbols/routes is clean except the intentional route-path
+  assertion in `tests/test_api.py`; `git diff --check` reports no whitespace
+  errors.
+- No corpus, index, retrieval, embedding, Qdrant, acquisition, persistence,
+  or evaluation data was regenerated or changed. Existing dirty user files,
+  ignored `data/`, and pre-existing services (backend PID 11844; Vite PIDs
+  7292/2360) were preserved, and no process was started or stopped. The V4
+  sequence `V4-R00.1 → V4-R01.1 → V4-R02.1 → V4-R03.1 → V4-R04.1 → V4-R05.1`
+  is complete.
+
+## V4-P improvement audit closure — 2026-09-12
+
+The resumed product-improvement audit completed the frozen sequence
+`V4-P00.1 → P01.1 → P01.2 → P02.1 → P03.1 → P03.2 → P04.1 → P04.2 → P05.1 →
+P05.2 → P06.1 → P08.1 → P09.1`. `V4-P07.1` Library continuity remains
+explicitly deferred. The sequence adds a conservative versioned table
+presentation contract, source-layout/raw fallback, unified company labels,
+typed local action states, provenance-bearing local evidence snapshots,
+stateful inline/drawer evidence review, density tokens, direct document
+workspace composition, analyst/advanced Retrieval Lab disclosure, and a
+measurement-only reader performance gate. Retrieval algorithms, corpus/index,
+embeddings, Qdrant, acquisition, streaming/cancellation, and evaluation
+semantics remain frozen.
+
+Repository gates are green: frontend Vitest `48 files / 235 tests`, TypeScript
+lint, Vite build (`1,993` modules), serial Chromium/Firefox E2E `152 passed / 4
+intentional skips`, local synthetic E2E `6/6`, and backend pytest `770 passed`
+with `182` existing warnings. Real-backend P08 characterization measured
+AAPL/GOOGL/AMZN cold/warm reader open paths in Chromium and Firefox, recorded
+local table overflow with no global page overflow, and did not claim a memory
+benchmark because the provider did not expose one. The audit-owned one-worker
+backend was stopped after closure; no project listener remains on ports
+`3000`, `4173`, `5173`, or `8000`.
+
+The skill-system reconciliation and bounded external research are complete.
+External sources are pattern evidence only: Azure AI Search and OpenAI File
+Search support separate citation/reference artifacts; Docling and W3C support
+preserving merged-cell/table structure and readable local overflow; Elasticsearch
+Explain supports advanced-only score diagnostics; Langfuse and WCAG guidance
+support idempotent, action-local feedback and scoped status/error messaging.
+None is a new product dependency or proof of SEC representation truth.
+
+The sole remaining validation item is the historical external manual gate for
+native Chrome/Edge menu zoom at exactly `100%`, `125%`, `150%`, and `200%`.
+Connected Codex browser tooling cannot establish browser-chrome zoom values, so
+CSS viewport tests were not substituted for that requirement. Existing dirty
+worktree files, ignored `data/`, and user-owned state remain preserved.
+
+## V4-P07.1 Library continuity — 2026-09-12
+
+The previously deferred Library follow-up is now complete. The frontend
+Library is organized as a derived local continuation workspace with bounded
+Recent Research (eight most recent stored conversations), a complete
+conversation-history list, Saved Answer Versions (up to 100 immutable
+variants), and Evidence Collections (historical EvidenceSnapshot v2
+artifacts). Existing conversation persistence,
+answer-variant identity, bookmark/note models, backup import/export,
+IndexedDB/localStorage fallback, Web Locks, BroadcastChannel, and deterministic
+evidence deduplication remain the only owners of persisted state.
+
+Reopening a saved answer carries the exact conversation/message/variant IDs;
+it never falls back to the latest answer. Continue Research restores the saved
+scope and fills the composer without submitting. Evidence opens as the saved
+snapshot, while Current source performs an exact local chunk/document/hash
+check and reports current, stale, missing, or unavailable without nearby/fuzzy
+substitution. Raw IDs, revisions, hashes, locations, lineage, and capture time
+are behind a provenance disclosure; unknown company/source fields are omitted
+and known tickers use the shared `Company Name (TICKER)` formatter. A storage
+warning is not presented as durable “Saved on this device” state. Browser-local,
+read-only, volatile, malformed storage, and current-corpus limitations are
+explicit in EN/VI and both themes.
+
+Files for this follow-up are limited to the frontend Library/evidence surface,
+existing App/ChatMessage handoff plumbing, focused tests, styles, and the
+implementation receipts. No backend, retrieval, generation, evaluation,
+reader representation, corpus, index, Qdrant, model, prompt, or PDF path was
+changed. The full frontend suite passes `48 files / 245 tests`, TypeScript lint
+passes, and the production build transforms `1,993` modules. The saved-answer
+journey passes in both Chromium and Firefox (`2 passed`); the complete default
+preview matrix passes `152` tests with `4` intentional skips across both
+engines. Connected-browser responsive checks at 390, 768, 1024, 1280, 1366,
+1440, 1920, plus short 1366×520, show no global horizontal overflow. The current demo services were
+preserved: backend parent/listener `19104/16700` on `127.0.0.1:8000` and
+frontend parent/listener `19292/18944` on `127.0.0.1:4173`; backend health is
+`200`, pipeline ready, with 50 searchable companies and 10,053 indexed chunks.
+
+The historical manual native browser-chrome zoom gate remains unchanged and
+is not replaced by CSS viewport checks. The final preview matrix passed `152`
+tests with `4` intentional skips across Chromium and Firefox after restoring
+the complete history list and removing duplicate Recent Research action
+targets; no further step is required for V4-P07.1.
+
+## V5-00 execution checkpoint — 2026-09-13
+
+V5-00 is complete. This checkpoint establishes the repository-local V5
+workbench contract and a measured current-state baseline before implementation
+begins. The attached V5 objective/master plan remains the execution authority;
+the user-supplied product-reference image is visual guidance only and does not
+authorize unsupported PDF or backend behavior.
+
+The current UI remains the existing App shell with a primary research
+conversation and a single right-side `EvidenceWorkspaceRail`/`ContextPanel`.
+At 1440×900 and 1920×1080, the baseline capture measured a 216px navigation,
+primary column x=232 with widths 816 and 1296, and a 360px evidence rail at
+x=1064 and x=1544. Two source cards are visible, with the reader stacked below
+them inside the same rail; there is not yet a separate persistent Document
+pane. Page scroll width equals the viewport width at both targets in Chromium
+and Firefox. The detailed contract and visual evidence are in
+`docs/frontend/V5_WORKBENCH_CONTRACT.md` and the test-only
+`frontend/e2e/v5-00-baseline.spec.ts`.
+
+Validation receipts:
+
+- Frontend Vitest: `48 files / 245 tests` passed.
+- TypeScript lint and production Vite build passed; the build transformed
+  `1,993` modules.
+- Backend compileall passed; backend pytest passed `770` tests with `182`
+  existing warnings.
+- Retained Chromium/Firefox layout, regression, and structured-reader gate:
+  `66/66` passed serially.
+- Provider-free local browser gate: `6/6` passed.
+- V5-00 baseline capture: `4/4` passed across Chromium and Firefox.
+- Token contrast audit: all reported light/dark pairs passed their WCAG
+  thresholds.
+- The full serial browser run recorded `155 passed`, one existing Firefox
+  timing/modal failure in the workspace-layout A–G setup, and four intentional
+  skips. The default parallel run recorded `136 passed`, 16 timing/shared-state
+  failures, and four skips. The focused 66-test gate is the deterministic
+  checkpoint gate.
+- Real HTTP/SSE integration recorded `12 passed` and two failures in both
+  engines because the harness response did not expose the expected `Open
+  source 1` citation button. This pre-existing harness/test mismatch was not
+  changed in V5-00.
+
+No production UI runtime, backend API/DTO, async request owner, persistence
+schema, retrieval/generation behavior, model/prompt, corpus, index, Qdrant,
+reader representation, or PDF path changed. Existing state owners,
+cancellation/stale-response handling, exact evidence identity, and P07
+Library continuity remain authoritative. The pre-existing untracked
+`.audit-runtime/` and `harness_stacks.txt` were preserved; ignored `data/`
+was untouched. Playwright/Vite/harness processes were task-owned and
+self-cleaned, and no project listener remained on ports `3000`, `4173`,
+`4175`, `5173`, `8000`, `8765`, or `8766`.
+
+Known limitations remain the unimplemented four-pane target, the two real
+integration citation-button failures, unverified provider/network/long-stream/
+memory timings, and the historical external native browser-chrome zoom gate
+at 100/125/150/200%. The V5-00 rollback point is limited to its documentation
+and test-only baseline file. Exact next task: `V5-01`, typed workbench
+primitives and resizer/preference contracts only.
+
+## V5-01 execution checkpoint — 2026-09-13
+
+V5-01 is complete. The isolated typed foundation for the future workbench is
+now present, with no visible shell migration. `lib/workbench.ts` defines the
+five planned layout modes, Structured/Normalized representation type, pane
+and lower-context types, actual-geometry mode derivation, V1 pane limits and
+defaults, and the layout-only `sec_qa_workbench_panes_v1` preference envelope.
+The mode helper uses measured container width/height, navigation width, pane
+widths, and separators; it does not choose mode from `window.innerWidth`
+alone.
+
+The preference hook performs safe, non-destructive migration from the existing
+`sec_qa_context_rail_width_v1` key, clamps Sources to `280–360`, keeps
+Document in `400–560`, handles valid cross-tab updates, ignores malformed or
+future schemas, resets safely, and retains in-memory usability when storage
+fails. It persists no source content, selection, reader content, find query,
+or fullscreen state.
+
+`evidenceDeepLink.ts` preserves legacy `#evidence=<message>-<citation>` links
+and adds encoded conversation/variant/source-key identity for V5 links.
+`readerLocationView.ts` retains raw Structured and Normalized location
+responses and exposes exact/ambiguous/not-found/unavailable/stale/error
+semantics. `useWorkbenchController.ts` owns presentation/coordination only
+and generation-guards transient evidence binding outcomes; existing
+`useResearchSession`, `useEvidenceSelection`, `useReaderSession`, Library,
+and persistence owners remain authoritative. No new network request or
+backend/API contract exists.
+
+V5-01 focused foundation tests pass `18/18`; the full frontend suite passes
+`53 files / 263 tests`; TypeScript lint passes; the production build passes
+with `1,993` transformed modules; and the V5-00 Chromium/Firefox visual
+baseline capture passes `4/4` with unchanged geometry. No retrieval,
+generation, model, prompt, corpus, index, Qdrant, reader representation, or
+PDF behavior changed. The existing V5-00 browser/integration limitations,
+native zoom manual gate, and preserved untracked user files remain unchanged.
+
+Rollback is isolated to the five new modules and five focused test files; no
+data migration is required. Exact next task: `V5-02`, workbench shell, top
+bar, navigation, and scoped CSS foundation.
+
+## V5-02 execution checkpoint — 2026-09-13
+
+V5-02 is complete. The App shell now composes through
+`ApplicationWorkspace`, which mounts the V5 presentation controller and
+layout-only preferences while preserving App lifecycle, route, health/status,
+conversation, evidence, reader, Library, and dialog ownership. The
+route-local `main` is wrapped by `ResearchWorkbench`; `WorkbenchLayout`
+measures the rendered shell and navigation and writes a geometry-derived
+layout mode plus pane-width CSS variables for later pane composition.
+
+The global header is now 56px in the new shell. The final shell browser gate
+verified a 216px expanded navigation at 1440×900 and 1920×1080, with measured
+mode `context-dock` at 1440×900 and `four-pane` at 1920×1080. Compact
+navigation, EN/VI labels, dark theme, keyboard focus, route compatibility,
+landmarks, and no page horizontal overflow passed. The old
+`EvidenceWorkspaceRail` remains the intentional V5-02 rollback/presentation
+surface; the final first-class Sources and Document panes are next tasks.
+
+Validation receipts:
+
+- New shell unit/component coverage passed; the focused App/i18n/workspace
+  run passed `5 files / 27 tests`.
+- Full frontend Vitest passed `55 files / 265 tests`.
+- TypeScript lint passed; production Vite build passed with `2,000` modules
+  transformed.
+- V5-02 Chromium/Firefox shell gate passed `4/4`.
+- Retained Chromium/Firefox compatibility gate (workspace layout,
+  regression, structured reader, and V5-02 shell) passed `70/70` serially.
+- Final production-preview captures at 1440×900 and 1920×1080 were
+  visually inspected after the 56px-bar change. The shell, nav, research
+  canvas, and composer remained visible and inside the viewport. No claim is
+  made that the final Sources + Document four-pane content exists yet.
+- `git diff --check` passed with only normal line-ending normalization
+  warnings.
+
+No backend/API/DTO, query/SSE, retrieval, generation, model, prompt, corpus,
+index, Qdrant, reader representation, provenance, persistence schema, or PDF
+behavior changed. `.audit-runtime/` and `harness_stacks.txt` remain
+untouched, and ignored `data/` remains untouched. Task-owned preview/browser
+processes self-cleaned; no project listener remained on ports
+`3000`, `4173`, `4175`, `5173`, `8000`, `8765`, or `8766`.
+
+Known limitations are the still-legacy vertical evidence rail and all
+unstarted Sources/Document replacement, exact synchronization, responsive
+pane-resizer, and route-handoff tasks. Rollback is limited to the V5-02 shell
+components/style import/App composition/header-height/data-landmark changes;
+no data or backend rollback is required. Exact next task: `V5-03`,
+first-class Sources pane, with the legacy rail retained until the required
+reference sweep and coverage pass.
+
+## V5-03 execution checkpoint — 2026-09-13
+
+V5-03 is complete. Production answer-source rendering now uses the shared
+`SourcesPane` and `SourceCard`. The pane provides literal source search,
+citation-order list rendering, answer-origin All/Cited/Saved filtering, section
+navigation, explicit collapse, stable deep-link focus, and keyboard list
+navigation. Cards expose filing identity, section, readable excerpt, explicit
+saved/stale/unavailable/citation-linked state, Save Evidence, Open document,
+and advanced ranking details without confidence language.
+
+`ApplicationWorkspace` now provides workbench context to the pane.
+`ChatMessage` uses the shared disclosure fallback when no inspector callback
+exists, and `ContextPanel` uses the same pane before the existing
+`DocumentViewer`. The dead duplicate source-list functions were removed
+from `ContextPanel`; `SourcesPanel.tsx` remains only as a
+compatibility module for its direct tests/embedders and has no production import.
+The exact selected-source identity still belongs to `App`/
+`useEvidenceSelection`; reader detail/nearby fetch, cancellation, and
+generation guards remain unchanged.
+
+Validation receipts:
+
+- Full frontend Vitest passed `56 files / 271 tests`.
+- TypeScript lint passed; production Vite build passed with `2,003` modules
+  transformed.
+- New V5-03 browser coverage passed `2/2` across Chromium and Firefox,
+  and the V5-00/V5-02/V5-03 serial slice passed `10/10`.
+- Full serial browser coverage discovered `166` tests: `160 passed,
+  `4 skipped, and `2` Firefox-only timing failures in existing V4
+  reader readiness checks. An isolated rerun of those two specs passed `3/3`;
+  no production reader change was made.
+- `git diff --check` passed with only normal line-ending warnings.
+- The rebuilt Chromium preview was inspected at 1440×900; the source stack,
+  filter/search controls, saved action, selection styling, reader handoff, and
+  no-horizontal-overflow condition were visible.
+
+No backend/API/DTO, query/SSE, retrieval, generation, model, prompt, corpus,
+index, Qdrant, reader representation, provenance schema, or PDF behavior
+changed. Save Evidence continues to use the existing persistence writer and
+snapshot helper; no new storage schema was introduced. `.audit-runtime/`,
+`harness_stacks.txt`, and ignored `data/` remain untouched.
+Task-owned browser/preview processes self-cleaned.
+
+Known limitations: the source pane still composes inside the existing vertical
+`EvidenceWorkspaceRail`; independent Document pane geometry and route-specific
+catalog/search integrations remain V5-04/V5-05 work. The retained
+`SourcesPanel.tsx` module is not a production render path. Rollback is
+limited to the V5-03 pane/card/context/style/test integration; no backend, data,
+persistence, or PDF rollback is required. Exact next task: `V5-04`,
+first-class Document pane with the existing reader/provenance lifecycle retained.
+
+## V5-04 execution checkpoint — 2026-09-13
+
+V5-04 is complete. Production answer, catalog, and search document surfaces
+now enter through `DocumentPane`, which adapts the existing
+`DocumentWorkspace` and reader components into a shared workbench
+document surface. The pane provides one filing identity header, a genuine
+Structured/Normalized text switcher, an embedded reader canvas, Evidence and
+Metadata context tabs, conditional Notes only when supplied by an existing
+relationship, coordinated find text, and bounded expand/restore controls.
+Indexed excerpts remain evidence context rather than a representation.
+
+The existing Structured and Normalized readers remain authoritative for
+manifest/content/search/location requests, reader generations, cancellation,
+coverage, table truth, exact/ambiguous/not-found states, source identity, and
+SEC links. App route targets, reader sessions, source provenance, evidence
+selection, and Save Evidence persistence were not moved. The compatibility
+workspace mode and legacy tabs remain available to direct consumers.
+
+Validation receipts:
+
+- Full frontend Vitest passed `58 files / 277 tests`.
+- TypeScript lint passed; production Vite build passed with
+  `2,005` transformed modules.
+- V5-04 Chromium/Firefox browser acceptance passed `2/2`.
+- The retained V5-00/V5-02/V5-03/V5-04 serial slice passed
+  `12/12`; existing document-workspace and structured-reader
+  compatibility coverage passed `6/6` across both browsers.
+- `git diff --check` passed with only normal line-ending warnings.
+- The rebuilt 1440×900 Chromium preview was visually inspected in
+  `frontend/e2e/screenshots/v5-04-document-1440x900.png`. A
+  container-aware wrapping correction keeps the shared header controls usable
+  inside the narrow evidence inspector.
+
+No backend/API/DTO, query/SSE, retrieval, generation, model, prompt, corpus,
+index, Qdrant, provenance schema, persistence schema, or PDF behavior
+changed. The e2e fixture adds only hermetic responses for the existing
+normalized-reader contract. `.audit-runtime/`,
+`harness_stacks.txt`, and ignored `data/` remain untouched;
+task-owned preview/browser processes self-cleaned.
+
+Known limitations: the answer inspector still presents Sources and the shared
+Document pane in the existing vertical `EvidenceWorkspaceRail`.
+Independent Sources/Document geometry, resizers, collapse policy, and exact
+cross-pane synchronization remain V5-05/V5-06 work. The compatibility
+`DocumentWorkspace` module remains intentionally present.
+
+Rollback is limited to the V5-04 DocumentPane/context-tab integration, reader
+controlled-prop seam, styles/tests/fixture routes, and App/ContextPanel entry
+point substitutions. No backend, data, reader transport, provenance, or
+persistence rollback is required. Exact next task: `V5-05`,
+responsive Sources + Document geometry and explicit synchronization.
+
+## V5-05 execution checkpoint — 2026-09-13
+
+V5-05 is complete. The selected source now opens the shared Document pane with
+an exact, revision-bound evidence target. `App` resolves canonical and legacy
+deep links by exact conversation/message/variant/citation/source identity;
+missing or mismatched targets remain unavailable or closed instead of
+falling forward. Structured and Normalized readers resolve live missing-hash
+sources through the existing cache, validate the returned chunk/hash/document
+identity, and emit generation-guarded resolving/resolved/stale/unavailable/
+error events to the presentation controller.
+
+Reader location truth is explicit: exact marks require the matching chunk ID,
+hash, document/source-set revisions, verified source document, and a valid
+representation range. Ambiguous, stale, not-found, unavailable, and transport
+errors keep the selected source visible with a concise reason and render no
+yellow mark. Hashless historical snapshots are unavailable and are not
+silently refetched as current content. Exact structured block focus and the
+existing normalized nested identity contract remain intact.
+
+Validation receipts:
+
+- Full frontend Vitest passed `60 files / 288 tests`.
+- TypeScript lint passed; production Vite build passed with `2,007` modules
+  transformed.
+- V5-00/V5-02/V5-03/V5-04/V5-05 serial Chromium/Firefox acceptance passed
+  `16/16` with one worker and zero retries.
+- Existing Documents/Search exact-chunk compatibility passed `2/2` across
+  Chromium and Firefox.
+- Focused tests cover exact, ambiguous, stale hash, not-found/409,
+  unavailable historical snapshots, normalized nested identity, old/new
+  deep-link parsing, direct route targets, and rapid source switching. The
+  final structured-reader focused run passed `6/6`.
+- `git diff --check` passed with only normal LF/CRLF normalization warnings;
+  the final listener check was empty on ports `3000`, `4173`, `4175`, `5173`,
+  `8000`, `8765`, and `8766`.
+- The rebuilt 1440×900 Chromium render in
+  `frontend/e2e/screenshots/v5-05-sync-1440x900.png` was visually inspected.
+  Answer, sources, selected evidence, document identity, representation
+  controls, and reader context remained legible and inside the viewport.
+
+No backend/API/DTO, query/SSE, retrieval, generation, model, prompt, corpus,
+index, Qdrant, reader transport, provenance schema, persistence schema, or PDF
+behavior changed. Existing cache, reader request IDs, abort controllers,
+source provenance, and evidence persistence owners remain authoritative.
+`.audit-runtime/`, `harness_stacks.txt`, and ignored `data/` were preserved;
+task-owned browser/preview processes self-cleaned.
+
+Known limitations: the answer inspector still presents the Sources and shared
+Document surfaces inside the existing vertical `EvidenceWorkspaceRail`.
+Independent Sources/Document geometry, resizers, collapse policy, and the
+pane-level visual acceptance remain V5-06 work. The compatibility
+`DocumentWorkspace` module remains intentionally present.
+
+Rollback is limited to the V5-05 location validation/event seam, cached source
+resolver, exact deep-link target resolution, and focused tests/fixtures. No
+backend, data, reader transport, provenance, persistence, or PDF rollback is
+required. Exact next task: `V5-06` — responsive Sources + Document geometry,
+resizers, collapse policy, and visual acceptance.
+
+## V5-06 execution checkpoint — 2026-09-13
+
+V5-06 is complete. The V5 shell now renders the measured Research + Sources +
+Document workstation instead of placing the contextual surfaces in a legacy
+vertical rail. At 1440×900 the first-run compact navigation is 56px and the
+four-pane tracks measure Research 624px, Sources 304px, two 8px splitters, and
+Document 440px. At 1920×1080 expanded navigation is 216px and Research is
+944px with the same contextual defaults. At 1366×768 and 1280×800 the
+context-dock shows one explicitly switchable Sources/Document surface; 1024px
+uses a contextual modal and narrower widths use the existing drawer or
+single-surface lifecycle.
+
+`PaneResizer` keeps pointer motion in rAF-updated CSS variables and commits
+width state/storage only on pointer-up; cancel, keyboard Arrow/Home/End,
+Enter/Space, double-click Reset, and Wider/Narrower controls are covered.
+Sources and Document collapse retain their prior bounded widths and expose
+accessible restore actions. The embedded reader keeps a 300px minimum, while
+the lower Evidence/Metadata/Notes context is collapsible and bounded to
+`min(17rem, 32%)`, collapsing first on short tracks.
+
+Validation receipts:
+
+- Full frontend Vitest passed `60 files / 289 tests`.
+- TypeScript lint passed; production Vite build passed with `2,008` modules.
+- V5-02 shell Chromium passed `2/2`; V5-05 synchronization Chromium passed
+  `2/2` after the four-pane reader mount.
+- V5-06 responsive matrix passed `3/3` in Chromium and `3/3` in Firefox,
+  including four-pane geometry, dock tabs, modal transitions, resizer commit
+  timing, keyboard bounds, collapse/restore, and page-overflow checks.
+- Chromium renders at 1440×900 and 1920×1080 were inspected from the rebuilt
+  preview; both show Research, Sources, and Document concurrently and legibly.
+
+No backend/API/DTO, query/SSE, retrieval, generation, model, prompt, corpus,
+index, Qdrant, reader transport, provenance, persistence schema, acquisition,
+or PDF behavior changed. The hermetic e2e fixture only adds an unavailable
+reader response for a non-AAPL identity so eager wide-layout mounting remains
+network-isolated. `.audit-runtime/`, `harness_stacks.txt`, and ignored `data/`
+remain untouched; task-owned preview/browser processes self-cleaned.
+
+Known limitations: Documents, Search, Retrieval Lab, and Library still need
+their explicit V5-07 handoff/focus integration; V5-06 only moves the existing
+evidence target into the shared shell. Rollback is limited to the sibling
+composition, resizer, responsive CSS, navigation default, document context
+collapse, and V5-06 fixtures/tests/docs. Exact next task: `V5-07`.
+
+## V5-07 execution checkpoint — 2026-09-13
+
+V5-07 is complete. Documents, Search, Retrieval Lab, and Library now use the
+shared workbench document handoff while preserving their existing route-local
+state and domain owners. The Documents catalog remains mounted during a
+catalog-to-document handoff. Search result cards now present company and
+filing identity, keep indexed-excerpt inspection distinct from the explicit
+Document workspace action, expose the existing Save Evidence path, and restore
+the exact result opener. Retrieval Lab retains Analyst/Advanced diagnostics
+and score semantics while emitting a typed `RetrievalWorkspaceTarget`; its
+save/open actions restore the exact candidate opener. Library reuses the
+completed P07 saved variant/evidence behavior and restores the exact saved
+evidence invoker without changing snapshot truth.
+
+`RouteDocumentContext` places route targets in the shared contextual slot for
+four-pane/context-dock modes and uses the existing modal focus lifecycle for
+narrower modes. `App` remains authoritative for route identity and close/Back
+transitions; `ApplicationWorkspace` and the presentation controller mirror
+target/focus state only. Stable route and Library IDs provide exact focus
+restoration, and no duplicate reader tree is mounted.
+
+Validation receipts:
+
+- Full frontend Vitest passed `60 files / 291 tests`.
+- TypeScript lint passed; production Vite build passed with `2,009` modules.
+- V5-07 Chromium handoffs passed `4/4`; Firefox handoffs passed `4/4`.
+- Existing affected browser checks passed: Documents/Search exact-chunk
+  regression `1/1` and V5-04 document acceptance `1/1` in Chromium.
+- Focused route unit coverage passed `4 files / 35 tests`.
+
+No backend/API/DTO, query/SSE, retrieval, generation, model, prompt, corpus,
+index, Qdrant, reader transport, provenance, persistence schema, acquisition,
+or PDF behavior changed. The e2e fixture only adds existing reader identity
+fields. `.audit-runtime/`, `harness_stacks.txt`, and ignored `data/` were
+preserved; task-owned browser/preview processes self-cleaned.
+
+Rollback is limited to `RouteDocumentContext`, typed route targets, handoff
+callbacks, stable focus IDs, scoped CSS, and V5-07 tests/fixture updates. No
+data migration or backend/domain rollback is required. Exact next task:
+`V5-08` — visual, accessibility, browser, performance, and regression closure.
+
+## V5-08 execution checkpoint — 2026-09-13
+
+V5-08 is complete. This is the current SEC research workspace baseline and
+supersedes the earlier rail-era presentation descriptions. V5-00 through
+V5-07 were completed in order, and the final closure verified the shared
+Research + Sources + Document workbench across the required wide, short-wide,
+tablet, phone, theme, locale, keyboard, and reduced-motion states.
+
+The final wide geometry is exact: at 1440×900 compact navigation is 56px,
+Research is 624px, Sources is 304px, the two splitters are 8px each, and
+Document is 440px; at 1920×1080 expanded navigation is 216px and Research is
+944px with the same contextual tracks. 1366×768 and 1280×800 use the
+accessible context dock; 1024×768 and 1366×520 use the contextual surface;
+768px/390px use the drawer or single-surface lifecycle. The reader’s internal
+outline/canvas grid is non-shrinking, so the exact amber/yellow structured
+evidence mark and the PDF-unavailable limitation remain separated at 1440×900.
+
+Final validation receipts:
+
+- Backend `.venv\Scripts\python.exe -m pytest -q`: `770 passed`, `182 warnings`.
+- Frontend Vitest: `60 files / 292 tests` passed; TypeScript lint and the
+  production build passed with `2,009` transformed modules.
+- V5-00/V5-02/V5-03/V5-04/V5-05/V5-06/V5-07 acceptance: `15/15` Chromium
+  and `15/15` Firefox. V5-06 responsive slice: `3/3` in both engines,
+  including the new 1366×520 short-height check.
+- Full app suite: `38/38` Chromium and `38/38` Firefox. Full regression:
+  `31/31` Chromium and `31/31` Firefox. Synthetic workspace performance:
+  `2/2` executed per engine with two provider-dependent checks skipped.
+- Latest synthetic Chromium p95s: warm composer `14.00ms`, warm view
+  `42.90ms`, Markdown layout `175.70ms`, source switching p50/p95
+  `166.10/204.30ms`. Firefox: `27.00ms`, `89.00ms`, `314.00ms`, and
+  `143.00/164.00ms`. Production regression p95s for Library search/composer
+  were Chromium `62.67/43.50ms` and Firefox `68.21/40.00ms`, below the
+  200/100ms budgets.
+- Accessibility evidence passed: overview Axe serious/critical scan, contrast
+  scan, splitters/tabs/dialog focus and restoration, EN/VI, and reduced-motion
+  browser journeys. Native browser chrome zoom remains a manual gate.
+- Final project listener check was empty for ports `3000`, `4173`, `4175`,
+  `5173`, `8000`, `8765`, and `8766`. `git diff --check` remains limited to
+  normal LF/CRLF normalization warnings.
+
+No backend/API/DTO, query/SSE, retrieval, generation, model, prompt, index,
+corpus, Qdrant, acquisition, provenance, persistence, or PDF behavior changed.
+The frontend-only closure fixed the warning-token reference used by exact
+reader marks, kept the reader grid from collapsing under short wide heights,
+and updated the synthetic reader probe to traverse the real Sources → Document
+surface while accepting its documented unavailable state. `.audit-runtime/`,
+`harness_stacks.txt`, ignored `data/`, and all unrelated dirty work were
+preserved. No file was removed; no commit, deploy, benchmark promotion, or
+corpus/index regeneration was performed.
+
+Known limitations: PDF remains deferred because no provenance-bound PDF
+representation/location contract or tracked PDF corpus is in scope; native
+browser zoom remains manual. Historical entries may mention the old rail, but
+the current design and frontend contracts identify the shared workbench as
+authoritative. Rollback is limited to V5-08 frontend CSS/test-probe/fixture and
+documentation changes. Exact post-V5 next task: `PDF-01`, only after a real
+PDF contract is separately approved.
+
+## Current repair state — 2026-09-22
+
+REPAIR-R1 through REPAIR-R4 are complete, superseding the earlier post-UI-008
+next-action note. API-006 has not started.
+
+- **R1 atomic collection mutations** (`ebb8823`): independently committing
+  record operations were the cause of partial cascades and check/write races.
+  Connection-scoped versioned-record operations now let every logical
+  collection mutation run in one SQLite write transaction. Parent live/revision
+  validation precedes cascade work; child/note/activity/parent changes roll back
+  together; parent and capacity checks share the serialized transaction.
+- **R2 PATCH preflight** (`6220b18`): the explicit CORS method allowlist now adds
+  only PATCH. Origin/header/Host/loopback/private-mode and bearer controls are
+  unchanged, and preflight still grants no application authorization.
+- **R3 shared delete confirmation** (`60562d5`): list menu, detail menu, and
+  Settings all delegate to one workspace-owned confirmation dialog carrying the
+  collection ID, revision, and name. Cancel/Escape do not write; pending state
+  prevents duplicate submission; 409 is visible and never auto-retried; modal
+  focus/return focus and EN/VI copy are preserved.
+- **R4 selection lifetime ownership** (`47c4ea6`): every network, cached, or
+  cleared selection first invalidates and aborts its predecessor. Route
+  generation + request epoch checks protect detail, notes, activity, drafts,
+  loading/errors, mutation refreshes, and navigation across A→B→A lifetimes.
+  Canceled reads do not surface AbortError; completed old server mutations may
+  refresh safe list state but cannot mutate the current detail lifetime.
+- Browser repair receipts were added in `8aa5af4`, covering list-menu
+  Cancel/Escape and focus restoration, detail-menu 409/exact revision/no retry,
+  and exactly one successful Settings DELETE.
+
+Validation actually run: atomicity `11/11`; combined Collections persistence,
+domain/repository/API and DATA-001/002/003 `135/135`; access/CORS selection
+`50/50`; collection model/component/client selection `64/64`; final workspace
+component suite `23/23`; full backend `1035 passed / 0 failed / 188 warnings`;
+final full frontend `75 files / 507 tests`; TypeScript passed; production build
+passed with `2060` transformed modules; focused production-like UI-008 passed
+Chromium `18/18` and Firefox `18/18` (`36/36`, one worker). Final warning count
+matches the recorded baseline. The checkpoint records the earlier transient
+test observations and their focused/final resolutions rather than hiding them.
+
+Security/data-integrity position: no schema or public HTTP contract changed;
+record formats, IDs, revisions, tombstones/no-resurrection behavior, canonical
+transfer serialization, and DATA-002 compatibility remain intact. No token was
+persisted, hardcoded, or bypassed. The final memory-only local connection/token
+owner remains staged architecture, so unavailable/unauthorized states remain
+truthful.
+
+Repository health: the historical dirty/untracked tree was preserved. A clean
+checkout remains non-self-contained because committed runtime modules still
+depend on untracked files; this was deliberately not repaired by mass-staging.
+UI-008 remains the latest completed product task and no roadmap feature is in
+progress.
+
+**Exact next action: `REPAIR-005 — Restore clean-checkout/runtime dependency
+closure`.** Do not start API-006 until that separate health task is complete.
+
+## REPAIR-005 clean-checkout closure — 2026-09-22
+
+REPAIR-005 is complete. The failure was repository membership, not a new
+product defect: committed backend and frontend composition depended on
+completed source, tests, contracts, and authority assets that still existed
+only in the historical dirty tree. A detached checkout at `1585444` reproduced
+`ModuleNotFoundError: No module named 'src.api.sec_urls'`; the same checkout's
+TypeScript graph reported missing route, conversation, workbench, reader,
+source, console, and stylesheet modules plus their tracked companion type/prop
+mismatches.
+
+The closure was committed in five bounded groups:
+
+- `1931f87` — backend runtime source closure;
+- `0114cb6` — backend contract/fixture closure;
+- `05df347` — frontend runtime source closure;
+- `59dfaa9` — frontend unit/component/browser contract closure;
+- `17dafe2` — rebuild plans, V5 contract, current docs, and nine reference PNGs.
+
+A detached worktree at `17dafe2` imported all restored backend modules from its
+own directory and composed `63` routes. Focused backend contracts passed
+`341/341`; the full hermetic backend suite passed `1001`, skipped `34`, and
+reported `148` warnings with no failures. The short skip report attributes every
+skip to an unavailable git-ignored evaluation artifact or local filing/corpus.
+Clean-checkout frontend validation
+passed TypeScript, production build (`2060` modules), and Vitest (`75` files /
+`507` tests). No browser suite was rerun because the repair commits the runtime
+and contracts already exercised in the active tree without changing their
+behavior. No network/provider flow was invoked.
+
+The original 59 tracked modifications and 77 untracked status entries were
+classified before staging. Required completed source/tests/docs were committed;
+generated/runtime/tool artifacts and ad-hoc diagnostics remain untracked and
+preserved. No reset, clean, restore, stash, deletion, mass staging, data
+regeneration, architecture redesign, or roadmap feature implementation was
+performed.
+
+The clean-checkout blocker is closed. The separate memory-only local
+connection/token owner remains an intentional staged limitation; API-001 was
+not weakened and no token was persisted or embedded. UI-008 remains the latest
+completed product task, API-006 has not started, and the next product task may
+now return to `API-006 — Model/dataset registries` under a separate scope.

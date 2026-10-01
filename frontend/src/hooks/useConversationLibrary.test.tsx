@@ -241,6 +241,125 @@ describe("useConversationLibrary request isolation", () => {
     ).toBe(false);
   });
 
+  it("saves the displayed original answer once and deduplicates a repeat", async () => {
+    const record = makeRecord("conversation-version", "session-version", [
+      { id: "u-1", sender: "user", text: "What was revenue?" },
+      { id: "a-1", sender: "assistant", text: "Revenue was $100B.", status: "completed" },
+    ]);
+    localStorage.setItem(V3_KEY, JSON.stringify({ envelopeVersion: 3, records: [{ ...record, variants: [] }], tombstones: [] }));
+    localStorage.setItem("sec_qa_session_id", "session-version");
+    localStorage.setItem("sec_qa_active_conversation_id", "conversation-version");
+
+    const { rendered } = await freshHook();
+    await waitFor(() => expect(rendered.result.current.activeConversationId).toBe("conversation-version"));
+
+    let first!: Awaited<ReturnType<typeof rendered.result.current.saveAnswerVersion>>;
+    await act(async () => {
+      first = await rendered.result.current.saveAnswerVersion({
+        conversationId: "conversation-version",
+        messageId: "a-1",
+        variantId: null,
+      });
+    });
+    expect(first.status).toBe("saved");
+
+    let second!: Awaited<ReturnType<typeof rendered.result.current.saveAnswerVersion>>;
+    await act(async () => {
+      second = await rendered.result.current.saveAnswerVersion({
+        conversationId: "conversation-version",
+        messageId: "a-1",
+        variantId: null,
+      });
+    });
+    expect(second.status).toBe("already_saved");
+    expect(rendered.result.current.conversations.find((item) => item.id === "conversation-version")?.variants).toHaveLength(1);
+  });
+
+  it("persists a next draft during streaming without persisting the partial answer", async () => {
+    const { store, rendered } = await freshHook();
+    const nextDraft = "A follow-up question typed during streaming";
+
+    act(() => {
+      rendered.result.current.updateMessages((previous) => [
+        ...previous,
+        { id: "u-1", sender: "user", text: "What are the risks?" },
+        {
+          id: "a-1",
+          sender: "assistant",
+          text: "Partial answer",
+          isStreaming: true,
+          status: "streaming",
+        },
+      ]);
+      rendered.result.current.setInputText(nextDraft);
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    });
+
+    const library = await store.loadConversationLibrary(
+      rendered.result.current.sessionId,
+      rendered.result.current.activeConversationId,
+    );
+    const saved = library.conversations.find(
+      (conversation) => conversation.id === rendered.result.current.activeConversationId,
+    );
+    expect(saved?.draft).toBe(nextDraft);
+    expect(saved?.messages.some((message) => message.id === "a-1")).toBe(false);
+    expect(saved?.messages.some((message) => message.isStreaming)).toBe(false);
+  });
+
+  it("does not let a queued completed-answer save erase a later bookmark after reload", async () => {
+    const record = makeRecord("conversation-bookmark-race", "session-bookmark-race", [
+      { id: "u-1", sender: "user", text: "What were net sales?" },
+    ]);
+    localStorage.setItem(V3_KEY, JSON.stringify({ envelopeVersion: 3, records: [record], tombstones: [] }));
+    localStorage.setItem("sec_qa_session_id", "session-bookmark-race");
+    localStorage.setItem("sec_qa_active_conversation_id", "conversation-bookmark-race");
+
+    const { store, rendered } = await freshHook();
+    await waitFor(() => expect(rendered.result.current.activeConversationId).toBe("conversation-bookmark-race"));
+    await waitFor(() => expect(
+      rendered.result.current.conversations.some((item) => item.id === "conversation-bookmark-race"),
+    ).toBe(true));
+
+    const queuedExchange = deferred<void>();
+    const originalMutate = store.mutateConversationRecord;
+    const mutateSpy = vi.spyOn(store, "mutateConversationRecord").mockImplementationOnce(async (conversationId, mutate) => {
+      await queuedExchange.promise;
+      return originalMutate(conversationId, mutate);
+    });
+
+    act(() => {
+      rendered.result.current.updateMessages((previous) => [
+        ...previous,
+        { id: "a-1", sender: "assistant", text: "Net sales were reported.", status: "completed" },
+      ]);
+    });
+    await waitFor(() => expect(mutateSpy).toHaveBeenCalledTimes(1));
+
+    let bookmarkResult!: Awaited<ReturnType<typeof rendered.result.current.toggleConversationBookmark>>;
+    await act(async () => {
+      bookmarkResult = await rendered.result.current.toggleConversationBookmark("conversation-bookmark-race", "a-1");
+    });
+    expect(bookmarkResult.status).not.toBe("failed");
+    await waitFor(() => expect(rendered.result.current.bookmarkedMessageIds).toEqual(["a-1"]));
+
+    await act(async () => {
+      queuedExchange.resolve();
+    });
+    await waitFor(() => expect(
+      store.listConversations().find((item) => item.id === "conversation-bookmark-race")?.bookmarkedMessageIds,
+    ).toEqual(["a-1"]));
+
+    rendered.unmount();
+    const reloaded = await freshHook();
+    await waitFor(() => expect(reloaded.rendered.result.current.activeConversationId).toBe("conversation-bookmark-race"));
+    expect(reloaded.rendered.result.current.bookmarkedMessageIds).toEqual(["a-1"]);
+    expect(reloaded.rendered.result.current.messages.some((message) => message.id === "a-1")).toBe(true);
+  });
+
   it("saves the normalized partial answer of the old conversation when starting a new one", async () => {
     const { rendered } = await freshHook();
 

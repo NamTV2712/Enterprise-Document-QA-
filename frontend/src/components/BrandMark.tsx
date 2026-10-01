@@ -4,26 +4,25 @@
  */
 
 import React from "react";
-import { TrendingUp } from "lucide-react";
 
 interface BrandMarkProps {
-  size?: "sm" | "md";
+  size?: "xs" | "sm" | "md" | "lg";
   className?: string;
 }
 
-/**
- * A compact, high-contrast brand mark that remains legible in both themes.
- * The glow is CSS-only so it does not add an image request or another asset.
- */
+/** A compact, project-owned mark for the document/evidence workspace. */
 export const BrandMark = React.memo<BrandMarkProps>(
   ({ size = "md", className = "" }) => (
     <span
       className={`brand-mark brand-mark--${size} ${className}`.trim()}
       aria-hidden="true"
     >
-      <span className="brand-mark__glow" />
       <span className="brand-mark__surface">
-        <TrendingUp className="brand-mark__icon" strokeWidth={2.4} />
+        <svg viewBox="0 0 32 32" className="brand-mark__icon" fill="none" aria-hidden="true">
+          <path d="m3 8.5 13-6 13 6-13 6-13-6Z" stroke="currentColor" strokeWidth="2.35" strokeLinejoin="round" />
+          <path d="m3 15.5 13 6 13-6" stroke="currentColor" strokeWidth="2.35" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="m3 22.5 13 6 13-6" stroke="var(--evidence-accent)" strokeWidth="2.35" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </span>
     </span>
   ),

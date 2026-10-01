@@ -1,0 +1,1141 @@
+/* V5 shell foundation. Pane content is composed by the shared workbench while
+   each route and reader keeps its existing domain and transport ownership. */
+.workbench-application-shell {
+  background: var(--surface-app);
+  color: var(--text-primary);
+}
+
+/* The V5 workbench keeps one compact 56px global bar; pane-local controls stay
+   with the region that owns their interaction and state. */
+.workbench-application-shell .workspace-header {
+  height: 3.5rem;
+  min-height: 3.5rem;
+}
+
+.workbench-application-main,
+.workbench-layout,
+.workbench-layout__content,
+.workbench-research,
+.workbench-research__surface {
+  min-width: 0;
+  min-height: 0;
+}
+
+.workbench-application-main,
+.workbench-layout,
+.workbench-layout__content,
+.workbench-research,
+.workbench-research__surface {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.workbench-layout {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--surface-app);
+  color: var(--text-primary);
+  --workbench-navigation-width: 0px;
+  --workbench-sources-width: 304px;
+  --workbench-document-width: 440px;
+}
+
+.workbench-layout__content,
+.workbench-research__surface {
+  overflow: hidden;
+}
+
+.workbench-research > .workbench-research__surface > main {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+/* Keep the mode contract observable for the shared pane composition. */
+.workbench-layout[data-workbench-layout-mode="four-pane"] {
+  --workbench-pane-count: 4;
+}
+
+.workbench-layout[data-workbench-layout-mode="context-dock"] {
+  --workbench-pane-count: 3;
+}
+
+.workbench-layout[data-workbench-layout-mode="contextual-surface"],
+.workbench-layout[data-workbench-layout-mode="drawer"],
+.workbench-layout[data-workbench-layout-mode="single-surface"] {
+  --workbench-pane-count: 1;
+}
+
+[data-workbench-region="navigation"]:focus-visible,
+[data-workbench-region="header"]:focus-visible,
+[data-workbench-region="research"]:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+/* V5-03 source stack. ContextPanel remains the reader lifecycle boundary,
+   while this slice owns the list, card focus, and analyst filters. */
+.sources-pane {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 0 1 48%;
+  flex-direction: column;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface);
+}
+
+.sources-pane__header {
+  flex: none;
+  min-width: 0;
+}
+
+.sources-pane__title-group {
+  min-width: 0;
+}
+
+.sources-pane__header-actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.sources-pane__collapse,
+.sources-pane__disclosure-toggle {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+}
+
+.sources-pane__collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 0.55rem;
+  color: var(--text-muted);
+}
+
+.sources-pane__collapse:hover,
+.sources-pane__collapse:focus-visible {
+  border-color: var(--border-strong);
+  background: var(--surface-selected);
+  color: var(--accent-text);
+  outline: none;
+}
+
+.sources-pane__body {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sources-pane__controls {
+  display: flex;
+  min-width: 0;
+  flex: none;
+  flex-direction: column;
+}
+
+.sources-pane__filters {
+  display: flex;
+  flex: none;
+  gap: 0.25rem;
+  overflow-x: auto;
+  padding: 0.35rem 0.65rem 0.15rem;
+  scrollbar-width: thin;
+}
+
+.sources-pane__filter {
+  min-height: 1.65rem;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sources-pane__filter:hover,
+.sources-pane__filter:focus-visible,
+.sources-pane__filter.is-selected {
+  border-color: var(--accent-text);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  outline: none;
+}
+
+.sources-pane__search {
+  flex: none;
+  margin-block: 0.25rem 0.35rem;
+  margin-inline: 0.65rem;
+}
+
+.sources-pane__sections {
+  flex: none;
+}
+
+.sources-pane__unavailable,
+.sources-pane__save-error {
+  flex: none;
+}
+
+.sources-pane__list {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.35rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 0.55rem 0.55rem;
+  outline: none;
+}
+
+.sources-pane__list:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.sources-pane__list > [role="listitem"] {
+  min-width: 0;
+}
+
+.source-card {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.source-card__select {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: 1.45rem minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.45rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.45rem;
+  background: var(--card-bg, var(--surface-muted));
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.source-card__select:hover,
+.source-card__select:focus-visible {
+  border-color: var(--border-strong);
+  background: var(--pane-bg-elevated, var(--surface-selected));
+  outline: none;
+}
+
+.source-card__select.is-selected {
+  border-color: #3b82f6 !important;
+  background: var(--surface-selected) !important;
+  box-shadow: 0 0 0 1px #3b82f6 !important;
+  outline: none;
+}
+
+.source-card__select.is-selected .source-card__excerpt,
+.source-card__select.is-selected .source-card__meta,
+.source-card__select.is-selected .source-card__state {
+  color: var(--text-secondary);
+}
+
+.source-card__select:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus-ring) 70%, transparent);
+}
+
+.source-card.is-unavailable .source-card__select {
+  border-color: var(--state-warning-border);
+}
+
+.source-card__rank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 9999px;
+  background: #1e293b;
+  color: #94a3b8;
+  border: 1px solid #334155;
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-top: 0.08rem;
+  flex-shrink: 0;
+}
+
+.source-card.is-selected .source-card__rank {
+  background: #2563eb;
+  color: #ffffff;
+  border: 1px solid #3b82f6;
+}
+
+.source-card__body {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.source-card__heading {
+  display: grid;
+  min-width: 0;
+  gap: 0.1rem;
+}
+
+.source-card__heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+
+.source-card__company {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-card__score-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  background: var(--state-success-surface);
+  color: var(--state-success-text);
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  flex: none;
+}
+
+.source-card__citation {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-card__meta {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-card__state {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--text-subtle);
+  font-size: 0.68rem;
+  line-height: 1.3;
+}
+
+.source-card__state-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.source-card__state-item--selected {
+  color: var(--accent-text);
+  font-weight: 800;
+}
+
+.source-card__state-item.is-saved {
+  color: var(--state-success-text);
+  font-weight: 700;
+}
+
+.source-card__state-item.is-stale,
+.source-card__state-item.is-warning {
+  color: var(--state-warning-text);
+  font-weight: 700;
+}
+
+.source-card__excerpt {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.73rem;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.source-card__preview-label {
+  color: var(--state-warning-text);
+  font-weight: 750;
+}
+
+.source-card__arrow {
+  margin-top: 0.08rem;
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.source-card__actions {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0 0.35rem 0.15rem 1.95rem;
+}
+
+.source-card__action {
+  display: inline-flex;
+  min-height: 1.55rem;
+  height: 1.55rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.35rem;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.source-card__action:hover:not(:disabled),
+.source-card__action:focus-visible {
+  border-color: var(--accent-text);
+  color: var(--accent-text);
+  outline: none;
+}
+
+.source-card__action.is-saved {
+  color: var(--state-success-text);
+}
+
+.source-card__action:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+
+.source-card__advanced {
+  margin-left: 1.95rem;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.source-card__advanced summary {
+  display: flex;
+  min-height: 1.45rem;
+  height: 1.45rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.source-card__advanced summary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.source-card__advanced dl {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.1rem 0 0.35rem;
+  font-size: 0.68rem;
+}
+
+.source-card__advanced dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.source-card__advanced dd {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+.sources-pane__empty {
+  margin: 0.75rem;
+}
+
+.sources-pane--disclosure {
+  margin: 1rem 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+}
+
+.sources-pane--disclosure .sources-pane__header {
+  padding: 0;
+  border-bottom: 0;
+}
+
+.sources-pane__disclosure-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.sources-pane__disclosure-toggle:hover,
+.sources-pane__disclosure-toggle:focus-visible {
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface-muted));
+  outline: none;
+}
+
+.sources-pane__disclosure-title,
+.sources-pane__disclosure-action {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.sources-pane__disclosure-title {
+  min-width: 0;
+}
+
+.sources-pane__disclosure-heading,
+.sources-pane__disclosure-description {
+  display: block;
+}
+
+.sources-pane__disclosure-heading {
+  font-size: 0.8125rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.sources-pane__disclosure-description {
+  margin-top: 0.2rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.sources-pane__disclosure-action {
+  flex: none;
+  color: var(--accent-text);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.sources-pane--disclosure .sources-pane__body {
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .source-card__select,
+  .source-card__action,
+  .sources-pane__collapse,
+  .sources-pane__filter {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workbench-layout,
+  .workbench-application-main {
+    transition: none;
+  }
+}
+
+/* V5-06 responsive workstation composition. The Research surface and the
+   contextual surface are siblings; only the measured layout mode decides
+   whether the latter is a four-pane track, a dock, or a modal portal. */
+.workbench-layout__content {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.workbench-layout[data-workbench-layout-mode="four-pane"] .workbench-layout__content[data-workbench-has-context="true"] {
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(0, calc(
+      var(--workbench-sources-track-width, 304px) +
+      var(--workbench-document-track-width, 440px) +
+      (var(--workbench-splitter-width, 8px) * 2)
+    ));
+}
+
+/* Route handoffs use the same contextual slot as evidence, but they only
+   need the Document track. The catalog/search/retrieval route stays mounted
+   in Research so the invoker and its submitted state remain available. */
+.workbench-layout[data-workbench-layout-mode="four-pane"] .workbench-layout__content[data-workbench-context-kind="document"] {
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(400px, var(--workbench-document-track-width, 440px));
+}
+
+.workbench-layout[data-workbench-layout-mode="context-dock"] .workbench-layout__content[data-workbench-has-context="true"] {
+  grid-template-columns: minmax(520px, 1fr) minmax(400px, 440px);
+}
+
+.workbench-layout__content > .workbench-research {
+  grid-column: 1;
+  grid-row: 1;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workbench-layout__content:not([data-workbench-has-context="true"]) > .workbench-research {
+  grid-column: 1 / -1;
+}
+
+.workbench-layout__content > .workbench-evidence-layout {
+  grid-column: 2;
+  grid-row: 1;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.workbench-layout__content > .workbench-route-document-layout {
+  grid-column: 2;
+  grid-row: 1;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--border-subtle);
+  background: var(--surface);
+}
+
+.workbench-route-document-layout > .document-pane,
+.workbench-route-document-layout > .document-pane > .document-workspace {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.workbench-route-document-layout > .document-pane {
+  display: flex;
+  flex-direction: column;
+}
+
+.workbench-route-document-layout > .document-pane > .document-workspace {
+  flex: 1 1 auto;
+}
+
+.workbench-route-document-layout[data-workbench-route-origin="retrieval"] .document-workspace__title-row h2,
+.workbench-route-document-layout[data-workbench-route-origin="search"] .document-workspace__title-row h2,
+.workbench-route-document-layout[data-workbench-route-origin="catalog"] .document-workspace__title-row h2 {
+  max-width: 24rem;
+}
+
+.workbench-route-document-dialog {
+  display: flex;
+  width: min(96vw, 72rem);
+  height: min(92vh, 54rem);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: 1rem;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg, 0 1.5rem 4rem rgb(0 0 0 / 0.35));
+}
+
+.workbench-route-document-dialog > .workbench-route-document-layout {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.workbench-route-document-overlay {
+  z-index: 70;
+}
+
+.workbench-research__surface {
+  width: 100%;
+  height: 100%;
+}
+
+.workbench-research .workspace-scroll {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The route-local grid retains its scroll and composer ownership, but the
+   contextual surface is no longer a child of that grid. */
+.workbench-research .workspace-main-grid--with-evidence {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  padding-right: 0;
+}
+
+.workbench-research .workspace-main-grid--conversation.workspace-main-grid--with-evidence {
+  display: flex;
+}
+
+.workbench-research .workspace-main-grid--with-evidence > .workspace-primary-column {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Four-pane geometry. The two structural separators are 8px wide; their
+   pseudo hit areas expand to 24px without changing the measured tracks. */
+.workbench-evidence-layout--four-pane {
+  position: relative;
+  display: grid;
+  grid-template-columns:
+    var(--workbench-splitter-width, 8px)
+    var(--workbench-sources-track-width, 304px)
+    var(--workbench-splitter-width, 8px)
+    var(--workbench-document-track-width, 440px);
+  grid-template-rows: minmax(0, 1fr);
+  border: 0;
+  border-radius: 0;
+  background: var(--surface);
+  box-shadow: none;
+  isolation: isolate;
+}
+
+.workbench-evidence-layout--four-pane > .workbench-context__toolbar {
+  position: absolute;
+  z-index: 12;
+  top: 0;
+  right: 0;
+  min-height: 3rem;
+  border: 0;
+  background: color-mix(in srgb, var(--surface-2) 86%, transparent);
+}
+
+.workbench-evidence-layout--four-pane > .workbench-context__toolbar > span {
+  display: none;
+}
+
+.workbench-evidence-layout--four-pane > .workbench-pane-resizer--sources {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.workbench-evidence-layout--four-pane > .sources-pane {
+  grid-column: 2;
+  grid-row: 1;
+  height: 100%;
+  flex: none;
+  border-right: 1px solid var(--border-subtle);
+  border-bottom: 0;
+}
+
+.workbench-evidence-layout--four-pane > .workbench-pane-resizer--document {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.workbench-evidence-layout--four-pane > .document-pane,
+.workbench-evidence-layout--four-pane > .workbench-document-collapsed {
+  grid-column: 4;
+  grid-row: 1;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.workbench-pane-resizer {
+  position: relative;
+  z-index: 8;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  cursor: col-resize;
+  background: transparent;
+  outline: none;
+  touch-action: none;
+}
+
+.workbench-pane-resizer__handle {
+  position: absolute;
+  inset: 0;
+  outline: none;
+}
+
+.workbench-pane-resizer__handle::before {
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 24px;
+  content: "";
+  transform: translateX(-50%);
+}
+
+.workbench-pane-resizer__line {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4.5rem;
+  border-radius: 999px;
+  background: var(--border-strong);
+  opacity: 0.55;
+  transform: translate(-50%, -50%);
+  transition: background-color 120ms ease, opacity 120ms ease;
+}
+
+.workbench-pane-resizer:hover .workbench-pane-resizer__line,
+.workbench-pane-resizer__handle:focus-visible .workbench-pane-resizer__line,
+.workbench-pane-resizer:active .workbench-pane-resizer__line {
+  background: var(--accent-text);
+  opacity: 1;
+}
+
+.workbench-pane-resizer__handle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.workbench-pane-resizer__menu {
+  position: absolute;
+  top: 0.55rem;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.workbench-pane-resizer__menu summary {
+  display: inline-flex;
+  width: 2rem;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  list-style: none;
+}
+
+.workbench-pane-resizer__menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.workbench-pane-resizer__menu summary:hover,
+.workbench-pane-resizer__menu summary:focus-visible {
+  border-color: var(--accent-text);
+  color: var(--accent-text);
+  outline: none;
+}
+
+.workbench-pane-resizer__controls {
+  position: absolute;
+  z-index: 20;
+  top: 2.35rem;
+  left: 50%;
+  display: grid;
+  width: max-content;
+  min-width: 8.25rem;
+  gap: 0.25rem;
+  padding: 0.35rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.65rem;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-md);
+  transform: translateX(-50%);
+}
+
+.workbench-pane-resizer__controls button {
+  min-height: 2.75rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: 0.45rem;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workbench-pane-resizer__controls button:hover:not(:disabled),
+.workbench-pane-resizer__controls button:focus-visible {
+  border-color: var(--accent-text);
+  background: var(--surface-selected);
+  outline: none;
+}
+
+.workbench-pane-resizer__controls button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.workbench-evidence-layout--four-pane .sources-pane.is-collapsed {
+  border-right: 1px solid var(--border-subtle);
+}
+
+.workbench-evidence-layout--four-pane .sources-pane.is-collapsed .sources-pane__header {
+  height: 100%;
+  align-items: center;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 0.65rem;
+  padding: 0.65rem 0.25rem;
+}
+
+.workbench-evidence-layout--four-pane .sources-pane.is-collapsed .sources-pane__title-group {
+  display: none;
+}
+
+.workbench-evidence-layout--four-pane .sources-pane.is-collapsed .sources-pane__header-actions {
+  align-items: center;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.workbench-evidence-layout--four-pane .sources-pane.is-collapsed .evidence-rail-count {
+  writing-mode: vertical-rl;
+}
+
+.workbench-document-collapsed {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  border-left: 1px solid var(--border-subtle);
+  background: var(--surface);
+}
+
+.workbench-document-collapsed__button {
+  display: inline-flex;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  margin-top: 0.65rem;
+  padding: 0.45rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.6rem;
+  background: var(--surface-raised);
+  color: var(--accent-text);
+  font-size: 0.75rem;
+  font-weight: 800;
+  writing-mode: vertical-rl;
+  cursor: pointer;
+}
+
+.workbench-document-collapsed__button:hover,
+.workbench-document-collapsed__button:focus-visible {
+  border-color: var(--accent-text);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Context dock keeps an explicit tab switcher while retaining one bounded
+   scroll owner for whichever contextual surface is active. */
+.workbench-evidence-layout--context-dock {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-left: 1px solid var(--border-subtle);
+  background: var(--surface);
+}
+
+.workbench-evidence-layout--context-dock .workbench-context__toolbar {
+  position: static;
+  flex: none;
+  min-height: 3.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-2);
+}
+
+.workbench-context__switcher {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.workbench-context__switcher button {
+  min-width: 5rem;
+  min-height: 2.75rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid transparent;
+  border-radius: 0.55rem;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.workbench-context__switcher button[aria-selected="true"],
+.workbench-context__switcher button:hover,
+.workbench-context__switcher button:focus-visible {
+  border-color: var(--accent-text);
+  background: var(--accent-soft);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.workbench-evidence-layout--context-dock > .sources-pane,
+.workbench-evidence-layout--context-dock > .document-pane,
+.workbench-evidence-layout--context-dock > .context-viewer {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+  border: 0;
+}
+
+.workbench-evidence-layout--context-dock > .sources-pane .sources-pane__body {
+  min-height: 0;
+}
+
+.workbench-evidence-layout--context-dock > .document-pane > .document-workspace {
+  min-height: 0;
+}
+
+/* Keep the reader canvas dominant. The lower context has one bounded scroll
+   owner and becomes compact/collapsed automatically on short document tracks. */
+.workbench-evidence-layout .document-workspace__reader {
+  min-height: 300px;
+}
+
+.workbench-evidence-layout .document-workspace__context {
+  max-height: min(17rem, 32%);
+  min-height: 0;
+  flex: 0 1 auto;
+}
+
+.workbench-evidence-layout .document-workspace__context-content {
+  min-height: 0;
+  overflow: auto;
+}
+
+.workbench-evidence-layout .document-workspace__context-content[hidden] {
+  display: none;
+}
+
+.workbench-evidence-layout .document-workspace__context-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.workbench-evidence-layout .document-workspace__context-header .document-context-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-bottom: 0;
+}
+
+.workbench-evidence-layout .document-workspace__context-toggle {
+  display: inline-flex;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.35rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.workbench-evidence-layout .document-workspace__context-toggle svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.workbench-evidence-layout .document-workspace__context-toggle:hover,
+.workbench-evidence-layout .document-workspace__context-toggle:focus-visible {
+  border-color: var(--accent-text);
+  color: var(--accent-text);
+  outline: none;
+}
+
+@media (max-height: 719px) {
+  .workbench-evidence-layout .document-workspace__context {
+    max-height: 3.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workbench-pane-resizer__line,
+  .workbench-pane-resizer__controls button,
+  .workbench-context__switcher button {
+    transition: none;
+  }
+}
+
+/* Keep dense desktop controls, but give phone actions a usable hit area. */
+@media (max-width: 640px) {
+  .evidence-drawer-dialog .evidence-workspace-rail:has(.document-workspace) {
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100%;
+  }
+
+  .evidence-drawer-dialog .context-panel:has(.document-workspace) > .sources-pane {
+    display: none;
+  }
+
+  .evidence-drawer-dialog .document-workspace__header-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    width: 100%;
+  }
+
+  .workbench-application-main :is(button, summary),
+  .evidence-drawer-dialog :is(button, summary) {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  .workbench-application-main :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea),
+  .evidence-drawer-dialog :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    font-size: 1rem;
+  }
+
+  .workbench-application-main :is(input:not([type="checkbox"]):not([type="radio"]):not([data-composite-input]), select),
+  .evidence-drawer-dialog :is(input:not([type="checkbox"]):not([type="radio"]):not([data-composite-input]), select),
+  .evidence-drawer-dialog [data-composite-field] {
+    min-height: 2.75rem;
+  }
+}

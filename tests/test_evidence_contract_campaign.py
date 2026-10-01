@@ -114,3 +114,21 @@ def test_manifest_path_identity_cannot_overlap_campaign_output(tmp_path, monkeyp
         campaign.configure_campaign(original_campaign_id)
 
     assert campaign._same_file_identity(hardlink_path, output_path) is True
+
+
+def test_legacy_comparison_uses_versioned_references_when_report_omits_ground_truth(
+    tmp_path, monkeypatch
+) -> None:
+    reference_path = tmp_path / "phase2-results.json"
+    reference_path.write_text(
+        json.dumps({"cases": [{"question": question} for question in campaign.SENTINEL_QUESTIONS]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(campaign, "REFERENCE_PATH", reference_path)
+    monkeypatch.setattr(campaign, "LEGACY_OUTPUT", tmp_path / "legacy.json")
+    ledger = RequestLedger(tmp_path / "ledger.jsonl", campaign.CAMPAIGN_ID, 60)
+
+    result = campaign._run_legacy_comparison([], ledger, lambda *_args: {})
+
+    assert result["rows"] == []
+    assert result["provider_requests"] == 0

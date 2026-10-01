@@ -1,6 +1,7 @@
 from src.generation.risk_answer_shape import (
     assess_risk_answer_shape,
     render_deterministic_risk_answer,
+    render_deterministic_risk_answer_localized,
 )
 from src.generation.answer_completion import correct_answer_once
 from src.generation.period_value_completeness import validate_grounded_answer
@@ -87,3 +88,11 @@ def test_candidate_renderer_does_not_spend_a_correction_call() -> None:
     assert result.answer_rendered_deterministically is True
     assert result.correction_accepted is True
     assert result.final.enumeration.passed is True
+
+
+def test_localized_risk_renderer_keeps_canonical_scope() -> None:
+    answer = render_deterministic_risk_answer_localized(QUESTION, CONTEXT, "vi")
+    assert answer is not None
+    assert "Rủi ro chiến lược và cạnh tranh" in answer
+    assert "Rủi ro vận hành" in answer
+    assert "Threats to security" not in answer

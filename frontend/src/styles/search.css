@@ -1,0 +1,369 @@
+/* Discovery Search (UI-006).
+ *
+ * Owned by UI-006 rather than the shared console stylesheet: it only adds the
+ * Search page's own composition (query card, results toolbar, score pill, and
+ * the scope/refine/recent rail) and reuses the console primitives for cards,
+ * chips, results, pagination, and stats so no second design system appears.
+ */
+
+.search-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+/* Main column plus the reference's right rail. The rail collapses under the
+   results below the wide desktop ladder, matching the other console pages. */
+.search-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: start;
+  min-width: 0;
+}
+
+@media (min-width: 1280px) {
+  .search-layout {
+    grid-template-columns: minmax(0, 1fr) 22.5rem;
+  }
+}
+
+.search-layout__main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.search-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+/* --- Query card --------------------------------------------------------- */
+
+.search-query-card__body {
+  display: flex;
+  flex-direction: column;
+}
+
+.search-query-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.search-query-form__label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.search-query-form__input-row {
+  min-height: 2.9rem;
+}
+
+.search-query-form__input {
+  font-size: 0.95rem;
+}
+
+.search-query-form__hint {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--text-subtle);
+}
+
+.search-query-form__filters {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  align-items: end;
+  margin-top: 0.15rem;
+}
+
+.search-query-form__submit {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.search-query-form__button {
+  min-width: 8.5rem;
+  justify-content: center;
+}
+
+@media (max-width: 640px) {
+  .search-query-form__submit {
+    justify-content: stretch;
+  }
+
+  .search-query-form__button {
+    width: 100%;
+  }
+}
+
+/* --- Results card ------------------------------------------------------- */
+
+.search-results-card__header {
+  gap: 0.6rem;
+}
+
+.search-results-card__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.search-results-card__bounded {
+  margin: 0;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+
+.search-results-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.search-results-card__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.search-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+/* A filter change is a draft until the next search is submitted. */
+.search-chip--pending {
+  border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+  background: color-mix(in srgb, var(--warning) 14%, var(--surface-raised));
+  color: var(--text-primary);
+}
+
+/* --- Result card -------------------------------------------------------- */
+
+.search-result__snippet {
+  -webkit-line-clamp: 3;
+}
+
+.search-score {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin-left: auto;
+  padding: 0.18rem 0.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 32%, transparent);
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface-raised));
+  color: var(--accent-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.search-score__value {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.search-score__label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* Grouping switch in the results toolbar. */
+.search-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border-default);
+  border-radius: 0.6rem;
+  background: var(--surface-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.search-switch input {
+  width: 0.95rem;
+  height: 0.95rem;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+/* --- Rail --------------------------------------------------------------- */
+
+.search-rail__metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+@media (max-width: 720px) {
+  .search-rail__metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.search-rail__metrics .console-stat {
+  padding: 0.7rem 0.75rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+  /* The card surface, not the muted one: the 12px hint text keeps its AA
+     contrast only on the lighter surface. */
+  background: var(--surface);
+}
+
+.search-rail__metrics .console-stat__value {
+  font-size: 1.15rem;
+}
+
+.search-rail__refine {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.search-rail__legend {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.search-rail__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.search-rail__chip-count {
+  margin-left: 0.3rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-subtle);
+}
+
+.search-rail__placeholder {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.search-rail__engine {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 0.5rem;
+}
+
+.search-rail__engine summary {
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent-text);
+}
+
+.search-rail__engine-text,
+.search-rail__engine-scope {
+  margin: 0.45rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+/* --- Recent searches ---------------------------------------------------- */
+
+.search-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.search-recent__button {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 0.6rem;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background-color 0.16s ease;
+}
+
+.search-recent__button:hover:not(:disabled),
+.search-recent__button:focus-visible {
+  border-color: var(--border-default);
+  background: var(--surface-muted);
+}
+
+.search-recent__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.search-recent__button svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+  color: var(--text-subtle);
+}
+
+.search-recent__body {
+  display: block;
+  min-width: 0;
+}
+
+.search-recent__query {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-recent__meta {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.7rem;
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Empty states ------------------------------------------------------- */
+
+.search-empty__hint {
+  font-size: 0.75rem;
+  color: var(--text-subtle);
+}

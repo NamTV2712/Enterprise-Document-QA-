@@ -17,9 +17,15 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
-def make_filter_key(ticker: str | None, section: str | None, top_k: int) -> str:
-    """Create a stable string key from request filters."""
-    return f"{ticker or '*'}|{section or '*'}|{top_k}"
+def make_filter_key(
+    ticker: str | None,
+    section: str | None,
+    top_k: int,
+    answer_language: str | None = None,
+) -> str:
+    """Create a stable key from request filters and answer language."""
+    base = f"{ticker or '*'}|{section or '*'}|{top_k}"
+    return base if answer_language is None else f"{answer_language}|{base}"
 
 
 @dataclass
@@ -88,12 +94,13 @@ class SemanticCache:
         ticker: str | None,
         section: str | None,
         top_k: int,
+        answer_language: str | None = None,
     ) -> CacheEntry | None:
         """Return the best matching cache entry, or None on miss."""
         with self._lock:
             self._stats.total_requests += 1
             now = time.monotonic()
-            filter_key = make_filter_key(ticker, section, top_k)
+            filter_key = make_filter_key(ticker, section, top_k, answer_language)
 
             candidates = [
                 entry
@@ -135,6 +142,7 @@ class SemanticCache:
         answer: str,
         sources: list[dict],
         model_used: str,
+        answer_language: str | None = None,
     ) -> None:
         """Store a response and evict expired or least-used entries if needed."""
         with self._lock:
@@ -149,7 +157,7 @@ class SemanticCache:
             self._entries.append(
                 CacheEntry(
                     query_embedding=query_embedding,
-                    filter_key=make_filter_key(ticker, section, top_k),
+                    filter_key=make_filter_key(ticker, section, top_k, answer_language),
                     answer=answer,
                     sources=sources,
                     model_used=model_used,

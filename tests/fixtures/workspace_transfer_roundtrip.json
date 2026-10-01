@@ -1,0 +1,306 @@
+{
+  "fixtures": [
+    {
+      "backup": {
+        "collections": [],
+        "conversations": [],
+        "digest": "f3e4deddab943234a06294192d40b3f613c347f20a83e569238a2b2161a1fad5",
+        "evidence_items": [],
+        "exported_at": "2025-01-01T00:00:00Z",
+        "favorites": [],
+        "format": "enterprise-document-qa.workspace",
+        "source_counts": {
+          "collections": 0,
+          "conversations": 0,
+          "evidence_items": 0,
+          "favorites": 0,
+          "tombstones": 0,
+          "unsupported": 0
+        },
+        "source_schemas": {
+          "conversations": [],
+          "evidence_collections": [],
+          "favorites": [],
+          "tombstones": []
+        },
+        "tombstones": [],
+        "unsupported": [],
+        "version": 1
+      },
+      "id": "minimal-valid-backup"
+    },
+    {
+      "backup": {
+        "collections": [],
+        "conversations": [
+          {
+            "created_at": 1735689600000,
+            "legacy_id": "conversation-vi",
+            "payload": {
+              "bookmarkedMessageIds": [
+                "answer-1"
+              ],
+              "createdAt": 1735689600000,
+              "draft": "",
+              "id": "conversation-vi",
+              "messages": [
+                {
+                  "content": "How did revenue change?",
+                  "id": "question-1",
+                  "role": "user"
+                },
+                {
+                  "content": "Doanh thu AWS t\u0103ng t\u1eeb 107,556 l\u00ean 128,725 tri\u1ec7u USD [1].",
+                  "id": "answer-1",
+                  "role": "assistant",
+                  "sources": [
+                    {
+                      "chunk_id": "chunk-identity-1",
+                      "chunk_text_hash": "sha256:source-content",
+                      "citation": "AAPL 10-K [Source 1]",
+                      "document_id": "document-identity-1",
+                      "document_revision": "doc-revision-7",
+                      "score": 0.91,
+                      "source_set_revision": "source-set-3",
+                      "text": "Exact source excerpt",
+                      "text_preview": "Exact source excerpt"
+                    }
+                  ]
+                }
+              ],
+              "metadata": {
+                "integralFloat": 5.0,
+                "largeSafeInteger": 9007199254740991,
+                "nested": {
+                  "empty-array": [],
+                  "empty-object": {},
+                  "flag": true,
+                  "null-value": null
+                },
+                "score": 0.91,
+                "smallExponent": 1e-07,
+                "\ue000-zone": "sorts before astral keys by code point",
+                "\ud83d\ude00-alpha": "astral plane key"
+              },
+              "notes": [
+                {
+                  "createdAt": 1735689600000,
+                  "id": "note-1",
+                  "text": "So s\u00e1nh v\u1edbi n\u0103m tr\u01b0\u1edbc"
+                }
+              ],
+              "revision": 1,
+              "schemaVersion": 4,
+              "sessionId": "session-conversation-vi",
+              "tags": [
+                "revenue"
+              ],
+              "title": "\u0110\u00e1nh gi\u00e1 doanh thu qu\u00fd IV",
+              "titleMode": "custom",
+              "updatedAt": 1735689600001,
+              "variants": [
+                {
+                  "content": "C\u00e2u tr\u1ea3 l\u1eddi thay th\u1ebf [1].",
+                  "id": "variant-1",
+                  "originMessageId": "answer-1",
+                  "sources": [
+                    {
+                      "chunk_id": "chunk-identity-1",
+                      "citation": "AAPL 10-K [Source 1]",
+                      "document_id": "document-identity-1"
+                    }
+                  ]
+                }
+              ]
+            },
+            "revision": 1,
+            "schema_version": 4,
+            "updated_at": 1735689600001
+          }
+        ],
+        "digest": "6d9b3f3d26f2b2c26d758c98aa7fc90fe7586a2075bdcec1c2ac5e09aaa08ae5",
+        "evidence_items": [],
+        "exported_at": "2025-01-01T00:00:00Z",
+        "favorites": [],
+        "format": "enterprise-document-qa.workspace",
+        "source_counts": {
+          "collections": 0,
+          "conversations": 1,
+          "evidence_items": 0,
+          "favorites": 0,
+          "tombstones": 0,
+          "unsupported": 0
+        },
+        "source_schemas": {
+          "conversations": [
+            4
+          ],
+          "evidence_collections": [],
+          "favorites": [],
+          "tombstones": []
+        },
+        "tombstones": [],
+        "unsupported": [],
+        "version": 1
+      },
+      "id": "unicode-and-numeric-canonicalization"
+    },
+    {
+      "backup": {
+        "collections": [
+          {
+            "created_at": 1735689600000,
+            "legacy_id": "collection-1",
+            "payload": {
+              "createdAt": 1735689600000,
+              "id": "collection-1",
+              "name": "B\u1eb1ng ch\u1ee9ng doanh thu",
+              "schemaVersion": 2,
+              "updatedAt": 1735689600010
+            },
+            "revision": 1,
+            "schema_version": 2,
+            "updated_at": 1735689600010
+          }
+        ],
+        "conversations": [
+          {
+            "created_at": 1735689600000,
+            "legacy_id": "conversation-1",
+            "payload": {
+              "bookmarkedMessageIds": [
+                "answer-1"
+              ],
+              "createdAt": 1735689600000,
+              "draft": "",
+              "id": "conversation-1",
+              "messages": [
+                {
+                  "content": "How did revenue change?",
+                  "id": "question-1",
+                  "role": "user"
+                },
+                {
+                  "content": "Revenue increased [1].",
+                  "id": "answer-1",
+                  "role": "assistant",
+                  "sources": [
+                    {
+                      "chunk_id": "chunk-identity-1",
+                      "chunk_text_hash": "sha256:source-content",
+                      "citation": "AAPL 10-K [Source 1]",
+                      "document_id": "document-identity-1",
+                      "document_revision": "doc-revision-7",
+                      "score": 0.91,
+                      "source_set_revision": "source-set-3",
+                      "text": "Exact source excerpt",
+                      "text_preview": "Exact source excerpt"
+                    }
+                  ]
+                }
+              ],
+              "notes": [
+                {
+                  "createdAt": 1735689600000,
+                  "id": "note-1",
+                  "text": "So s\u00e1nh v\u1edbi n\u0103m tr\u01b0\u1edbc"
+                }
+              ],
+              "revision": 3,
+              "schemaVersion": 4,
+              "sessionId": "session-conversation-1",
+              "tags": [
+                "revenue"
+              ],
+              "title": "Revenue review",
+              "titleMode": "custom",
+              "updatedAt": 1735689600003,
+              "variants": [
+                {
+                  "content": "C\u00e2u tr\u1ea3 l\u1eddi thay th\u1ebf [1].",
+                  "id": "variant-1",
+                  "originMessageId": "answer-1",
+                  "sources": [
+                    {
+                      "chunk_id": "chunk-identity-1",
+                      "citation": "AAPL 10-K [Source 1]",
+                      "document_id": "document-identity-1"
+                    }
+                  ]
+                }
+              ]
+            },
+            "revision": 3,
+            "schema_version": 4,
+            "updated_at": 1735689600003
+          }
+        ],
+        "digest": "b3bd4a3897faf9633e1265a0126d8711b46e0e9d853459218b203c0b6c55d11d",
+        "evidence_items": [
+          {
+            "created_at": 1735689600005,
+            "legacy_id": "evidence-1",
+            "parent_legacy_id": "collection-1",
+            "payload": {
+              "chunkId": "chunk-identity-1",
+              "chunkTextHash": "sha256:source-content",
+              "citation": "AAPL 10-K [Source 1]",
+              "documentId": "document-identity-1",
+              "documentRevision": "doc-revision-7",
+              "excerpt": "Tr\u00edch d\u1eabn ngu\u1ed3n ch\u00ednh x\u00e1c",
+              "id": "evidence-1",
+              "note": "D\u00f9ng cho b\u1ea3n ghi nh\u1edb doanh thu",
+              "savedAt": 1735689600005,
+              "sourceConversationId": "conversation-1",
+              "sourceMessageId": "answer-1",
+              "sourceSetRevision": "source-set-3"
+            },
+            "revision": 1,
+            "schema_version": 2,
+            "updated_at": 1735689600005
+          }
+        ],
+        "exported_at": "2025-01-01T00:00:00Z",
+        "favorites": [
+          "collection-1"
+        ],
+        "format": "enterprise-document-qa.workspace",
+        "source_counts": {
+          "collections": 1,
+          "conversations": 1,
+          "evidence_items": 1,
+          "favorites": 1,
+          "tombstones": 1,
+          "unsupported": 0
+        },
+        "source_schemas": {
+          "conversations": [
+            4
+          ],
+          "evidence_collections": [
+            2
+          ],
+          "favorites": [
+            1
+          ],
+          "tombstones": [
+            1
+          ]
+        },
+        "tombstones": [
+          {
+            "deleted_at": 1735689600020,
+            "kind": "conversation",
+            "legacy_id": "conversation-deleted",
+            "revision": 5,
+            "schema_version": 1
+          }
+        ],
+        "unsupported": [],
+        "version": 1
+      },
+      "id": "identity-revisions-and-tombstones"
+    }
+  ],
+  "format_note": "Shared cross-runtime DATA-002 canonical digest fixtures. Each backup envelope carries its own digest; Python (compute_backup_digest) and TypeScript (computeWorkspaceBackupDigest) must both reproduce it from the payload without the digest and exported_at fields."
+}

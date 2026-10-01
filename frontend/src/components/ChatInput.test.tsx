@@ -45,6 +45,34 @@ describe("ChatInput", () => {
     expect(onSendMessage).toHaveBeenCalledWith("doanh thu Apple");
   });
 
+  test("keeps the next draft editable and does not submit during a stream", () => {
+    const onSendMessage = vi.fn();
+    function StreamingHarness() {
+      const [inputText, setInputText] = useState("");
+      return (
+        <ChatInput
+          inputText={inputText}
+          setInputText={setInputText}
+          onSendMessage={onSendMessage}
+          onStopGenerating={vi.fn()}
+          isLoading={true}
+          isStreaming={true}
+          isBackendConnected={true}
+          isPipelineReady={true}
+        />
+      );
+    }
+
+    render(<StreamingHarness />);
+    const input = screen.getByRole("textbox", { name: "Research question" });
+    fireEvent.change(input, { target: { value: "A follow-up draft while streaming" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(input).toHaveValue("A follow-up draft while streaming");
+    expect(onSendMessage).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Stop generating response" })).toBeInTheDocument();
+  });
+
   test("validates trimmed content and exposes the active scope", () => {
     const onSendMessage = vi.fn();
     render(
@@ -57,11 +85,11 @@ describe("ChatInput", () => {
         isStreaming={false}
         isBackendConnected={true}
         isPipelineReady={true}
-        scopeLabel="Company: Apple Inc. (AAPL)"
+        scopeLabel="Apple Inc. (AAPL) · Risk Factors · Top 5"
       />,
     );
 
-    expect(screen.getByLabelText("Active search scope: Company: Apple Inc. (AAPL)"))
+    expect(screen.getByText("Scope · Apple Inc. (AAPL) · Risk Factors · Top 5"))
       .toBeInTheDocument();
     expect(screen.getByText("Query must be at least 5 characters.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Send question" })).toBeDisabled();

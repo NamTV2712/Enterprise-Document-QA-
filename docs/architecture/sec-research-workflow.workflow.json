@@ -1,0 +1,51 @@
+{
+    "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Grounded Research Answer Workflow",
+    "subtitle": "The recoverable path from question to cited answer.",
+    "viewBox": [1050, 666],
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "prepare", "label": "Prepare the question", "focus": ["ask", "scope"], "note": "Capture the question and explicit research scope." },
+      { "id": "retrieve", "label": "Retrieve and rank", "focus": ["retrieve", "rank"], "note": "Inspect the evidence path before generation." },
+      { "id": "answer", "label": "Generate and recover", "focus": ["context", "answer", "retry"], "note": "Return citations or explain how the researcher can recover." }
+    ]
+  },
+  "lanes": [
+    { "id": "researcher", "label": "Researcher" },
+    { "id": "workspace", "label": "Workspace" },
+    { "id": "retrieval", "label": "Retrieval" },
+    { "id": "recovery", "label": "Recovery", "variant": "exception" }
+  ],
+  "phases": [
+    { "id": "request", "label": "Request", "fromCol": 0, "toCol": 1 },
+    { "id": "evidence", "label": "Evidence", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "response", "label": "Response", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "groups": [
+    { "id": "evidence-group", "label": "Evidence boundary", "lane": "retrieval", "fromCol": 2, "toCol": 3, "variant": "security" },
+    { "id": "recovery-group", "label": "Recoverable outcomes", "lane": "recovery", "fromCol": 3, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["ask", "scope", "retrieve", "rank", "context", "answer"],
+  "nodes": [
+    { "id": "ask", "lane": "researcher", "col": 0, "type": "external", "label": "Ask", "sublabel": "question" },
+    { "id": "scope", "lane": "workspace", "col": 1, "type": "frontend", "label": "Set scope", "sublabel": "ticker + section" },
+    { "id": "retrieve", "lane": "retrieval", "col": 2, "type": "backend", "label": "Retrieve", "sublabel": "BM25 + dense" },
+    { "id": "rank", "lane": "retrieval", "col": 3, "type": "backend", "label": "Rerank", "sublabel": "top-k evidence" },
+    { "id": "context", "lane": "workspace", "col": 4, "type": "security", "label": "Ground context", "sublabel": "bounded excerpts", "tag": "citations" },
+    { "id": "answer", "lane": "workspace", "col": 5, "type": "frontend", "label": "Read answer", "sublabel": "sources beside text" },
+    { "id": "retry", "lane": "recovery", "col": 4, "type": "backend", "label": "Retry", "sublabel": "narrow scope", "tag": "recoverable" },
+    { "id": "offline", "lane": "recovery", "col": 5, "type": "security", "label": "Explain state", "sublabel": "offline / quota" }
+  ],
+  "edges": [
+    { "id": "ask-scope", "from": "ask", "to": "scope", "label": "question", "role": "main", "variant": "emphasis" },
+    { "id": "scope-retrieve", "from": "scope", "to": "retrieve", "label": "scoped query", "role": "main" },
+    { "id": "retrieve-rank", "from": "retrieve", "to": "rank", "role": "main", "variant": "emphasis" },
+    { "id": "rank-context", "from": "rank", "to": "context", "label": "ranked evidence", "role": "main", "variant": "security" },
+    { "id": "context-answer", "from": "context", "to": "answer", "label": "answer + citations", "role": "main", "variant": "emphasis", "labelDy": 57 },
+    { "id": "retrieve-retry", "from": "retrieve", "to": "retry", "label": "timeout / empty", "role": "error", "variant": "dashed", "route": "bottom-channel" },
+    { "id": "retry-offline", "from": "retry", "to": "offline", "label": "visible recovery", "role": "error", "variant": "security", "route": "straight", "labelDy": 75 },
+    { "id": "context-offline", "from": "context", "to": "offline", "label": "provider unavailable", "role": "error", "variant": "dashed", "route": "drop" }
+  ]
+}

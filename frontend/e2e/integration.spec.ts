@@ -60,56 +60,49 @@ test.afterEach(async ({ page }) => {
 
 test("health readiness and ticker discovery over real HTTP", async ({ page }) => {
   await setup(page);
-  await expect(page.getByText(/Pipeline: Ready/i).first()).toBeVisible();
-  await page.locator("#ticker-select-btn").click();
-  await expect(page.getByRole("button", { name: "Apple Inc. AAPL" })).toBeVisible();
+  await expect(page.getByText(/Research ready/i).first()).toBeVisible();
+  await page.getByRole("button", { name: /Scope/i }).click();
+  await page.getByRole("button", { name: "Company" }).click();
+  await expect(page.getByRole("option", { name: /Apple Inc.*AAPL/ })).toBeVisible();
   await page.keyboard.press("Escape");
+});
+
+test("retrieval lab receives a provider-free trace from the real harness route", async ({ page }) => {
+  await setup(page);
+  await page.getByRole("link", { name: "Retrieval Lab" }).click();
+  await expect(page.getByRole("heading", { name: "Retrieval", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Run retrieval" }).click();
+  await expect(page.getByTestId("retrieval-analyst-summary")).toBeVisible();
+  await expect(page.getByText(/provider-free/i).first()).toBeVisible();
+  await expect(page.getByText(/candidate/i).first()).toBeVisible();
+  await expect(page.getByText(/AAPL/i).first()).toBeVisible();
 });
 
 test("asked question streams cited answer over real SSE with sources", async ({ page }) => {
   await setup(page);
   await askQuestion(page, "What was Apple total revenue?");
   await expect(page.getByText(/Harness answer with/).first()).toBeVisible();
-  await expect(page.getByText(/Retrieved filing evidence · 1 excerpts/i)).toBeVisible();
-  await page.getByRole("button", { name: /Show 1 retrieved filing evidence excerpts/i }).click();
-  await expect(page.getByText(/Harness evidence for:/)).toBeVisible();
-  // The citation button in the answer opens the matching source excerpt.
-  await page.getByRole("button", { name: "Open source 1" }).click();
-  await expect(page.getByText(/Harness evidence for:/).first()).toBeVisible();
+  await expect(page.getByText("Execution stages", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Open source 1", exact: true }).first().click();
+  await expect(page.locator(".sources-pane")).toBeVisible();
+  await expect(page.getByText(/Harness indexed excerpt for/).first()).toBeVisible();
+  // The citation opened this inspector; its selected source remains reopenable.
+  await page.getByRole("button", { name: /Open source excerpt 1:/ }).click();
+  await expect(page.getByText(/Harness indexed excerpt for/).first()).toBeVisible();
 });
 
 test("stream interrupted mid-answer keeps the partial answer visible", async ({ page }) => {
   await setup(page);
-  await page.route(`${API_ORIGIN}/__harness__/failure`, async (route) => {
-    if (route.request().method() === "OPTIONS") {
-      await route.fulfill({ status: 204, headers: { "access-control-allow-origin": "*" } });
-      return;
-    }
-    await route.continue();
-  });
-  await askQuestion(page, "What was Apple total revenue?");
-  // Put the harness into omit_done mode between the sources event and the
-  // tokens: the stream ends without done and the partial answer stays.
-  await page.evaluate(async () => {
-    await fetch("http://127.0.0.1:8765/__harness__/failure", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: "omit_done" }),
-    });
-  });
-  // Trigger a second question that will end without done.
+  expect((await page.request.post(`${CONTROL_ORIGIN}/__harness__/failure`, {
+    data: { mode: "omit_done" },
+  })).status()).toBe(200);
+  const response = page.waitForResponse(value => value.url().endsWith("/query/stream"));
   const input = page.getByRole("textbox", { name: "Research question" });
-  await expect(input).toBeEnabled();
   await input.fill("Omit done question");
   await input.press("Enter");
-  await expect(page.getByText(/Harness answer with/).first()).toBeVisible();
-  await page.evaluate(async () => {
-    await fetch("http://127.0.0.1:8765/__harness__/failure", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: "clear" }),
-    });
-  });
+  expect((await (await response).text())).not.toMatch(/"type"\s*:\s*"done"/);
+  await expect(page.getByText(/Harness answer with évidence for: Omit done question/).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Stop generating response" })).toHaveCount(0);
 });
 
 test("session context survives a reload while the backend remembers it", async ({ page }) => {

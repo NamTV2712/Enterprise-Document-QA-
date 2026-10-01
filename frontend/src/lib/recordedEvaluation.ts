@@ -1,0 +1,51 @@
+import { EvaluationRun } from "../types";
+
+export const RECORDED_EVALUATION_RUN: EvaluationRun = {
+  run_id: "recorded-demo-v1",
+  title: "Recorded evaluation contract demo (provider-free)",
+  status: "historical",
+  created_at: "2026-09-07T00:00:00.000Z",
+  provenance: {
+    dataset_version: "demo-fixture-v1",
+    corpus_fingerprint: "demo-corpus",
+    model_fingerprint: "demo-retrieval",
+    profile_fingerprint: "demo-profile",
+    rubric_fingerprint: "demo-rubric",
+    source_artifact_sha256: "demo-artifact",
+  },
+  aggregate: {
+    faithfulness: 1,
+    answer_relevancy: 1,
+    context_precision: 1,
+    sample_count: 2,
+  },
+  cases: [
+    {
+      case_id: "demo-en-fact",
+      question: "What revenue did the filing report?",
+      language: "en",
+      intent: "fact",
+      ticker: "AAPL",
+      status: "OK",
+      answer: "Recorded demo answer; not a live provider result.",
+      scores: { faithfulness: 1, answer_relevancy: 1, context_precision: 1 },
+      gates: { contract: true },
+      reasons: [],
+      evidence: [{ citation: "Recorded fixture [Source 1]", excerpt: "Curated demo excerpt." }],
+    },
+    {
+      case_id: "demo-vi-fact",
+      question: "Doanh thu được nêu trong hồ sơ là bao nhiêu?",
+      language: "vi",
+      intent: "fact",
+      ticker: "AAPL",
+      status: "OK",
+      answer: "Câu trả lời demo đã ghi sẵn; không phải kết quả provider trực tiếp.",
+      scores: { faithfulness: 1, answer_relevancy: 1, context_precision: 1 },
+      gates: { contract: true },
+      reasons: [],
+      evidence: [{ citation: "Recorded fixture [Source 1]", excerpt: "Đoạn trích demo được tuyển chọn." }],
+    },
+  ],
+  notes: ["Recorded mode only; not an official benchmark."],
+};

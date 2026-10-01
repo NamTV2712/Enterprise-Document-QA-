@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "SEC Research Workspace",
+    "subtitle": "Evidence-first document QA across the browser, FastAPI, retrieval index, and Groq generation.",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/NamTV2712/Enterprise-Document-QA-.git",
+      "revision": "95e6118193a14a4286f1bee391d4ff58799f8a44"
+    },
+    "views": [
+      { "id": "research-path", "label": "Research request path", "focus": ["researcher", "frontend", "api", "retriever", "generator"], "note": "Follow a question from the workspace to a grounded answer." },
+      { "id": "evidence-path", "label": "Evidence and storage", "focus": ["frontend", "api", "retriever", "qdrant", "corpus"], "note": "Inspect where searchable filings and citations come from." },
+      { "id": "operations", "label": "Operations", "focus": ["api", "retriever", "generator"], "note": "Keep provider status and operational diagnostics behind progressive disclosure." }
+    ]
+  },
+  "components": [
+    { "id": "researcher", "type": "external", "label": "Researcher", "sublabel": "Browser user", "pos": [40, 300], "size": [150, 68] },
+    { "id": "frontend", "type": "frontend", "label": "Research Workspace", "sublabel": "Vite · React · TypeScript", "pos": [270, 300], "size": [190, 68], "sources": [{ "path": "frontend/src/App.tsx", "line": 1160, "label": "workspace shell" }] },
+    { "id": "api", "type": "backend", "label": "FastAPI service", "sublabel": "Query · documents · inspect", "pos": [550, 300], "size": [185, 68], "sources": [{ "path": "src/api/app.py", "line": 648, "label": "public document APIs" }] },
+    { "id": "retriever", "type": "backend", "label": "Hybrid retriever", "sublabel": "BM25 · dense · rerank", "pos": [825, 300], "size": [185, 68], "sources": [{ "path": "src/retrieval/hybrid_retriever.py", "label": "retrieval engine" }] },
+    { "id": "generator", "type": "cloud", "label": "Groq generation", "sublabel": "KEY5-only live path", "tag": "provider", "pos": [1100, 300], "size": [185, 68] },
+    { "id": "corpus", "type": "database", "label": "SEC corpus", "sublabel": "Chunks · metadata · eval", "pos": [825, 480], "size": [185, 68], "tag": "git-ignored local corpus" },
+    { "id": "qdrant", "type": "database", "label": "Qdrant index", "sublabel": "Local or cloud mode", "pos": [550, 480], "size": [185, 68], "sources": [{ "path": "src/retrieval/vector_store.py", "label": "vector store" }] },
+    { "id": "health", "type": "backend", "label": "Health + readiness", "sublabel": "Safe status surface", "pos": [1100, 480], "size": [185, 68], "sources": [{ "path": "src/api/app.py", "line": 500, "label": "health routes" }] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "User workspace", "wraps": ["researcher", "frontend"] },
+    { "kind": "region", "label": "Backend service boundary", "wraps": ["api", "retriever", "generator", "health"] },
+    { "kind": "security-group", "label": "Evidence and provider boundary", "wraps": ["qdrant", "corpus", "generator"] }
+  ],
+  "connections": [
+    { "id": "ask", "from": "researcher", "to": "frontend", "label": "ask + inspect", "variant": "emphasis" },
+    { "id": "query", "from": "frontend", "to": "api", "label": "HTTP /query/stream", "labelDy": 58 },
+    { "id": "retrieve", "from": "api", "to": "retriever", "label": "retrieve + rank" },
+    { "id": "index", "from": "retriever", "to": "qdrant", "label": "vector lookup", "fromSide": "bottom", "toSide": "top" },
+    { "id": "chunks", "from": "qdrant", "to": "corpus", "label": "chunk metadata", "variant": "dashed" },
+    { "id": "ground", "from": "retriever", "to": "generator", "label": "grounded context", "variant": "emphasis" },
+    { "id": "answer", "from": "generator", "to": "api", "label": "answer + citations", "variant": "security", "fromSide": "top", "toSide": "top" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Evidence first", "items": ["Citations remain visible beside the answer", "Reader details are progressively disclosed"] },
+    { "dot": "emerald", "title": "Provider boundary", "items": ["Retrieval and document browsing are provider-free", "Live generation is isolated behind the KEY5-only policy"] },
+    { "dot": "rose", "title": "Operational truth", "items": ["Health state is explicit and recoverable", "Telemetry supports latency and regression checks"] }
+  ]
+}

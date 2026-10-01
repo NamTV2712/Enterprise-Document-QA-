@@ -81,10 +81,48 @@ def test_pipeline_stops_without_caching_partial_stream() -> None:
         )
     )
 
-    assert [event_type for event_type, _ in events] == ["sources", "token"]
+    assert [event_type for event_type, _ in events if event_type != "stage"] == ["sources", "token"]
     assert events[-1] == ("token", "first token")
     pipeline.cache.set.assert_not_called()
     pipeline.memory.add_turn.assert_not_called()
+
+
+def test_pipeline_emits_measured_execution_trace_after_a_completed_stream() -> None:
+    generator = MagicMock()
+    generator.model = "mock-model"
+    generator.generate_stream.return_value = iter(["grounded answer"])
+    pipeline = RAGPipeline.__new__(RAGPipeline)
+    pipeline.generator = generator
+    pipeline.rewriter = MagicMock()
+    pipeline.rewriter.rewrite.return_value = "What is Apple's business?"
+    pipeline.retriever = MagicMock()
+    pipeline.retriever.embed_query.return_value = [0.1, 0.2]
+    pipeline.retriever.retrieve_with_embedding.return_value = [_retrieved_chunk()]
+    pipeline.cache = MagicMock()
+    pipeline.cache.get.return_value = None
+    pipeline.memory = MagicMock()
+
+    events = list(pipeline.query_stream(question="What is Apple's business?"))
+
+    done = next(data for event_type, data in events if event_type == "done")
+    execution = done["execution"]
+    assert execution["elapsed_ms"] >= 0
+    assert [stage["name"] for stage in execution["stages"]] == [
+        "query_preparation",
+        "embedding",
+        "cache_lookup",
+        "retrieval",
+        "generation",
+    ]
+    assert execution["stages"][2]["status"] == "miss"
+
+    stage_events = [data for event_type, data in events if event_type == "stage"]
+    assert stage_events
+    assert [event["sequence"] for event in stage_events] == list(range(1, len(stage_events) + 1))
+    assert len({event["request_id"] for event in stage_events}) == 1
+    assert stage_events[0]["stage_id"] == "query_preparation"
+    assert stage_events[0]["status"] == "running"
+    assert any(event["stage_id"] == "retrieval" and event["status"] == "success" and event["counters"]["source_count"] == 1 for event in stage_events)
 
 
 def test_groq_stream_closes_provider_connection_on_cancel() -> None:

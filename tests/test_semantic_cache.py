@@ -27,6 +27,24 @@ def test_cache_hit_requires_matching_filters() -> None:
     assert cache.get(embedding, ticker="AAPL", section="business", top_k=3) is None
 
 
+def test_cache_separates_answer_languages() -> None:
+    cache = SemanticCache(similarity_threshold=0.99)
+    embedding = [1.0, 0.0, 0.0]
+    cache.set(
+        embedding,
+        ticker="AAPL",
+        section="business",
+        top_k=5,
+        answer="English answer",
+        sources=[],
+        model_used="test-model",
+        answer_language="en",
+    )
+
+    assert cache.get(embedding, "AAPL", "business", 5, "en").answer == "English answer"
+    assert cache.get(embedding, "AAPL", "business", 5, "vi") is None
+
+
 def test_similar_but_different_financial_queries_do_not_hit() -> None:
     """Revenue and net income questions are similar but not interchangeable."""
     cache = SemanticCache(similarity_threshold=0.95)

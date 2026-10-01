@@ -1,0 +1,74 @@
+{
+  "receipt_version": 1,
+  "date": "2026-09-08",
+  "policy": "key5_only",
+  "credential_alias": "key5",
+  "secret_values_recorded": false,
+  "server": {
+    "command": ".venv\\Scripts\\python.exe -m uvicorn src.api.app:app --host 127.0.0.1 --port 8000 --workers 1",
+    "health_status": 200,
+    "ready_status": 200,
+    "indexed_chunks": 10053
+  },
+  "cases": [
+    {
+      "id": "single-en",
+      "route": "/query",
+      "status": 200,
+      "elapsed_ms": 120,
+      "source_count": 2,
+      "fallback": false,
+      "cached": true
+    },
+    {
+      "id": "single-vi",
+      "route": "/query",
+      "status": 200,
+      "elapsed_ms": 1561,
+      "source_count": 2,
+      "fallback": false,
+      "cached": false
+    },
+    {
+      "id": "comparison-en",
+      "route": "/query/decomposed",
+      "status": 200,
+      "elapsed_ms": 2456,
+      "source_count": 2,
+      "fallback": false,
+      "cached": false
+    },
+    {
+      "id": "comparison-vi",
+      "route": "/query/decomposed",
+      "status": 200,
+      "elapsed_ms": 2315,
+      "source_count": 2,
+      "fallback": false,
+      "cached": false
+    },
+    {
+      "id": "insufficient-en",
+      "route": "/query",
+      "status": 200,
+      "elapsed_ms": 1045,
+      "source_count": 3,
+      "fallback": true,
+      "cached": false
+    },
+    {
+      "id": "insufficient-vi",
+      "route": "/query",
+      "status": 200,
+      "elapsed_ms": 1073,
+      "source_count": 3,
+      "fallback": true,
+      "cached": false
+    }
+  ],
+  "result": "6/6 HTTP 200; single and comparison cases returned sources; insufficient-evidence cases returned an explicit fallback.",
+  "notes": [
+    "English provider output used the Unicode citation token 【Source N】; API source objects and the frontend reader remain authoritative for citation validation.",
+    "No N=30 replay was run and no official benchmark, corpus, index, or campaign aggregate was changed."
+  ]
+}

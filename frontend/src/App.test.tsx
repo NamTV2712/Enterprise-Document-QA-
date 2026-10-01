@@ -1,7 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import App from "./App";
+import App, { resolveDisplayedAnswerTarget, resolveEvidenceCommandTarget } from "./App";
+import { LocaleProvider } from "./lib/i18n";
+import type { EvidenceSelection, Message } from "./types";
+import type { ConversationRecord } from "./lib/conversationStore";
 
 const apiMocks = vi.hoisted(() => ({
   checkHealth: vi.fn(),
@@ -19,6 +22,7 @@ vi.mock("./lib/api", () => ({
 
 describe("App request cancellation", () => {
   beforeEach(() => {
+    window.history.replaceState(null, "", "/");
     localStorage.clear();
     vi.clearAllMocks();
     apiMocks.checkHealth.mockResolvedValue({
@@ -65,6 +69,27 @@ describe("App request cancellation", () => {
     warnSpy.mockRestore();
   });
 
+  test("ignores a stale health/readiness response from an unmounted initialization", async () => {
+    let resolveStaleHealth: ((value: { status: string; pipeline_ready: boolean; memory: { active_sessions: number; total_turns: number } }) => void) | undefined;
+    apiMocks.checkHealth.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        resolveStaleHealth = resolve;
+      }),
+    );
+
+    const firstMount = render(<App />);
+    await waitFor(() => expect(apiMocks.checkHealth).toHaveBeenCalledTimes(1));
+    firstMount.unmount();
+
+    render(<App />);
+    await waitFor(() => expect(apiMocks.checkHealth).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      resolveStaleHealth?.({ status: "ok", pipeline_ready: false, memory: { active_sessions: 99, total_turns: 99 } });
+    });
+
+    expect(await screen.findByText("Research ready")).toBeInTheDocument();
+  });
+
   test("initialization shares one abort signal across health and metadata requests", async () => {
     const { unmount } = render(<App />);
 
@@ -100,7 +125,7 @@ describe("App request cancellation", () => {
     expect(resolveSupportedTickers).toBeDefined();
 
     resolveSupportedTickers?.({ tickers: ["AAPL"], sections: ["business"] });
-    expect(await screen.findByText("Pipeline: Ready")).toBeInTheDocument();
+    expect(await screen.findByText("Research ready")).toBeInTheDocument();
   });
 
   test("session history can switch between conversation and overview", async () => {
@@ -118,19 +143,33 @@ describe("App request cancellation", () => {
 
     render(<App />);
 
-    expect(await screen.findByText(longAnswer)).toBeInTheDocument();
+    expect(
+      await screen.findByRole(
+        "article",
+        { name: "Research assistant response" },
+        { timeout: 5_000 },
+      ),
+    ).toHaveTextContent(longAnswer);
 
-    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
+    fireEvent.click(screen.getByRole("link", { name: "Research" }));
     expect(
       await screen.findByText("Ask questions. Verify every answer."),
     ).toBeInTheDocument();
-    expect(screen.queryByText(longAnswer)).not.toBeInTheDocument();
+    expect(screen.queryByRole("article", { name: "Research assistant response" })).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Return to conversation" }),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Conversation" }));
-    expect(await screen.findByText(longAnswer)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
+    fireEvent.click(screen.getByRole("link", { name: "Chat" }));
+    expect(
+      await screen.findByRole(
+        "article",
+        { name: "Research assistant response" },
+        { timeout: 5_000 },
+      ),
+    ).toHaveTextContent(longAnswer);
   });
 
   test("explains when a locally saved conversation has expired backend context", async () => {
@@ -220,8 +259,7 @@ describe("App request cancellation", () => {
     expect(
       screen.getByText(/Rank scores order results; they are not confidence percentages/i),
     ).toBeInTheDocument();
-    expect(screen.getByText("In-memory conversations")).toBeInTheDocument();
-    expect(screen.getByText("Retained messages")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Scope · All companies · All sections · Top 5/ })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Explain active sessions" }),
     ).not.toBeInTheDocument();
@@ -232,7 +270,7 @@ describe("App request cancellation", () => {
 
   test("theme preference can be selected from the three-mode menu", async () => {
     render(<App />);
-    await screen.findByText("Pipeline: Ready");
+    await screen.findByText("Research ready");
 
     const themeButton = screen.getByRole("button", {
       name: "Theme System. Choose light, dark, or system theme",
@@ -255,63 +293,123 @@ describe("App request cancellation", () => {
     expect(themeButton).toHaveAccessibleName("Theme System. Choose light, dark, or system theme");
   });
 
-  test("sidebar width can be adjusted with the resize separator", async () => {
+  test("narrow header keeps secondary controls in More and closes it before Help", async () => {
     render(<App />);
-    await screen.findByText("Pipeline: Ready");
+    await screen.findByText("Research ready");
 
-    const resizeHandle = screen.getByRole("separator", {
-      name: "Resize search controls",
+    fireEvent.click(screen.getByRole("button", { name: "More workspace controls" }));
+    const moreDialog = screen.getByRole("dialog", { name: "Workspace controls" });
+    expect(moreDialog).toBeInTheDocument();
+    expect(within(moreDialog).getByRole("button", { name: "Close workspace controls" })).toHaveFocus();
+    expect(within(moreDialog).getByRole("group", { name: "Language" })).toBeInTheDocument();
+
+    fireEvent.click(within(moreDialog).getByRole("button", { name: "Open help" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Workspace controls" })).not.toBeInTheDocument();
+      expect(screen.getByRole("dialog", { name: "How to use this research workspace" })).toBeInTheDocument();
     });
-    expect(resizeHandle).toHaveAttribute("aria-valuenow", "320");
-
-    fireEvent.keyDown(resizeHandle, { key: "ArrowRight" });
-
-    expect(resizeHandle).toHaveAttribute("aria-valuenow", "336");
-    expect(document.getElementById("control-sidebar")).toHaveStyle({
-      width: "min(336px, calc(100vw - 2rem))",
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Close help" })).toHaveFocus();
     });
   });
 
-  test("ticker picker shows and searches company names", async () => {
+  test("sidebar is a stable navigation surface without a resizer or duplicate Collections", async () => {
     render(<App />);
-    await screen.findByText("Pipeline: Ready");
+    await screen.findByText("Research ready");
 
-    fireEvent.click(screen.getByRole("button", { name: /All companies/i }));
-    expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
-    expect(screen.getByText("Microsoft Corporation")).toBeInTheDocument();
-
-    fireEvent.change(
-      screen.getByPlaceholderText("Search company or ticker..."),
-      { target: { value: "Microsoft" } },
-    );
-    fireEvent.click(
-      screen.getByRole("button", { name: /Microsoft Corporation MSFT/i }),
-    );
-    expect(screen.getByText("Microsoft Corporation (MSFT)")).toBeInTheDocument();
+    expect(screen.queryByRole("separator", { name: /Resize/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
+    expect(screen.getAllByRole("link", { name: /Collections/i })).toHaveLength(1);
   });
 
-  test("section picker explains filing scope", async () => {
+  test("research scope is controlled next to the composer", async () => {
     render(<App />);
-    await screen.findByText("Pipeline: Ready");
+    await screen.findByText("Research ready");
 
-    fireEvent.click(screen.getByRole("button", { name: /All sections/i }));
-    expect(screen.getByText("Risk Factors")).toBeInTheDocument();
-    expect(screen.queryByText(/Item 1A/)).not.toBeInTheDocument();
-    expect(
-      screen.getByText("Material risks disclosed by company management."),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("Extracted rows optimized for exact numeric retrieval."),
-    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Scope · All companies/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Company" }));
+    fireEvent.click(screen.getByRole("option", { name: "Microsoft Corporation (MSFT)" }));
+    expect(screen.getByRole("button", { name: /Scope · Microsoft Corporation \(MSFT\) · All sections · Top 5/ })).toBeInTheDocument();
   });
 
-  test("suggested questions use readable company names", async () => {
+  test("research scope keeps selected filing section visible", async () => {
     render(<App />);
+    await screen.findByText("Research ready");
 
-    expect(
-      await screen.findByText("Apple vs Microsoft — Risk Factors"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Amazon — MD&A Highlights")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Scope · All companies/ }));
+    fireEvent.click(screen.getByRole("button", { name: "10-K section" }));
+    fireEvent.click(screen.getByRole("option", { name: "Risk Factors" }));
+    expect(screen.getAllByText(/^Risk Factors$/).length).toBeGreaterThan(0);
+  });
+
+  test("applies a validated template question with its selected company scope without sending", async () => {
+    render(<App />);
+    await screen.findByText("Research ready");
+
+    fireEvent.click(screen.getByRole("button", { name: /^Revenue fact/ }));
+    const dialog = screen.getByRole("dialog", { name: "Revenue fact" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Company" }));
+    fireEvent.click(screen.getByRole("option", { name: "Apple Inc. (AAPL)" }));
+    fireEvent.change(within(dialog).getByLabelText("Fiscal year"), { target: { value: "2024" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Use in question" }));
+
+    expect(apiMocks.streamQuery).not.toHaveBeenCalled();
+    expect(document.getElementById("chat-textarea")).toHaveValue("What total revenue did AAPL report in 2024?");
+    expect(screen.getByRole("button", { name: /Scope · Apple Inc\. \(AAPL\) · Financial Tables · Top 5/ })).toBeInTheDocument();
+  });
+
+  test("rejects a template apply after the current draft changes and preserves that draft", async () => {
+    render(<App />);
+    await screen.findByText("Research ready");
+
+    fireEvent.click(screen.getByRole("button", { name: /^Revenue fact/ }));
+    const dialog = screen.getByRole("dialog", { name: "Revenue fact" });
+    fireEvent.change(document.getElementById("chat-textarea")!, { target: { value: "A newer draft" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Company" }));
+    fireEvent.click(screen.getByRole("option", { name: "Apple Inc. (AAPL)" }));
+    fireEvent.change(within(dialog).getByLabelText("Fiscal year"), { target: { value: "2024" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Use in question" }));
+
+    expect(screen.getByText("Research context changed; reopen this template.")).toBeInTheDocument();
+    expect(document.getElementById("chat-textarea")).toHaveValue("A newer draft");
+    expect(screen.getByRole("button", { name: /Scope · All companies · All sections · Top 5/ })).toBeInTheDocument();
+    expect(apiMocks.streamQuery).not.toHaveBeenCalled();
+  });
+
+  test("sidebar keeps retrieval and diagnostics grouped", async () => {
+    render(<App />);
+    await screen.findByText("Research ready");
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
+    expect(screen.getByText("Build")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Retrieval Lab" })).toBeInTheDocument();
+  });
+
+  test("sends the shared interface language without changing the evidence request", async () => {
+    apiMocks.streamQuery.mockImplementation(async (_payload, onEvent) => {
+      onEvent({ type: "token", data: "Câu trả lời có nguồn [Source 1]." });
+      onEvent({ type: "done", data: { answer_language: "vi" } });
+    });
+
+    render(<LocaleProvider><App /></LocaleProvider>);
+    await screen.findByText("Research ready");
+    fireEvent.click(screen.getByRole("button", { name: "VI" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "VI" })).toHaveAttribute("aria-pressed", "true"));
+    fireEvent.change(document.getElementById("chat-textarea")!, {
+      target: { value: "Doanh thu của Apple năm 2024 là bao nhiêu?" },
+    });
+    fireEvent.click(document.getElementById("send-message-btn")!);
+
+    // The citation formatter wraps [Source 1] in a button, so assert the
+    // answer's accessible article text rather than requiring one DOM text node.
+    await waitFor(() =>
+      expect(
+        screen.getByRole("article", { name: /Research assistant response|Câu trả lời của trợ lý nghiên cứu/ }),
+      ).toHaveTextContent("Câu trả lời có nguồn"),
+    );
+    expect(apiMocks.streamQuery.mock.calls[0][0]).toMatchObject({
+      answer_language: "vi",
+      question: "Doanh thu của Apple năm 2024 là bao nhiêu?",
+    });
   });
 
   test("stop generating aborts the stream and preserves partial text", async () => {
@@ -332,14 +430,16 @@ describe("App request cancellation", () => {
     );
 
     render(<App />);
-    await screen.findByText("Pipeline: Ready");
+    await screen.findByText("Research ready");
     setItemSpy.mockClear();
 
     const input = screen.getByRole("textbox");
     fireEvent.change(input, {
       target: { value: "What are Apple's main risk factors?" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Send question" }));
+    const send = screen.getByRole("button", { name: "Send question" });
+    await waitFor(() => expect(send).toBeEnabled());
+    fireEvent.click(send);
 
     await screen.findByText("Partial answer");
     expect(
@@ -361,6 +461,36 @@ describe("App request cancellation", () => {
       ).toHaveLength(1),
     );
     setItemSpy.mockRestore();
+  });
+
+  test("changing routes while a request is pending aborts the stream and ignores late events", async () => {
+    let streamSignal: AbortSignal | undefined;
+    let emitLate: (() => void) | undefined;
+    apiMocks.streamQuery.mockImplementation(
+      async (_payload, onEvent, _onError, signal?: AbortSignal) => {
+        streamSignal = signal;
+        onEvent({ type: "token", data: "Partial before route change" });
+        await new Promise<void>((resolve) => {
+          emitLate = () => {
+            onEvent({ type: "token", data: "Late event after route change" });
+            resolve();
+          };
+          signal?.addEventListener("abort", () => undefined, { once: true });
+        });
+      },
+    );
+
+    render(<App />);
+    await screen.findByText("Research ready");
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Pending route query" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send question" }));
+    await screen.findByText("Partial before route change");
+
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
+    fireEvent.click(screen.getByRole("link", { name: "Research" }));
+    await waitFor(() => expect(streamSignal?.aborted).toBe(true));
+    emitLate?.();
+    await waitFor(() => expect(screen.queryByText("Late event after route change")).not.toBeInTheDocument());
   });
 
   test("comparative analysis can be stopped while the request is pending", async () => {
@@ -387,7 +517,7 @@ describe("App request cancellation", () => {
     );
 
     render(<App />);
-    await screen.findByText("Pipeline: Ready");
+    await screen.findByText("Research ready");
 
     const input = screen.getByRole("textbox");
     fireEvent.change(input, {
@@ -421,7 +551,7 @@ describe("App request cancellation", () => {
     expect(await screen.findByText("Full historical answer")).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Start a new conversation" }),
+      screen.getByRole("button", { name: "New Research" }),
     );
     expect(
       screen.getByRole("dialog", { name: "Start a new conversation?" }),
@@ -432,7 +562,7 @@ describe("App request cancellation", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Start a new conversation" }),
+      screen.getByRole("button", { name: "New Research" }),
     );
     const dialog = screen.getByRole("dialog", { name: "Start a new conversation?" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Start new conversation" }));
@@ -441,5 +571,221 @@ describe("App request cancellation", () => {
       expect(raw).toContain("Full historical answer");
     });
     expect(apiMocks.deleteSession).not.toHaveBeenCalled();
+  });
+});
+
+describe("conversation modes", () => {
+  beforeEach(() => {
+    window.history.replaceState(null, "", "/");
+    localStorage.clear();
+    vi.clearAllMocks();
+    apiMocks.checkHealth.mockResolvedValue({
+      status: "ok",
+      pipeline_ready: true,
+      memory: { active_sessions: 0, total_turns: 0 },
+    });
+    apiMocks.getSupportedTickers.mockResolvedValue({
+      tickers: ["AAPL", "MSFT"],
+      sections: ["business", "risk_factors", "mdna", "financial_statements", "financial_table"],
+    });
+    apiMocks.getSessionHistory.mockResolvedValue({ session_id: "test-session", turns: [] });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  test("the chat route presents the chat composition and the research route its own", async () => {
+    window.history.replaceState(null, "", "/chat");
+    const chat = render(<App />);
+    expect(await screen.findByText("Research ready")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Chat" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Research" })).toBeNull();
+    chat.unmount();
+
+    window.history.replaceState(null, "", "/research?mode=conversation");
+    render(<App />);
+    expect(await screen.findByText("Research ready")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Research" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Chat" })).toBeNull();
+  });
+
+  test("a question asked on the chat page records the chat mode with its request", async () => {
+    window.history.replaceState(null, "", "/chat");
+    apiMocks.streamQuery.mockImplementation(async (_payload, onEvent) => {
+      onEvent({ type: "token", data: "Revenue grew [Source 1]." });
+      onEvent({ type: "done", data: { answer_language: "en" } });
+    });
+
+    render(<App />);
+    await screen.findByText("Research ready");
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "What was Apple revenue?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send question" }));
+
+    await waitFor(() => {
+      const raw = localStorage.getItem("sec_qa_library_v3");
+      expect(raw).toContain("\"mode\":\"chat\"");
+    });
+    const envelope = JSON.parse(localStorage.getItem("sec_qa_library_v3") ?? "{}");
+    const record = envelope.records[0];
+    expect(record.mode).toBe("chat");
+    expect(record.messages[0].requestSnapshot).toMatchObject({ mode: "chat" });
+  });
+
+  test("opening a saved research conversation never regenerates its answer", async () => {
+    seedStoredConversation({ mode: "research" });
+    window.history.replaceState(null, "", "/chat");
+
+    render(<App />);
+    await screen.findByText("Research ready");
+    apiMocks.streamQuery.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
+    fireEvent.click(screen.getByRole("link", { name: "Collections" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Conversations" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Open recent research: Stored research question/ }),
+    );
+
+    // The stored conversation opens in the research family and its answer is
+    // read from storage; the request path is never entered again.
+    expect(
+      await screen.findByRole("article", { name: "Research assistant response" }, { timeout: 5_000 }),
+    ).toHaveTextContent("Stored research answer");
+    expect(screen.getByRole("heading", { name: "Research" })).toBeTruthy();
+    expect(window.location.pathname).toBe("/research/conversation-stored");
+    expect(apiMocks.streamQuery).not.toHaveBeenCalled();
+    expect(apiMocks.queryDecomposed).not.toHaveBeenCalled();
+  });
+
+  test("a chat conversation keeps its chat composition when opened from a research URL", async () => {
+    seedStoredConversation({ mode: "chat" });
+    window.history.replaceState(null, "", "/research/conversation-stored");
+
+    render(<App />);
+
+    // The stored mode wins over the URL family: the answer is presented in
+    // the composition it was created in, and no new request is issued.
+    expect(
+      await screen.findByRole("article", { name: "Research assistant response" }, { timeout: 5_000 }),
+    ).toHaveTextContent("Stored research answer");
+    expect(screen.getByRole("heading", { name: "Chat" })).toBeTruthy();
+    expect(apiMocks.streamQuery).not.toHaveBeenCalled();
+  });
+});
+
+function seedStoredConversation({ mode }: { mode: "chat" | "research" }) {
+  const now = Date.now();
+  localStorage.setItem(
+    "sec_qa_library_v3",
+    JSON.stringify({
+      envelopeVersion: 4,
+      records: [
+        {
+          schemaVersion: 4,
+          id: "conversation-stored",
+          sessionId: "session-stored",
+          title: "Stored research question",
+          titleMode: "auto",
+          revision: 2,
+          createdAt: now - 1_000,
+          updatedAt: now,
+          draft: "",
+          bookmarkedMessageIds: [],
+          tags: [],
+          notes: [],
+          variants: [],
+          mode,
+          messages: [
+            {
+              id: "user-stored",
+              sender: "user",
+              text: "Stored research question",
+              requestSnapshot: {
+                ticker: "AAPL",
+                section: "risk_factors",
+                topK: 5,
+                enableComparative: false,
+                answerLanguage: "en",
+                mode,
+              },
+            },
+            {
+              id: "answer-stored",
+              sender: "assistant",
+              text: "Stored research answer [Source 1].",
+              status: "completed",
+              sources: [
+                {
+                  citation: "AAPL 10-K [Source 1]",
+                  chunk_id: "chunk-stored",
+                  document_id: "doc-stored",
+                  text_preview: "Stored excerpt",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      tombstones: [],
+    }),
+  );
+  localStorage.setItem("sec_qa_session_id", "session-stored");
+}
+
+describe("displayed answer command identity", () => {
+  const messages: Message[] = [
+    {
+      id: "answer-older",
+      sender: "assistant",
+      text: "Older original answer.",
+      sources: [{ citation: "Older source", chunk_id: "older-chunk", text_preview: "Older excerpt" }],
+    },
+    {
+      id: "answer-newer",
+      sender: "assistant",
+      text: "Newer answer.",
+      sources: [{ citation: "Newer source", chunk_id: "newer-chunk", text_preview: "Newer excerpt" }],
+    },
+  ];
+  const record = {
+    variants: [{
+      id: "older-variant",
+      originMessageId: "answer-older",
+      text: "Older selected variant.",
+      sources: [{ citation: "Variant source", chunk_id: "variant-chunk", text_preview: "Variant excerpt" }],
+      answerLanguage: "en" as const,
+      status: "completed" as const,
+      createdAt: 1,
+      updatedAt: 1,
+  }],
+  } as unknown as ConversationRecord;
+
+  test("resolves copy and source commands to the focused older variant", () => {
+    const context = { conversationId: "conversation-1", messageId: "answer-older", variantId: "older-variant" };
+    const answer = resolveDisplayedAnswerTarget(context, messages, record, "conversation-1");
+    expect(answer?.text).toBe("Older selected variant.");
+    expect(answer?.sources[0].chunk_id).toBe("variant-chunk");
+
+    const target = resolveEvidenceCommandTarget(context, null, messages, record, "conversation-1");
+    expect(target?.source.chunk_id).toBe("variant-chunk");
+    expect(target?.selection).toEqual(expect.objectContaining({ messageId: "answer-older", variantId: "older-variant" }));
+  });
+
+  test("fails closed when a focused variant disappears instead of falling back to newest", () => {
+    const context = { conversationId: "conversation-1", messageId: "answer-older", variantId: "deleted-variant" };
+    expect(resolveDisplayedAnswerTarget(context, messages, record, "conversation-1")).toBeNull();
+    expect(resolveEvidenceCommandTarget(context, null, messages, record, "conversation-1")).toBeNull();
+
+    const staleSelection: EvidenceSelection = {
+      conversationId: "conversation-1",
+      messageId: "answer-older",
+      variantId: "deleted-variant",
+      citationIndex: 0,
+      sourceKey: "chunk:variant-chunk",
+    };
+    expect(resolveEvidenceCommandTarget(context, staleSelection, messages, record, "conversation-1")).toBeNull();
   });
 });

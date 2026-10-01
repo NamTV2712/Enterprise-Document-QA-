@@ -1,0 +1,4 @@
+interface:
+  display_name: "SEC RAG Security"
+  short_description: "Review SEC RAG trust boundaries and threat controls"
+  default_prompt: "Use $rag-security to review a SEC RAG threat or trust-boundary change."

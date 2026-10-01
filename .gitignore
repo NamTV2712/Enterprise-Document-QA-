@@ -3,12 +3,14 @@ __pycache__/
 *.pyc
 .env
 data/
+.local/
 .ipynb_checkpoints/
 .DS_Store
 
 # Frontend dependencies, build output, and local configuration
 frontend/node_modules/
 frontend/dist/
+frontend/dist-*/
 frontend/build/
 frontend/.next/
 frontend/out/

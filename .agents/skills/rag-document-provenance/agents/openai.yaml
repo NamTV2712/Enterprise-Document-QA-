@@ -1,0 +1,4 @@
+interface:
+  display_name: "SEC Document Provenance"
+  short_description: "Protect SEC source identity and evidence lineage"
+  default_prompt: "Use $rag-document-provenance to resolve a SEC source, reader, or citation identity issue."

@@ -1,7 +1,12 @@
 from src.evaluation.generation_checkpoint import (
     DEFAULT_GENERATION_PROMPT_TEMPLATE,
 )
-from src.generation.generator import SYSTEM_PROMPT, _build_user_message
+from src.generation.generator import (
+    SYSTEM_PROMPT,
+    VIETNAMESE_SYSTEM_PROMPT,
+    _build_user_message,
+    system_prompt_for_language,
+)
 from src.generation.prompt_contracts import (
     ANSWER_FOCUS_CONTRACT,
     RISK_FOCUS_CONTRACT,
@@ -24,6 +29,15 @@ def test_answer_focus_contract_is_shared_by_all_generation_paths() -> None:
     _assert_answer_focus_contract(_build_user_message("Compare their approach", []))
     assert "{answer_focus_contract}" in DEFAULT_GENERATION_PROMPT_TEMPLATE
     assert ANSWER_FOCUS_CONTRACT not in SYNTHESIS_SYSTEM_PROMPT
+
+
+def test_answer_language_changes_only_the_output_language_contract() -> None:
+    assert system_prompt_for_language("en") is SYSTEM_PROMPT
+    assert system_prompt_for_language("vi") is VIETNAMESE_SYSTEM_PROMPT
+    assert "Always respond in Vietnamese" in VIETNAMESE_SYSTEM_PROMPT
+    assert "[Source N]" in VIETNAMESE_SYSTEM_PROMPT
+    # The legacy English fingerprint remains stable for existing evaluations.
+    assert "Always respond in English" in SYSTEM_PROMPT
 
 
 def test_answer_focus_contract_is_scoped_to_approach_questions() -> None:

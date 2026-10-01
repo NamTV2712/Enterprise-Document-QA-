@@ -12,14 +12,15 @@ services:
     ports:
       - "${RELEASE_PORT:-8000}:8000"
     environment:
-      # Serving key pool: primary pair plus failover keys 3, 4, 5. The
-      # evaluation-generation pool keys are intentionally NOT forwarded:
-      # serving never uses them.
+      # The improvement/evaluation default is strict KEY5-only. Set
+      # GROQ_KEY_POLICY=pool explicitly when serving failover rotation is
+      # intended; evaluation scripts still pass their own strict policy.
       - GROQ_API_KEY=${GROQ_API_KEY}
       - GROQ_API_KEY2=${GROQ_API_KEY2}
       - GROQ_API_KEY3=${GROQ_API_KEY3}
       - GROQ_API_KEY4=${GROQ_API_KEY4:-}
       - GROQ_API_KEY5=${GROQ_API_KEY5:-}
+      - GROQ_KEY_POLICY=${GROQ_KEY_POLICY:-key5_only}
       - QDRANT_MODE=local
       - QDRANT_LOCAL_PATH=/app/data/processed/qdrant
       - QDRANT_INDEX_MANIFEST_PATH=${QDRANT_INDEX_MANIFEST_PATH:-data/processed/qdrant_index_manifest.json}

@@ -13,6 +13,8 @@ no changes needed, just swap objects.
 import logging
 import re
 import threading
+import time
+from collections.abc import Callable
 
 from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder
@@ -31,6 +33,74 @@ CROSS_ENCODER_MODEL_REVISION = "233902d25c440f23af6f7d6e94d2946bac0bee0a"
 CROSS_ENCODER_BATCH_SIZE = 4
 RRF_K = 60  # The RRF constant, 60, is a commonly observed empirical value
 CE_RELATIVE_CUTOFF = 0.50
+
+# Version of the inspection trace shape. Consumers can rely on the fields this
+# version documents; additive fields keep the same version.
+TRACE_VERSION = "retrieval-trace-v1"
+
+# What each score family means and on what scale it lives. The families are not
+# interchangeable, so the trace states this once instead of letting a reader
+# compare a BM25 score with a reranker logit.
+_SCORE_SEMANTICS: dict[str, dict[str, str]] = {
+    "bm25_score": {
+        "family": "lexical",
+        "scale": "unbounded_positive",
+        "definition": "BM25 term-frequency score over the filtered index; higher means stronger keyword overlap.",
+    },
+    "dense_score": {
+        "family": "dense_similarity",
+        "scale": "vector_similarity_as_returned_by_the_store",
+        "definition": "Similarity of the query embedding to the chunk embedding, reported with the store's own scale.",
+    },
+    "rrf_score": {
+        "family": "fusion",
+        "scale": "sum_of_reciprocal_ranks",
+        "definition": "Reciprocal rank fusion of the lexical, dense, and query-shaper rankings; not comparable across queries.",
+    },
+    "cross_encoder_score": {
+        "family": "reranker",
+        "scale": "cross_encoder_logit",
+        "definition": "Cross-encoder relevance logit for the query/chunk pair; only comparable within one candidate pool.",
+    },
+}
+_SCORE_SEMANTICS_NOTE = (
+    "Score families are distinct and must not be compared with one another. "
+    "None of them is a confidence, accuracy, or probability."
+)
+
+
+def _score_semantics(preset: str) -> dict:
+    """Return the score-family semantics that apply to one preset."""
+    family_by_preset = {
+        "bm25": ("bm25_score",),
+        "dense": ("dense_score",),
+        "hybrid": ("bm25_score", "dense_score", "rrf_score"),
+        "hybrid_rerank": ("bm25_score", "dense_score", "rrf_score", "cross_encoder_score"),
+    }
+    keys = family_by_preset.get(preset, ("bm25_score", "dense_score", "rrf_score", "cross_encoder_score"))
+    return {
+        "applies_to_preset": preset,
+        "note": _SCORE_SEMANTICS_NOTE,
+        "families": {key: dict(_SCORE_SEMANTICS[key]) for key in keys},
+    }
+
+
+def _production_parity() -> dict:
+    """State which production stages this trace does and does not reproduce.
+
+    Inspection reports the ranked stage candidates; production additionally
+    promotes high-confidence structured financial rows and merges the
+    query-shaper lexical ladder into the final evidence. Saying so explicitly
+    keeps a trace from being read as production output.
+    """
+    return {
+        "structured_promotion": "not_executed",
+        "lexical_ladder_merge_into_final": "not_executed",
+        "reason": (
+            "Inspection exposes the ranking stages only; production /query applies "
+            "structured financial-row promotion and lexical-ladder merging on top."
+        ),
+    }
 
 
 def _tokenize(text: str) -> list[str]:
@@ -142,6 +212,39 @@ class HybridRetriever:
         with self._model_lock:
             return self.embedder.embed_query(query)
 
+    def tokenize_query(self, text: str) -> list[str]:
+        """Return the tokens this retriever's BM25 index was built with.
+
+        Exposed so keyword-only consumers (discovery search) score in the exact
+        same token space without duplicating the tokenizer. It performs no
+        model work and never touches retrieval state.
+        """
+        return _tokenize(text)
+
+    def bm25_scores(self, tokens: list[str]) -> list[float]:
+        """Return the prebuilt BM25 score of every indexed chunk for tokens.
+
+        Read-only: no embedding, no cross-encoder, no provider, no store. The
+        order matches the chunk list this retriever was built with.
+        """
+        return [float(score) for score in self.bm25.get_scores(tokens)]
+
+    def bm25_terms_present(self, tokens: list[str]) -> list[bool]:
+        """Return whether each indexed chunk actually contains any token.
+
+        A BM25 score alone cannot answer this: a term present in a large share
+        of the corpus gets a non-positive inverse document frequency, so its
+        score collapses to zero even though the term occurs. Keyword discovery
+        uses this presence map for matching and the BM25 score for ordering.
+        """
+        wanted = set(tokens)
+        if not wanted:
+            return [False] * len(self.bm25.doc_freqs)
+        return [
+            any(term in document_terms for term in wanted)
+            for document_terms in self.bm25.doc_freqs
+        ]
+
     def retrieve(
         self,
         query: str,
@@ -197,6 +300,248 @@ class HybridRetriever:
         )
 
         return self._format_results(query, reranked)
+
+    def inspect(
+        self,
+        query: str,
+        top_k: int = 5,
+        ticker: str | None = None,
+        section: str | None = None,
+        candidate_pool: int = 10,
+        preset: str = "hybrid_rerank",
+        chunk_filter: Callable[[dict], bool] | None = None,
+    ) -> dict:
+        """Return a provider-free trace of the retrieval stages.
+
+        This is intentionally separate from production retrieval. It exposes
+        raw stage scores with their original scale and never labels them as a
+        confidence value. The production path remains byte-compatible because
+        this method does not alter ``retrieve_with_embedding``.
+
+        ``chunk_filter`` optionally narrows the eligible pool (the document and
+        date restrictions the catalog defines) *before* the stages run, so the
+        reported ranks describe the scope the reader actually asked about
+        instead of a wider pool that was later trimmed.
+        """
+        allowed_presets = {"bm25", "dense", "hybrid", "hybrid_rerank"}
+        if preset not in allowed_presets:
+            raise ValueError(f"unsupported retrieval preset: {preset}")
+        if not query.strip():
+            return {
+                "trace_version": TRACE_VERSION,
+                "preset": preset,
+                "query": query,
+                "candidates": [],
+                "selected_chunk_ids": [],
+                "stages": [],
+                "score_semantics": _score_semantics(preset),
+                "production_parity": _production_parity(),
+            }
+        top_k = max(1, min(top_k, 10))
+        candidate_pool = max(top_k, min(candidate_pool, 50))
+        trace_started = time.perf_counter()
+        query_embedding = self.embed_query(query)
+        embedding_ms = (time.perf_counter() - trace_started) * 1000
+
+        if ticker and section:
+            filtered_chunks = self._chunks_by_ticker_section.get((ticker, section), [])
+        elif ticker:
+            filtered_chunks = self._chunks_by_ticker.get(ticker, [])
+        elif section:
+            filtered_chunks = self._chunks_by_section.get(section, [])
+        else:
+            filtered_chunks = self._all_chunks
+        if chunk_filter is not None:
+            filtered_chunks = [chunk for chunk in filtered_chunks if chunk_filter(chunk)]
+
+        stage_started = time.perf_counter()
+        bm25_scores = self.bm25.get_scores(_tokenize(query))
+        bm25_candidates = sorted(
+            filtered_chunks,
+            key=lambda chunk: bm25_scores[self._chunk_index_map[chunk["chunk_id"]]],
+            reverse=True,
+        )[:candidate_pool]
+        bm25_ids = [chunk["chunk_id"] for chunk in bm25_candidates]
+        bm25_ms = (time.perf_counter() - stage_started) * 1000
+
+        stage_started = time.perf_counter()
+        semantic_results = self.store.search(
+            query_vector=query_embedding,
+            top_k=candidate_pool,
+            ticker=ticker,
+            section=section,
+        )
+        if chunk_filter is not None:
+            # The store lookup is filtered by ticker/section only, so an
+            # inspection document/date restriction has to be applied to its
+            # results too; otherwise the dense stage would report candidates
+            # outside the scope the reader asked about.
+            semantic_results = [
+                result
+                for result in semantic_results
+                if result.get("chunk_id") in self._chunks_by_id
+                and chunk_filter(self._chunks_by_id[result["chunk_id"]])
+            ]
+        dense_scores = {
+            result["chunk_id"]: float(result.get("score", 0.0))
+            for result in semantic_results
+        }
+        dense_ids = [result["chunk_id"] for result in semantic_results]
+        dense_ms = (time.perf_counter() - stage_started) * 1000
+
+        stage_started = time.perf_counter()
+        hints = shape_retrieval_query(query)
+        lexical_ids = [
+            match.chunk["chunk_id"]
+            for match in lexical_ladder_candidates(
+                filtered_chunks,
+                ticker=ticker,
+                section=section,
+                exact_phrases=hints.exact_phrases,
+                full_terms=hints.full_terms,
+                partial_terms=hints.partial_terms,
+                fuzzy_terms=hints.fuzzy_terms,
+                max_candidates=candidate_pool,
+            )
+        ]
+        lexical_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(lexical_ids)}
+        lexical_ms = (time.perf_counter() - stage_started) * 1000
+
+        rrf_scores: dict[str, float] = {}
+        for ids in (bm25_ids, dense_ids, lexical_ids):
+            for rank, chunk_id in enumerate(ids):
+                rrf_scores[chunk_id] = rrf_scores.get(chunk_id, 0.0) + 1 / (RRF_K + rank + 1)
+        fusion_order = sorted(rrf_scores, key=rrf_scores.get, reverse=True)
+        hybrid_ids = fusion_order[:candidate_pool]
+        hybrid_chunks = [self._chunks_by_id[chunk_id] for chunk_id in hybrid_ids]
+
+        cross_encoder_scores: dict[str, float] = {}
+        if preset == "hybrid_rerank":
+            stage_started = time.perf_counter()
+            pairs = [(query, chunk["text"]) for chunk in hybrid_chunks]
+            with self._model_lock:
+                scores = self.cross_encoder.predict(pairs, batch_size=CROSS_ENCODER_BATCH_SIZE)
+            cross_encoder_scores = {
+                chunk["chunk_id"]: float(score)
+                for chunk, score in zip(hybrid_chunks, scores)
+            }
+            final_ids = [
+                chunk["chunk_id"]
+                for chunk in sorted(
+                    hybrid_chunks,
+                    key=lambda chunk: cross_encoder_scores[chunk["chunk_id"]],
+                    reverse=True,
+                )[:top_k]
+            ]
+            rerank_ms = (time.perf_counter() - stage_started) * 1000
+        elif preset == "bm25":
+            final_ids = bm25_ids[:top_k]
+            rerank_ms = 0.0
+        elif preset == "dense":
+            final_ids = dense_ids[:top_k]
+            rerank_ms = 0.0
+        else:
+            final_ids = hybrid_ids[:top_k]
+            rerank_ms = 0.0
+
+        all_ids = list(dict.fromkeys((*bm25_ids, *dense_ids, *lexical_ids, *hybrid_ids)))
+        bm25_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(bm25_ids)}
+        dense_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(dense_ids)}
+        fusion_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(fusion_order)}
+        final_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(final_ids)}
+        all_ids = list(dict.fromkeys((*bm25_ids, *dense_ids, *lexical_ids, *hybrid_ids)))
+        bm25_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(bm25_ids)}
+        dense_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(dense_ids)}
+        fusion_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(fusion_order)}
+        final_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(final_ids)}
+        reranked_pool = {chunk["chunk_id"] for chunk in hybrid_chunks}
+
+        def dropped_reason(chunk_id: str) -> str | None:
+            """Name why a candidate was not selected, or None when unknown.
+
+            Only reasons this trace can prove are reported; anything else stays
+            null so a reader is never given an invented explanation.
+            """
+            if chunk_id in final_rank:
+                return None
+            if preset == "hybrid_rerank":
+                return "ranked_below_top_k" if chunk_id in reranked_pool else "outside_candidate_pool"
+            if preset == "bm25":
+                produced = chunk_id in bm25_rank
+            elif preset == "dense":
+                produced = chunk_id in dense_rank
+            else:
+                produced = chunk_id in fusion_rank
+            return "ranked_below_top_k" if produced else "not_in_selected_preset_stage"
+
+        candidates = []
+        for chunk_id in all_ids:
+            chunk = self._chunks_by_id[chunk_id]
+            candidates.append(
+                {
+                    "chunk_id": chunk_id,
+                    "ticker": chunk.get("ticker"),
+                    "section": chunk.get("section"),
+                    "filing_date": chunk.get("filing_date"),
+                    "citation": RetrievedChunk.from_raw(chunk, score=0.0).citation,
+                    "text_preview": chunk.get("text", "")[:240],
+                    "bm25_score": round(float(bm25_scores[self._chunk_index_map[chunk_id]]), 6)
+                    if chunk_id in bm25_rank else None,
+                    "bm25_rank": bm25_rank.get(chunk_id),
+                    "dense_score": round(dense_scores[chunk_id], 6)
+                    if chunk_id in dense_scores else None,
+                    "dense_rank": dense_rank.get(chunk_id),
+                    "lexical_rank": lexical_rank.get(chunk_id),
+                    "fusion_rank": fusion_rank.get(chunk_id),
+                    "rrf_score": round(rrf_scores[chunk_id], 8) if chunk_id in rrf_scores else None,
+                    "cross_encoder_score": round(cross_encoder_scores[chunk_id], 6)
+                    if chunk_id in cross_encoder_scores else None,
+                    "final_rank": final_rank.get(chunk_id),
+                    "selected": chunk_id in final_rank,
+                    "dropped_reason": dropped_reason(chunk_id),
+                }
+            )
+
+        reranker_executed = preset == "hybrid_rerank"
+        return {
+            "trace_version": TRACE_VERSION,
+            "preset": preset,
+            "query": query,
+            "filters": {"ticker": ticker, "section": section},
+            "top_k": top_k,
+            "candidate_pool": candidate_pool,
+            "models": {
+                "embedding": getattr(self.embedder, "model_name", None),
+                "reranker": self.cross_encoder_model if reranker_executed else None,
+                "rrf_k": RRF_K,
+            },
+            "score_semantics": _score_semantics(preset),
+            "production_parity": _production_parity(),
+            "stages": [
+                {"name": "embedding", "elapsed_ms": round(embedding_ms, 3), "status": "executed"},
+                {"name": "bm25", "elapsed_ms": round(bm25_ms, 3), "status": "executed"},
+                {"name": "dense", "elapsed_ms": round(dense_ms, 3), "status": "executed"},
+                {"name": "lexical_ladder", "elapsed_ms": round(lexical_ms, 3), "status": "executed"},
+                {
+                    "name": "reranker",
+                    "elapsed_ms": round(rerank_ms, 3),
+                    "skipped": not reranker_executed,
+                    "status": "executed" if reranker_executed else "skipped",
+                    "reason": None if reranker_executed else "The selected preset ranks without the cross-encoder.",
+                },
+                {
+                    "name": "structured_promotion",
+                    "elapsed_ms": None,
+                    "status": "not_executed",
+                    "reason": "Inspection does not apply production structured financial-row promotion.",
+                },
+            ],
+            "candidates": candidates,
+            "selected_chunk_ids": final_ids,
+            "candidate_count": len(candidates),
+            "selected_count": len(final_ids),
+            "elapsed_ms": round((time.perf_counter() - trace_started) * 1000, 3),
+        }
 
     def _retrieve_with_embedding(
         self,

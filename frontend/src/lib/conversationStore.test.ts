@@ -118,6 +118,33 @@ describe("conversation store repository", () => {
 
   // --- Title and metadata preservation -----------------------------------
 
+  it("serializes field-scoped mutations against the latest record", async () => {
+    const store = await freshStore();
+    await store.loadConversationLibrary("session-live", "conversation-live");
+    const created = store.createConversationRecord("conversation-live", "session-live", [
+      userMessage("u1", "Apple total revenue"),
+      assistantMessage("a1", "Apple reported total revenue.", { status: "completed" }),
+    ]);
+    await store.saveConversationRecord(created);
+
+    const [tagResult, noteResult] = await Promise.all([
+      store.mutateConversationRecord(created.id, (latest) => ({
+        ...latest,
+        tags: ["revenue"],
+      })),
+      store.mutateConversationRecord(created.id, (latest) => ({
+        ...latest,
+        notes: [{ id: "note-1", text: "Verify against the filing table.", createdAt: 1, updatedAt: 1 }],
+      })),
+    ]);
+
+    expect(tagResult.status).toBe("persisted");
+    expect(noteResult.status).toBe("persisted");
+    const saved = store.listConversations().find((record) => record.id === created.id);
+    expect(saved?.tags).toEqual(["revenue"]);
+    expect(saved?.notes?.[0]?.text).toBe("Verify against the filing table.");
+  });
+
   it("keeps a custom title when autosave rebuilds the record from messages", async () => {
     const store = await freshStore();
     await store.loadConversationLibrary("session-live", "conversation-live");
@@ -226,7 +253,7 @@ describe("conversation store repository", () => {
   });
 
   it("locks localStorage writes when it holds a future-schema record and preserves the payload", async () => {
-    seedLocal([makeRecord({ id: "conversation-now", schemaVersion: 3, revision: 9 })]);
+    seedLocal([makeRecord({ id: "conversation-now", schemaVersion: 5, revision: 9 })]);
     const rawBefore = window.localStorage.getItem(V3_KEY);
     const store = await freshStore();
     const state = await store.loadConversationLibrary();
@@ -258,7 +285,7 @@ describe("conversation store repository", () => {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(["conversations", "tombstones"], "readwrite");
       tx.objectStore("conversations").put(
-        makeRecord({ id: "conversation-future", schemaVersion: 3, revision: 9 }),
+        makeRecord({ id: "conversation-future", schemaVersion: 5, revision: 9 }),
       );
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
@@ -694,6 +721,32 @@ describe("conversation store repository", () => {
     expect(store.listConversations().map((record) => record.id)).toContain("conversation-fallback");
   });
 
+  it("notifies a tab about migrated storage changes even while a write failure is recoverable", async () => {
+    const store = await freshStore();
+    await store.loadConversationLibrary();
+    const listener = vi.fn();
+    const unsubscribe = store.subscribeConversationLibrary(listener);
+
+    window.dispatchEvent(new StorageEvent("storage", {
+      key: "sec_qa_library_v3",
+      newValue: JSON.stringify({ envelopeVersion: 4, records: [], tombstones: [] }),
+      storageArea: window.localStorage,
+    }));
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    const setItemSpy = breakLocalStorageWrites();
+    const idbWriteSpy = breakIdbTransactions(await openDb());
+    const record = store.createConversationRecord("conversation-storage-race", "session-storage-race", [
+      userMessage("u1", "Storage race question"),
+    ]);
+    const result = await store.saveConversationRecord(record);
+    expect(result.status).toBe("volatile");
+    expect(store.listConversations().some((item) => item.id === "conversation-storage-race")).toBe(true);
+    setItemSpy.mockRestore();
+    idbWriteSpy.mockRestore();
+    unsubscribe();
+  });
+
   it("merges a version-1 payload and preserves a renamed title as custom", async () => {
     seedRaw(
       V1_KEY,
@@ -714,7 +767,7 @@ describe("conversation store repository", () => {
     const store = await freshStore();
     const state = await store.loadConversationLibrary("session-legacy", "conversation-legacy");
     const record = state.conversations.find((item) => item.id === "conversation-legacy");
-    expect(record?.schemaVersion).toBe(2);
+    expect(record?.schemaVersion).toBe(4);
     expect(record?.titleMode).toBe("custom");
     expect(record?.title).toBe("My renamed research");
     expect(record?.bookmarkedMessageIds).toEqual(["a1"]);
@@ -964,7 +1017,7 @@ describe("tombstone and envelope validation", () => {
 
   it("locks the envelope when the container version is unsupported or missing", async () => {
     for (const envelope of [
-      { envelopeVersion: 4, records: [], tombstones: [] },
+      { envelopeVersion: 5, records: [], tombstones: [] },
       { envelopeVersion: "3", records: [], tombstones: [] },
       { records: [], tombstones: [] },
     ]) {
@@ -1037,5 +1090,111 @@ describe("tombstone and envelope validation", () => {
     expect(
       (envelope.records as { id: string }[]).some((record) => record.id === "conversation-a"),
     ).toBe(true);
+  });
+});
+
+describe("conversation mode provenance", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    globalThis.indexedDB = new IDBFactory() as unknown as IDBFactory;
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("derives the mode from the first submitted request when nothing else sets it", async () => {
+    const store = await freshStore();
+    const record = store.buildConversationRecord(null, {
+      id: "conversation-1",
+      sessionId: "session-1",
+      createdAt: 1_700_000_000_000,
+      draft: "",
+      bookmarkedMessageIds: [],
+      messages: [
+        {
+          id: "user-1",
+          sender: "user",
+          text: "What are Apple's main risk factors?",
+          requestSnapshot: {
+            ticker: "AAPL",
+            section: "risk_factors",
+            topK: 5,
+            enableComparative: false,
+            answerLanguage: "en",
+            mode: "chat",
+          },
+        },
+      ],
+    });
+    expect(record.mode).toBe("chat");
+    expect(store.conversationModeFromMessages(record.messages)).toBe("chat");
+  });
+
+  it("keeps the existing mode across later saves even when a newer request differs", async () => {
+    const store = await freshStore();
+    const existing: ConversationRecord = {
+      schemaVersion: 4,
+      id: "conversation-1",
+      sessionId: "session-1",
+      title: "Revenue review",
+      titleMode: "auto",
+      revision: 2,
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_010,
+      messages: [],
+      draft: "",
+      bookmarkedMessageIds: [],
+      mode: "research",
+    };
+    const next = store.buildConversationRecord(existing, {
+      id: existing.id,
+      sessionId: existing.sessionId,
+      createdAt: existing.createdAt,
+      draft: "",
+      bookmarkedMessageIds: [],
+      messages: [
+        {
+          id: "user-1",
+          sender: "user",
+          text: "Follow-up",
+          requestSnapshot: {
+            ticker: null,
+            section: null,
+            topK: 5,
+            enableComparative: false,
+            answerLanguage: "en",
+            mode: "chat",
+          },
+        },
+      ],
+    });
+    expect(next.mode).toBe("research");
+  });
+
+  it("preserves a stored mode across a reload and rejects a malformed one", async () => {
+    const store = await freshStore();
+    const record = store.buildConversationRecord(null, {
+      id: "conversation-1",
+      sessionId: "session-1",
+      createdAt: 1_700_000_000_000,
+      draft: "",
+      bookmarkedMessageIds: [],
+      mode: "chat",
+      messages: [userMessage("u1", "First question")],
+    });
+    const saved = await store.saveConversationRecord(record);
+    expect(saved.status).toBe("persisted");
+
+    const reloaded = await store.loadConversationLibrary("session-1", "conversation-1");
+    expect(reloaded.conversations.find((item) => item.id === "conversation-1")?.mode).toBe("chat");
+
+    // A record whose mode is not a known value is unreadable data, not
+    // something to silently coerce into a different mode.
+    seedLocal([makeRecord({ id: "conversation-bad", sessionId: "session-1", mode: "analysis" })]);
+    const poisoned = await store.loadConversationLibrary("session-1", "conversation-1");
+    expect(poisoned.conversations.some((item) => item.id === "conversation-bad")).toBe(false);
+    expect(poisoned.warning).toBeTruthy();
   });
 });

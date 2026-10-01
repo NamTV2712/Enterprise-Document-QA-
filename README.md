@@ -27,6 +27,15 @@ and quality metrics retain their existing meanings. See the
 bounds and the hermetic benchmark. Workers remain two with 500ms polling and
 5000ms shutdown grace. This does not certify a production SLA.
 
+Private workspace factories reuse integrity/schema validation for the same live
+database file and migration contract. Each operation still opens and closes its
+own SQLite connection; no job/event/result cache or connection pool is added.
+Multi-statement job and event reads use short WAL snapshot transactions, while
+mutations retain serialized `BEGIN IMMEDIATE` and revision checks. Explicit
+`WorkspaceDatabase.initialize()` still performs a full audit, including on reopen.
+See the [DB-SCALE-001 protocol](docs/DB_SCALE_001_PROTOCOL.md) for lifecycle and
+measurement boundaries. Public mode retains lazy private-storage refusal.
+
 The independent frontend exposes Chat, Research, Documents, Search, Collections,
 Retrieval, Models, Pipeline, Agent, Reranker, Evaluation, Analytics, Datasets,
 Settings, and Logs. FastAPI supplies public catalog/search/inspection/report reads; opt-in

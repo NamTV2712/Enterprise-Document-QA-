@@ -16,6 +16,26 @@ locks release. There is no second telemetry store, new endpoint, dependency or
 worker scheduling change. Private analytics keeps performance separate from
 legacy request/quality populations. See the [protocol](docs/OBS_001_ATTRIBUTION_PROTOCOL.md).
 
+Workspace initialization and ordinary operation ownership are separate. Authorized
+factories use `ensure_initialized()` with a shared per-canonical-path validation
+receipt, bound to filesystem identity and the exact migration contract. One cold
+caller performs integrity/schema validation; concurrent callers wait for complete
+publication. The registry holds weak references and retains no connection or
+product data. Last-owner release ends that validation lifecycle; missing/replaced
+files or different migration contracts require full validation. Explicit
+`initialize()` always revalidates and clears the receipt on failure. The local
+lifespan's repository retains the live owner; public startup/import remains lazy.
+
+Ordinary readers already owned independent short-lived SQLite connections before
+DB-SCALE-001. They were delayed by repeated factory initialization under the writer
+RLock. Warm factories now bypass that boundary. Multi-statement job detail/list and
+event reads use explicit `BEGIN` snapshots on their own connections. Connections
+close on success/failure, including setup failure. Writers retain the existing
+canonical-path RLock, nested migration reentrancy and `BEGIN IMMEDIATE`; no lock
+is removed, no connection is shared, and provider/tool work remains outside writes.
+WAL/NORMAL, busy timeout 5000ms, schema v7, DATA-004 CAS/events/recovery and DATA-005
+authority are unchanged. See [DB-SCALE-001](docs/DB_SCALE_001_PROTOCOL.md).
+
 ```mermaid
 flowchart LR
     Browser[Vite React Frontend]

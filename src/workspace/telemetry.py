@@ -326,7 +326,7 @@ class SQLiteTelemetryRepository:
     def from_settings(cls, configured: Settings, *, initialize: bool = True, **kwargs: object) -> "SQLiteTelemetryRepository":
         database = WorkspaceDatabase.from_settings(configured)
         if initialize:
-            database.initialize()
+            database.ensure_initialized()
         if "forbidden_secret_values" not in kwargs:
             kwargs["forbidden_secret_values"] = _configured_secret_values(configured)
         return cls(database, **kwargs)

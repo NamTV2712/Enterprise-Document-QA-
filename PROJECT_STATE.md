@@ -1,5 +1,40 @@
 # Project State
 
+## DB-SCALE-001 candidate validated; comparison pending (2026-10-01)
+
+Focused optional repository task on main, starting
+`cb6ed9e1aedc9d33431e5e6cf85c1baa3d478507`. Required roadmap, Agent/provider,
+CRED-001, SCALE-001/002 and OBS-001 stay COMPLETE; SCALE-003 is NOT STARTED.
+Fresh enabled pre-change confirmation completed five anchors / 15 trials with
+zero correctness/missing/drop counters. Same environment/protocol/workloads:
+read50, mixed25, SSE25, research10/250ms, admission50; three trials each.
+Full initialization counts (including startup/warmup/reopen): read **211 each**,
+mixed **1004/982/940**, SSE **245/228/200**, research **71 each**. Ordinary read
+connections were already independent: repeated factory initialization held the
+writer RLock and defeated that overlap at the service boundary.
+
+Candidate adds guarded initialization receipts bound to canonical path, file
+identity and exact migration contract; weak registry retains no product data or
+connection. Explicit initialize still performs full integrity/schema validation.
+Warm factories skip the initialization/writer boundary. Multi-statement job and
+event reads now pin short WAL snapshots; prior autocommit boundary probes reproduce
+job/step and list-count/item inconsistencies. Connections close on setup failure.
+Write lock/BEGIN IMMEDIATE/CAS/claim order/event atomicity remain unchanged; no
+cache, pool, migration, index, default, provider, dependency or frontend change.
+
+Shared focused gate **662 passed / 1 inherited warning**, including **24 new
+DB-SCALE tests**, DATA-004/005, OBS, workers, Agent, CRED/provider and portable
+backup. Deterministic races cover eight cold initializers/one full check, two
+unrelated stores, eight overlapping readers, reads during held writer transactions,
+snapshot consistency, CAS/claim/cancellation/fairness and real HTTP/SSE during a
+paused worker append. Two initial harness assertions were corrected (thread-owner
+close inspection and OBS admission's now-absent initialization reads).
+The [protocol](docs/DB_SCALE_001_PROTOCOL.md) defines comparable counts and phases.
+Commit the candidate before fresh canonical after measurements; retain only a
+repeatable improvement without an unexplained material regression. Full/clean
+release, final receipt, exact main push and next-task selection remain pending.
+Raw reports use ignored `.local/db-scale-001/`; same 12 unrelated paths untouched.
+
 ## OBS-001 complete — performance attribution and fixed measurements (2026-10-01)
 
 Optional measurement extension on main, starting

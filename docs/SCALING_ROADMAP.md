@@ -8,7 +8,22 @@ milestones remain complete. Starting HEAD: `b13fff6affc919a19f13bda3ddc730c319a7
 | SCALE-001 | Bounded background workers / durable Agent execution | COMPLETE |
 | SCALE-002 | Load, concurrency and capacity characterization | COMPLETE |
 | OBS-001 | Content-free performance attribution and fixed hermetic measurements | COMPLETE |
+| DB-SCALE-001 | Reduce repeated initialization and repository contention under mixed load | Candidate validated; comparison/release pending |
 | SCALE-003 | Evidence-backed caching and resource optimization | Not started |
+
+## DB-SCALE-001: comparison protocol
+
+[DB-SCALE-001 protocol](DB_SCALE_001_PROTOCOL.md) reuses committed SCALE/OBS
+workloads and attribution. Starting main `cb6ed9e…`: five enabled before points,
+15 complete trials; full initialization was repeated 211 times per read trial
+and 940–1004 times per mixed trial. Candidate guards validation per live store/
+file/migration identity and gives multi-statement reads explicit WAL snapshots.
+Independent per-operation connections and the writer RLock/BEGIN IMMEDIATE remain.
+Shared focused 662 passed, including 24 new tests. Acceptance requires comparable
+three-trial after points and repeatable wait reduction without an unexplained
+material regression, full/clean release and normal exact-HEAD main push.
+No cache/index/migration/provider/default/frontend/dependency change or automatic
+SCALE-003 work. Final evidence and one next-task proposal remain pending.
 
 ## OBS-001: final attribution findings
 

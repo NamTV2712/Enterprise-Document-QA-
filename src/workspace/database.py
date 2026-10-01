@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
+from weakref import WeakValueDictionary
 
 from configs.settings import Settings
 from src.workspace.attribution import defer_database_observations, record_interval, timed
@@ -23,6 +24,27 @@ from src.workspace.migrations import (
 
 _WRITE_LOCKS_GUARD = threading.Lock()
 _WRITE_LOCKS: dict[Path, threading.RLock] = {}
+_INITIALIZATION_GUARD = threading.Lock()
+
+
+class _InitializationState:
+    """Validation receipt for one live database lifecycle, never product data."""
+
+    def __init__(self) -> None:
+        self.lock = threading.RLock()
+        self.ready: tuple[tuple[int, ...], tuple[Migration, ...], int] | None = None
+
+
+_INITIALIZATIONS: WeakValueDictionary[Path, _InitializationState] = WeakValueDictionary()
+
+
+def _initialization_for(path: Path) -> _InitializationState:
+    with _INITIALIZATION_GUARD:
+        state = _INITIALIZATIONS.get(path)
+        if state is None:
+            state = _InitializationState()
+            _INITIALIZATIONS[path] = state
+        return state
 
 
 def _write_lock_for(path: Path) -> threading.RLock:
@@ -115,6 +137,7 @@ class WorkspaceDatabase:
         self.busy_timeout_ms = busy_timeout_ms
         self.migrations = migrations
         self._write_lock = _write_lock_for(self.path)
+        self._initialization = _initialization_for(self.path)
 
     @classmethod
     def from_settings(cls, configured: Settings) -> "WorkspaceDatabase":
@@ -135,6 +158,8 @@ class WorkspaceDatabase:
 
     @timed("workspace.connection_open")
     def _connect(self) -> sqlite3.Connection:
+        connection = None
+        configured = False
         try:
             connection = self._open_connection(
                 self.path,
@@ -147,6 +172,7 @@ class WorkspaceDatabase:
             connection.execute("PRAGMA journal_mode = WAL")
             connection.execute("PRAGMA synchronous = NORMAL")
             connection.execute("PRAGMA trusted_schema = OFF")
+            configured = True
             return connection
         except sqlite3.OperationalError as error:
             if self._is_busy(error):
@@ -154,6 +180,9 @@ class WorkspaceDatabase:
             raise WorkspaceDatabaseStateError("workspace database could not be opened") from error
         except sqlite3.DatabaseError as error:
             raise WorkspaceDatabaseStateError("workspace database is invalid") from error
+        finally:
+            if connection is not None and not configured:
+                connection.close()
 
     @staticmethod
     def _is_busy(error: BaseException) -> bool:
@@ -161,11 +190,14 @@ class WorkspaceDatabase:
         return "locked" in message or "busy" in message
 
     @contextmanager
-    def connection(self) -> Iterator[sqlite3.Connection]:
+    def connection(self, *, snapshot: bool = False) -> Iterator[sqlite3.Connection]:
+        """Own a short-lived connection; multi-statement reads can pin a snapshot."""
         connection = self._connect()
         started = time.perf_counter_ns()
         outcome = "completed"
         try:
+            if snapshot:
+                connection.execute("BEGIN")
             yield connection
         except BaseException:
             outcome = "failed"
@@ -224,13 +256,45 @@ class WorkspaceDatabase:
 
     @timed("workspace.initialize")
     def initialize(self) -> int:
-        """Create and migrate the configured database, safely and repeatably."""
+        """Explicitly revalidate integrity/schema, even for an initialized store."""
         # The receipt snapshot and all pending migrations form one operation.
         # Locking only individual migration transactions lets another instance
         # apply the same pending list between inspection and application. The
         # shared reentrant lock also permits nested write transactions below.
-        with self._serialized():
-            return self._initialize_locked()
+        with self._initialization.lock:
+            self._initialization.ready = None
+            with self._serialized():
+                version = self._initialize_locked()
+                identity = self._file_identity()
+                if identity is not None:
+                    self._initialization.ready = (identity, self.migrations, version)
+                return version
+
+    def _file_identity(self) -> tuple[int, ...] | None:
+        try:
+            status = self.path.stat()
+        except OSError:
+            return None
+        if not status.st_ino:
+            return None
+        identity = (status.st_dev, status.st_ino)
+        birth = getattr(status, "st_birthtime_ns", None)
+        return identity + (birth,) if birth is not None else identity
+
+    def ensure_initialized(self) -> int:
+        """Validate once per live canonical store/file/migration identity.
+
+        Warm factories never enter the writer boundary. No connection or job data
+        is retained. Explicit initialize remains the full audit/reopen boundary.
+        """
+        ready = self._initialization.ready
+        if ready is not None and ready[:2] == (self._file_identity(), self.migrations):
+            return ready[2]
+        with self._initialization.lock:
+            ready = self._initialization.ready
+            if ready is not None and ready[:2] == (self._file_identity(), self.migrations):
+                return ready[2]
+            return self.initialize()
 
     def _initialize_locked(self) -> int:
         try:

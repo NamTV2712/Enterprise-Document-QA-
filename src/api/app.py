@@ -148,7 +148,7 @@ structured_locations = StructuredLocationService(original_viewer, structured_rea
 def _workspace_transfer_service() -> WorkspaceTransferService:
     """Open the explicitly configured local workspace after API-001 authorization."""
     database = WorkspaceDatabase.from_settings(settings)
-    database.initialize()
+    database.ensure_initialized()
     return WorkspaceTransferService(database)
 
 
@@ -160,7 +160,7 @@ def _collections_repository() -> SQLiteCollectionRepository:
     never opens the private database.
     """
     database = WorkspaceDatabase.from_settings(settings)
-    database.initialize()
+    database.ensure_initialized()
     return SQLiteCollectionRepository(database)
 
 

@@ -53,7 +53,18 @@ def test_obs_real_tcp_smoke_has_complete_bounded_content_free_phases(tmp_path, p
     assert all(not value for value in result["correctness"]["counts"].values())
     assert result["correctness"]["database"]["schema"] == 7
     phases = {row["phase"] for row in data["phases"]}
-    assert {"api.total", "api.access", "api.service_init", "workspace.serialized_wait", "workspace.read"} <= phases
+    assert {"api.total", "api.access", "api.service_init"} <= phases
+    if profile != "admission":
+        assert "workspace.read" in phases
+    else:
+        # Admission reads stay inside its unchanged write transaction; expensive
+        # initializer read connections are absent from the warm measured window.
+        assert "workspace.read" not in phases
+    if profile == "read":
+        # Validated warm read factories no longer enter the writer/init boundary.
+        assert "workspace.serialized_wait" not in phases and "workspace.initialize" not in phases
+    else:
+        assert "workspace.serialized_wait" in phases
     if profile != "read":
         assert "workspace.transaction" in phases
     if profile in ("research", "mixed", "sse"):

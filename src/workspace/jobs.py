@@ -379,7 +379,7 @@ class SQLiteJobRepository:
     @classmethod
     def from_settings(cls, configured: Settings, **kwargs: Any) -> "SQLiteJobRepository":
         database = WorkspaceDatabase.from_settings(configured)
-        database.initialize()
+        database.ensure_initialized()
         return cls(database, **kwargs)
 
     def _new_id(self, prefix: str) -> str:
@@ -523,7 +523,7 @@ class SQLiteJobRepository:
 
     @classified("job_read")
     def get_job(self, job_id: str) -> DurableJob:
-        with self.database.connection() as connection:
+        with self.database.connection(snapshot=True) as connection:
             return self._job_in(connection, job_id)
 
     @classified("job_read")
@@ -569,7 +569,7 @@ class SQLiteJobRepository:
             clauses.append("state = ?")
             values.append(state)
         where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
-        with self.database.connection() as connection:
+        with self.database.connection(snapshot=True) as connection:
             total = int(connection.execute(f"SELECT COUNT(*) FROM jobs{where}", values).fetchone()[0])
             rows = connection.execute(
                 f"SELECT * FROM jobs{where} ORDER BY created_at DESC, job_id DESC LIMIT ? OFFSET ?",
@@ -1043,7 +1043,7 @@ class SQLiteJobRepository:
             raise ValueError("event sequence must be non-negative")
         if isinstance(limit, bool) or not 1 <= limit <= MAX_LIST_LIMIT:
             raise JobLimitError("event list limit is out of bounds")
-        with self.database.connection() as connection:
+        with self.database.connection(snapshot=True) as connection:
             if connection.execute("SELECT 1 FROM jobs WHERE job_id = ?", (job_id,)).fetchone() is None:
                 raise JobNotFoundError("durable job does not exist")
             rows = connection.execute(
@@ -1174,7 +1174,7 @@ class SQLiteJobRepository:
             raise ValueError("event sequence must be non-negative")
         if type(limit) is not int or not 1 <= limit <= MAX_LIST_LIMIT:
             raise JobLimitError("event list limit is out of bounds")
-        with self.database.connection() as connection:
+        with self.database.connection(snapshot=True) as connection:
             job = self._job_in(connection, job_id)
             if job.namespace != "agent":
                 raise JobNotFoundError("Agent run does not exist")

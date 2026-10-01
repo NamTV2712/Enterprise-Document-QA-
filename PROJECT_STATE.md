@@ -1,5 +1,86 @@
 # Project State
 
+## CI-FIX-001 release fixes — final exact-SHA gate (2026-10-01)
+
+Main-only task starting `eb962e8acd4f5a94dff3d49713a9bc5f27ea499b`;
+contract fix `21537c1479c73a9933c80e8ec126ee34bdd94e8e`, browser correction
+`8b28b76604bfc0e04df68223438dec6724c7716f`. The
+[receipt](docs/CI_FIX_001_FINAL_RECEIPT.md) records fresh failed GitHub runs,
+dependency parity, all structural differences, repetitions and retained limits.
+Required roadmap and completed optional milestones are unchanged.
+
+Primary Pydantic 2.13.4/core 2.46.4 differed from declared/CI 2.10.0/core 2.27.0.
+Fresh Windows requirements reproduced the Linux raw OpenAPI digest. Exactly 14
+bare object response schemas differ by explicit `additionalProperties: true`
+versus omission, with equivalent validation. Normalize only that rule in test
+data, retain the original operation digest, and freeze all three transitively
+referenced request/response schemas. Twelve new cases retain semantic drift
+detection. No runtime API, dependency or route change.
+
+Frontend failures were zero-stream sends during the independent initial session
+check: health readiness was insufficient, and the empty-history mock correctly
+blocked a concurrent preflight. Resolve initial history inside React `act` before
+submission; assert partial visibility, actual abort and rejection of late token,
+done/error/error-callback events after awaiting stream settlement. No product
+implementation, timeout, sleep, skip or retry change.
+
+Before exact cancellation repeats **19/20** pass; instrumented diagnosis **18/20**.
+After **50/50** pass (25 normal/25 CI flag). Fresh uncached OpenAPI generation
+**20/20 in each environment**, same original digest; router suites 22 each.
+API/security/cross-layer/Worker/DB/CRED/provider focused **569 passed**. Three
+full frontend suites each **94 files/818 tests**, frozen install/TypeScript/build
+PASS. Built Chromium/Firefox app journey **76 passed, retries=0**; actual light
+desktop and dark mobile screenshots inspected. Primary **1931 passed/188 warnings**;
+fix-SHA clean declared environment **1897 passed/34 expected skips/149 warnings**.
+Clean frozen frontend install/TypeScript/94 files/818 tests/build PASS.
+
+Retain one cold clean overlapping frontend/backend run: inherited history test
+exceeded its 5s budget; fixed cancellation passed. History isolated **20/20** and
+serial full frontend passed. Resource contention is plausible but unproven; no
+unrelated test/timeout/worker change hides this result. Fresh 149 warnings match
+starting Linux, including newer transitive AnyIO/Starlette; primary 188 unchanged.
+Existing Node action warnings and current 508.63 kB build warning remain.
+
+Backend initial fix-SHA CI 36843208943 SUCCESS; frontend HTTP/SSE SUCCESS, but
+full Frontend CI 36843208925 FAILURE exposed 35 browser failures after its 818
+unit tests passed. Preserve that failed candidate: 32 Agent sweep cases used the
+default preview instead of their required local harness, two exact sidebar
+assertions omitted the accepted Agent route, and Firefox's 200ms navigation gate
+included visibility assertion retry backoff. Move the same 32 required cases to
+the existing dedicated configuration in the HTTP integration CI job; correct
+the exact route expectation; use frame polling for the same visibility condition
+before retaining both explicit assertions in the measured navigation sequence.
+No production source, native clicks, sample count, 200ms budget, recording,
+timeout, retry or dependency changes. Agent **32/32**, sidebar **2/2**, navigation
+**20/20** (10/browser, p95 79.10-141.00ms), all zero retries. Removing recording
+was tested and rejected: both recorded and unrecorded original probes were 9/10.
+The regular 522 cases plus dedicated 32 retain the 554-case population, including
+four inherited provider-dependent skips.
+
+Browser correction Frontend CI 36848939269 then confirmed the dedicated harness:
+**16 HTTP/SSE + 32 Agent cases PASS**, job 110325747687 SUCCESS. Its unit job
+110325747432 failed two additional fixture assumptions (92 files/816 tests pass):
+Pipeline's intentionally repeated Stage run action after empty-history loading,
+and Discovery reading articles before a mock response committed. Pipeline
+reproduced in 7/10 local CI-flag affected-suite runs. Await the empty-history
+heading and scope its action; await the search busy label clearing. Production
+behavior and all double-submit/refusal/identity/score assertions stay unchanged.
+Afterwards **20/20 affected-suite runs** passed (28 cases each) and **three more
+full frontend suites** passed (94 files/818 tests each), plus TypeScript/build.
+The final receipt commit includes these bounded fixture corrections and receives
+the required complete Backend and Frontend workflows.
+
+Both workflows now include the receipt path so the
+documentation closure SHA also receives complete workflows. Final literal SHA,
+committed clean results and both exact-SHA SUCCESS conclusions belong to the
+closing report; failure blocks completion. Routes **90**, SQLite
+**v7/WAL/NORMAL/busy5000**, Worker **2/500/5000**, provider/CRED and DB-SCALE
+semantics preserved. Same 12 historical paths/.env/data untouched; diagnostics
+ignored under `.local/ci-fix-001/`.
+
+**CAPACITY-001 is NEXT**, NOT STARTED. UX-AGENT-001 and FINAL-IMPROVE are NOT
+STARTED; SCALE-003/API-PERF-001 remain outside this task. STOP after release.
+
 ## WORKER-002 complete — durable admission hints and capacity attribution (2026-10-01)
 
 Optional task on main, starting `d7bd0d4f66a03bc00be05876059a1b1ed1f04877`;

@@ -119,6 +119,9 @@ async function submitQuery(query = "cloud revenue") {
   fireEvent.change(screen.getByLabelText("Search Query"), { target: { value: query } });
   fireEvent.click(screen.getByRole("button", { name: "Search" }));
   await waitFor(() => expect(createSearchMock).toHaveBeenCalledTimes(1));
+  // Entering the mock does not mean its response has committed to React.
+  // The busy label clears after both success and refusal have been rendered.
+  await screen.findByRole("button", { name: "Search" });
 }
 
 describe("DiscoverySearchPage", () => {

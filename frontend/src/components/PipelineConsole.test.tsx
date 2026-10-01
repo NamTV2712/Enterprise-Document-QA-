@@ -105,6 +105,13 @@ async function connect() {
   await waitFor(() => expect(screen.getByText("Connected · local")).toBeInTheDocument());
 }
 
+async function openStageFromEmptyHistory() {
+  // Connection readiness precedes run-list readiness. The empty history has
+  // its own Stage run action in addition to the always-present header action.
+  const heading = await screen.findByRole("heading", { name: "No staged runs yet" });
+  fireEvent.click(within(heading.parentElement!).getByRole("button", { name: "Stage run" }));
+}
+
 beforeEach(() => {
   localStorage.clear();
   vi.spyOn(pipelineApi, "getDefinition").mockResolvedValue(definition());
@@ -157,7 +164,7 @@ describe("Pipeline workspace", () => {
     render(<Harness />);
     await connect();
 
-    fireEvent.click(screen.getByRole("button", { name: "Stage run" }));
+    await openStageFromEmptyHistory();
     const dialog = screen.getByRole("dialog", { name: "Stage an isolated run" });
     fireEvent.click(within(dialog).getByRole("checkbox", { name: "AAPL" }));
     const submit = within(dialog).getByRole("button", { name: "Create staged run" });
@@ -205,7 +212,7 @@ describe("Pipeline workspace", () => {
     vi.mocked(pipelineApi.stageRun).mockRejectedValue(new PipelineApiError(422));
     render(<Harness />);
     await connect();
-    fireEvent.click(screen.getByRole("button", { name: "Stage run" }));
+    await openStageFromEmptyHistory();
     const dialog = screen.getByRole("dialog", { name: "Stage an isolated run" });
     fireEvent.click(within(dialog).getByRole("checkbox", { name: "AAPL" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Create staged run" }));

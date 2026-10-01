@@ -47,6 +47,18 @@ to 9.340ms; saturated queueing, finite admission overlap and some service tails
 remain. Worker and poll defaults are unchanged; larger synthetic worker counts
 also raise possible provider concurrency and local/API costs.
 
+The [CI-FIX-001 receipt](docs/CI_FIX_001_FINAL_RECEIPT.md) records the release
+contract audit and exact-SHA GitHub evidence. OpenAPI verification normalizes
+the proven equivalent omitted/true extra-property rule on object responses and
+also freezes referenced request/response schemas. The route-cancellation fixture
+waits for the initial session check before sending, then verifies partial text,
+abort and rejection of late terminal events. Install declared Python requirements
+in a fresh environment and use Bun 1.3.14 with the frozen frontend lockfile for
+release validation; an existing development environment may contain other versions.
+CI runs the Agent shell sweep through its dedicated local fixture harness. Warm
+navigation checks retain the 200ms budget and observe visibility on browser frames
+before the explicit assertions, avoiding assertion polling delay in the samples.
+
 The independent frontend exposes Chat, Research, Documents, Search, Collections,
 Retrieval, Models, Pipeline, Agent, Reranker, Evaluation, Analytics, Datasets,
 Settings, and Logs. FastAPI supplies public catalog/search/inspection/report reads; opt-in

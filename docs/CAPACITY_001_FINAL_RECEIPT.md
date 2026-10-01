@@ -189,7 +189,7 @@ Primary and clean full backend run serially. Baseline: primary 1931/188 warnings
 | Secret/artifact/preserved-file audit | Required final gates; closing report |
 | Exact final GitHub Backend and Frontend CI | Both SUCCESS required, exact SHA/run IDs in closing report; no failure rerun to mask nondeterminism |
 
-Changed files: new benchmark driver, new capacity tests, protocol and this receipt; PROJECT_STATE and SCALING_ROADMAP updates. Both workflows gain this receipt in push/PR path filters so documentation closure triggers their full existing gates. No workflow test/timeout/retry/skip/ownership/budget change. No runtime/frontend production, dependency, lockfile, schema/index/migration, README, ARCHITECTURE or AGENTS changes. Deleted files: none.
+Changed files: new benchmark driver, new capacity tests, protocol and this receipt; PROJECT_STATE and SCALING_ROADMAP updates. Both workflows gain this receipt in push/PR path filters so documentation closure triggers their full existing gates. A task-specific `.gitignore` rule protects only `.audit-runtime/capacity-001/`; historical untracked paths retain their existing status. No workflow test/timeout/retry/skip/ownership/budget change. No runtime/frontend production, dependency, lockfile, schema/index/migration, README, ARCHITECTURE or AGENTS changes. Deleted files: none.
 
 Commits: ecc8cb4bf0c266341cfeeaf473c834c2d08dc252 — test(capacity): characterize agent service limits; 8f2af8edf760e1958ec21f8a64004131e1baf394 — fix(capacity): bind occupancy to measured durable jobs. The final policy/documentation commit is resolved by git log -1 --format=%H -- docs/CAPACITY_001_FINAL_RECEIPT.md and reported literally in the closing report.
 

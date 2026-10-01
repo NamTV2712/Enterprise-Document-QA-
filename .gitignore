@@ -4,6 +4,7 @@ __pycache__/
 .env
 data/
 .local/
+.audit-runtime/capacity-001/
 .ipynb_checkpoints/
 .DS_Store
 

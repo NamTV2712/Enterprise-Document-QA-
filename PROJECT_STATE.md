@@ -1,5 +1,59 @@
 # Project State
 
+## OBS-001 complete — performance attribution and fixed measurements (2026-10-01)
+
+Optional measurement extension on main, starting
+`6faacd5bfdd4259e7cb6d9504943ca392aa69f4f`; accepted runtime/harness
+**`6ea9d534ba55f24fc3f094095eefede74f526bf1`**. The
+[final receipt](docs/OBS_001_FINAL_RECEIPT.md) records versioned boundaries,
+complete per-trial tables, safety, rejected observer, uncertainty and release
+closure. Required product/Agent/provider, SCALE-001/002 and CRED-001 remain
+COMPLETE. SCALE-003 remains NOT STARTED. No bottleneck optimization implemented.
+
+Accepted fresh campaign: **16 scenarios / 48 trials**, six fixed anchors each
+off/on plus four enabled poll settings, three trials each. All correctness,
+missing API/worker observations and dropped spans are zero. Measured 10,790
+requests, 1,836 job rows (1,200 deliberately queued admission, 636 succeeded),
+6,020 captured traces / 163,654 spans and 982 selected durable summaries.
+Initial `023ec89…` observer campaign is excluded entirely: repeated telemetry
+initialization/full API persistence starved mixed workers. Initialized-store
+reuse and server-random one-in-ten durable API sampling resolve that observer
+defect; all successful worker cycles persist and benchmark capture stays complete.
+Private analytics explicitly labels its sampled population, with 30-day retention.
+
+Recommend exactly **DB-SCALE-001 — repository serialization/initialization under
+mixed read/SSE/worker load**, separately scoped, NOT STARTED. Mixed worker
+event-append serialized wait/transaction p95 **299.933/6.202ms**, claim
+**170.735/4.159ms**; SSE factory initialization/serialized wait p95
+**328.013/313.151ms**, serialization/send **0.044/0.167ms**. These scopes separate
+Python waiting from transaction work, not pure SQLite CPU. Worker capacity also
+contributes: research queue/service p95 **3658.011/857.056ms**, mixed
+**17633.700/2217.795ms**. Large API remainder and pre-ASGI paired client difference
+prevent a claim that DB changes alone resolve the API plateau. Retrieval dominance
+is not established with synthetic fixtures. Poll 100/250/500/1000ms is honestly
+INCONCLUSIVE for median/p95 tracking; production defaults stay 2/500ms/5000ms.
+
+Overhead remains visible: admission/read request throughput -11.14/-6.29%; mixed
+job throughput -14.42% and client p95 +27.98%. Three ordered trials, random durable
+selection, Windows sampling and same-process client/server/capture limit causal
+precision. No production SLO, user capacity, performance score or live quota use.
+Monotonic protocol `obs-001-attribution-v1`: 32 closed phases, 11 operations,
+inclusive nested spans, valid interval-union API remainder, bounded 128/512 spans,
+64 groups and 16KiB content-free summaries. DATA-004 lock order/CAS/lifecycle,
+provider attempts/CRED-001, native 21 metrics/digests and SSE cursor/order are intact.
+
+Final primary **1875 passed / 188 warnings / zero failures**; measured-runtime
+clean release **1841 passed / 34 expected artifact skips / 148 warnings / zero
+failures**. New OBS 61 tests; OBS + DATA-005 99 passed; clean OBS + CRED 94 passed.
+Compile/clean import/no import-time workers, 90 routes, SQLite fresh/reopen v7/ok
+and two guarded Generator transport probes PASS. Exact documentation HEAD clean
+release and normal main push SHA/0-0 closure are recorded in the final report.
+No dependency/lockfile/frontend/migration changes; inherited frontend 94 files /
+818 tests and TypeScript/build PASS were not rerun. Same 12 unrelated untracked
+paths are preserved. Raw reports remain ignored; secret/artifact audits pass.
+Unresolved P0–P2: zero. Remote Linux CI is not certified by these Windows gates.
+STOP after release; do not implement DB-SCALE-001 or SCALE-003 automatically.
+
 ## OBS-001 implementation validated; attribution campaign pending (2026-10-01)
 
 Optional measurement work on main, starting

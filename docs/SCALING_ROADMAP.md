@@ -7,8 +7,37 @@ milestones remain complete. Starting HEAD: `b13fff6affc919a19f13bda3ddc730c319a7
 | --- | --- | --- |
 | SCALE-001 | Bounded background workers / durable Agent execution | COMPLETE |
 | SCALE-002 | Load, concurrency and capacity characterization | COMPLETE |
-| OBS-001 | Content-free performance attribution and fixed hermetic measurements | Implementation validated; campaign/release pending |
+| OBS-001 | Content-free performance attribution and fixed hermetic measurements | COMPLETE |
 | SCALE-003 | Evidence-backed caching and resource optimization | Not started |
+
+## OBS-001: final attribution findings
+
+See the [final receipt](OBS_001_FINAL_RECEIPT.md) and
+[protocol](OBS_001_ATTRIBUTION_PROTOCOL.md). Accepted runtime
+`6ea9d534ba55f24fc3f094095eefede74f526bf1`: 16 scenarios / 48 hermetic trials,
+three each, six anchors off/on plus four low-load poll settings. Zero correctness,
+missing observation or span-drop failures; no checkpoint merging. The initial
+observer's repeated initialization/full API persistence caused starvation; its
+campaign is excluded. Initialized telemetry reuse and sampled durable API records
+resolve that defect. All benchmark captures remain complete.
+
+Mixed event-append serialized wait/transaction p95 is **299.933/6.202ms**; SSE
+initialization wait **313.151ms**, serialization/send **0.044/0.167ms**. Recommend
+exactly **DB-SCALE-001 — repository serialization/initialization under mixed
+read/SSE/worker load** (NOT STARTED), preserving worker fairness/CAS and measuring
+the large API remainder/ingress contribution. DB changes alone are not proven to
+resolve the API plateau. Worker queue capacity remains separate; retrieval
+dominance is unestablished. Poll 100/250/500/1000ms is INCONCLUSIVE for median/p95
+tracking. Defaults remain workers 2 / poll 500ms / grace 5000ms.
+
+Attribution overhead is measurable: admission/read requests/sec -11.14/-6.29%,
+mixed jobs/sec -14.42%, mixed client p95 +27.98%. Ordered three-trial campaigns,
+sampled durable selection and combined client/server/capture memory limit causal
+precision. No SLA or production capacity claim. Primary 1875/188 warnings;
+clean 1841/34 skips/148 warnings; 90 routes and SQLite v7. Exact documentation
+HEAD clean/push closure is reported with its literal final SHA. Required roadmap,
+SCALE-001/002 and CRED-001 remain complete; SCALE-003 is not started. STOP before
+the next optimization.
 
 ## SCALE-001-A: ownership audit and contract
 

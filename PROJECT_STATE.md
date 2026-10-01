@@ -90,8 +90,24 @@ Final original browser focus cases **60/60 PASS**, zero retries, 30 per engine;
 three final full frontend suites each **94 files/819 tests PASS**, TypeScript/build
 PASS, focused App/ChatMessage **42 PASS**. Four actual built inspector journeys
 and inspected screenshots cover light EN 1024px/dark VI 390px in both engines,
-Escape/focus restoration and no root horizontal overflow. Full exact-SHA CI
-must still succeed without retry-backed flakes before acceptance.
+Escape/focus restoration and no root horizontal overflow. Focus SHA
+`ed545eddb93fa169b7767dc693067eb935e9d7f6` has Backend CI **36856067163 SUCCESS**
+(1897/34/149) and Frontend CI **36856067299 SUCCESS** (94/819 units, type/build/
+contrast; regular browser **518 passed/4 inherited skips/zero flaky**, 16 HTTP/SSE
+and 32 Agent pass), both attempt 1. Warm navigation p95 138.10ms Chromium/174ms
+Firefox retains the 200ms gate. This accepts the production focus fix; final
+fixture/documentation SHA still requires both complete workflows and clean gates.
+
+A second cold clean-checkout history timeout on focus SHA
+`ed545eddb93fa169b7767dc693067eb935e9d7f6` reproduced without backend overlap.
+Fresh-install phase diagnostics prove the real lazy answer import took 5099.64ms
+before any article assertion, exceeding the unchanged 5s interaction budget;
+warm navigation completed in about 1.7s. Preload the real `ChatMessage` module in
+the App unit fixture lifecycle; no mock, runtime eager load, assertion, timeout,
+retry, sleep or test-count change. Built browser tests retain real lazy-loading
+coverage. Three separate fresh frozen-install full suites each 94/819 PASS,
+history 974/487/797ms; TypeScript/build PASS. Committed exact-SHA gates remain
+mandatory. All diagnostics removed.
 
 Both workflows now include the receipt path so the
 documentation closure SHA also receives complete workflows. Final literal SHA,

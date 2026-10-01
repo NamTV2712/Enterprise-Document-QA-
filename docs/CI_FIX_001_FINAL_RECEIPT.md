@@ -6,7 +6,9 @@ Fix SHA: `21537c1479c73a9933c80e8ec126ee34bdd94e8e`
 (`fix(ci): stabilize backend and frontend release contracts`).
 Browser correction SHA: `8b28b76604bfc0e04df68223438dec6724c7716f`
 (`fix(ci): correct browser suite ownership and timing checks`).
-The final release SHA is the documentation closure commit containing this
+Remaining-fixture SHA: `f40d7b5a42468428fc348e78394c316e766d5f3a`.
+Focus correction SHA: `ed545eddb93fa169b7767dc693067eb935e9d7f6`.
+The final release SHA is the fixture/documentation closure commit containing this
 receipt. Its literal SHA, exact-SHA run IDs/conclusions, clean-checkout results
 and push equality are recorded in the closing report after committing it.
 This receipt cannot contain its own Git object ID. That final gate is mandatory.
@@ -251,6 +253,51 @@ build passed. Together with the initial repair, six post-fix full frontend suite
 passed; no whole-suite rerun was used to mask a failure. The final committed
 checkout receives its own serial backend and frontend validation.
 
+## Accepted focus correction GitHub evidence
+
+Focus SHA **`ed545eddb93fa169b7767dc693067eb935e9d7f6`** has both terminal
+workflows successful, each on attempt 1:
+
+| Workflow | Run / jobs | Exact-SHA result |
+| --- | --- | --- |
+| [Backend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/runs/36856067163) | 36856067163 / 110348716990 | SUCCESS: 1897 passed, 34 expected skips, 149 warnings; original OpenAPI contract and compileall pass |
+| [Frontend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/runs/36856067299) | 36856067299 / test 110348717069, http-integration 110348717247 | SUCCESS: 94 files / 819 unit tests, TypeScript/build/contrast pass; regular browser 518 passed / 4 inherited skips / zero flaky; HTTP/SSE 16 and dedicated Agent 32 pass |
+
+Both original focus assertions pass on both engines without retry. Warm-navigation
+p95 is 138.10ms Chromium / 174.00ms Firefox within the unchanged 200ms gate.
+This evidence accepts the production focus correction. The final commit adds
+only the real-module unit setup below and closure documentation; it still requires
+its own committed clean gate and both complete exact-SHA workflows before the
+closing report can declare CI-FIX-001 complete. Earlier failures and retry-backed
+candidate results remain recorded above.
+
+## Cold clean-checkout history fixture
+
+Retain the initial cold checkout timeout above and a second occurrence on
+`ed545eddb93fa169b7767dc693067eb935e9d7f6` with backend work already finished:
+93 files / 818 tests passed, only inherited history navigation exceeded its
+unchanged 5s budget. Serial execution alone therefore does not explain or fix it.
+Temporary phase diagnostics in the owned clean checkout reproduced the same
+failure after a fresh frozen install. The real lazy `ChatMessage` import took
+**5099.64ms**, starting about 375ms after test entry; no answer/article assertion
+completed before the 5s test timeout. Two warm diagnostic runs imported it in
+671.14ms / 507.94ms and completed both navigation legs in 1687.86ms / 1693.60ms.
+The cold import cost, rather than the navigation contract, consumes the budget.
+All diagnostics were removed; logs remain ignored and contain no private data.
+
+Preload the real answer module in `App.test.tsx`'s existing test lifecycle before
+interaction timing. There is no component mock, production eager-loading change,
+new timeout, sleep, skip or retry. Both full-answer assertions, overview state,
+return action and conversation restoration stay unchanged. Production lazy loading
+continues to be exercised by the full built browser gate. Three independent
+fresh frozen-install full suites after the fix each pass **94 files / 819 tests**,
+with history cases
+**974ms / 487ms / 797ms**; TypeScript/build pass. All three retained cold startup
+costs (environment totals 174.03s / 177.04s / 177.20s), rather than relying on
+warm reruns. Primary TypeScript/full 94-file 819-test suite/build also pass
+after this final fixture change (history 1202ms). The final committed clean gate
+remains mandatory before release.
+
 ## Files, preservation and remaining limits
 
 ### Reproduced inspector focus race
@@ -308,7 +355,8 @@ Modified: `.github/workflows/backend.yml`, `.github/workflows/frontend.yml`,
 `PROJECT_STATE.md`. Added: `tests/fixtures/moved_openapi_schemas.json`, this receipt.
 Deleted: none. Coherent commits cover the initial contract fix, browser gate
 corrections, remaining fixture synchronization, the reproduced focus race, and
-final successful CI evidence. Accepted fix SHAs are recorded above; the final
+cold-module fixture setup with final successful CI evidence. Accepted fix SHAs
+are recorded above; the final
 documentation SHA is in the closing report.
 Full diagnostics/environments/logs remain ignored under `.local/ci-fix-001/`.
 The task-owned detached clean checkout is removed after final validation;

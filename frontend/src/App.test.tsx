@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 
 import App, { resolveDisplayedAnswerTarget, resolveEvidenceCommandTarget } from "./App";
 import { LocaleProvider } from "./lib/i18n";
@@ -19,6 +19,13 @@ vi.mock("./lib/api", () => ({
   ...apiMocks,
   getApiBaseUrl: () => "http://localhost:8000",
 }));
+
+// Load the real answer component before timing interactions. Cold dependency
+// transforms otherwise consume the navigation test's budget before any answer
+// can render; production lazy loading remains covered by the browser suite.
+beforeAll(async () => {
+  await import("./components/ChatMessage");
+});
 
 describe("App request cancellation", () => {
   beforeEach(() => {

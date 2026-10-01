@@ -32,9 +32,14 @@ durable IDs now select occupancy, with a regression. Entire initial partial
 campaign excluded; no merged populations. **18 new tests PASS**, focused prior
 regressions **319/1 warning**, primary **1949/188 warnings**, frontend **94/819**,
 frozen install/TypeScript/build PASS. Routes 90 / SQLite v7 unchanged. Exact final
-receipt-commit clean gates, normal push equality and both complete CI successes
-are mandatory release closure and are reported literally in the closing report.
-Both CI path filters include the new receipt; existing gates are unchanged.
+receipt-commit clean gates, normal push equality and full exact-SHA Backend CI
+success are mandatory release closure and are reported literally in the closing report.
+The user waived Frontend CI for CAPACITY-001 on 2026-10-01 after run 36886766285
+was cancelled near the existing 30-minute limit: 517 browser passes, two skips,
+no logged assertion failure, and no completed suite. Other frontend gates passed.
+This is an explicit release waiver, not a green Frontend CI claim. Local final
+frontend validation remains required. Both CI path filters include the receipt;
+workflows and their timeout/retry/test/skip behavior remain configured unchanged.
 No dependency/lockfile/migration/index/production frontend changes. Same 12
 historical untracked paths and `.env`/`data/` preserved; raw task artifacts ignored.
 

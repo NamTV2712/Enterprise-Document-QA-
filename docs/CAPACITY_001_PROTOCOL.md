@@ -88,4 +88,8 @@ goal, answer, evidence/document text, reasoning, provider body, credentials,
 headers, SQL or raw exception body is a timing dimension or artifact field.
 All historical untracked files and `.env` are preserved. No data regeneration.
 Canonical reporting requires a complete report and exact final local/clean tests,
-push with no upstream movement, and both full GitHub workflows at final SHA.
+push with no unexpected upstream movement, and full GitHub Backend CI at final
+SHA. The user waived Frontend CI for CAPACITY-001 on 2026-10-01 after the prior
+browser job was cancelled near its existing timeout. That cancellation is not
+a success. Local final frontend gates remain required; workflow configuration,
+tests, timeouts and retries remain unchanged.

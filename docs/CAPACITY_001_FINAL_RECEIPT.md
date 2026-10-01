@@ -1,6 +1,8 @@
 # CAPACITY-001 final receipt
 
-Date: 2026-10-01. Optional characterization on `main`; required and completed optional milestones remain complete. Release is complete only after the exact latest receipt commit passes the clean-checkout, normal push and both full GitHub CI gates below. Literal final SHA/run IDs are supplied in the ignored closing report and final chat after those gates finish. No next task is started.
+Date: 2026-10-01. Optional characterization on `main`; required and completed optional milestones remain complete. Release is complete only after the exact latest receipt commit passes the clean-checkout, normal push and full GitHub Backend CI gates below. Literal final SHA/run IDs are supplied in the ignored closing report and final chat after those gates finish. No next task is started.
+
+Release-gate amendment (2026-10-01): the user waived Frontend CI for CAPACITY-001 after run 36886766285 at 460461af2dfb2e77a26f76a2cebe77adc5e7df31 was cancelled near the existing 30-minute job limit. Its regular browser suite did not finish: 517 passes, two skips and no assertion failure were logged out of 524 planned tests. Unit tests, TypeScript, build, contrast, HTTP/SSE and Agent harness gates passed. The cancellation is not recorded as a success. Frontend CI remains configured; no workflow timeout, retry, skip or test change implements this waiver. Exact-final local frontend validation and full exact-SHA Backend CI remain required.
 
 ## Bindings and protocol
 
@@ -187,13 +189,14 @@ Primary and clean full backend run serially. Baseline: primary 1931/188 warnings
 | Exact-final clean frontend | Frozen install / TypeScript / full unit / build required; closing report |
 | Import/public startup/routes/SQLite | Required final gates; closing report |
 | Secret/artifact/preserved-file audit | Required final gates; closing report |
-| Exact final GitHub Backend and Frontend CI | Both SUCCESS required, exact SHA/run IDs in closing report; no failure rerun to mask nondeterminism |
+| Exact final GitHub Backend CI | Full SUCCESS required; exact SHA/run ID in closing report; no failure rerun to mask nondeterminism |
+| GitHub Frontend CI | Waived by the user for CAPACITY-001; prior cancelled run disclosed above, optional final run status in closing report |
 
 Changed files: new benchmark driver, new capacity tests, protocol and this receipt; PROJECT_STATE and SCALING_ROADMAP updates. Both workflows gain this receipt in push/PR path filters so documentation closure triggers their full existing gates. A task-specific `.gitignore` rule protects only `.audit-runtime/capacity-001/`; historical untracked paths retain their existing status. No workflow test/timeout/retry/skip/ownership/budget change. No runtime/frontend production, dependency, lockfile, schema/index/migration, README, ARCHITECTURE or AGENTS changes. Deleted files: none.
 
 Commits: ecc8cb4bf0c266341cfeeaf473c834c2d08dc252 — test(capacity): characterize agent service limits; 8f2af8edf760e1958ec21f8a64004131e1baf394 — fix(capacity): bind occupancy to measured durable jobs. The final policy/documentation commit is resolved by git log -1 --format=%H -- docs/CAPACITY_001_FINAL_RECEIPT.md and reported literally in the closing report.
 
-Raw reports/logs/probes remain ignored in `.audit-runtime/capacity-001/`. No prompt/goal/answer/evidence/document text, provider body/reasoning, credential/header/SQL/raw exception dimension enters timing artifacts or Git. `.env`, `data/` and the same 12 historical untracked paths are preserved; only the task-owned new capacity subdirectory is added inside the existing audit directory. Normal main-only commits/push; no PR/feature branch, rebase/amend/reset/clean/stash/force push. Fresh fetch before push must show origin/main still at the starting SHA; divergence stops release.
+Raw reports/logs/probes remain ignored in `.audit-runtime/capacity-001/`. No prompt/goal/answer/evidence/document text, provider body/reasoning, credential/header/SQL/raw exception dimension enters timing artifacts or Git. `.env`, `data/` and the same 12 historical untracked paths are preserved; only the task-owned new capacity subdirectory is added inside the existing audit directory. Normal main-only commits/push; no PR/feature branch, rebase/amend/reset/clean/stash/force push. Fresh fetch before each push must show origin/main at the last own pushed SHA (the starting SHA before the first push); unexpected movement stops release.
 
 ## Roadmap and stop boundary
 

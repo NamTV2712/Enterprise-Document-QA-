@@ -12,7 +12,7 @@ milestones remain complete. Starting HEAD: `b13fff6affc919a19f13bda3ddc730c319a7
 | DB-SCALE-001 | Reduce repeated initialization and repository contention under mixed load | COMPLETE |
 | WORKER-002 | Bounded queue/scheduling and admission fairness attribution with durable admission hints | COMPLETE |
 | CI-FIX-001 | Authoritative backend/frontend release gates and exact-SHA CI | COMPLETE |
-| CAPACITY-001 | Bounded Agent service capacity and provider concurrency policy | COMPLETE once exact-SHA release gates pass |
+| CAPACITY-001 | Bounded Agent service capacity and provider concurrency policy | COMPLETE once exact-SHA Backend CI and local release gates pass; Frontend CI waived by user |
 | UX-AGENT-001 | Next bounded Agent UX task | NEXT |
 | FINAL-IMPROVE | Final current-round closure | NOT STARTED |
 | SCALE-003 | Future evidence-backed caching/resource work, outside current round | NOT STARTED / DEFERRED |
@@ -38,9 +38,12 @@ retrieval/schema/dependency change justified. No Groq quota or global Generator
 capacity claim, including synchronous query work surviving cancellation.
 
 18 new tests; primary 1949/188 warnings, frontend 94/819, TypeScript/build PASS.
-Final exact receipt-commit clean tests, normal main push equality and both full
-GitHub workflows SUCCESS are required release closure, with literal SHA/results
-in the closing report. Receipt paths trigger both unchanged complete workflows.
+Final exact receipt-commit clean tests, normal main push equality and full
+GitHub Backend CI SUCCESS are required release closure, with literal SHA/results
+in the closing report. The user waived Frontend CI for CAPACITY-001 on 2026-10-01
+after run 36886766285 was cancelled near its existing 30-minute limit; its browser
+suite is incomplete, not successful. Local final frontend gates remain required.
+Receipt paths trigger both unchanged complete workflows; no CI gate was weakened.
 Same 12 historical untracked paths preserved. Required and completed optional
 milestones remain complete. Performance investigation ends here; exactly
 **UX-AGENT-001 is NEXT**, then FINAL-IMPROVE. STOP; start neither automatically.

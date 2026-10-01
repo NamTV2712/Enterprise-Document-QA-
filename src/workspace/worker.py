@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
+from contextlib import nullcontext
+from src.workspace.attribution import capture, record_interval, span, timed
 from dataclasses import dataclass
 
 from configs.settings import Settings
@@ -38,7 +41,8 @@ class WorkerSupervisor:
     """N fixed consumers, no per-queued-job task and no namespace business loop."""
 
     def __init__(self, repository: SQLiteJobRepository, registry: ExecutorRegistry,
-                 config: WorkerConfig = WorkerConfig()) -> None:
+                 config: WorkerConfig = WorkerConfig(), *, attribution_enabled: bool = False,
+                 attribution_sink=None) -> None:
         self.repository = repository
         self.registry = registry
         self.config = config
@@ -46,6 +50,8 @@ class WorkerSupervisor:
         self._tasks: tuple[asyncio.Task[None], ...] = ()
         self._active: set[str] = set()
         self._stopping = False
+        self.attribution_enabled = attribution_enabled
+        self.attribution_sink = attribution_sink
 
     @property
     def task_count(self) -> int:
@@ -107,6 +113,7 @@ class WorkerSupervisor:
             # DB failure leaves active authority for startup recovery; never replay.
             logger.error("durable_worker_reconciliation_failed")
 
+    @timed("worker.claim")
     async def _claim(self) -> DurableJob | None:
         # Cancellation cannot abandon a thread that may commit ownership later.
         # Finish the bounded SQLite operation, then reconcile any claimed row.
@@ -120,35 +127,60 @@ class WorkerSupervisor:
             raise
 
     async def _worker(self) -> None:
+        previous_idle = None
         while not self._stop.is_set():
-            try:
-                job = await self._claim()
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                logger.error("durable_worker_claim_failed")
-                await self._idle()
-                continue
+            job = None
+            with capture("worker") if self.attribution_enabled else nullcontext() as trace:
+                if previous_idle is not None:
+                    record_interval("worker.poll_wait", *previous_idle)
+                with span("worker.cycle"):
+                    job = await self._iteration()
+            if job is not None and job.namespace == "agent" and self.attribution_sink is not None and trace is not None:
+                try:
+                    await self.attribution_sink(trace, correlation_id=job.job_id, route_template="worker.agent")
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    logger.warning("performance_telemetry_write_failed")
             if job is None:
+                began = time.perf_counter_ns()
                 await self._idle()
-                continue
-            if self._stop.is_set():
-                await self._reconcile(job)
-                break
-            self._active.add(job.job_id)
-            try:
-                await self.registry.resolve(job).execute(job)
-                # A returned executor must have persisted its namespace outcome.
-                # If it did not, the external boundary is uncertain, never retry.
-                await self._reconcile(job)
-            except asyncio.CancelledError:
-                await self._reconcile(job)
-                raise
-            except Exception:
-                logger.error("durable_worker_executor_failed namespace=%s", job.namespace)
-                await self._reconcile(job)
-            finally:
-                self._active.discard(job.job_id)
+                previous_idle = (began, time.perf_counter_ns())
+            else:
+                previous_idle = None
+
+    async def _iteration(self):
+        try:
+            job = await self._claim()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.error("durable_worker_claim_failed")
+            return None
+        if job is None:
+            return None
+        if self._stop.is_set():
+            await self._reconcile(job)
+            return job
+        await self._execute(job)
+        return job
+
+    @timed("worker.service")
+    async def _execute(self, job):
+        self._active.add(job.job_id)
+        try:
+            await self.registry.resolve(job).execute(job)
+            # A returned executor must have persisted its namespace outcome.
+            # If it did not, the external boundary is uncertain, never retry.
+            await self._reconcile(job)
+        except asyncio.CancelledError:
+            await self._reconcile(job)
+            raise
+        except Exception:
+            logger.error("durable_worker_executor_failed namespace=%s", job.namespace)
+            await self._reconcile(job)
+        finally:
+            self._active.discard(job.job_id)
 
     async def stop(self) -> None:
         self._stopping = True

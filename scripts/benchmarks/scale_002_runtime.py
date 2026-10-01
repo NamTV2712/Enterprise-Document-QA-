@@ -164,7 +164,7 @@ def observe_database(stack: ExitStack, database_path: Path, observer: Observer):
             with observer.lock: observer.claim_ms.append((time.perf_counter() - started) * 1000)
         return job
 
-    stack.enter_context(patch.object(sqlite3, "connect", connect))
+    stack.enter_context(patch.object(database_module.WorkspaceDatabase, "_open_connection", staticmethod(connect)))
     stack.enter_context(patch.object(database_module, "_write_lock_for", lock_for))
     stack.enter_context(patch.object(SQLiteJobRepository, "claim_next_job", claim))
 
@@ -206,10 +206,14 @@ class Runtime:
                         "cancel" if endpoint.endswith("/cancel") else
                         "list" if endpoint == "/agent/runs" else "detail")
             self.endpoint_ms[category].append(duration)
+            self.observe_response(response.headers.get("x-request-id"), category, duration)
             self.statuses[str(response.status_code)] += 1
         if response.status_code != expected:
             raise BenchmarkFailure("unexpected_http_status")
         return response
+
+    def observe_response(self, correlation_id, category, duration):
+        """Optional OBS completion seam; SCALE-002 retains no extra samples."""
 
     async def create(self, ordinal, research=False):
         body = {"goal": "Research benchmark filing evidence.", "allow_decision_provider_execution": True}
@@ -289,6 +293,7 @@ class Runtime:
                 duration = (time.perf_counter() - started) * 1000
                 self.request_ms.append(duration)
                 self.endpoint_ms["sse_batch"].append(duration)
+                self.observe_response(response.headers.get("x-request-id"), "sse_batch", duration)
                 self.statuses["200"] += 1
             self.sse["finite_closures"] += 1
             if not terminal: await asyncio.sleep(.1)

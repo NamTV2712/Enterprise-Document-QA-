@@ -1,6 +1,7 @@
 """Adapters over existing product services, with no HTTP self-calls."""
 
 from __future__ import annotations
+from src.workspace.attribution import timed
 
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
@@ -34,6 +35,7 @@ class ToolServices:
         self.rag_query = rag_query
 
 
+@timed("retrieval.search")
 def search_documents(services: ToolServices, body: SearchDocumentsInput) -> DiscoverySnapshotResponse:
     try:
         snapshot = services.discovery().search(**body.model_dump())
@@ -44,6 +46,7 @@ def search_documents(services: ToolServices, body: SearchDocumentsInput) -> Disc
     return DiscoverySnapshotResponse.model_validate(snapshot.as_payload(body.page, body.page_size))
 
 
+@timed("retrieval.inspect")
 async def inspect_retrieval(services: ToolServices, body: InspectRetrievalInput) -> RetrievalObservation:
     try:
         return RetrievalObservation.model_validate(await services.inspect(body))

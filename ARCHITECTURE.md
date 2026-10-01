@@ -6,6 +6,16 @@ and engineering decisions, and `AGENTS.md` for repository operating rules.
 
 ## System Context
 
+OBS-001 adds opt-in content-free timing at existing Agent API, repository,
+worker/provider/tool, native evaluation and SSE boundaries. Inclusive monotonic
+spans are bounded and discarded after a typed terminal summary is written to
+DATA-005's existing `telemetry_events` table (30-day retention, SQLite v7).
+Python serialization wait, critical-section hold, connection opening, transaction
+and read scopes are measured separately; instrumentation emits after product
+locks release. There is no second telemetry store, new endpoint, dependency or
+worker scheduling change. Private analytics keeps performance separate from
+legacy request/quality populations. See the [protocol](docs/OBS_001_ATTRIBUTION_PROTOCOL.md).
+
 ```mermaid
 flowchart LR
     Browser[Vite React Frontend]

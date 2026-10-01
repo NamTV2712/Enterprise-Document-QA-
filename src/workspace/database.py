@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+import time
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -11,6 +12,7 @@ from pathlib import Path
 from typing import Iterator
 
 from configs.settings import Settings
+from src.workspace.attribution import defer_database_observations, record_interval, timed
 from src.workspace.migrations import (
     EXPECTED_TABLES_BY_VERSION,
     MIGRATIONS,
@@ -126,9 +128,15 @@ class WorkspaceDatabase:
     def latest_schema_version(self) -> int:
         return self.migrations[-1].version
 
+    @staticmethod
+    def _open_connection(*args, **kwargs):
+        """Owned factory seam for offline benchmark connection observation."""
+        return sqlite3.connect(*args, **kwargs)
+
+    @timed("workspace.connection_open")
     def _connect(self) -> sqlite3.Connection:
         try:
-            connection = sqlite3.connect(
+            connection = self._open_connection(
                 self.path,
                 timeout=self.busy_timeout_ms / 1000,
                 isolation_level=None,
@@ -155,38 +163,73 @@ class WorkspaceDatabase:
     @contextmanager
     def connection(self) -> Iterator[sqlite3.Connection]:
         connection = self._connect()
+        started = time.perf_counter_ns()
+        outcome = "completed"
         try:
             yield connection
+        except BaseException:
+            outcome = "failed"
+            raise
         finally:
+            ended = time.perf_counter_ns()
             connection.close()
+            record_interval("workspace.read", started, ended, outcome=outcome)
+
+    @contextmanager
+    def _serialized(self):
+        # Record only after the outer reentrant boundary releases the existing
+        # lock. No telemetry lock or persistence occurs in this critical section.
+        with defer_database_observations():
+            started = time.perf_counter_ns()
+            acquired = None
+            outcome = "completed"
+            try:
+                with self._write_lock:
+                    acquired = time.perf_counter_ns()
+                    yield
+            except BaseException:
+                outcome = "failed"
+                raise
+            finally:
+                ended = time.perf_counter_ns()
+                if acquired is not None:
+                    record_interval("workspace.serialized_wait", started, acquired)
+                    record_interval("workspace.critical_section", acquired, ended, outcome=outcome)
 
     @contextmanager
     def transaction(self, *, write: bool = False) -> Iterator[sqlite3.Connection]:
-        lock = self._write_lock if write else nullcontext()
+        lock = self._serialized() if write else nullcontext()
         with lock:
             connection = self._connect()
+            started = time.perf_counter_ns()
+            outcome = "completed"
             try:
                 connection.execute("BEGIN IMMEDIATE" if write else "BEGIN")
                 yield connection
                 connection.commit()
             except sqlite3.OperationalError as error:
+                outcome = "failed"
                 connection.rollback()
                 if self._is_busy(error):
                     raise WorkspaceBusyError("workspace database is busy") from error
                 raise
             except BaseException:
+                outcome = "failed"
                 connection.rollback()
                 raise
             finally:
+                ended = time.perf_counter_ns()
                 connection.close()
+                record_interval("workspace.transaction", started, ended, outcome=outcome)
 
+    @timed("workspace.initialize")
     def initialize(self) -> int:
         """Create and migrate the configured database, safely and repeatably."""
         # The receipt snapshot and all pending migrations form one operation.
         # Locking only individual migration transactions lets another instance
         # apply the same pending list between inspection and application. The
         # shared reentrant lock also permits nested write transactions below.
-        with self._write_lock:
+        with self._serialized():
             return self._initialize_locked()
 
     def _initialize_locked(self) -> int:

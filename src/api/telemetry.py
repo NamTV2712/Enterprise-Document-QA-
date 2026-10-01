@@ -9,6 +9,13 @@ from typing import Any
 
 
 class RequestTelemetry:
+    def record_attribution(self, trace, *, correlation_id: str, route_template: str) -> None:
+        """Completion seam for hermetic attribution; raw spans are not retained here.
+
+        Private bounded summaries are persisted by the DATA-005 owner. The
+        public metrics population and its existing semantics remain unchanged.
+        """
+
     def __init__(self) -> None:
         self._lock = Lock()
         self._requests: Counter[str] = Counter()

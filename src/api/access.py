@@ -7,6 +7,7 @@ Forwarding headers are deliberately irrelevant to this boundary.
 """
 
 from __future__ import annotations
+from src.workspace.attribution import timed
 
 import ipaddress
 import secrets
@@ -107,6 +108,7 @@ def _valid_bearer_token(request: Request) -> bool:
     return well_formed and matches
 
 
+@timed("api.access")
 def require_local_workspace_access(request: Request) -> AccessGrant:
     """Authorize one private workspace read or write request."""
     if settings.workspace_mode != "local":
@@ -127,6 +129,7 @@ def require_local_workspace_access(request: Request) -> AccessGrant:
             detail=_AUTH_REQUIRED,
             headers={"WWW-Authenticate": "Bearer"},
         )
+    request.state.performance_workspace_authorized = True
     return AccessGrant(
         frozenset(
             {

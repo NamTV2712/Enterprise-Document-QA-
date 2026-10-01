@@ -1,6 +1,7 @@
 """DATA-004 ownership around the existing bounded Agent orchestrator."""
 
 from __future__ import annotations
+from src.workspace.attribution import span, timed
 
 import asyncio
 import hashlib
@@ -102,6 +103,7 @@ class AgentDurableService:
         self.decision_provider = decision_provider
         self._sensitive_values = sensitive_values
 
+    @timed("api.freeze")
     def _plan(self, body: AgentRunCreateRequest) -> FrozenAgentPlan:
         return FrozenAgentPlan(
             decision_model_id=self.decision_model_id, decision_provider=self.decision_provider,
@@ -115,9 +117,11 @@ class AgentDurableService:
             research=body.research,
         )
 
+    @timed("api.admission")
     def create(self, body: AgentRunCreateRequest, *, idempotency_key: str) -> AgentRunResponse:
-        if contains_protected_value(body.model_dump(mode="json"), self._sensitive_values):
-            raise ValueError("Agent request contains protected runtime data")
+        with span("api.validation"):
+            if contains_protected_value(body.model_dump(mode="json"), self._sensitive_values):
+                raise ValueError("Agent request contains protected runtime data")
         plan = self._plan(body)
         encoded = plan.model_dump(mode="json", exclude_none=True)
         fingerprint = hashlib.sha256(_canonical_json(encoded)).hexdigest()
@@ -175,9 +179,11 @@ class AgentDurableService:
             if job.failure_code and job.failure_message else None,
         )
 
+    @timed("api.read")
     def get(self, run_id: str) -> AgentRunResponse:
         return self._view(self._job(run_id))
 
+    @timed("api.read")
     def list(self, *, state: JobState | None, page: int, page_size: int) -> AgentRunPage:
         rows = self.repository.list_jobs(
             namespace="agent", state=state, limit=page_size, offset=(page - 1) * page_size,
@@ -185,6 +191,7 @@ class AgentDurableService:
         return AgentRunPage(items=[self._view(job) for job in rows.items],
                             total=rows.total, page=page, page_size=page_size)
 
+    @timed("api.read")
     def result(self, run_id: str) -> AgentRunResultResponse:
         view = self.get(run_id)
         return AgentRunResultResponse(
@@ -198,6 +205,7 @@ class AgentDurableService:
             job.job_id, expected_revision=expected_revision,
         ))
 
+    @timed("sse.read_events")
     def events(self, run_id: str, *, after_sequence: int) -> tuple[AgentRunEventResponse, ...]:
         job = self._job(run_id)
         rows = self.repository.list_agent_events(job.job_id, after_sequence=after_sequence, limit=100)
@@ -234,6 +242,7 @@ class AgentDurableService:
             step_count=step_count, max_steps=max_steps,
         )
 
+    @timed("agent.persist_result")
     def _finish(self, job_id: str, result: AgentResult) -> None:
         # A concurrent cancellation can win after the last Agent boundary.
         # Re-read before each transition and let DATA-004 decide the state.

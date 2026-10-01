@@ -137,6 +137,7 @@ class Settings(BaseSettings):
 
     # Effective only in explicitly enabled local execution, never public mode.
     workspace_worker_enabled: bool = True
+    enable_performance_attribution: bool = False
     workspace_worker_concurrency: int = Field(default=2, ge=1, le=16)
     workspace_worker_poll_interval_ms: int = Field(default=500, ge=100, le=5000)
     workspace_worker_shutdown_grace_ms: int = Field(default=5000, ge=100, le=60_000)

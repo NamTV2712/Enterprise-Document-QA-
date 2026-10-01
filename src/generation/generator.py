@@ -4,6 +4,7 @@ Purpose: Call the Groq API with the retrieved context and return a cited respons
 """
 
 import logging
+from src.workspace.attribution import timed
 import re
 import time
 from dataclasses import dataclass
@@ -204,6 +205,7 @@ class Generator:
         delay = value / 1000 if unit == "ms" else value
         return min(delay + 0.5, 30.0)
 
+    @timed("generator.transport")
     def _create_groq_chat_completion(
         self, *, _retry_limit: int | None = None, **kwargs: Any
     ) -> Any:

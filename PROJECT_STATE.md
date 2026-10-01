@@ -1,5 +1,30 @@
 # Project State
 
+## OBS-001 implementation validated; attribution campaign pending (2026-10-01)
+
+Optional measurement work on main, starting
+`6faacd5bfdd4259e7cb6d9504943ca392aa69f4f`. Required product/Agent/provider,
+SCALE-001/002 and CRED-001 remain COMPLETE; SCALE-003 is NOT STARTED.
+The [OBS protocol](docs/OBS_001_ATTRIBUTION_PROTOCOL.md) defines opt-in bounded
+monotonic content-free spans, separate Python serialized wait/SQLite boundaries,
+API/worker/provider/four-tool/evaluation/SSE attribution and DATA-005 terminal
+summaries. No optimization, new route, migration, dependency, lockfile or
+production frontend change. Defaults remain workers 2 / poll 500ms / grace 5000ms.
+
+New OBS tests: **58 passed / 1 inherited warning**. Full primary:
+**1872 passed / 188 warnings / zero failures**. SCALE-002 legacy real-TCP smoke
+and CRED/provider/Agent/worker regressions pass within that release suite.
+A reproduced legacy analytics/log defect incorrectly validated terminal Agent
+jobs against the three legacy job namespaces; queries now exclude Agent while
+keeping existing legacy populations and corrupt-namespace rejection.
+Timing decoration preserves evaluated dependency signatures after an initial
+FastAPI annotation regression was reproduced and repaired.
+
+Runtime and harness must be committed before canonical anchor/overhead/poll
+measurements. Completion, bottleneck selection, clean release and normal main
+push remain pending. Raw diagnostics are ignored under `.local/obs-001/`; the
+12 historical untracked paths remain untouched. No live provider or data mutation.
+
 ## CRED-001 complete - Groq credential consolidation (2026-10-01)
 
 Bounded optional configuration task on main, starting

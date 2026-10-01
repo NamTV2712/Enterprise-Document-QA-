@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+from contextlib import nullcontext
+from src.workspace.attribution import span
 from dataclasses import dataclass
 from typing import Any, Callable, Literal
 
@@ -53,6 +55,14 @@ class AgentToolRegistry:
             raise AgentToolError("unknown_tool") from error
 
     async def invoke(
+        self, name: str, arguments: dict[str, Any], context: AgentExecutionContext,
+    ) -> ToolObservation:
+        self.get(name)  # Unknown names fail closed before selecting a phase.
+        known = name in ("search_documents", "inspect_retrieval", "read_document", "ask_rag")
+        with span("agent.tool." + name) if known else nullcontext():
+            return await self._invoke(name, arguments, context)
+
+    async def _invoke(
         self, name: str, arguments: dict[str, Any], context: AgentExecutionContext,
     ) -> ToolObservation:
         tool = self.get(name)

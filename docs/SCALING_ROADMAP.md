@@ -7,6 +7,7 @@ milestones remain complete. Starting HEAD: `b13fff6affc919a19f13bda3ddc730c319a7
 | --- | --- | --- |
 | SCALE-001 | Bounded background workers / durable Agent execution | COMPLETE |
 | SCALE-002 | Load, concurrency and capacity characterization | COMPLETE |
+| OBS-001 | Content-free performance attribution and fixed hermetic measurements | Implementation validated; campaign/release pending |
 | SCALE-003 | Evidence-backed caching and resource optimization | Not started |
 
 ## SCALE-001-A: ownership audit and contract

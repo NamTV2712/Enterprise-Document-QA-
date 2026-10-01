@@ -495,6 +495,53 @@ class SQLiteTelemetryRepository:
             raise TelemetryConflictError("terminal telemetry identity is immutable")
         return record
 
+    def record_performance_terminal(self, *, summary, correlation_id: str, route_template: str) -> None:
+        """OBS-001 closed terminal summary in the existing DATA-005 authority."""
+        from src.workspace.attribution import AGENT_ROUTES, TimingSummary
+        summary = TimingSummary.model_validate_json(summary.model_dump_json())
+        if not ((summary.source == "api" and route_template in AGENT_ROUTES)
+                or (summary.source == "worker" and route_template == "worker.agent")):
+            raise TelemetryValidationError("unsupported performance route")
+        _validate_opaque(correlation_id, label="performance correlation", forbidden_values=self._forbidden_secret_values)
+        current = self.now()
+        root_phase = "api.total" if summary.source == "api" else "worker.service"
+        roots = [group for group in summary.phases if group.phase == root_phase]
+        duration = roots[0].total_ms if len(roots) == 1 else None
+        outcome = "failed" if roots and roots[0].failed else "cancelled" if roots and roots[0].cancelled else "rejected" if roots and roots[0].rejected else "succeeded"
+        values = (self.new_record_id(), "performance_terminal", route_template, "local_workspace", outcome,
+                  duration, _format_utc(current), _format_utc(current + timedelta(days=TELEMETRY_RETENTION_DAYS)),
+                  TELEMETRY_RECORD_SCHEMA_VERSION, "api", "info", correlation_id, None, None, summary.model_dump_json())
+        with self.database.transaction(write=True) as connection:
+            connection.execute("DELETE FROM telemetry_events WHERE retention_until <= ?", (_format_utc(current),))
+            connection.execute(
+                "INSERT INTO telemetry_events(telemetry_id,event_name,route_template,capability,status,duration_ms,"
+                "occurred_at,retention_until,record_schema_version,subsystem,severity,correlation_id,domain_id,error_code,metadata_json) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", values)
+
+    def performance_summaries(self, *, started_at: datetime, ended_at: datetime):
+        """At most 10,000 summaries; never return private correlation identities."""
+        from src.workspace.attribution import AGENT_ROUTES, TimingSummary
+        if ended_at <= started_at or ended_at - started_at > timedelta(days=TELEMETRY_RETENTION_DAYS):
+            raise TelemetryValidationError("performance query window is invalid")
+        with self.database.connection() as connection:
+            rows = connection.execute(
+                "SELECT route_template, metadata_json, record_schema_version, subsystem, capability FROM telemetry_events WHERE event_name='performance_terminal' "
+                "AND occurred_at >= ? AND occurred_at < ? AND retention_until > ? ORDER BY occurred_at DESC LIMIT 10001",
+                (_format_utc(started_at), _format_utc(ended_at), _format_utc(ended_at))).fetchall()
+        summaries = []
+        for row in rows[:10000]:
+            try:
+                summary = TimingSummary.model_validate_json(row["metadata_json"])
+                if not ((summary.source == "api" and row["route_template"] in AGENT_ROUTES)
+                        or (summary.source == "worker" and row["route_template"] == "worker.agent")):
+                    raise ValueError("invalid performance binding")
+                if row["record_schema_version"] != 1 or row["subsystem"] != "api" or row["capability"] != "local_workspace":
+                    raise ValueError("invalid performance record classification")
+                summaries.append(summary)
+            except (ValueError, TypeError):
+                raise TelemetryDataError("persisted performance summary is invalid") from None
+        return tuple(summaries), len(rows) > 10000
+
     def request_records(self, *, started_at: datetime, ended_at: datetime) -> tuple[TerminalTelemetryRecord, ...]:
         if ended_at <= started_at or ended_at - started_at > timedelta(days=TELEMETRY_RETENTION_DAYS):
             raise TelemetryValidationError("telemetry query window is invalid")
@@ -515,6 +562,7 @@ class SQLiteTelemetryRepository:
             rows = connection.execute(
                 "SELECT job_id, namespace, state, revision, failure_code, finished_at "
                 "FROM jobs WHERE state IN ('cancelled', 'succeeded', 'failed', 'interrupted') "
+                "AND namespace != 'agent' "
                 "AND finished_at IS NOT NULL AND finished_at >= ? AND finished_at < ? "
                 "ORDER BY finished_at, job_id",
                 (_format_utc(started_at), _format_utc(ended_at)),
@@ -628,6 +676,7 @@ class SQLiteTelemetryRepository:
         record_id_sql = "('job:' || job_id || ':' || revision)"
         clauses = [
             "state IN ('cancelled', 'succeeded', 'failed', 'interrupted')",
+            "namespace != 'agent'",
             "finished_at IS NOT NULL",
             "finished_at >= ?",
             "finished_at < ?",
@@ -696,9 +745,11 @@ class TelemetryService:
         return ended_at - self._RANGES[range_name], ended_at
 
     def summary(self, range_name: AnalyticsRange) -> dict[str, object]:
+        from src.workspace.attribution import aggregate_summaries
         started_at, ended_at = self._bounds(range_name)
         requests = self.repository.request_records(started_at=started_at, ended_at=ended_at)
         jobs = self.repository.terminal_jobs(started_at=started_at, ended_at=ended_at)
+        performance, truncated = self.repository.performance_summaries(started_at=started_at, ended_at=ended_at)
         outcomes = {name: 0 for name in ("succeeded", "rejected", "failed", "cancelled", "interrupted")}
         durations: list[float] = []
         for record in requests:
@@ -715,6 +766,7 @@ class TelemetryService:
             "range": range_name,
             "started_at": _format_utc(started_at),
             "ended_at": _format_utc(ended_at),
+            "performance": aggregate_summaries(performance, truncated=truncated),
             "requests": {
                 "terminal_count": total,
                 "outcomes": outcomes,

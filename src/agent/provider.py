@@ -1,6 +1,7 @@
 """One strict Groq decision proposal; the existing orchestrator executes tools."""
 
 from __future__ import annotations
+from src.workspace.attribution import span
 
 import asyncio
 import json
@@ -205,7 +206,8 @@ class GroqDecisionModel:
 
         try:
             # wait_for preserves the documented Python 3.10 compatibility.
-            response = await asyncio.wait_for(completion(), timeout=TIMEOUT_SECONDS)
+            with span("agent.provider"):
+                response = await asyncio.wait_for(completion(), timeout=TIMEOUT_SECONDS)
             choices = getattr(response, "choices", None)
             if not isinstance(choices, list) or len(choices) != 1 or getattr(choices[0], "finish_reason", None) != "stop":
                 raise DecisionProviderError("decision_provider_invalid_response")

@@ -44,6 +44,7 @@ class AnalyticsSummaryResponse(_StrictModel):
     ended_at: str
     requests: RequestSummary
     terminal_jobs: TerminalJobSummary
+    performance: dict[str, object]
 
 
 class AnalyticsPoint(_StrictModel):

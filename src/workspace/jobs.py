@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any, Callable, Iterable, Literal, Mapping, Sequence, cast
 
+from src.workspace.attribution import classified
+
 from configs.settings import Settings, settings
 from src.workspace.database import WorkspaceDatabase
 from src.workspace.repository import utc_timestamp
@@ -519,10 +521,12 @@ class SQLiteJobRepository:
             raise JobNotFoundError("durable job does not exist")
         return self._job_from_row(connection, row)
 
+    @classified("job_read")
     def get_job(self, job_id: str) -> DurableJob:
         with self.database.connection() as connection:
             return self._job_in(connection, job_id)
 
+    @classified("job_read")
     def find_idempotent_job(self, namespace: JobNamespace, idempotency_key: str) -> DurableJob | None:
         """Read the existing DATA-004 identity before consulting mutable inputs."""
         if namespace not in JOB_NAMESPACES:
@@ -539,6 +543,7 @@ class SQLiteJobRepository:
             ).fetchone()
             return self._job_from_row(connection, row) if row is not None else None
 
+    @classified("job_list")
     def list_jobs(
         self,
         *,
@@ -573,6 +578,7 @@ class SQLiteJobRepository:
             items = tuple(self._job_from_row(connection, row) for row in rows)
         return JobPage(items=items, total=total, limit=limit, offset=offset)
 
+    @classified("job_create")
     def create_job(
         self,
         *,
@@ -677,6 +683,7 @@ class SQLiteJobRepository:
             self._inject("after_create", job_id)
             return self._job_in(connection, job_id)
 
+    @classified("job_transition")
     def transition_job(
         self,
         job_id: str,
@@ -696,6 +703,7 @@ class SQLiteJobRepository:
                 failure_code=failure_code, failure_message=failure_message,
             )
 
+    @classified("job_claim")
     def claim_next_job(self, eligible: Sequence[tuple[JobNamespace, str]]) -> DurableJob | None:
         """Claim one oldest exact registered job in a single write transaction.
 
@@ -803,6 +811,7 @@ class SQLiteJobRepository:
         )
         return self._job_in(connection, job_id)
 
+    @classified("job_transition")
     def report_progress(
         self,
         job_id: str,
@@ -838,6 +847,7 @@ class SQLiteJobRepository:
             )
             return self._job_in(connection, job_id)
 
+    @classified("job_step")
     def transition_step(
         self,
         job_id: str,
@@ -899,6 +909,7 @@ class SQLiteJobRepository:
             )
             return self._job_in(connection, job_id)
 
+    @classified("job_cancel")
     def request_cancellation(self, job_id: str, *, expected_revision: int) -> DurableJob:
         timestamp = self._clock()
         with self.database.transaction(write=True) as connection:
@@ -942,6 +953,7 @@ class SQLiteJobRepository:
             )
             return self._job_in(connection, job_id)
 
+    @classified("job_cancel")
     def acknowledge_cancellation(
         self, job_id: str, *, expected_revision: int, result: Mapping[str, object] | None = None,
     ) -> DurableJob:
@@ -981,6 +993,7 @@ class SQLiteJobRepository:
             )
             return self._job_in(connection, job_id)
 
+    @classified("job_recover")
     def recover_interrupted_jobs(self, *, limit: int = MAX_LIST_LIMIT) -> tuple[DurableJob, ...]:
         if isinstance(limit, bool) or not 1 <= limit <= MAX_LIST_LIMIT:
             raise JobLimitError("recovery limit is out of bounds")
@@ -1023,6 +1036,7 @@ class SQLiteJobRepository:
                 recovered.append(self._job_in(connection, job_id))
             return tuple(recovered)
 
+    @classified("job_event_read")
     def list_events(self, job_id: str, *, after_sequence: int = 0, limit: int = 100) -> tuple[JobEvent, ...]:
         _validate_opaque(job_id, label="job ID")
         if isinstance(after_sequence, bool) or after_sequence < 0:
@@ -1065,6 +1079,7 @@ class SQLiteJobRepository:
             )
         return tuple(events)
 
+    @classified("job_event_append")
     def append_agent_decision_event(
         self, job_id: str, *, event_key: str, payload: Mapping[str, object],
         step_count: int, max_steps: int,
@@ -1150,6 +1165,7 @@ class SQLiteJobRepository:
             occurred_at=str(row["occurred_at"]), payload=payload,
         )
 
+    @classified("job_event_read")
     def list_agent_events(
         self, job_id: str, *, after_sequence: int = 0, limit: int = 100,
     ) -> tuple[AgentJobEvent, ...]:

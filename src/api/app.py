@@ -40,6 +40,8 @@ from src.retrieval.hybrid_retriever import HybridRetriever
 from src.retrieval.query_normalizer import normalize_retrieval_question
 from src.retrieval.vector_store import VectorStore
 from src.api.telemetry import RequestTelemetry
+from src.api.attribution import PerformanceMiddleware
+from src.workspace.attribution import timed
 from src.api.proxy import get_rate_limit_key
 from src.api.content_presentation import build_chunk_presentation
 from src.api.catalog import (
@@ -176,11 +178,13 @@ def _agent_decision_resolution():
     return resolve_decision_provider(settings, getattr(_state.get("pipeline"), "generator", None))
 
 
+@timed("api.service_init")
 def _agent_durable_service() -> AgentDurableService:
     """Open DATA-004 only after private Agent-route authorization."""
     return _agent_service_for_repository(SQLiteJobRepository.from_settings(settings))
 
 
+@timed("api.service_init")
 def _agent_service_for_repository(repository: SQLiteJobRepository) -> AgentDurableService:
     resolution = _agent_decision_resolution()
     return AgentDurableService(
@@ -201,7 +205,8 @@ async def workspace_worker_lifespan():
             pass
         if settings.enable_workspace_execution and settings.workspace_worker_enabled:
             registry = ExecutorRegistry((AgentJobExecutor(lambda: _agent_service_for_repository(jobs)),))
-            supervisor = WorkerSupervisor(jobs, registry, WorkerConfig.from_settings(settings))
+            supervisor = WorkerSupervisor(jobs, registry, WorkerConfig.from_settings(settings),
+                attribution_enabled=settings.enable_performance_attribution, attribution_sink=_publish_performance)
             await supervisor.start()
             _state["worker_supervisor"] = supervisor
     try:
@@ -217,6 +222,14 @@ async def workspace_worker_lifespan():
 def _terminal_telemetry_service() -> TelemetryService:
     """Open DATA-005 storage only after local access or a local terminal event."""
     return TelemetryService(SQLiteTelemetryRepository.from_settings(settings))
+
+
+async def _publish_performance(trace, *, correlation_id: str, route_template: str) -> None:
+    """After product locks/body completion: best effort DATA-005 terminal summary."""
+    summary = trace.summary()
+    await asyncio.to_thread(lambda: _terminal_telemetry_service().repository.record_performance_terminal(
+        summary=summary, correlation_id=correlation_id, route_template=route_template))
+    telemetry.record_attribution(trace, correlation_id=correlation_id, route_template=route_template)
 
 
 def _resolved_route_template(request: Request) -> str:
@@ -2123,6 +2136,8 @@ app.include_router(create_pipeline_router(_pipeline_service))
 app.include_router(create_evaluation_router())
 app.include_router(create_evaluation_job_router(_evaluation_job_service))
 app.include_router(create_agent_run_router(_agent_durable_service))
+app.add_middleware(PerformanceMiddleware, enabled=lambda: settings.enable_performance_attribution and settings.workspace_mode == "local",
+                   sink=_publish_performance)
 app.include_router(create_telemetry_router(_terminal_telemetry_service))
 
 @app.post("/retrieval/inspect")

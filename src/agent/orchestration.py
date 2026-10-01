@@ -1,6 +1,7 @@
 """One bounded in-memory Agent state machine over the AGENT-001 registry."""
 
 from __future__ import annotations
+from src.workspace.attribution import span
 
 import hashlib
 import json
@@ -225,7 +226,8 @@ class AgentOrchestrator:
                 return self._result(state, "cancelled", domain="system", code="cancelled")
             state.decision_call_count += 1
             try:
-                raw_decision = await self.decision_model.decide(self._request(state, context))
+                with span("agent.decision"):
+                    raw_decision = await self.decision_model.decide(self._request(state, context))
             except DecisionProviderUnavailable:
                 return self._result(state, "unavailable", domain="model", code="decision_provider_unavailable")
             except DecisionProviderError as error:

@@ -1,6 +1,7 @@
 """Private, revisioned AGENT-003 routes over DATA-004 and AGENT-002."""
 
 from __future__ import annotations
+from src.workspace.attribution import span
 
 import json
 import re
@@ -77,9 +78,11 @@ def _sequence(value: str | None) -> int:
 
 def _frames(events: tuple[AgentRunEventResponse, ...]) -> Iterator[str]:
     for event in events:
-        payload = json.dumps(event.model_dump(mode="json"), ensure_ascii=False,
-                             allow_nan=False, separators=(",", ":"))
-        yield f"id: {event.sequence}\nevent: {event.event_type}\ndata: {payload}\n\n"
+        with span("sse.serialize"):
+            payload = json.dumps(event.model_dump(mode="json"), ensure_ascii=False,
+                                 allow_nan=False, separators=(",", ":"))
+            frame = f"id: {event.sequence}\nevent: {event.event_type}\ndata: {payload}\n\n"
+        yield frame
 
 
 def create_agent_run_router(get_service: Callable[[], AgentDurableService]) -> APIRouter:

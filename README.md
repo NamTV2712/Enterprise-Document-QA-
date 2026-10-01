@@ -17,6 +17,16 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 
 ## Start here — current product
 
+Optional content-free Agent performance attribution is disabled by default.
+For an authorized local workspace, set server-side
+`ENABLE_PERFORMANCE_ATTRIBUTION=true` to retain bounded terminal timing summaries
+for 30 days in the existing DATA-005 SQLite database. Protected
+`/analytics/summary` exposes a separate performance population; public metrics
+and quality metrics retain their existing meanings. See the
+[OBS-001 protocol](docs/OBS_001_ATTRIBUTION_PROTOCOL.md) for phase definitions,
+bounds and the hermetic benchmark. Workers remain two with 500ms polling and
+5000ms shutdown grace. This does not certify a production SLA.
+
 The independent frontend exposes Chat, Research, Documents, Search, Collections,
 Retrieval, Models, Pipeline, Agent, Reranker, Evaluation, Analytics, Datasets,
 Settings, and Logs. FastAPI supplies public catalog/search/inspection/report reads; opt-in

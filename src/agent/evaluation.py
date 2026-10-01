@@ -1,6 +1,7 @@
 """Deterministic read-only evaluation of already recorded Agent runs."""
 
 from __future__ import annotations
+from src.workspace.attribution import timed
 
 import hashlib
 import json
@@ -327,6 +328,7 @@ def _final_reference_metric(
     return _ratio("final_reference_validity", len(result.evidence_refs), len(result.evidence_refs))
 
 
+@timed("evaluation.compute")
 def evaluate_agent_run(
     run: AgentRunResponse, events: Sequence[AgentRunEventResponse],
 ) -> AgentEvaluationReport:

@@ -35,6 +35,10 @@ mutations retain serialized `BEGIN IMMEDIATE` and revision checks. Explicit
 `WorkspaceDatabase.initialize()` still performs a full audit, including on reopen.
 See the [DB-SCALE-001 protocol](docs/DB_SCALE_001_PROTOCOL.md) for lifecycle and
 measurement boundaries. Public mode retains lazy private-storage refusal.
+The [final receipt](docs/DB_SCALE_001_FINAL_RECEIPT.md) records the comparable
+before/after campaign, snapshot correctness and finite admission contention
+tradeoff. Mixed event-append wait p95 falls from 350.401ms to 4.180ms; queue
+scheduling remains a separately scoped next investigation.
 
 The independent frontend exposes Chat, Research, Documents, Search, Collections,
 Retrieval, Models, Pipeline, Agent, Reranker, Evaluation, Analytics, Datasets,

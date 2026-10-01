@@ -34,7 +34,8 @@ close on success/failure, including setup failure. Writers retain the existing
 canonical-path RLock, nested migration reentrancy and `BEGIN IMMEDIATE`; no lock
 is removed, no connection is shared, and provider/tool work remains outside writes.
 WAL/NORMAL, busy timeout 5000ms, schema v7, DATA-004 CAS/events/recovery and DATA-005
-authority are unchanged. See [DB-SCALE-001](docs/DB_SCALE_001_PROTOCOL.md).
+authority are unchanged. See the [DB-SCALE-001 protocol](docs/DB_SCALE_001_PROTOCOL.md)
+and [measured acceptance receipt](docs/DB_SCALE_001_FINAL_RECEIPT.md).
 
 ```mermaid
 flowchart LR

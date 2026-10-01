@@ -8,22 +8,41 @@ milestones remain complete. Starting HEAD: `b13fff6affc919a19f13bda3ddc730c319a7
 | SCALE-001 | Bounded background workers / durable Agent execution | COMPLETE |
 | SCALE-002 | Load, concurrency and capacity characterization | COMPLETE |
 | OBS-001 | Content-free performance attribution and fixed hermetic measurements | COMPLETE |
-| DB-SCALE-001 | Reduce repeated initialization and repository contention under mixed load | Candidate validated; comparison/release pending |
+| DB-SCALE-001 | Reduce repeated initialization and repository contention under mixed load | COMPLETE |
+| WORKER-002 | Bounded queue/scheduling and admission fairness attribution; recommended next task | Not started |
 | SCALE-003 | Evidence-backed caching and resource optimization | Not started |
 
-## DB-SCALE-001: comparison protocol
+## DB-SCALE-001: accepted repository concurrency change
 
-[DB-SCALE-001 protocol](DB_SCALE_001_PROTOCOL.md) reuses committed SCALE/OBS
-workloads and attribution. Starting main `cb6ed9e…`: five enabled before points,
-15 complete trials; full initialization was repeated 211 times per read trial
-and 940–1004 times per mixed trial. Candidate guards validation per live store/
-file/migration identity and gives multi-statement reads explicit WAL snapshots.
-Independent per-operation connections and the writer RLock/BEGIN IMMEDIATE remain.
-Shared focused 662 passed, including 24 new tests. Acceptance requires comparable
-three-trial after points and repeatable wait reduction without an unexplained
-material regression, full/clean release and normal exact-HEAD main push.
-No cache/index/migration/provider/default/frontend/dependency change or automatic
-SCALE-003 work. Final evidence and one next-task proposal remain pending.
+[Protocol](DB_SCALE_001_PROTOCOL.md) and [final receipt](DB_SCALE_001_FINAL_RECEIPT.md).
+Starting main `cb6ed9e…`; measured runtime `7d445d5…`. Five enabled points / 15
+trials per before/after, same environment/workloads/protocols. Full initialization
+falls from 211 per read trial and 940–1004 per mixed trial to two per whole trial
+(startup and explicit reopen). Guarded live-store/file/migration receipts hold no
+product data or connection. Independent per-operation connections and the writer
+RLock/BEGIN IMMEDIATE remain; multi-statement reads pin short WAL snapshots.
+
+Mixed event/step wait p95 **350.401/249.477→4.180/21.690ms**, jobs/sec
+**1.216→1.844**, service p95 **2455.694→1046.785ms**. Read/SSE client p95
+**1967.995/603.006→982.813/221.115ms**. All 30 correctness/missing/drop populations
+are zero. The initial admission burst raises create/claim tails; three temporal
+diagnostics locate only the first two slow claims at overlapping creates, with
+later claims below 49ms and all jobs completing. This finite tradeoff is retained
+explicitly, with inclusive read/transaction overlap costs and small research queue
+regression documented. No engine-only or all-bottleneck improvement claim.
+
+Shared focused **662 passed**, including **24 new tests**. Primary **1899/188
+warnings**; measured-runtime clean **1865/34 expected skips/148 warnings**.
+Exact final documentation HEAD clean/push closure and literal SHA are in the closing
+report. Routes 90, SQLite v7; no cache/index/migration/provider/default/frontend/
+dependency change. Required milestones/SCALE-001/002/OBS stay complete;
+SCALE-003 is NOT STARTED.
+
+Recommend exactly **WORKER-002**, separately scoped and NOT STARTED: mixed queue/
+service p95 **11229.163/1046.785ms**, research **3840.910/885.604ms**. Attribute
+admission, service capacity and polling before changing workers or scheduling.
+API remainder/client-minus-server remains material; engine dominance and cacheable
+work are unproven. Implement no next task automatically. STOP after release.
 
 ## OBS-001: final attribution findings
 

@@ -1,39 +1,58 @@
 # Project State
 
-## DB-SCALE-001 candidate validated; comparison pending (2026-10-01)
+## DB-SCALE-001 complete — guarded initialization and WAL snapshots (2026-10-01)
 
-Focused optional repository task on main, starting
-`cb6ed9e1aedc9d33431e5e6cf85c1baa3d478507`. Required roadmap, Agent/provider,
-CRED-001, SCALE-001/002 and OBS-001 stay COMPLETE; SCALE-003 is NOT STARTED.
-Fresh enabled pre-change confirmation completed five anchors / 15 trials with
-zero correctness/missing/drop counters. Same environment/protocol/workloads:
-read50, mixed25, SSE25, research10/250ms, admission50; three trials each.
-Full initialization counts (including startup/warmup/reopen): read **211 each**,
-mixed **1004/982/940**, SSE **245/228/200**, research **71 each**. Ordinary read
-connections were already independent: repeated factory initialization held the
-writer RLock and defeated that overlap at the service boundary.
+Optional repository concurrency task on main, starting
+`cb6ed9e1aedc9d33431e5e6cf85c1baa3d478507`; accepted measured runtime
+**`7d445d5f053819e7244fdf0612ae706a316cf3cf`**. The
+[final receipt](docs/DB_SCALE_001_FINAL_RECEIPT.md) and
+[protocol](docs/DB_SCALE_001_PROTOCOL.md) record architecture, correctness,
+comparable before/after tables and retained tradeoffs. Required roadmap,
+AGENT-001–006/UI-014/TEST-005, provider/CRED and SCALE-001/002/OBS remain COMPLETE.
+SCALE-003 is NOT STARTED. Exact final documentation HEAD clean/push closure and
+literal SHA/results are reported in the closing report; failure blocks release.
 
-Candidate adds guarded initialization receipts bound to canonical path, file
-identity and exact migration contract; weak registry retains no product data or
-connection. Explicit initialize still performs full integrity/schema validation.
-Warm factories skip the initialization/writer boundary. Multi-statement job and
-event reads now pin short WAL snapshots; prior autocommit boundary probes reproduce
-job/step and list-count/item inconsistencies. Connections close on setup failure.
-Write lock/BEGIN IMMEDIATE/CAS/claim order/event atomicity remain unchanged; no
-cache, pool, migration, index, default, provider, dependency or frontend change.
+Ordinary reads already owned independent connections. Repeated factory full
+initialization held the writer RLock. Factories now use guarded validation receipts
+bound to canonical store/file/migration identity; the weak registry holds no product
+state or connection. Explicit initialize still performs full validation. Multi-query
+job/event reads pin short WAL snapshots, fixing reproduced job/step and count/item
+inconsistency; setup failures close handles. Writer RLock/BEGIN IMMEDIATE, CAS,
+claim ordering, event/cancel/recovery/backup and provider boundaries remain unchanged.
+No cache, pool, index, migration, default, dependency or frontend change.
 
-Shared focused gate **662 passed / 1 inherited warning**, including **24 new
-DB-SCALE tests**, DATA-004/005, OBS, workers, Agent, CRED/provider and portable
-backup. Deterministic races cover eight cold initializers/one full check, two
-unrelated stores, eight overlapping readers, reads during held writer transactions,
-snapshot consistency, CAS/claim/cancellation/fairness and real HTTP/SSE during a
-paused worker append. Two initial harness assertions were corrected (thread-owner
-close inspection and OBS admission's now-absent initialization reads).
-The [protocol](docs/DB_SCALE_001_PROTOCOL.md) defines comparable counts and phases.
-Commit the candidate before fresh canonical after measurements; retain only a
-repeatable improvement without an unexplained material regression. Full/clean
-release, final receipt, exact main push and next-task selection remain pending.
-Raw reports use ignored `.local/db-scale-001/`; same 12 unrelated paths untouched.
+Comparable enabled campaigns: five anchors / 15 trials each, same environment,
+protocols and workloads; all correctness/missing/drop counters zero. Whole-trial full
+initialization drops from read 211 and mixed 940–1004 to **two per trial** (startup +
+explicit reopen). Mixed event/step wait p95 **350.401/249.477→4.180/21.690ms**;
+jobs/sec **1.216→1.844**, service p95 **2455.694→1046.785ms**. Read/SSE client p95
+**1967.995/603.006→982.813/221.115ms**. Warm read/SSE init/writer-wait samples
+are absent, not fabricated zero. CPU/RSS decrease at all five points.
+
+Mixed create server p95 **340.264→615.350ms** and claim wait p95
+**68.162→367.060ms** increase. Three separate temporal diagnostics locate only
+first-two slow claims at the concentrated admission transactions; later claims
+remain below 49ms and all 25 jobs succeed. Inclusive read/transaction durations rise
+with overlapping work; pure engine cost is unisolated. This finite burst tradeoff
+and research queue p95 **3708.914→3840.910ms** are explicit limitations. No sustained
+read/SSE starvation or SQLite busy/integrity defect; no scheduler introduced.
+
+Focused **662 passed / 1 inherited warning**, including **24 new DB tests**,
+DATA-004/005/OBS, Agent/workers/provider/CRED and portable backup. Deterministic
+barriers prove eight initializer/reader/CAS/claim races, held-writer committed reads,
+snapshot consistency, cancellation/fairness and real Agent HTTP/SSE overlap.
+Primary full **1899 passed / 188 warnings**; measured-runtime data-free clean
+**1865 passed / 34 expected skips / 148 warnings**, zero failures, run serially.
+Routes **90**, SQLite **v7/WAL/NORMAL/busy5000**, worker defaults **2/500/5000**.
+Compile/import/public startup without DB/pool passes. Frontend **94 files/818 tests**,
+TypeScript/build PASS are inherited, not rerun. Same 12 unrelated paths untouched;
+raw task artifacts remain ignored under `.local/db-scale-001/`.
+
+Recommend exactly **WORKER-002 — bounded queue/scheduling and admission fairness
+attribution**, NOT STARTED. Mixed queue/service p95 **11229.163/1046.785ms**, research
+**3840.910/885.604ms**; attribute finite admission, service and polling before
+changing defaults. API remainder/client-minus-server remains material, engine
+dominance/cacheable work unproven. STOP before any next task or SCALE-003.
 
 ## OBS-001 complete — performance attribution and fixed measurements (2026-10-01)
 

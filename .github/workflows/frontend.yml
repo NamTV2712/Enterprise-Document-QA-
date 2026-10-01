@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/frontend.yml"
       - "docs/CI_FIX_001_FINAL_RECEIPT.md"
+      - "docs/CAPACITY_001_FINAL_RECEIPT.md"
       - "frontend/**"
       - "src/**"
       - "tests/integration/**"
@@ -14,6 +15,7 @@ on:
     paths:
       - ".github/workflows/frontend.yml"
       - "docs/CI_FIX_001_FINAL_RECEIPT.md"
+      - "docs/CAPACITY_001_FINAL_RECEIPT.md"
       - "frontend/**"
       - "src/**"
       - "tests/integration/**"

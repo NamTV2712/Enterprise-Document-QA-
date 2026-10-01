@@ -218,7 +218,7 @@ async def test_binding_is_resolved_at_execution_time_and_never_upgraded(configur
     if change == "unsupported":
         monkeypatch.setitem(application._state, "pipeline", SimpleNamespace(generator=SimpleNamespace(model="chat-only")))
     elif change == "missing":
-        monkeypatch.setattr(application.settings, "groq_api_key5", "")
+        monkeypatch.setattr(application.settings, "groq_api_key", "")
     else:
         monkeypatch.setattr(application.settings, "groq_key_policy", "pool")
     pool, executor = worker(service, application._agent_durable_service)

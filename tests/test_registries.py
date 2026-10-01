@@ -40,10 +40,7 @@ def _settings(tmp_path, *, manifest: dict | str | None = None):
         qdrant_index_manifest_path=manifest_path,
         groq_key_policy="pool",
         groq_api_key=SECRET,
-        groq_api_key2="",
-        groq_api_key3="",
-        groq_api_key4="",
-        groq_api_key5="",
+        groq_api_key_fall_back="",
         model_cache_path=PRIVATE_PATH,
     )
 

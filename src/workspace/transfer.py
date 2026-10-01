@@ -266,7 +266,7 @@ def _configured_secret_values() -> tuple[str, ...]:
     for name in (
         "local_workspace_token",
         "groq_api_key",
-        "groq_api_key5",
+        "groq_api_key_fall_back",
         "qdrant_api_key",
     ):
         configured = getattr(settings, name, None)

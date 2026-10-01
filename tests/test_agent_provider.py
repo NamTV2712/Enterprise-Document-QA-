@@ -339,17 +339,18 @@ def test_empty_multiple_truncated_or_tool_call_responses_fail_closed(output):
 
 def settings(**overrides):
     return SimpleNamespace(groq_key_policy=overrides.get("policy", "key5_only"),
-                           groq_api_key=overrides.get("key1", ""), groq_api_key5=overrides.get("key5", KEY),
+                           groq_api_key=overrides.get("primary", KEY),
+                           groq_api_key_fall_back=overrides.get("fallback", ""),
                            local_workspace_token=SecretStr(BEARER))
 
 
 @pytest.mark.parametrize("configured,runtime,reason", [
     (settings(), None, "configured"),
-    (settings(key5=""), None, "credentials_missing"),
-    (settings(key5="", key1=KEY), None, "credentials_missing"),
+    (settings(primary=""), None, "credentials_missing"),
+    (settings(primary="", fallback=KEY), None, "credentials_missing"),
     (settings(), SimpleNamespace(model="unsupported-chat-model"), "unsupported_model"),
     (settings(), SimpleNamespace(model="openai/gpt-oss-20b"), "configured"),
-    (settings(policy="pool", key1=KEY), None, "configured"),
+    (settings(policy="pool", primary=KEY), None, "configured"),
 ])
 def test_capability_resolver_reuses_authority_without_client_or_network(configured, runtime, reason):
     resolved = resolve_decision_provider(configured, runtime)

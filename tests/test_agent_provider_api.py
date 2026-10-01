@@ -14,10 +14,13 @@ from tests.test_agent_provider import BEARER, KEY, FakeSDK, final, tool, wire
 from tests.worker_helpers import finish_agent_with_worker
 
 
+FALLBACK = "API_FALLBACK_CRED_TEST_synthetic_only"
+
+
 @pytest.fixture
 def configured(tmp_path, monkeypatch):
-    for name in ("groq_api_key", "groq_api_key2", "groq_api_key3", "groq_api_key4", "groq_api_key5"):
-        monkeypatch.setattr(application.settings, name, KEY if name == "groq_api_key5" else "")
+    for name in ("groq_api_key", "groq_api_key_fall_back"):
+        monkeypatch.setattr(application.settings, name, KEY if name == "groq_api_key" else FALLBACK)
     monkeypatch.setattr(application.settings, "groq_key_policy", "key5_only")
     monkeypatch.setattr(application.settings, "workspace_mode", "local")
     monkeypatch.setattr(application.settings, "local_workspace_token", SecretStr(BEARER))
@@ -71,7 +74,7 @@ def test_existing_private_capability_and_create_use_actual_resolver(configured, 
         "goal": "Find risk evidence.", "allow_decision_provider_execution": True})
     assert repeat.json()["run_id"] == run_id and len(sdk.requests) == 2
     combined = status.text + create.text + detail.text + result.text + events.text + report.text + caplog.text
-    assert KEY not in combined and BEARER not in combined
+    assert all(secret not in combined for secret in (KEY, FALLBACK, BEARER))
     assert "CONTROL_JSON" not in combined and "Request options" not in combined
 
 
@@ -79,7 +82,7 @@ def test_existing_private_capability_and_create_use_actual_resolver(configured, 
 def test_unavailable_configuration_is_truthful_without_sdk_calls(configured, monkeypatch, missing, unsupported):
     sdk, calls = configured
     if missing:
-        monkeypatch.setattr(application.settings, "groq_api_key5", "")
+        monkeypatch.setattr(application.settings, "groq_api_key", "")
     if unsupported:
         monkeypatch.setitem(application._state, "pipeline", SimpleNamespace(generator=SimpleNamespace(model="ordinary-chat-only")))
     status = _call(application.app, "GET", "/system/configuration-status", headers=headers())
@@ -106,7 +109,7 @@ def test_private_execution_and_decision_grants_are_required_before_transport(con
     assert not sdk.requests and not calls
 
 
-@pytest.mark.parametrize("secret", [KEY, BEARER])
+@pytest.mark.parametrize("secret", [KEY, FALLBACK, BEARER])
 def test_runtime_secret_create_refuses_before_sqlite_or_response_leak(configured, secret):
     sdk, calls = configured
     response = _call(application.app, "POST", "/agent/runs", headers=headers(), body={"goal": f"Find {secret}."})
@@ -115,7 +118,7 @@ def test_runtime_secret_create_refuses_before_sqlite_or_response_leak(configured
     assert application._agent_durable_service().list(state=None, page=1, page_size=25).total == 0
 
 
-@pytest.mark.parametrize("secret", [KEY, BEARER])
+@pytest.mark.parametrize("secret", [KEY, FALLBACK, BEARER])
 def test_runtime_secret_observation_never_enters_api_state_result_events_or_evaluation(configured, monkeypatch, secret, caplog):
     sdk, calls = configured
     monkeypatch.setattr(application, "create_agent_tool_registry", lambda: build_tool_registry(_services(calls, text=secret)))

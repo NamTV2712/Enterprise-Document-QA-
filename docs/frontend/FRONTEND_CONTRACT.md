@@ -139,8 +139,8 @@ completed-shell design tokens govern these routes.
 - Destructive actions require confirmation or undo.
 - Normal text contrast is at least 4.5:1 in both themes. Status never relies
   on color alone.
-- `GROQ_KEY_POLICY=key5_only` and `GROQ_API_KEY5` are mandatory for any real
-  Groq request; no fallback key is allowed.
+- `GROQ_KEY_POLICY=key5_only` and `GROQ_API_KEY` are mandatory for any real
+  Groq request; the historical policy selects primary only, with no fallback.
 - `data/` and canonical corpus/index are immutable in frontend work.
 
 ## Product vocabulary

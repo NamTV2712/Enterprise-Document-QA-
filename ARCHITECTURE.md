@@ -334,6 +334,13 @@ rules:
 
 Groq is the only LLM provider. Serving, rewriting, decomposition, synthesis, and
 evaluation use `openai/gpt-oss-120b` through the Groq API.
+`src/generation/provider_policy.py` is the credential authority: `pool` selects
+unique primary `GROQ_API_KEY` then optional `GROQ_API_KEY_FALL_BACK`. The retained
+historical `key5_only` identifier selects primary only and preserves frozen
+Agent binding IDs. Generator cooldown/failover is bounded; Agent decisions make
+one HTTP attempt with no fallback rotation. Generation and judge clients share
+eligible credentials but keep separate request accounting. No credentials enter
+browser configuration, frozen plans, observations, events or evaluation reports.
 Provider streams are closed in `finally` blocks, but provider-side billing
 cancellation remains best effort.
 

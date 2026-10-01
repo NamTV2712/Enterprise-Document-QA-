@@ -131,12 +131,7 @@ def _configured_secret_values() -> tuple[str, ...]:
     values = (
         settings.local_workspace_token.get_secret_value(),
         settings.groq_api_key,
-        settings.groq_api_key2,
-        settings.groq_api_key3,
-        settings.groq_api_key4,
-        settings.groq_api_key5,
         settings.groq_api_key_fall_back,
-        settings.groq_api_key_fall_back2,
         settings.qdrant_cloud_api_key,
     )
     return tuple(value for value in values if value)

@@ -92,8 +92,7 @@ def main() -> None:
     port = int(os.environ.get("TEST004_API_PORT", "8778"))
     # Pin every credential input before Settings imports, including inherited
     # environment variables. These are intentionally synthetic test sentinels.
-    for key in ("GROQ_API_KEY", "GROQ_API_KEY2", "GROQ_API_KEY3", "GROQ_API_KEY4", "GROQ_API_KEY5",
-                "GROQ_API_KEY_FALL_BACK", "GROQ_API_KEY_FALL_BACK2"):
+    for key in ("GROQ_API_KEY", "GROQ_API_KEY_FALL_BACK"):
         os.environ[key] = "test004-offline-synthetic-provider-key"
     os.environ.update({
         "GROQ_KEY_POLICY": "key5_only", "QDRANT_MODE": "local",

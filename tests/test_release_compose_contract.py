@@ -40,10 +40,7 @@ def test_serving_critical_variables_are_forwarded() -> None:
     names = _env_names(_environment_block(_compose_text()))
     required = [
         "GROQ_API_KEY",
-        "GROQ_API_KEY2",
-        "GROQ_API_KEY3",
-        "GROQ_API_KEY4",
-        "GROQ_API_KEY5",
+        "GROQ_API_KEY_FALL_BACK",
         "QDRANT_MODE",
         "QDRANT_LOCAL_PATH",
         "QDRANT_INDEX_MANIFEST_PATH",
@@ -65,11 +62,11 @@ def test_serving_critical_variables_are_forwarded() -> None:
     assert not missing, f"Documented serving variables never reach the container: {missing}"
 
 
-def test_evaluation_generation_keys_are_not_forwarded() -> None:
-    """The evaluation-generation pool keys must stay out of the serving image."""
+def test_serving_credentials_are_exactly_primary_and_optional_fallback() -> None:
+    """Serving and evaluation share the consolidated credential authority."""
     names = _env_names(_environment_block(_compose_text()))
-    assert "GROQ_API_KEY_FALL_BACK" not in names
-    assert "GROQ_API_KEY_FALL_BACK2" not in names
+    assert {name for name in names if name.startswith("GROQ_API_KEY")} == {
+        "GROQ_API_KEY", "GROQ_API_KEY_FALL_BACK"}
     assert "EMBEDDING_GENERATION_PATH" not in names
     assert "EMBEDDING_GENERATIONS_DIR" not in names
 

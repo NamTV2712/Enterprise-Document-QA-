@@ -17,9 +17,8 @@ KEY = "SCALE001_SYNTHETIC_PROVIDER_KEY_72CD"
 
 def main():
     directory = Path(os.environ.get("SCALE001_RUNTIME_DIR") or tempfile.mkdtemp(prefix="edqa-scale001-")).resolve()
-    for name in ("GROQ_API_KEY", "GROQ_API_KEY2", "GROQ_API_KEY3", "GROQ_API_KEY4", "GROQ_API_KEY5",
-                 "GROQ_API_KEY_FALL_BACK", "GROQ_API_KEY_FALL_BACK2"):
-        os.environ[name] = KEY if name == "GROQ_API_KEY5" else ""
+    for name in ("GROQ_API_KEY", "GROQ_API_KEY_FALL_BACK"):
+        os.environ[name] = KEY if name == "GROQ_API_KEY" else ""
     os.environ.update({
         "GROQ_KEY_POLICY":"key5_only", "QDRANT_MODE":"local", "QDRANT_CLOUD_URL":"",
         "QDRANT_CLOUD_API_KEY":"", "HF_HUB_OFFLINE":"1", "TRANSFORMERS_OFFLINE":"1",
@@ -81,7 +80,7 @@ def main():
                 entered.clear()
                 release.clear()
                 attempts.clear()
-                application.settings.groq_api_key5 = "" if body["action"] == "missing" else KEY
+                application.settings.groq_api_key = "" if body["action"] == "missing" else KEY
             elif body["action"] == "start":
                 await pool.start()
             elif body["action"] == "release":

@@ -21,14 +21,17 @@ def normalize_groq_key_policy(policy: str | None) -> str:
 
 
 def configured_groq_keys(settings: Any, *, policy: str | None = None) -> list[str]:
-    """Return eligible Groq keys in deterministic order for a settings object."""
+    """Resolve primary then optional fallback; legacy key5_only selects primary.
+
+    The policy literal remains stable for frozen Agent provider bindings.
+    """
     effective = normalize_groq_key_policy(
         policy if policy is not None else getattr(settings, "groq_key_policy", "pool")
     )
     if effective == "key5_only":
-        key = getattr(settings, "groq_api_key5", "")
+        key = getattr(settings, "groq_api_key", "")
         if not key:
-            raise ValueError("GROQ_KEY_POLICY=key5_only requires GROQ_API_KEY5")
+            raise ValueError("GROQ_KEY_POLICY=key5_only requires GROQ_API_KEY")
         return [key]
 
     return list(
@@ -36,10 +39,7 @@ def configured_groq_keys(settings: Any, *, policy: str | None = None) -> list[st
             key
             for key in (
                 getattr(settings, "groq_api_key", ""),
-                getattr(settings, "groq_api_key2", ""),
-                getattr(settings, "groq_api_key3", ""),
-                getattr(settings, "groq_api_key4", ""),
-                getattr(settings, "groq_api_key5", ""),
+                getattr(settings, "groq_api_key_fall_back", ""),
             )
             if key
         )
@@ -54,27 +54,33 @@ def validate_explicit_keys(
 ) -> list[str]:
     """Validate caller-supplied keys without exposing their values.
 
-    Under ``key5_only`` a caller may pass the already-resolved single key5
+    Under ``key5_only`` a caller may pass the already-resolved single primary
     value.  Passing a pool is rejected so a future call cannot silently rotate
     to another credential.
     """
     selected = list(dict.fromkeys(key for key in requested_keys if key))
     if policy != "key5_only":
+        if len(selected) > 2:
+            raise ValueError("Groq client pool permits at most primary and fallback")
         return selected
     if len(selected) > 1:
         raise ValueError("GROQ_KEY_POLICY=key5_only forbids a multi-key client pool")
-    configured_key5 = getattr(settings, "groq_api_key5", "")
-    if configured_key5 and selected and selected[0] != configured_key5:
-        raise ValueError("GROQ_KEY_POLICY=key5_only permits only GROQ_API_KEY5")
+    configured_primary = getattr(settings, "groq_api_key", "")
+    if not configured_primary:
+        raise ValueError("GROQ_KEY_POLICY=key5_only requires GROQ_API_KEY")
+    if selected and selected[0] != configured_primary:
+        raise ValueError("GROQ_KEY_POLICY=key5_only permits only GROQ_API_KEY")
     if not selected:
-        if not configured_key5:
-            raise ValueError("GROQ_KEY_POLICY=key5_only requires GROQ_API_KEY5")
-        selected = [configured_key5]
+        selected = [configured_primary]
     return selected
 
 
-def key_alias(index: int, *, policy: str, pool_size: int) -> str:
+def key_alias(index: int, *, policy: str, pool_size: int, role: str | None = None) -> str:
     """Return safe metadata for a provider key without leaking credentials."""
     if policy == "key5_only":
-        return "key5"
-    return f"key-{index + 1}" if pool_size else "key-unknown"
+        return "primary"
+    if not pool_size:
+        return "unconfigured"
+    if role in ("primary", "fallback"):
+        return role
+    return "primary" if index == 0 else "fallback"

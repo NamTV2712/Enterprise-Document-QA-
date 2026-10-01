@@ -342,7 +342,7 @@ async def runtime(scenario: Scenario, directory: Path):
             "local_workspace_allowed_origins": ORIGIN, "allowed_origins": ORIGIN,
             "groq_key_policy": "key5_only", "qdrant_mode": "local",
             "qdrant_cloud_url": "", "qdrant_cloud_api_key": ""}
-        values.update({name: KEY if name == "groq_api_key5" else ""
+        values.update({name: KEY if name == "groq_api_key" else ""
             for name in type(application.settings).model_fields if name.startswith("groq_api_key")})
         if scenario.mode == "artifact":
             values.update(qdrant_local_path=Path("data/processed/qdrant"),

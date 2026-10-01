@@ -26,7 +26,7 @@ from src.evaluation.generation_checkpoint import (
 )
 from src.evaluation.judge_checkpoint import JudgeParseErrorStub
 from src.generation.generator import SYSTEM_PROMPT, Generator
-from src.generation.provider_policy import configured_groq_keys, normalize_groq_key_policy
+from src.generation.provider_policy import configured_groq_keys
 from src.generation.answer_completion import (
     completion_metadata,
     correct_answer_once,
@@ -79,48 +79,13 @@ class UsageTracker:
 
 
 def generation_pool_keys(policy: str | None = None) -> list[str]:
-    """Evaluation-generation rotation: dedicated pair, then primary."""
-    effective = normalize_groq_key_policy(
-        policy if policy is not None else getattr(settings, "groq_key_policy", "pool")
-    )
-    if effective == "key5_only":
-        return configured_groq_keys(settings, policy=effective)
-    configured = [
-        settings.groq_api_key_fall_back,
-        settings.groq_api_key_fall_back2,
-    ]
-    if not any(configured):
-        configured = [settings.groq_api_key, settings.groq_api_key2]
-    configured.extend(
-        (
-            settings.groq_api_key3,
-            settings.groq_api_key4,
-            settings.groq_api_key5,
-        )
-    )
-    return list(dict.fromkeys(key for key in configured if key))
+    """Use the shared primary/fallback policy for generation."""
+    return configured_groq_keys(settings, policy=policy)
 
 
 def judging_pool_keys(policy: str | None = None) -> list[str]:
-    """Serving/judging rotation: the primary key pair."""
-    effective = normalize_groq_key_policy(
-        policy if policy is not None else getattr(settings, "groq_key_policy", "pool")
-    )
-    if effective == "key5_only":
-        return configured_groq_keys(settings, policy=effective)
-    return list(
-        dict.fromkeys(
-            key
-            for key in (
-                settings.groq_api_key,
-                settings.groq_api_key2,
-                settings.groq_api_key3,
-                settings.groq_api_key4,
-                settings.groq_api_key5,
-            )
-            if key
-        )
-    )
+    """Use the same eligible credentials, retaining separate judge accounting."""
+    return configured_groq_keys(settings, policy=policy)
 
 
 def make_generation_call(

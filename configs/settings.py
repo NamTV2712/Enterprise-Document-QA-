@@ -66,14 +66,9 @@ class Settings(BaseSettings):
 
     # LLM API keys
     groq_api_key: str = ""
-    groq_api_key2: str = ""
-    groq_api_key3: str = ""
-    groq_api_key4: str = ""
-    groq_api_key5: str = ""
     groq_api_key_fall_back: str = ""
-    groq_api_key_fall_back2: str = ""
-    # ``pool`` preserves legacy rotation; improvement/evaluation runs set
-    # ``key5_only`` so every provider call is auditable against GROQ_API_KEY5.
+    # ``pool`` rotates primary then fallback. The historical ``key5_only``
+    # identifier selects primary only and preserves frozen Agent bindings.
     groq_key_policy: str = "pool"
 
     # Data path (relative path to run on any machine)

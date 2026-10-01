@@ -33,6 +33,7 @@ from src.evaluation.evaluator import (
 from src.evaluation.test_set import TEST_SET, TestCase
 from src.generation.query_decomposer import DecomposedResponse, QueryDecomposer
 from src.generation.generator import Generator
+from src.generation.provider_policy import configured_groq_keys
 from src.generation.rag_pipeline import RAGPipeline
 from src.retrieval.chunk_loader import load_retrieval_chunks
 from src.retrieval.embedder import Embedder
@@ -54,6 +55,14 @@ GENERATOR_MODEL = "openai/gpt-oss-120b"
 JUDGE_MODEL = "openai/gpt-oss-120b"
 
 T = TypeVar("T")
+
+
+def evaluation_generators() -> tuple[Generator, Generator]:
+    """Build separate generation/judge clients from the shared credential authority."""
+    keys = configured_groq_keys(settings)
+    policy = settings.groq_key_policy
+    return (Generator(model=GENERATOR_MODEL, api_keys=keys, key_policy=policy),
+            Generator(model=JUDGE_MODEL, api_keys=keys, key_policy=policy))
 
 
 def _format_optional(value: float | None) -> str:
@@ -395,22 +404,7 @@ def main() -> None:
         model_name=settings.embedding_model_id,
         revision=settings.embedding_model_revision or None,
     )
-    dedicated_generation_keys = [
-        settings.groq_api_key_fall_back,
-        settings.groq_api_key_fall_back2,
-    ]
-    generation_api_keys = list(dedicated_generation_keys)
-    if not any(dedicated_generation_keys):
-        generation_api_keys = [settings.groq_api_key, settings.groq_api_key2]
-    generation_api_keys.extend(
-        [
-            settings.groq_api_key3,
-            settings.groq_api_key4,
-            settings.groq_api_key5,
-        ]
-    )
-    generator = Generator(model=GENERATOR_MODEL, api_keys=generation_api_keys)
-    judge_generator = Generator(model=JUDGE_MODEL)
+    generator, judge_generator = evaluation_generators()
     evaluator = RAGEvaluator(judge_generator=judge_generator)
 
     with VectorStore(

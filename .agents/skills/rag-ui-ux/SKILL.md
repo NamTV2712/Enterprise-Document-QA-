@@ -66,7 +66,7 @@ architecture artifacts, and the RAG specialists for their owned boundaries.
 - `/retrieval/inspect` is provider-free and must not trigger generation on every
   keystroke. Archify must describe verified topology and load outside Chat.
 - Any real Groq request must use `GROQ_KEY_POLICY=key5_only` and
-  `GROQ_API_KEY5`; fail closed rather than falling back to another key.
+  `GROQ_API_KEY`; the historical policy selects primary only; fail closed without it.
 
 ## Gates and rejection criteria
 

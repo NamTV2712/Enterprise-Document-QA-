@@ -18,9 +18,8 @@ KEY = "AGENT_PROVIDER_TEST_KEY_91C4_browser_synthetic"
 
 def main() -> None:
     directory = Path(os.environ.get("PROVIDER001_RUNTIME_DIR") or tempfile.mkdtemp(prefix="edqa-provider001-")).resolve()
-    for name in ("GROQ_API_KEY", "GROQ_API_KEY2", "GROQ_API_KEY3", "GROQ_API_KEY4",
-                 "GROQ_API_KEY5", "GROQ_API_KEY_FALL_BACK", "GROQ_API_KEY_FALL_BACK2"):
-        os.environ[name] = KEY if name == "GROQ_API_KEY5" else ""
+    for name in ("GROQ_API_KEY", "GROQ_API_KEY_FALL_BACK"):
+        os.environ[name] = KEY if name == "GROQ_API_KEY" else ""
     os.environ.update({
         "GROQ_KEY_POLICY": "key5_only", "QDRANT_MODE": "local",
         "QDRANT_CLOUD_URL": "", "QDRANT_CLOUD_API_KEY": "",
@@ -78,7 +77,7 @@ def main() -> None:
 
         @application.app.post("/__provider001__/mode")
         async def select_mode(body: dict[str, str]):
-            application.settings.groq_api_key5 = "" if body["mode"] == "missing" else KEY
+            application.settings.groq_api_key = "" if body["mode"] == "missing" else KEY
             application._state["pipeline"].generator.model = (
                 "ordinary-chat-only" if body["mode"] == "unsupported" else "openai/gpt-oss-120b")
             return {"attempts": len(attempts)}

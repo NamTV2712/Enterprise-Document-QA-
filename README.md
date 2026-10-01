@@ -1479,13 +1479,8 @@ Install dependencies:
 Create `.env`:
 
 ```text
-GROQ_API_KEY=your_groq_key
-GROQ_API_KEY2=optional_second_serving_key
-GROQ_API_KEY3=optional_third_failover_key
-GROQ_API_KEY4=optional_fourth_failover_key
-GROQ_API_KEY5=optional_fifth_failover_key
-GROQ_API_KEY_FALL_BACK=optional_first_evaluation_generation_key
-GROQ_API_KEY_FALL_BACK2=optional_second_evaluation_generation_key
+GROQ_API_KEY=your_primary_groq_key
+GROQ_API_KEY_FALL_BACK=optional_serving_and_evaluation_fallback
 GROQ_KEY_POLICY=key5_only
 QDRANT_MODE=local
 QDRANT_LOCAL_PATH=data/processed/qdrant
@@ -1517,10 +1512,15 @@ ENABLE_CACHE_CLEAR=false
 TRUSTED_PROXY_CIDRS=
 ```
 
-`GROQ_KEY_POLICY=key5_only` makes all generator, judge, correction, and
-decomposer calls resolve only `GROQ_API_KEY5`; use this for the improvement and
-evaluation round. The legacy `pool` value remains available for serving
-failover when that is an explicit operational choice. `ALLOWED_ORIGINS` is a
+`GROQ_API_KEY` is the primary credential; `GROQ_API_KEY_FALL_BACK` is optional.
+`GROQ_KEY_POLICY=key5_only` is retained as a historical/frozen policy identifier
+and now selects only the primary `GROQ_API_KEY`. The `pool` policy resolves primary
+then fallback, removes duplicates, and permits fallback-only configuration for
+normal generation; strict Agent execution requires primary. Generator rotation
+and bounded 429 cooldown/failover remain unchanged; Agent decisions retain one
+HTTP attempt and never rotate to fallback. CRED-001 promoted the former KEY5
+secret to primary locally. Generation and judging now share this policy while
+retaining their separate accounting. `ALLOWED_ORIGINS` is a
 comma-separated allowlist. Add the final Vercel domain before public
 deployment; do not use `*`. `TRUSTED_PROXY_CIDRS` is empty by default; set it
 to the proxy CIDR ranges only when the API runs behind ngrok or another reverse
@@ -1711,7 +1711,7 @@ provider access. Activate a backend test environment first, or set
 
 Prerequisites: Docker Desktop installed and running, plus corpus artifacts already built locally under `data/processed/`.
 
-1. Copy `.env.example` to `.env` and fill in `GROQ_API_KEY`. `GROQ_API_KEY2` through `GROQ_API_KEY5` are optional serving and judging failover keys. `GROQ_API_KEY_FALL_BACK` and `GROQ_API_KEY_FALL_BACK2` form the optional evaluation-generation pool; evaluation uses the primary pair when that dedicated pair is blank, then appends keys 3 through 5. Duplicate values are removed. Each pool rotates keys round-robin and cools down a key after a Groq `429` before retrying another key. Keep the pinned `EMBEDDING_MODEL_REVISION` and `RERANKER_MODEL_REVISION` values from `.env.example` unless the index and image are intentionally rebuilt together.
+1. Copy `.env.example` to `.env` and configure `GROQ_API_KEY`; optionally configure `GROQ_API_KEY_FALL_BACK`. The historical `key5_only` identifier selects primary only. Choose `pool` explicitly for primary/fallback rotation with deduplication and bounded 429 cooldown/failover. Generation and judging use the same credential authority. Keep the pinned model revisions unless the index and image are intentionally rebuilt together.
 
 2. Build and run the backend with a provenance-bound image. See
    [`docs/LOCAL_RELEASE_RUNBOOK.md`](docs/LOCAL_RELEASE_RUNBOOK.md) for the

@@ -666,31 +666,12 @@ def test_production_judge_prompt_preserves_source_boundaries_and_blank_lines() -
     assert "AWS net sales were 107,556.\n\nThe next paragraph" in prompt
 
 
-def test_phase2_pools_append_all_failover_keys_after_existing_keys(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_phase2_generation_and_judge_share_primary_then_fallback(monkeypatch):
     from configs.settings import settings
 
-    monkeypatch.setattr(settings, "groq_api_key", "primary-1")
-    monkeypatch.setattr(settings, "groq_api_key2", "primary-2")
-    monkeypatch.setattr(settings, "groq_api_key3", "primary-3")
-    monkeypatch.setattr(settings, "groq_api_key4", "primary-4")
-    monkeypatch.setattr(settings, "groq_api_key5", "primary-5")
-    monkeypatch.setattr(settings, "groq_api_key_fall_back", "fallback-1")
-    monkeypatch.setattr(settings, "groq_api_key_fall_back2", "fallback-2")
-
-    assert generation_pool_keys() == [
-        "fallback-1",
-        "fallback-2",
-        "primary-3",
-        "primary-4",
-        "primary-5",
-    ]
-    assert judging_pool_keys() == [
-        "primary-1",
-        "primary-2",
-        "primary-3",
-        "primary-4",
-        "primary-5",
-    ]
+    monkeypatch.setattr(settings, "groq_key_policy", "pool")
+    monkeypatch.setattr(settings, "groq_api_key", "synthetic-primary")
+    monkeypatch.setattr(settings, "groq_api_key_fall_back", "synthetic-fallback")
+    assert generation_pool_keys() == ["synthetic-primary", "synthetic-fallback"]
+    assert judging_pool_keys() == ["synthetic-primary", "synthetic-fallback"]
     assert JUDGE_CONTEXT_BUILDER_FINGERPRINT.startswith("sha256:")

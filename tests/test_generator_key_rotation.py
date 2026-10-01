@@ -42,7 +42,7 @@ def test_generator_rotates_primary_keys_round_robin(monkeypatch) -> None:
     assert generator._create_groq_chat_completion() == "first"
     assert generator._create_groq_chat_completion() == "second"
     assert calls == ["primary-1", "primary-2"]
-    assert generator.last_transport_metadata["key_alias"] == "key-2"
+    assert generator.last_transport_metadata["key_alias"] == "fallback"
     assert generator.last_transport_metadata["pool_size"] == 2
     assert generator.last_transport_metadata["status"] == "completed"
 
@@ -62,7 +62,7 @@ def test_rate_limited_key_immediately_fails_over_without_sleep(monkeypatch) -> N
     assert generator._create_groq_chat_completion() is fallback_response
     assert calls == ["fallback-1", "fallback-2"]
     assert sleeps == []
-    assert generator.last_transport_metadata["key_alias"] == "key-2"
+    assert generator.last_transport_metadata["key_alias"] == "fallback"
     assert generator.last_transport_metadata["status"] == "completed"
 
 

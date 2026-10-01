@@ -171,7 +171,10 @@ class Generator:
         # Preserve the old public attribute for integrations that inspect it.
         self.client = self.clients[0]
         self.client_aliases = [
-            key_alias(index, policy=self.key_policy, pool_size=len(self.clients))
+            key_alias(index, policy=self.key_policy, pool_size=len(self.clients),
+                role=("primary" if selected_keys[index] == getattr(settings, "groq_api_key", "")
+                      else "fallback" if selected_keys[index] == getattr(settings, "groq_api_key_fall_back", "")
+                      else None))
             for index in range(len(self.clients))
         ]
         self.last_transport_metadata: dict[str, Any] = {
@@ -222,7 +225,8 @@ class Generator:
             client_aliases = getattr(
                 self,
                 "client_aliases",
-                [f"key-{index + 1}" for index in range(len(self.clients))],
+                [key_alias(index, policy=getattr(self, "key_policy", "pool"),
+                           pool_size=len(self.clients)) for index in range(len(self.clients))],
             )
             self.last_transport_metadata = {
                 "key_alias": client_aliases[client_index],

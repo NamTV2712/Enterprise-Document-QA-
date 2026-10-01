@@ -85,8 +85,7 @@ def main() -> None:
     port = int(os.environ.get("TEST005_API_PORT", "8788"))
     directory = Path(os.environ.get("TEST005_RUNTIME_DIR") or tempfile.mkdtemp(prefix="edqa-test005-")).resolve()
     mode = os.environ.get("TEST005_WORKSPACE_MODE", "local")
-    for key in ("GROQ_API_KEY", "GROQ_API_KEY2", "GROQ_API_KEY3", "GROQ_API_KEY4", "GROQ_API_KEY5",
-                "GROQ_API_KEY_FALL_BACK", "GROQ_API_KEY_FALL_BACK2"):
+    for key in ("GROQ_API_KEY", "GROQ_API_KEY_FALL_BACK"):
         os.environ[key] = "test005-offline-synthetic-provider-key"
     os.environ.update({
         "GROQ_KEY_POLICY": "key5_only", "QDRANT_MODE": "local",

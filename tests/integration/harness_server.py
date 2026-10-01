@@ -58,7 +58,7 @@ os.environ["HARNESS_TEMP_DIR"] = str(_HARNESS_TEMP_DIR)
 
 # Harness settings must exist before configs.settings is imported.
 os.environ.setdefault("GROQ_API_KEY", "harness-fake-key")
-os.environ.setdefault("GROQ_API_KEY2", "harness-fake-key-2")
+os.environ.setdefault("GROQ_API_KEY_FALL_BACK", "harness-fake-key-2")
 os.environ.setdefault("QDRANT_MODE", "local")
 os.environ.setdefault("QDRANT_LOCAL_PATH", str(_HARNESS_TEMP_DIR / "qdrant"))
 os.environ.setdefault("QDRANT_INDEX_MANIFEST_PATH", str(_HARNESS_TEMP_DIR / "index_manifest.json"))

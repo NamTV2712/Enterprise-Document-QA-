@@ -862,7 +862,17 @@ function AppWorkspace() {
       }
     };
     const frame = window.requestAnimationFrame(restoreFocus);
+    // A new gesture owns focus immediately, before its later click handler.
+    // Do not let an old inspector's restoration steal focus between events.
+    const stopForInteraction = () => {
+      window.cancelAnimationFrame(frame);
+      clearEvidenceFocusRestoreTimer();
+    };
+    document.addEventListener("pointerdown", stopForInteraction, true);
+    document.addEventListener("keydown", stopForInteraction, true);
     return () => {
+      document.removeEventListener("pointerdown", stopForInteraction, true);
+      document.removeEventListener("keydown", stopForInteraction, true);
       window.cancelAnimationFrame(frame);
       clearEvidenceFocusRestoreTimer();
     };

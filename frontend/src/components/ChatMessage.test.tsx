@@ -6,6 +6,27 @@ import { ChatMessage } from "./ChatMessage";
 afterEach(cleanup);
 
 describe("ChatMessage", () => {
+  test("keeps citation focus and current source binding through answer updates", () => {
+    const message = {
+      id: "focus-stable-answer", sender: "assistant" as const,
+      text: "The filing provides evidence [Source 1].",
+      sources: [{ citation: "AAPL source", text_preview: "Evidence" }],
+    };
+    const onInspectSource = vi.fn();
+    const onToggleBookmark = vi.fn();
+    const { rerender } = render(<ChatMessage message={message} onInspectSource={onInspectSource} onToggleBookmark={onToggleBookmark} bookmarked={false} />);
+    const citation = screen.getByRole("button", { name: "Open source 1" });
+    citation.focus();
+    const copiedMessage = { ...message, sources: message.sources.map((source) => ({ ...source, chunk_id: "current-chunk" })) };
+    rerender(<ChatMessage message={copiedMessage} onInspectSource={onInspectSource} onToggleBookmark={onToggleBookmark} bookmarked={true} />);
+    expect(screen.getByRole("button", { name: "Open source 1" })).toBe(citation);
+    expect(citation).toHaveFocus();
+    fireEvent.click(citation);
+    expect(onInspectSource).toHaveBeenCalledWith(expect.objectContaining({
+      messageId: "focus-stable-answer", citationIndex: 0, chunkId: "current-chunk",
+    }));
+  });
+
   test("visually separates a user question from a grounded response", () => {
     const { rerender } = render(
       <ChatMessage

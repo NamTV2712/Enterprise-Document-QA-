@@ -6,7 +6,7 @@ Fix SHA: `21537c1479c73a9933c80e8ec126ee34bdd94e8e`
 (`fix(ci): stabilize backend and frontend release contracts`).
 Browser correction SHA: `8b28b76604bfc0e04df68223438dec6724c7716f`
 (`fix(ci): correct browser suite ownership and timing checks`).
-The final release SHA is the remaining-fixture and receipt closure commit containing this
+The final release SHA is the documentation closure commit containing this
 receipt. Its literal SHA, exact-SHA run IDs/conclusions, clean-checkout results
 and push equality are recorded in the closing report after committing it.
 This receipt cannot contain its own Git object ID. That final gate is mandatory.
@@ -161,6 +161,12 @@ Browser correction SHA `8b28b76604bfc0e04df68223438dec6724c7716f`:
 
 The final documentation SHA independently receives both complete workflows.
 
+Remaining-fixture SHA `f40d7b5a42468428fc348e78394c316e766d5f3a`:
+
+- [Backend CI 36850060854](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/runs/36850060854): SUCCESS; job 110329325262, **1897 passed / 34 expected skips / 149 warnings**, original OpenAPI assertion and compile PASS. Declared package versions match the parity table.
+- [Frontend CI 36850060856](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/runs/36850060856): SUCCESS with qualification. Job 110329325251: 94 files / 818 unit tests, TypeScript/build/contrast PASS; browser **516 passed / 2 flaky / 4 inherited skips**, 522 cases, 19.9 minutes. HTTP job 110329325325: **16 HTTP/SSE + 32 Agent cases PASS**. The existing browser retry allowed two Firefox focus tests to pass on retry. This candidate is **not accepted as deterministic**; no workflow rerun was initiated.
+- Exact committed clean checkout: backend **1897/34/149**, frontend frozen install, TypeScript, **94 files / 818 tests**, build PASS; import/OpenAPI/compile, 90 routes and fresh/reopened SQLite v7/WAL/NORMAL/busy5000/integrity OK. Push local/upstream/remote equality **0/0** verified.
+
 Both workflow path filters now include this receipt. Previously a documentation
 closure push could have no exact-HEAD checks. The four path-filter entries fix
 that release-gate omission without changing install commands, action versions,
@@ -247,16 +253,63 @@ checkout receives its own serial backend and frontend validation.
 
 ## Files, preservation and remaining limits
 
+### Reproduced inspector focus race
+
+The two retry-backed Firefox successes above affect existing remaining-width and
+responsive inspector focus-return tests. Their original assertions reproduced
+locally with retries disabled: **38 passed / 2 failed** in 40 cases. Diagnostic
+trials were 26/30, 15/20 and 4/5; logging could affect scheduling, so these are
+diagnosis rather than accepted stress results. Safe logs captured only element
+tag, label/index and focus state. Both original failure traces were preserved
+outside browser outputs; no source or credential data was printed.
+
+Two causes are proven. An older close operation's bounded focus-restoration timer
+can run between a new citation's pointer-down and click, returning focus to the
+previous `Open 2 sources` action before the new opener is recorded. Independently,
+inline Markdown component functions receive new React identities on answer
+updates and replace the focused citation node. A focused unit regression fails
+deterministically for both an unrelated bookmark update and an immutable source
+copy. Failure diagnostics showed the active element becoming BODY with browser
+document focus still true; this is not an unfocused browser window.
+
+Stop the old scheduled restoration on new pointer-down or key-down, and remove
+those listeners with the existing lifecycle cleanup. Keep its original bounds.
+Keep Markdown component types stable for the mounted answer, supplying the
+current citation callback/count through an answer-local React context. This
+preserves the DOM node while committed source/variant bindings update. The
+regression also verifies that clicking the retained button reports the current
+chunk identity. No assertion, timeout, retry, selection policy, style, provider,
+backend, route or persistence contract is relaxed.
+
+Memoizing renderer types against callback references alone was rejected: **59/60
+browser cases passed**, but an immutable source copy still reproduced replacement
+in the unit test. The final context binding avoids that dependency. One focused
+unit case raises the frontend count to **94 files / 819 tests**; the 522 regular
+and 32 dedicated browser cases are unchanged. These two frontend source fixes
+are the only production behavior correction in CI-FIX-001, justified by the
+reproduced accessibility race. Final **60/60** original browser cases passed
+(30 per engine, zero retries); **three full suites each passed 94 files / 819
+tests**, plus TypeScript/build. Focused App/ChatMessage: **42 passed**. Four built
+inspector journeys passed in Chromium/Firefox, covering light English 1024px and
+dark Vietnamese 390px, Escape/focus return and no root horizontal overflow.
+All four actual screenshots were inspected. The initial screenshot helper run
+directly under Bun stalled before producing results and was interrupted (UNKNOWN);
+the repository Playwright CLI completed the same four journeys. No product
+failure is inferred from that diagnostic runtime limitation.
+
 Modified: `.github/workflows/backend.yml`, `.github/workflows/frontend.yml`,
 `frontend/src/App.test.tsx`, `frontend/playwright.config.ts`,
+`frontend/src/App.tsx`, `frontend/src/components/ChatMessage.tsx`,
+`frontend/src/components/ChatMessage.test.tsx`,
 `frontend/src/components/PipelineConsole.test.tsx`,
 `frontend/src/components/search/DiscoverySearchPage.test.tsx`,
 `frontend/e2e/reconciliation-reference.spec.ts`,
 `frontend/e2e/workspace-performance.spec.ts`, `tests/test_api_router_contracts.py`, `README.md`,
 `PROJECT_STATE.md`. Added: `tests/fixtures/moved_openapi_schemas.json`, this receipt.
-Deleted: none. Three coherent commits: the initial contract fix, the newly exposed
-browser gate corrections, and remaining fixture synchronization with release
-evidence. The first two fix SHAs are above; the final SHA is in the closing report.
+Deleted: none. Coherent commits cover the initial contract fix, browser gate
+corrections, remaining fixture synchronization, the reproduced focus race, and
+final successful CI evidence. Accepted fix SHAs are recorded above; the final
+documentation SHA is in the closing report.
 Full diagnostics/environments/logs remain ignored under `.local/ci-fix-001/`.
 The task-owned detached clean checkout is removed after final validation;
 the historical TEST-004 worktree remains untouched.
@@ -278,8 +331,8 @@ Linux population. AnyIO 4.15.1 adds the Starlette alias deprecation absent from
 primary AnyIO 4.14.1; artifact-dependent skips remove the other warning difference.
 ReportLab, BeautifulSoup/lxml and Requests dependency warnings remain. Existing
 Node 20 action deprecation/runtime warnings did not cause either failed test;
-action upgrades are outside this repair. The current main build warning is
-508.63 kB. Collections/model-test browser bearer staging, native zoom manual/
+action upgrades are outside this repair. The initial build warning was 508.63 kB;
+the focus correction's current main chunk is 508.86 kB. Collections/model-test browser bearer staging, native zoom manual/
 unverified and optional Ragas remain inherited limitations.
 
 Roadmap: CI-FIX-001 release fixes are locally validated. Completion requires the

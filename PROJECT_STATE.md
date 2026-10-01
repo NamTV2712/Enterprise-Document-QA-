@@ -39,7 +39,8 @@ exceeded its 5s budget; fixed cancellation passed. History isolated **20/20** an
 serial full frontend passed. Resource contention is plausible but unproven; no
 unrelated test/timeout/worker change hides this result. Fresh 149 warnings match
 starting Linux, including newer transitive AnyIO/Starlette; primary 188 unchanged.
-Existing Node action warnings and current 508.63 kB build warning remain.
+Existing Node action warnings remain; the initial 508.63 kB main chunk becomes
+508.86 kB after the bounded focus correction, retaining the bundle warning.
 
 Backend initial fix-SHA CI 36843208943 SUCCESS; frontend HTTP/SSE SUCCESS, but
 full Frontend CI 36843208925 FAILURE exposed 35 browser failures after its 818
@@ -69,6 +70,28 @@ Afterwards **20/20 affected-suite runs** passed (28 cases each) and **three more
 full frontend suites** passed (94 files/818 tests each), plus TypeScript/build.
 The final receipt commit includes these bounded fixture corrections and receives
 the required complete Backend and Frontend workflows.
+
+Candidate `f40d7b5a42468428fc348e78394c316e766d5f3a` reached Backend CI
+36850060854 SUCCESS (1897/34/149) and Frontend CI 36850060856 SUCCESS, but the
+latter had **516 passed/2 flaky/4 inherited skips** in its 522-case browser gate.
+Do not accept retry-backed green as determinism. Original Firefox inspector
+focus assertions reproduced locally **38/40** with retries disabled. Diagnostics
+proved an old focus timer can steal focus during a new pointer gesture, and
+inline Markdown renderer identities replace focused citation nodes on answer
+updates. A focused unit regression fails for a bookmark update/immutable source
+copy and also protects the latest chunk binding. Stop old restoration on new
+pointer/key interaction; preserve renderer types and update their answer-local
+context binding. No style, provider, backend, route, schema or dependency change.
+Callback-dependent memoization alone was rejected (59/60 browser cases and a
+deterministic immutable-copy unit failure). The final focus fix raises units to
+**94 files/819 tests**, with the original browser population preserved. These
+are the only production frontend corrections, permitted by the proven race.
+Final original browser focus cases **60/60 PASS**, zero retries, 30 per engine;
+three final full frontend suites each **94 files/819 tests PASS**, TypeScript/build
+PASS, focused App/ChatMessage **42 PASS**. Four actual built inspector journeys
+and inspected screenshots cover light EN 1024px/dark VI 390px in both engines,
+Escape/focus restoration and no root horizontal overflow. Full exact-SHA CI
+must still succeed without retry-backed flakes before acceptance.
 
 Both workflows now include the receipt path so the
 documentation closure SHA also receives complete workflows. Final literal SHA,

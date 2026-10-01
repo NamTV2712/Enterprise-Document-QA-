@@ -58,6 +58,8 @@ release validation; an existing development environment may contain other versio
 CI runs the Agent shell sweep through its dedicated local fixture harness. Warm
 navigation checks retain the 200ms budget and observe visibility on browser frames
 before the explicit assertions, avoiding assertion polling delay in the samples.
+Citation nodes retain focus across answer updates, and a new pointer or keyboard
+interaction cancels stale inspector focus restoration.
 
 The independent frontend exposes Chat, Research, Documents, Search, Collections,
 Retrieval, Models, Pipeline, Agent, Reranker, Evaluation, Analytics, Datasets,

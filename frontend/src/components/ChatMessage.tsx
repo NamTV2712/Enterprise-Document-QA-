@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   User,
@@ -218,6 +218,13 @@ const renderFormattedChildren = (
   });
 };
 
+const MarkdownCitationContext = createContext<{ onCitation: (index: number) => void; sourceCount: number } | null>(null);
+
+function useFormattedMarkdownChildren(children: React.ReactNode): React.ReactNode {
+  const binding = useContext(MarkdownCitationContext);
+  return renderFormattedChildren(children, binding?.onCitation, binding?.sourceCount ?? 0);
+}
+
 const ChatMessageBase: React.FC<ChatMessageProps> = ({
   message,
   messageId = message.id,
@@ -324,7 +331,7 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
         ...(message.requestSnapshot.enableComparative ? [locale === "vi" ? "So sánh" : "Comparison"] : []),
       ].join(" · ")
     : null;
-  const inspectCitation = (citationIndex: number, fallbackSource?: { citation: string; text_preview: string; chunk_id?: string; document_id?: string }) => {
+  const inspectCitation = useCallback((citationIndex: number, fallbackSource?: { citation: string; text_preview: string; chunk_id?: string; document_id?: string }) => {
     const source = displayedSources?.[citationIndex] ?? fallbackSource;
     if (!source) return;
     onInspectSource?.({
@@ -339,7 +346,77 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
     // scheduling a second focus target in the legacy message-level source
     // panel, which could steal focus back after the inspector closes.
     if (!onInspectSource) setFocusSourceIndex(citationIndex);
-  };
+  }, [displayedSources, messageId, onInspectSource, selectedVariant?.id]);
+
+  // Stable Markdown component types preserve citation nodes and focus across
+  // unrelated answer-action or reader updates.
+  const markdownComponents = useMemo<Components>(() => ({
+    table: ({ ...props }) => (
+      <div className="overflow-x-auto my-4 border border-slate-200/90 dark:border-slate-800 rounded-xl shadow-4xs bg-white dark:bg-[var(--surface)]/80">
+        <table
+          className="w-full text-xs text-left border-collapse"
+          {...props}
+        />
+      </div>
+    ),
+    thead: ({ ...props }) => (
+      <thead
+        className="bg-[var(--surface-muted)] text-[var(--text-primary)] border-b border-[var(--border-subtle)]"
+        {...props}
+      />
+    ),
+    th: ({ ...props }) => (
+      <th
+        className="px-3 py-2.5 font-bold text-xs tracking-wider uppercase font-sans border-r last:border-r-0 border-slate-200/50 dark:border-slate-800/60"
+        {...props}
+      />
+    ),
+    tbody: ({ ...props }) => (
+      <tbody
+        className="divide-y divide-slate-100 dark:divide-slate-800/50 bg-white dark:bg-transparent"
+        {...props}
+      />
+    ),
+    td: ({ ...props }) => (
+      <td
+        className="px-3 py-2.5 font-mono text-xs text-[var(--text-primary)] border-r last:border-r-0 border-slate-100 dark:border-slate-800/40"
+        {...props}
+      />
+    ),
+    p: ({ children }) => (
+      <p className="mb-3.5 last:mb-0 text-sm md:text-base leading-relaxed text-[var(--text-primary)]">
+        {useFormattedMarkdownChildren(children)}
+      </p>
+    ),
+    ul: ({ children }) => (
+      <ul className="list-disc pl-5 mb-3 text-sm space-y-1.5 text-[var(--text-primary)]">
+        {useFormattedMarkdownChildren(children)}
+      </ul>
+    ),
+    ol: ({ children }) => (
+      <ol className="list-decimal pl-5 mb-3 text-sm space-y-1.5 text-[var(--text-primary)]">
+        {useFormattedMarkdownChildren(children)}
+      </ol>
+    ),
+    li: ({ children }) => (
+      <li className="text-sm md:text-base leading-relaxed">
+        {useFormattedMarkdownChildren(children)}
+      </li>
+    ),
+    strong: ({ children, ...props }) => (
+      <strong
+        className="font-bold text-[var(--text-primary)] font-sans"
+        {...props}
+      >
+        {useFormattedMarkdownChildren(children)}
+      </strong>
+    ),
+    em: ({ children, ...props }) => (
+      <em className="italic" {...props}>
+        {useFormattedMarkdownChildren(children)}
+      </em>
+    ),
+  }), []);
 
   useEffect(() => {
     const appliesToVariant = (message.feedback?.variantId ?? null) === (selectedVariantId ?? null);
@@ -533,78 +610,14 @@ const ChatMessageBase: React.FC<ChatMessageProps> = ({
                           {displayedText}
                         </p>
                       ) : (
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                          table: ({ ...props }) => (
-                            <div className="overflow-x-auto my-4 border border-slate-200/90 dark:border-slate-800 rounded-xl shadow-4xs bg-white dark:bg-[var(--surface)]/80">
-                              <table
-                                className="w-full text-xs text-left border-collapse"
-                                {...props}
-                              />
-                            </div>
-                          ),
-                          thead: ({ ...props }) => (
-                            <thead
-                              className="bg-[var(--surface-muted)] text-[var(--text-primary)] border-b border-[var(--border-subtle)]"
-                              {...props}
-                            />
-                          ),
-                          th: ({ ...props }) => (
-                            <th
-                              className="px-3 py-2.5 font-bold text-xs tracking-wider uppercase font-sans border-r last:border-r-0 border-slate-200/50 dark:border-slate-800/60"
-                              {...props}
-                            />
-                          ),
-                          tbody: ({ ...props }) => (
-                            <tbody
-                              className="divide-y divide-slate-100 dark:divide-slate-800/50 bg-white dark:bg-transparent"
-                              {...props}
-                            />
-                          ),
-                          td: ({ ...props }) => (
-                            <td
-                              className="px-3 py-2.5 font-mono text-xs text-[var(--text-primary)] border-r last:border-r-0 border-slate-100 dark:border-slate-800/40"
-                              {...props}
-                            />
-                          ),
-                          p: ({ children }) => (
-                            <p className="mb-3.5 last:mb-0 text-sm md:text-base leading-relaxed text-[var(--text-primary)]">
-                              {renderFormattedChildren(children, inspectCitation, displayedSources?.length ?? 0)}
-                            </p>
-                          ),
-                          ul: ({ children }) => (
-                            <ul className="list-disc pl-5 mb-3 text-sm space-y-1.5 text-[var(--text-primary)]">
-                              {renderFormattedChildren(children, inspectCitation, displayedSources?.length ?? 0)}
-                            </ul>
-                          ),
-                          ol: ({ children }) => (
-                            <ol className="list-decimal pl-5 mb-3 text-sm space-y-1.5 text-[var(--text-primary)]">
-                              {renderFormattedChildren(children, inspectCitation, displayedSources?.length ?? 0)}
-                            </ol>
-                          ),
-                          li: ({ children }) => (
-                            <li className="text-sm md:text-base leading-relaxed">
-                              {renderFormattedChildren(children, inspectCitation, displayedSources?.length ?? 0)}
-                            </li>
-                          ),
-                          strong: ({ children, ...props }) => (
-                            <strong
-                              className="font-bold text-[var(--text-primary)] font-sans"
-                              {...props}
-                            >
-                              {renderFormattedChildren(children, inspectCitation, displayedSources?.length ?? 0)}
-                            </strong>
-                          ),
-                          em: ({ children, ...props }) => (
-                            <em className="italic" {...props}>
-                              {renderFormattedChildren(children, inspectCitation, displayedSources?.length ?? 0)}
-                            </em>
-                          ),
-                          }}
-                        >
-                          {displayedText}
-                        </ReactMarkdown>
+                        <MarkdownCitationContext.Provider value={{ onCitation: inspectCitation, sourceCount: displayedSources?.length ?? 0 }}>
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={markdownComponents}
+                          >
+                            {displayedText}
+                          </ReactMarkdown>
+                        </MarkdownCitationContext.Provider>
                       )
                     ) : (
                       <div className="flex items-center gap-2 text-slate-400 py-1 font-mono">

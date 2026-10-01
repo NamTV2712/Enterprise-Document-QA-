@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
@@ -223,8 +225,7 @@ def test_data005_telemetry_routes_have_coherent_transport_owners() -> None:
         assert routes[path].endpoint.__module__ == "src.api.routers.telemetry"
 
 
-def test_moved_openapi_operations_match_the_pre_extraction_contract() -> None:
-    specification = app_module.app.openapi()
+def _moved_openapi_operations(specification: dict) -> dict:
     contracts = {
         path: specification["paths"][path]
         for path in sorted(EXTRACTED_ROUTE_MODULES)
@@ -240,11 +241,108 @@ def test_moved_openapi_operations_match_the_pre_extraction_contract() -> None:
     status_enum = status_parameter["schema"]["anyOf"][0]["enum"]
     assert status_enum == ["official", "candidate", "historical", "complete", "incomplete"]
     status_enum.remove("complete")
-    encoded = json.dumps(
-        contracts, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
+    # Pydantic 2.10 omits this keyword for bare dict responses; 2.13 emits
+    # true. Both permit extra properties. Preserve false and typed schemas,
+    # and leave all other metadata and request/response constraints intact.
+    for operations in contracts.values():
+        for operation in operations.values():
+            for response in operation.get("responses", {}).values():
+                for media in response.get("content", {}).values():
+                    schema = media.get("schema", {})
+                    if schema.get("type") == "object":
+                        schema.setdefault("additionalProperties", True)
+    return contracts
 
-    assert hashlib.sha256(encoded).hexdigest() == MOVED_OPENAPI_SHA256
+
+def _contract_digest(contract: dict) -> str:
+    encoded = json.dumps(
+        contract, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _referenced_contract_schemas(specification: dict, operations: dict) -> dict:
+    """Freeze transitive request/response schemas as well as their ref names."""
+    referenced = {}
+
+    def visit(value):
+        if isinstance(value, list):
+            for item in value:
+                visit(item)
+        elif isinstance(value, dict):
+            reference = value.get("$ref", "")
+            if reference.startswith("#/components/schemas/"):
+                name = reference.removeprefix("#/components/schemas/")
+                if name not in referenced:
+                    referenced[name] = specification["components"]["schemas"][name]
+                    visit(referenced[name])
+            for item in value.values():
+                visit(item)
+
+    visit(operations)
+    return referenced
+
+
+def test_moved_openapi_operations_match_the_pre_extraction_contract() -> None:
+    specification = app_module.app.openapi()
+    contracts = _moved_openapi_operations(specification)
+
+    assert _contract_digest(contracts) == MOVED_OPENAPI_SHA256
+    expected_schemas = json.loads(
+        (Path(__file__).parent / "fixtures" / "moved_openapi_schemas.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert _referenced_contract_schemas(specification, contracts) == expected_schemas
+
+
+def test_moved_openapi_contract_accepts_only_the_observed_representation_difference() -> None:
+    specification = json.loads(json.dumps(app_module.app.openapi()))
+    for operations in specification["paths"].values():
+        for operation in operations.values():
+            for response in operation.get("responses", {}).values():
+                for media in response.get("content", {}).values():
+                    schema = media.get("schema", {})
+                    if schema.get("type") == "object" and schema.get("additionalProperties") is True:
+                        schema.pop("additionalProperties")
+    assert _contract_digest(_moved_openapi_operations(specification)) == MOVED_OPENAPI_SHA256
+
+
+@pytest.mark.parametrize("change", [
+    "path", "method", "parameter", "required", "request_body", "status",
+    "response_type", "response_field", "closed_object", "typed_extras", "security",
+])
+def test_moved_openapi_contract_still_rejects_semantic_changes(change: str) -> None:
+    specification = json.loads(json.dumps(app_module.app.openapi()))
+    paths = specification["paths"]
+    operation = paths["/health"]["get"]
+    schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+    if change == "path":
+        paths["/renamed-health"] = paths.pop("/health")
+        with pytest.raises(KeyError):
+            _moved_openapi_operations(specification)
+        return
+    if change == "method":
+        paths["/health"]["post"] = paths["/health"].pop("get")
+    elif change == "parameter":
+        paths["/evaluation/runs"]["get"]["parameters"][0]["in"] = "header"
+    elif change == "required":
+        paths["/session/{session_id}"]["delete"]["parameters"][0]["required"] = False
+    elif change == "request_body":
+        paths["/cache/test"]["post"]["requestBody"]["required"] = False
+    elif change == "status":
+        operation["responses"]["201"] = operation["responses"].pop("200")
+    elif change == "response_type":
+        schema["type"] = "string"
+    elif change == "response_field":
+        schema["properties"] = {"changed": {"type": "integer"}}
+    elif change == "closed_object":
+        schema["additionalProperties"] = False
+    elif change == "typed_extras":
+        schema["additionalProperties"] = {"type": "string"}
+    elif change == "security":
+        operation["security"] = [{"bearer": []}]
+    assert _contract_digest(_moved_openapi_operations(specification)) != MOVED_OPENAPI_SHA256
 
 
 def test_static_evaluation_route_precedes_dynamic_and_keeps_errors(

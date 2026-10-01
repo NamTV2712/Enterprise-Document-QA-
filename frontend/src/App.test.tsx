@@ -464,33 +464,58 @@ describe("App request cancellation", () => {
   });
 
   test("changing routes while a request is pending aborts the stream and ignores late events", async () => {
+    let resolveInitialHistory!: (value: { session_id: string; turns: [] }) => void;
+    const initialHistory = new Promise<{ session_id: string; turns: [] }>((resolve) => {
+      resolveInitialHistory = resolve;
+    });
+    apiMocks.getSessionHistory.mockImplementationOnce(() => initialHistory);
     let streamSignal: AbortSignal | undefined;
     let emitLate: (() => void) | undefined;
     apiMocks.streamQuery.mockImplementation(
-      async (_payload, onEvent, _onError, signal?: AbortSignal) => {
+      async (_payload, onEvent, onError, signal?: AbortSignal) => {
         streamSignal = signal;
         onEvent({ type: "token", data: "Partial before route change" });
         await new Promise<void>((resolve) => {
           emitLate = () => {
             onEvent({ type: "token", data: "Late event after route change" });
+            onEvent({ type: "done", data: { answer: "Late completion after route change", sources: [] } });
+            onEvent({ type: "error", data: "Late stream error after route change" });
+            onError(new Error("Late callback error after route change"));
             resolve();
           };
-          signal?.addEventListener("abort", () => undefined, { once: true });
         });
       },
     );
 
     render(<App />);
     await screen.findByText("Research ready");
+    // Health readiness precedes the independent initial session check. An
+    // empty result establishes a fresh conversation only after that check
+    // settles; clicking during it can correctly fail the send preflight.
+    await waitFor(() => expect(apiMocks.getSessionHistory).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      resolveInitialHistory({ session_id: "test-session", turns: [] });
+      await initialHistory;
+    });
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Pending route query" } });
-    fireEvent.click(screen.getByRole("button", { name: "Send question" }));
+    const send = screen.getByRole("button", { name: "Send question" });
+    await waitFor(() => expect(send).toBeEnabled());
+    fireEvent.click(send);
     await screen.findByText("Partial before route change");
+    expect(apiMocks.streamQuery).toHaveBeenCalledTimes(1);
+    expect(streamSignal?.aborted).toBe(false);
 
     fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
     fireEvent.click(screen.getByRole("link", { name: "Research" }));
     await waitFor(() => expect(streamSignal?.aborted).toBe(true));
-    emitLate?.();
-    await waitFor(() => expect(screen.queryByText("Late event after route change")).not.toBeInTheDocument());
+    expect(emitLate).toBeDefined();
+    await act(async () => {
+      emitLate!();
+      await apiMocks.streamQuery.mock.results[0].value;
+    });
+    expect(window.location.pathname).toBe("/research");
+    expect(screen.queryByText(/Late (event|completion|stream error|callback error) after route change/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Stop generating response" })).not.toBeInTheDocument();
   });
 
   test("comparative analysis can be stopped while the request is pending", async () => {

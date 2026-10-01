@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - ".github/workflows/frontend.yml"
+      - "docs/CI_FIX_001_FINAL_RECEIPT.md"
       - "frontend/**"
       - "src/**"
       - "tests/integration/**"
@@ -12,6 +13,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/frontend.yml"
+      - "docs/CI_FIX_001_FINAL_RECEIPT.md"
       - "frontend/**"
       - "src/**"
       - "tests/integration/**"

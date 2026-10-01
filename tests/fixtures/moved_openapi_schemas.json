@@ -1,0 +1,68 @@
+{
+  "CacheTestRequest": {
+    "properties": {
+      "query_a": {
+        "minLength": 5,
+        "title": "Query A",
+        "type": "string"
+      },
+      "query_b": {
+        "minLength": 5,
+        "title": "Query B",
+        "type": "string"
+      }
+    },
+    "required": [
+      "query_a",
+      "query_b"
+    ],
+    "title": "CacheTestRequest",
+    "type": "object"
+  },
+  "HTTPValidationError": {
+    "properties": {
+      "detail": {
+        "items": {
+          "$ref": "#/components/schemas/ValidationError"
+        },
+        "title": "Detail",
+        "type": "array"
+      }
+    },
+    "title": "HTTPValidationError",
+    "type": "object"
+  },
+  "ValidationError": {
+    "properties": {
+      "loc": {
+        "items": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "title": "Location",
+        "type": "array"
+      },
+      "msg": {
+        "title": "Message",
+        "type": "string"
+      },
+      "type": {
+        "title": "Error Type",
+        "type": "string"
+      }
+    },
+    "required": [
+      "loc",
+      "msg",
+      "type"
+    ],
+    "title": "ValidationError",
+    "type": "object"
+  }
+}

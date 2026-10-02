@@ -26,15 +26,21 @@ Quick snapshots dropping accepted Agent references; fixed follow-up tiles
 obscuring citations with the taller composer; two existing dark overview text
 contrast defects. Preserve old Quick cancellation/focus/layout budgets. A VI
 fixture initially selected locale incorrectly; corrected without a product or
-timeout change. Prior incomplete/failed browser candidates remain disclosed.
+timeout change. A held create response redirected a newer Search route back to
+Research; a two-browser failing regression proves the defect. Navigation-key
+ownership now preserves the newer route while linking the accepted origin run.
+Prior incomplete/failed browser candidates remain disclosed.
 
 Primary backend **1958 passed / 188 warnings**, transfer focused **24 passed**;
 frontend **96 files / 843 tests**, TypeScript/build PASS. New production UX
-Chromium/Firefox **20 passed**, seven required widths, EN/VI and light/dark;
+Chromium/Firefox **22 passed**, seven required widths, EN/VI and light/dark;
 phone Agent/details screenshots inspected. HTTP/SSE **16**, Agent shell sweep
 **32** and durable Agent product harness **12** passed on Chromium/Firefox.
-Full browser and exact-final
-clean gates are required before closure and reported literally in the closing
+Implementation-SHA clean backend **1924 passed / 34 artifact skips / 149 warnings**;
+clean frontend frozen install / TypeScript / 96 files, 843 tests / build PASS.
+Its full regular browser matrix **540 passed / 4 existing skips**, one worker.
+After the late-navigation fix, final-SHA full browser and clean gates are required
+before closure and reported literally in the closing
 report. Main bundle **527.07 kB** retains the warning. Native zoom is manual/
 unverified; Collections/model-test bearer wiring staged; Ragas optional.
 
@@ -52,8 +58,9 @@ Same 12 unrelated paths remain untracked. Preservation audit: 1,691/1,694 files
 unchanged; an inherited PDF test overwrote three prior diagnostic screenshots.
 It now writes to per-test output paths. The user explicitly accepted the three
 diagnostic-file exception on 2026-10-02; the receipt records it literally.
-Required roadmap and prior milestones COMPLETE. **UX-AGENT-001 is COMPLETE once
-its exact-final gates pass; FINAL-IMPROVE is NEXT. STOP before FINAL-IMPROVE.**
+Required roadmap and prior milestones COMPLETE. **UX-AGENT-001 COMPLETE;
+FINAL-IMPROVE NEXT / NOT STARTED.** Publication closure still requires all
+exact-final gates above; STOP before FINAL-IMPROVE.
 
 ## CAPACITY-001 — operating policy and exact-SHA release gate (2026-10-01)
 

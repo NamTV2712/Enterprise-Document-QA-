@@ -13,7 +13,7 @@ milestones remain complete. Starting HEAD: `b13fff6affc919a19f13bda3ddc730c319a7
 | WORKER-002 | Bounded queue/scheduling and admission fairness attribution with durable admission hints | COMPLETE |
 | CI-FIX-001 | Authoritative backend/frontend release gates and exact-SHA CI | COMPLETE |
 | CAPACITY-001 | Bounded Agent service capacity and provider concurrency policy | COMPLETE once exact-SHA Backend CI and local release gates pass; Frontend CI waived by user |
-| UX-AGENT-001 | Unified Research conversation with separate Quick/Agent execution | COMPLETE once exact-final Backend CI and local release gates pass; GitHub Frontend CI waived by user |
+| UX-AGENT-001 | Unified Research conversation with separate Quick/Agent execution | COMPLETE; exact-final publication gates required; GitHub Frontend CI waived by user |
 | FINAL-IMPROVE | Final current-round closure | NEXT / NOT STARTED |
 | SCALE-003 | Future evidence-backed caching/resource work, outside current round | NOT STARTED / DEFERRED |
 
@@ -27,7 +27,10 @@ remain explicit. Conversation record v5 retains only the safe run reference;
 DATA-004 remains authoritative. Legacy Quick and `/chat` routes stay compatible.
 The bounded draft/reference races, citation obstruction and dark text contrast
 defects were reproduced and repaired. Primary backend 1958, frontend 96/843,
-TypeScript/build and 20 new two-browser UX cases pass. Exact-final clean/full
+TypeScript/build and 22 new two-browser UX cases pass. Implementation-SHA clean
+backend 1924/34 skips/149 warnings, frontend 96/843 and regular browser 540/4
+existing skips pass. A final navigation-key fix follows its failing regression;
+the accepted origin reference cannot redirect a newer tool route. Exact-final clean/full
 browser/harness gates, normal main push equality and Backend CI SUCCESS complete
 closure. GitHub Frontend CI is explicitly waived for this task by the user on
 2026-10-02; its configuration and local gates remain unchanged.

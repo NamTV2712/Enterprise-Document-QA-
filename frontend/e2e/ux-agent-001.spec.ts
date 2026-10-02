@@ -114,6 +114,29 @@ test("conversation cancellation uses current revision and reconciles conflict", 
   await expect(card.getByRole("status").first()).toHaveText("Cancelled");
 });
 
+test("a late accepted run stays linked to its origin without redirecting a newer tool navigation", async ({ page }) => {
+  const fixture = await installAgentFixture(page, { initialRuns: [] });
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  let posted = false;
+  await page.route(`${API_ORIGIN}/agent/runs`, async route => {
+    if (route.request().method() === "POST") { posted = true; await held; }
+    await route.fallback();
+  });
+  await page.goto("/research");
+  await page.getByRole("button", { name: "Deep Research", exact: true }).click();
+  await connect(page);
+  await page.getByRole("textbox", { name: "Research goal" }).fill("Review filing risk evidence.");
+  await page.getByRole("button", { name: "Start Deep Research" }).click();
+  await expect.poll(() => posted).toBe(true);
+  await page.getByRole("link", { name: "Search", exact: true }).click();
+  await expect(page).toHaveURL(/\/search$/);
+  release();
+  await expect.poll(() => fixture.createCount()).toBe(1);
+  await expect.poll(async () => (await auditStorage(page)).length).toBe(1);
+  await expect(page).toHaveURL(/\/search$/);
+});
+
 test("Vietnamese compact Agent states and keyboard details remain readable on a phone", async ({ page }, info) => {
   await installAgentFixture(page, { initialRuns: [] });
   await page.addInitScript(() => localStorage.setItem("sec_qa_locale", "vi"));

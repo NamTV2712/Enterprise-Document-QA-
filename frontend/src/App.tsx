@@ -373,6 +373,8 @@ function evidenceAnchorMessageId(messageId: string): string {
 function AppWorkspace() {
   const { locale, t } = useLocale();
   const location = useLocation();
+  const researchLocationKey = useRef(location.key);
+  researchLocationKey.current = location.key;
   const navigate = useNavigate();
   const resolvedRoute = useMemo(
     () => resolveAppRoute(location.pathname, location.search, location.hash),
@@ -2118,7 +2120,12 @@ function AppWorkspace() {
         setInputText={setInputText}
         onSendMessage={(text) => {
           if (conversationAgent.mode === "quick") void handleSendMessage(text);
-          else void conversationAgent.send(text).then((linked) => { if (linked) navigateWorkspaceRoute("conversation"); });
+          else {
+            const originLocationKey = location.key;
+            void conversationAgent.send(text).then((linked) => {
+              if (linked && researchLocationKey.current === originLocationKey) navigateWorkspaceRoute("conversation");
+            });
+          }
         }}
         showScope={conversationAgent.mode === "quick"}
         sendLabel={conversationAgent.mode === "deep" ? researchCopy[locale].send : undefined}

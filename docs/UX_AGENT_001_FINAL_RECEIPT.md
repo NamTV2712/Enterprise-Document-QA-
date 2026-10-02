@@ -5,6 +5,8 @@ Date: 2026-10-02. Main-only starting HEAD:
 The final commit is resolved by `git log -1 --format=%H -- docs/UX_AGENT_001_FINAL_RECEIPT.md`.
 Exact final verification, push equality and Backend CI run ID are reported in the closing report.
 Release is complete only after those gates pass.
+Implementation commit: `2ff9d08d34f902b7be5c578956d7aeb15ab14604` —
+`feat(research): unify Quick and durable Agent conversations`.
 
 ## Product and execution boundaries
 
@@ -130,6 +132,11 @@ Groq quota or live provider calls were used.
   accent-text token for those labels. No global token or contrast-threshold change.
 - One VI phone fixture initially used a URL parameter that does not select the
   product locale. Seed the existing locale preference; both browsers then pass.
+- A held create response redirected newer Search navigation back to Research.
+  The new browser regression failed on both engines before the fix. Bind the
+  optional post-create navigation to the originating navigation key while still
+  retaining the safe run reference in its origin conversation. The expanded UX
+  suite then passed all 22 cases, including the delayed-response scenario.
 
 An interrupted full browser attempt is excluded. A completed earlier candidate
 had 548 passes, four existing skips and six failures: two outdated Chat-primary
@@ -167,15 +174,18 @@ All other baseline files retain their original hashes.
 | Frontend focused | 114 passed; new library race suite 14 passed |
 | Primary frontend TypeScript / full unit / build | PASS / 96 files, 843 tests PASS / PASS |
 | Build warning | Main chunk 527.07 kB; warning retained |
-| New UX production Chromium/Firefox | 20 passed; all seven required widths in EN/VI light/dark |
+| New UX production Chromium/Firefox | Expanded final suite 22 passed; all seven required widths in EN/VI light/dark |
 | Token contrast | PASS, unchanged thresholds |
 | Isolated performance / PDF output regression | 6 passed, one worker, both browsers |
-| Complete regular browser matrix | Required fresh completed run before closure |
+| Complete implementation-SHA regular browser matrix | 540 passed / 4 existing skips / zero failed, one worker, 17.8m |
+| Complete final-SHA regular browser matrix | Required after the late-navigation fix; literal result in closing report |
 | Real HTTP/SSE | 16 passed, Chromium/Firefox, real FastAPI and fragmented SSE proxy |
 | Existing Agent shell sweep / local product harness | 32 passed, Chromium/Firefox |
 | Durable Agent product harness | 12 passed, Chromium/Firefox; real Agent routes, events, evaluation and cancellation |
 | Exact-final clean backend | Full suite required; literal SHA/counts in closing report |
 | Exact-final clean frontend | Frozen install, TypeScript, full unit and build required; closing report |
+| Implementation-SHA clean backend | 1924 passed / 34 artifact-dependent skips / 149 warnings, 103.50s |
+| Implementation-SHA clean frontend | Frozen install / TypeScript / 96 files, 843 tests / production build / token contrast PASS |
 | Import/public startup/route/SQLite/worker checks | Required final gates; closing report |
 | Preserved-file/secret/artifact audit | Required final gates; closing report |
 | Exact-final GitHub Backend CI | SUCCESS required; exact SHA/run ID in closing report |
@@ -193,6 +203,24 @@ The first local HTTP/SSE attempt aborted during the production build with a
 Windows Node/libuv `UV_HANDLE_CLOSING` assertion, before any test ran. A fresh
 unchanged invocation completed all 16 cases. The aborted attempt is retained
 as an infrastructure failure, not a passing integration run.
+
+The implementation-SHA detached checkout contains neither `.env` nor `data/`.
+It uses the declared-requirements environment (Pydantic 2.10.0), separate from
+the primary environment (2.13.4). Clean and primary full backend suites run
+serially. Compile/import checks and offline observations confirm 90 method/path
+pairs, no worker at import/public startup, v7/WAL/NORMAL/5000ms and native worker
+validation for all 1–16 values with invalid values rejected. The full backend
+suite also covers the real public/local application lifespan with offline model
+boundaries, readiness, index creation, cleanup and public DB refusal.
+
+Primary browser candidates include 16 cases from the unchanged unrelated
+untracked visual-capture spec. The source-clean browser gate naturally excludes
+that uncommitted file and ran all 544 committed cases before the late-navigation
+regression was added (546 final cases); no test filter or skip
+was added to achieve this difference.
+Those untracked capture cases generated screenshots in their preconfigured
+external diagnostic directory. They are not committed or used as authoritative
+clean-gate evidence; the final source-clean run does not execute that local script.
 
 No dependency or lockfile changes, endpoint additions, DB migration/index changes,
 retrieval/planner/provider algorithm changes or worker-policy changes. Routes stay

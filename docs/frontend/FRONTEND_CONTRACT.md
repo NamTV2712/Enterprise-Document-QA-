@@ -33,6 +33,9 @@ once. Disconnected restore requires the shared memory-only local connection;
 404 preserves the entry. Reconnect reads the same run, never recreates it.
 Research deeper pre-fills the visible Quick question and switches mode, with an
 explicit subsequent send. The advanced inspector remains at `/agent`.
+An accepted create may update its origin conversation, but its optional route
+transition must still own the originating navigation key. A newer tool route
+is preserved when the POST response arrives late.
 
 Follow-up tiles remain in the conversation scroller so the taller mode controls
 cannot obscure citation targets. The expired Quick session notice is shown once;

@@ -119,22 +119,32 @@ test("a late accepted run stays linked to its origin without redirecting a newer
   let release!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
   let posted = false;
+  let releaseSearch!: () => void;
+  const heldSearch = new Promise<void>(resolve => { releaseSearch = resolve; });
+  let searchRequested = false;
+  await page.route("**/assets/DiscoverySearchPage-*.js", async route => {
+    searchRequested = true; await heldSearch; await route.continue();
+  });
   await page.route(`${API_ORIGIN}/agent/runs`, async route => {
     if (route.request().method() === "POST") { posted = true; await held; }
     await route.fallback();
   });
-  await page.goto("/research");
-  await page.getByRole("button", { name: "Deep Research", exact: true }).click();
-  await connect(page);
-  await page.getByRole("textbox", { name: "Research goal" }).fill("Review filing risk evidence.");
-  await page.getByRole("button", { name: "Start Deep Research" }).click();
-  await expect.poll(() => posted).toBe(true);
-  await page.getByRole("link", { name: "Search", exact: true }).click();
-  await expect(page).toHaveURL(/\/search$/);
-  release();
-  await expect.poll(() => fixture.createCount()).toBe(1);
-  await expect.poll(async () => (await auditStorage(page)).length).toBe(1);
-  await expect(page).toHaveURL(/\/search$/);
+  try {
+    await page.goto("/research");
+    await page.getByRole("button", { name: "Deep Research", exact: true }).click();
+    await connect(page);
+    await page.getByRole("textbox", { name: "Research goal" }).fill("Review filing risk evidence.");
+    await page.getByRole("button", { name: "Start Deep Research" }).click();
+    await expect.poll(() => posted).toBe(true);
+    await page.getByRole("link", { name: "Search", exact: true }).click();
+    await expect(page).toHaveURL(/\/search$/);
+    await expect.poll(() => searchRequested).toBe(true);
+    release();
+    await expect.poll(() => fixture.createCount()).toBe(1);
+    await expect.poll(async () => (await auditStorage(page)).length).toBe(1);
+    await expect(page).toHaveURL(/\/search$/);
+  } finally { release(); releaseSearch(); }
+  await expect(page.getByRole("heading", { name: "Search", exact: true })).toBeVisible();
 });
 
 test("Vietnamese compact Agent states and keyboard details remain readable on a phone", async ({ page }, info) => {

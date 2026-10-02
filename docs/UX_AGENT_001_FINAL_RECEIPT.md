@@ -134,9 +134,14 @@ Groq quota or live provider calls were used.
   product locale. Seed the existing locale preference; both browsers then pass.
 - A held create response redirected newer Search navigation back to Research.
   The new browser regression failed on both engines before the fix. Bind the
-  optional post-create navigation to the originating navigation key while still
-  retaining the safe run reference in its origin conversation. The expanded UX
-  suite then passed all 22 cases, including the delayed-response scenario.
+  optional post-create navigation to current browser history, and check the actual
+  browser URL before the existing history-adoption effect opens a conversation.
+  Retain the safe run reference in its origin. A React location ref alone was
+  insufficient during a suspended route: the 1960d03 candidate had 541 passes,
+  four existing skips and one Chromium late-navigation failure. A deterministic
+  barrier now holds both the POST and Search module; the previous compiled code
+  fails on both engines. Both barriers are released in finally. After the complete
+  browser-history/URL fix, all 22 UX cases pass, including the suspended-route case.
 
 An interrupted full browser attempt is excluded. A completed earlier candidate
 had 548 passes, four existing skips and six failures: two outdated Chat-primary
@@ -173,12 +178,12 @@ All other baseline files retain their original hashes.
 | Primary full backend | 1958 passed / 188 warnings / zero failed; 178.59s |
 | Frontend focused | 114 passed; new library race suite 14 passed |
 | Primary frontend TypeScript / full unit / build | PASS / 96 files, 843 tests PASS / PASS |
-| Build warning | Main chunk 527.07 kB; warning retained |
+| Build warning | Final main chunk 527.28 kB (implementation 527.07 kB); warning retained |
 | New UX production Chromium/Firefox | Expanded final suite 22 passed; all seven required widths in EN/VI light/dark |
 | Token contrast | PASS, unchanged thresholds |
 | Isolated performance / PDF output regression | 6 passed, one worker, both browsers |
 | Complete implementation-SHA regular browser matrix | 540 passed / 4 existing skips / zero failed, one worker, 17.8m |
-| Complete final-SHA regular browser matrix | Required after the late-navigation fix; literal result in closing report |
+| Complete final-SHA regular browser matrix | Required after the suspended-route fix; literal result in closing report |
 | Real HTTP/SSE | 16 passed, Chromium/Firefox, real FastAPI and fragmented SSE proxy |
 | Existing Agent shell sweep / local product harness | 32 passed, Chromium/Firefox |
 | Durable Agent product harness | 12 passed, Chromium/Firefox; real Agent routes, events, evaluation and cancellation |
@@ -203,6 +208,10 @@ The first local HTTP/SSE attempt aborted during the production build with a
 Windows Node/libuv `UV_HANDLE_CLOSING` assertion, before any test ran. A fresh
 unchanged invocation completed all 16 cases. The aborted attempt is retained
 as an infrastructure failure, not a passing integration run.
+A later regular-suite startup at 1960d03 encountered the same Windows native
+assertion before any browser test. Its log is separate from the completed 541/1/4
+candidate above. Standalone builds and subsequent fresh startup pass; no runtime,
+timeout, retries or workflow change is used to conceal either startup abort.
 
 The implementation-SHA detached checkout contains neither `.env` nor `data/`.
 It uses the declared-requirements environment (Pydantic 2.10.0), separate from

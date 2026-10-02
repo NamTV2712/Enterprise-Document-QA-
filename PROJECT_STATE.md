@@ -27,8 +27,12 @@ obscuring citations with the taller composer; two existing dark overview text
 contrast defects. Preserve old Quick cancellation/focus/layout budgets. A VI
 fixture initially selected locale incorrectly; corrected without a product or
 timeout change. A held create response redirected a newer Search route back to
-Research; a two-browser failing regression proves the defect. Navigation-key
-ownership now preserves the newer route while linking the accepted origin run.
+Research; a two-browser failing regression proves the defect. A React location
+ref did not cover suspension: its full candidate had 541 passes / 4 skips / one
+late-navigation failure. Holding the Search module makes the defect deterministic
+on both engines. Current browser history and URL now guard post-create navigation
+and history adoption while linking the accepted origin run. The strengthened
+22-case UX suite and full 96/843 unit suite pass after this fix.
 Prior incomplete/failed browser candidates remain disclosed.
 
 Primary backend **1958 passed / 188 warnings**, transfer focused **24 passed**;
@@ -41,7 +45,7 @@ clean frontend frozen install / TypeScript / 96 files, 843 tests / build PASS.
 Its full regular browser matrix **540 passed / 4 existing skips**, one worker.
 After the late-navigation fix, final-SHA full browser and clean gates are required
 before closure and reported literally in the closing
-report. Main bundle **527.07 kB** retains the warning. Native zoom is manual/
+report. Main bundle **527.28 kB** retains the warning. Native zoom is manual/
 unverified; Collections/model-test bearer wiring staged; Ragas optional.
 
 On 2026-10-02 the user explicitly waived **GitHub Frontend CI for UX-AGENT-001**

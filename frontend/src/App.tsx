@@ -373,8 +373,6 @@ function evidenceAnchorMessageId(messageId: string): string {
 function AppWorkspace() {
   const { locale, t } = useLocale();
   const location = useLocation();
-  const researchLocationKey = useRef(location.key);
-  researchLocationKey.current = location.key;
   const navigate = useNavigate();
   const resolvedRoute = useMemo(
     () => resolveAppRoute(location.pathname, location.search, location.hash),
@@ -995,7 +993,8 @@ function AppWorkspace() {
   useEffect(() => {
     if (!historyAdoptedRef.current && messages.length > 0 && isLibraryReady) {
       historyAdoptedRef.current = true;
-      if (activeView === "overview") navigateWorkspaceRoute("conversation");
+      const browserView = resolveAppRoute(window.location.pathname, window.location.search, window.location.hash).workspaceView;
+      if (activeView === "overview" && browserView === "overview") navigateWorkspaceRoute("conversation");
     }
   }, [activeView, isLibraryReady, messages.length, navigateWorkspaceRoute]);
 
@@ -2123,7 +2122,8 @@ function AppWorkspace() {
           else {
             const originLocationKey = location.key;
             void conversationAgent.send(text).then((linked) => {
-              if (linked && researchLocationKey.current === originLocationKey) navigateWorkspaceRoute("conversation");
+              // Browser history changes before a suspended React route commits.
+              if (linked && (window.history.state?.key ?? "default") === originLocationKey) navigateWorkspaceRoute("conversation");
             });
           }
         }}

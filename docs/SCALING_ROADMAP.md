@@ -30,7 +30,8 @@ defects were reproduced and repaired. Primary backend 1958, frontend 96/843,
 TypeScript/build and 22 new two-browser UX cases pass. Implementation-SHA clean
 backend 1924/34 skips/149 warnings, frontend 96/843 and regular browser 540/4
 existing skips pass. A final navigation-key fix follows its failing regression;
-the accepted origin reference cannot redirect a newer tool route. Exact-final clean/full
+current browser history and URL protect suspended tool navigation while retaining
+the accepted origin reference. Exact-final clean/full
 browser/harness gates, normal main push equality and Backend CI SUCCESS complete
 closure. GitHub Frontend CI is explicitly waived for this task by the user on
 2026-10-02; its configuration and local gates remain unchanged.

@@ -34,8 +34,10 @@ once. Disconnected restore requires the shared memory-only local connection;
 Research deeper pre-fills the visible Quick question and switches mode, with an
 explicit subsequent send. The advanced inspector remains at `/agent`.
 An accepted create may update its origin conversation, but its optional route
-transition must still own the originating navigation key. A newer tool route
-is preserved when the POST response arrives late.
+transition must still own the originating key in current browser history. The
+history-adoption effect also checks the actual browser URL. React route state
+can lag a suspended transition; a newer tool route remains selected when the
+POST response arrives late.
 
 Follow-up tiles remain in the conversation scroller so the taller mode controls
 cannot obscure citation targets. The expired Quick session notice is shown once;

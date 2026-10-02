@@ -107,7 +107,7 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
               {vi ? "Quay lại cuộc trò chuyện" : "Return to conversation"}
             </button>
           ) : (
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-brand-indigo/30 bg-brand-indigo/5 dark:bg-brand-indigo/10 text-brand-indigo text-xs font-semibold shadow-4xs">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-brand-indigo/30 bg-brand-indigo/5 dark:bg-brand-indigo/10 text-[var(--accent-text)] text-xs font-semibold shadow-4xs">
               <Sparkles className="w-3.5 h-3.5 animate-pulse" />
               <span>
                 {vi ? "SEC EDGAR Intelligence · nghiên cứu filing" : "SEC EDGAR Intelligence · filing research"}
@@ -289,7 +289,7 @@ export const OverviewPanel = React.memo<OverviewPanelProps>(
 
       {/* Workspace Guide Collapsible */}
       <details className="workspace-guide group">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-brand-indigo [&::-webkit-details-marker]:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-[var(--accent-text)] [&::-webkit-details-marker]:hidden">
           <span className="flex items-center gap-2">
             <HelpCircle className="w-4 h-4" />
             {vi ? "Cách đọc workspace" : "How to read the workspace"}

@@ -1,0 +1,23 @@
+.research-mode-controls { padding: .65rem 1rem 0; color: var(--text-primary); font-size: .8125rem; }
+.research-mode-picker { display: flex; flex-wrap: wrap; gap: .25rem; }
+.research-mode-picker button { min-height: 44px; padding: .45rem .9rem; border: 1px solid var(--border-strong); border-radius: .7rem; color: var(--text-primary); background: var(--surface); }
+.research-mode-picker button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent-text); color: var(--accent-text); }
+.research-mode-picker button:disabled { opacity: .6; cursor: default; }
+.research-mode-hint { margin: .3rem 0; color: var(--text-muted); line-height: 1.45; }
+.research-consent { display: flex; align-items: center; gap: .5rem; min-height: 44px; line-height: 1.45; }
+.research-consent input { flex-shrink: 0; width: 1rem; height: 1rem; }
+.research-text-action { display: inline-flex; align-items: center; min-height: 44px; color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; text-align: left; }
+.research-agent-message { margin: 1rem auto; width: 100%; max-width: 48rem; min-width: 0; padding: 1rem; border: 1px solid var(--border-strong); border-radius: 1rem; background: var(--surface); color: var(--text-primary); overflow-wrap: anywhere; }
+.research-agent-message header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .5rem; margin-bottom: .5rem; }
+.research-agent-message h3 { font-weight: 650; font-size: 1rem; }
+.research-agent-message h4 { font-weight: 600; margin-top: .75rem; }
+.research-agent-message p { line-height: 1.5; }
+.research-agent-message .agent-answer { white-space: pre-wrap; margin-top: .5rem; line-height: 1.65; }
+.research-agent-message .agent-section-body { padding: 0; }
+.research-agent-details { margin-top: .75rem; border-top: 1px solid var(--border-subtle); }
+.research-agent-details > summary { display: list-item; cursor: pointer; padding: .75rem .25rem; min-height: 44px; }
+.research-agent-details .agent-section { margin-top: .75rem; }
+.research-source-list { display: grid; gap: .25rem; }
+.research-agent-message :focus-visible, .research-mode-controls :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+.research-agent-message:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+@media (max-width: 640px) { .research-agent-message { padding: .8rem; } .research-mode-controls { padding: .5rem .75rem 0; } }

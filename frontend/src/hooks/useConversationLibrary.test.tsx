@@ -67,6 +67,78 @@ describe("useConversationLibrary request isolation", () => {
     vi.useRealTimers();
   });
 
+  it("rejects a late repository refresh admitted before a newer Research deeper draft", async () => {
+    const record = makeRecord("conversation-active", "session-active");
+    record.draft = "Initial draft";
+    localStorage.setItem("sec_qa_active_conversation_id", record.id);
+    localStorage.setItem("sec_qa_session_id", record.sessionId);
+    localStorage.setItem(V3_KEY, JSON.stringify({ envelopeVersion: 4, records: [record], tombstones: [] }));
+    const { rendered, store } = await freshHook();
+    await waitFor(() => expect(rendered.result.current.saveIndicator).toBe("saved"), { timeout: 3000 });
+    const snapshot = await store.loadConversationLibrary();
+    const late = deferred<typeof snapshot>();
+    const load = vi.spyOn(store, "loadConversationLibrary").mockReturnValueOnce(late.promise);
+    act(() => window.dispatchEvent(new StorageEvent("storage", { key: V3_KEY })));
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(1));
+    act(() => rendered.result.current.setInputText("Research deeper with this visible question"));
+    await act(async () => late.resolve(snapshot));
+    expect(rendered.result.current.inputText).toBe("Research deeper with this visible question");
+  });
+
+  it("restores Agent references without checking Quick backend session memory", async () => {
+    const record = makeRecord("conversation-agent", "session-agent", [
+      { id: "goal", sender: "user", text: "Review filing risks" },
+      { id: "agent-message-alpha", sender: "assistant", text: "", assistantExecution: { kind: "agent_research", runId: "agent_alpha", createdAt: 1 } },
+    ]);
+    localStorage.setItem("sec_qa_active_conversation_id", record.id);
+    localStorage.setItem("sec_qa_session_id", record.sessionId);
+    localStorage.setItem(V3_KEY, JSON.stringify({ envelopeVersion: 4, records: [record], tombstones: [] }));
+    const { rendered } = await freshHook();
+    expect(rendered.result.current.messages).toHaveLength(2);
+    expect(rendered.result.current.sessionContext).toBe("fresh");
+    expect(apiMocks.getSessionHistory).not.toHaveBeenCalled();
+  });
+
+  it("links one accepted run to its origin after navigation without changing the current conversation", async () => {
+    const { rendered, store } = await freshHook();
+    act(() => rendered.result.current.setInputText("Review filing risks"));
+    const origin = rendered.result.current.activeConversationId;
+    let identity!: ReturnType<typeof rendered.result.current.beginSend>;
+    await act(async () => { identity = rendered.result.current.beginSend("Review filing risks"); await rendered.result.current.prepareAgentSend(identity!); });
+    await act(async () => { await rendered.result.current.startNewConversation(); });
+    const current = rendered.result.current.activeConversationId;
+    await act(async () => {
+      await rendered.result.current.linkAgentRun(identity!, "Review filing risks", { runId: "agent_alpha", createdAt: 1 });
+      await rendered.result.current.linkAgentRun(identity!, "Review filing risks", { runId: "agent_alpha", createdAt: 1 });
+    });
+    expect(rendered.result.current.activeConversationId).toBe(current);
+    expect(rendered.result.current.messages).toEqual([]);
+    expect(store.listConversations().find(record => record.id === origin)?.messages).toHaveLength(2);
+  });
+
+  it("does not lose a linked Agent reference when a previously captured Quick snapshot is saved", async () => {
+    const { rendered, store } = await freshHook();
+    act(() => rendered.result.current.setInputText("Review filing risks"));
+    let identity!: ReturnType<typeof rendered.result.current.beginSend>;
+    await act(async () => {
+      identity = rendered.result.current.beginSend("Review filing risks");
+      await rendered.result.current.prepareAgentSend(identity!);
+      await rendered.result.current.linkAgentRun(identity!, "Review filing risks", { runId: "agent_alpha", createdAt: 1 });
+      rendered.result.current.finishSend(identity!);
+    });
+    // A Quick completion admitted while an earlier create response was pending
+    // can hold a snapshot without that later linked reference.
+    act(() => rendered.result.current.updateMessages(() => [
+      { id: "quick-user", sender: "user", text: "What was revenue?" },
+      { id: "quick-answer", sender: "assistant", text: "Revenue increased." },
+    ]));
+    await waitFor(() => {
+      const record = store.listConversations().find(record => record.id === identity!.conversationId);
+      expect(record?.messages.some(message => message.id === "quick-answer")).toBe(true);
+      expect(record?.messages.filter(message => message.assistantExecution?.kind === "agent_research")).toHaveLength(1);
+    });
+  });
+
   it("returns cancelled when the preflight is invalidated by a conversation switch", async () => {
     const { rendered } = await freshHook();
 

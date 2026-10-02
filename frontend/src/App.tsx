@@ -5,6 +5,7 @@
 
 import {
   lazy,
+  Fragment,
   Suspense,
   useState,
   useEffect,
@@ -16,6 +17,12 @@ import { BrowserRouter, useLocation, useNavigate } from "react-router-dom";
 import { AlertTriangle, BookMarked, ChevronDown, RefreshCw, X } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { ChatInput } from "./components/ChatInput";
+import { isAgentMessage } from "./lib/assistantExecution";
+import { ResearchModeControls } from "./components/conversation/ResearchModeControls";
+import { useConversationAgent } from "./components/conversation/useConversationAgent";
+import { researchCopy } from "./components/conversation/researchCopy";
+const ResearchConnection = lazy(() => import("./components/conversation/ResearchConnection").then((module) => ({ default: module.ResearchConnection })));
+const AgentResearchMessage = lazy(() => import("./components/conversation/AgentResearchMessage").then((module) => ({ default: module.AgentResearchMessage })));
 import { TemplateQuestionDialog } from "./components/TemplateQuestionDialog";
 import { SampleQuestion, SampleQuestionChips } from "./components/SampleQuestionChips";
 import { OverviewPanel } from "./components/OverviewPanel";
@@ -516,6 +523,9 @@ function AppWorkspace() {
     saveAnswerVersion,
   } = library;
   const activeConversationId = library.activeConversationId;
+  const conversationAgent = useConversationAgent(library, locale);
+  const [researchConnectOpen, setResearchConnectOpen] = useState(false);
+  useEffect(() => { if (conversationAgent.model.session.status === "connected") setResearchConnectOpen(false); }, [conversationAgent.model.session.status]);
   // The route family carries presentation mode for a new conversation; a saved
   // conversation keeps the mode it was started in regardless of the URL.
   const routeConversationMode: ConversationMode = activeRouteId === "chat" ? "chat" : "research";
@@ -2097,22 +2107,30 @@ function AppWorkspace() {
     return buildRelatedResearchSuggestions(latestCompletedAnswer, sections).slice(0, 4);
   }, [latestCompletedAnswer, sections]);
   const showContextBanner =
-    activeView === "conversation" && hasExchanges &&
+    conversationAgent.mode === "quick" && activeView === "conversation" && hasExchanges &&
     (sessionContext === "checking" || isReadOnly);
-  const showComposer = !["retrieval", "documents", "library", "search", "architecture", "evaluation", "analytics", "system", "models", "pipeline", "datasets"].includes(activeView);
+  const showComposer = !["agent", "retrieval", "documents", "library", "search", "architecture", "evaluation", "analytics", "system", "models", "pipeline", "datasets"].includes(activeView);
   const composer = showComposer ? (
     <div className="composer-shell flex-shrink-0 z-10">
+      <ResearchModeControls agent={conversationAgent} busy={isLoading || isPreflightRunning || conversationAgent.model.createPending} onConnect={() => setResearchConnectOpen(true)} />
       <ChatInput
         inputText={inputText}
         setInputText={setInputText}
-        onSendMessage={handleSendMessage}
+        onSendMessage={(text) => {
+          if (conversationAgent.mode === "quick") void handleSendMessage(text);
+          else void conversationAgent.send(text).then((linked) => { if (linked) navigateWorkspaceRoute("conversation"); });
+        }}
+        showScope={conversationAgent.mode === "quick"}
+        sendLabel={conversationAgent.mode === "deep" ? researchCopy[locale].send : undefined}
+        promptLabel={conversationAgent.mode === "deep" ? (locale === "vi" ? "Mục tiêu nghiên cứu" : "Research goal") : undefined}
+        showReadOnlyNotice={!showContextBanner || isLegacyExample}
         onStopGenerating={handleStopGenerating}
         isLoading={isLoading}
         isStreaming={isStreaming}
         isPreflightRunning={isPreflightRunning}
-        isBackendConnected={isBackendConnected}
-        isPipelineReady={isPipelineReady}
-        isReadOnly={isReadOnly && hasExchanges}
+        isBackendConnected={conversationAgent.mode === "deep" ? conversationAgent.model.session.status === "connected" : isBackendConnected}
+        isPipelineReady={conversationAgent.mode === "deep" ? conversationAgent.canSend : isPipelineReady}
+        isReadOnly={conversationAgent.mode === "deep" ? conversationAgent.readOnly : isReadOnly && hasExchanges}
         readOnlyMessage={
           isLegacyExample
             ? (locale === "vi" ? "Mẫu cũ — không phải bằng chứng trực tiếp. Bản ghi được giữ ở chế độ chỉ đọc vì không thể xác minh nguồn sống." : "Legacy example — not live evidence. This record is preserved read-only because its live source could not be verified.")
@@ -2120,7 +2138,7 @@ function AppWorkspace() {
             ? "The backend session for this saved conversation has expired. Start a new conversation to ask follow-up questions."
             : "The backend could not be reached. Check the connection again before asking follow-up questions."
         }
-        showBanner={activeView === "conversation" && hasExchanges}
+        showBanner={conversationAgent.mode === "quick" && activeView === "conversation" && hasExchanges}
         scopeLabel={scopeLabel || undefined}
         tickers={tickers}
         sections={sections}
@@ -2585,7 +2603,11 @@ function AppWorkspace() {
                     </p>
                     <SampleQuestionChips onSelect={handleSelectSample} />
                   </section>
-                ) : messages.map((msg, index) => (
+                ) : messages.map((msg, index) => isAgentMessage(msg) ? (
+                  <AgentResearchMessage key={msg.id} message={msg} onConnect={() => setResearchConnectOpen(true)}
+                    onOpenDocument={(id) => navigate(`/documents/${encodeURIComponent(id)}`)} />
+                ) : (
+                  <Fragment key={msg.id}>
                   <ChatMessage
                     key={msg.id}
                     message={msg}
@@ -2637,6 +2659,14 @@ function AppWorkspace() {
                     initialVariantId={pendingOpenVariant?.conversationId === activeConversationId && pendingOpenVariant.messageId === msg.id ? pendingOpenVariant.variantId : undefined}
                     tabIndex={0}
                   />
+                  {msg.sender === "assistant" && !msg.isStreaming && !msg.error && msg.text && msg.status !== "stopped" && msg.status !== "error" && <button type="button"
+                    className="research-text-action mx-4" disabled={isLoading || isPreflightRunning} onClick={() => {
+                      const question = messages.slice(0, index).reverse().find((item) => item.sender === "user")?.text;
+                      if (!question) return;
+                      setInputText(question); conversationAgent.setMode("deep");
+                      requestAnimationFrame(() => document.getElementById("chat-textarea")?.focus());
+                    }}>{researchCopy[locale].deeper}</button>}
+                  </Fragment>
                 ))}
               </Suspense>
             </ConversationPageShell>
@@ -2646,6 +2676,7 @@ function AppWorkspace() {
           </div>
         </main>
 
+      {researchConnectOpen && <Suspense fallback={null}><ResearchConnection onClose={() => setResearchConnectOpen(false)} /></Suspense>}
     </ApplicationWorkspace>
   );
 }

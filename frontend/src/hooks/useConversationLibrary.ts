@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnswerVariant, ConversationNote, DisplayedAnswerContext, Message, MessageFeedback, RequestSnapshot, SaveAnswerVersionStatus, SessionHistoryResponse } from "../types";
 import { getSessionHistory } from "../lib/api";
+import { isAgentMessage } from "../lib/assistantExecution";
 import {
   buildConversationRecord,
   ConversationLibraryState,
@@ -23,6 +24,20 @@ import {
 import { isLegacySeedRecord, isPristineLegacySeedRecord } from "../lib/legacySeed";
 
 const DRAFT_PERSIST_DEBOUNCE_MS = 1000;
+
+function retainLinkedAgentExchanges(latest: Message[], snapshot: Message[]): Message[] {
+  const runIds = new Set(snapshot.filter(isAgentMessage).map(message => message.assistantExecution.runId));
+  const messageIds = new Set(snapshot.map(message => message.id));
+  const retained: Message[] = [];
+  latest.forEach((message, index) => {
+    if (!isAgentMessage(message) || runIds.has(message.assistantExecution.runId)) return;
+    const goal = latest[index - 1];
+    if (goal?.sender === "user" && goal.id === `agent-goal-${message.assistantExecution.runId}` && !messageIds.has(goal.id)) retained.push(goal);
+    retained.push(message);
+    runIds.add(message.assistantExecution.runId);
+  });
+  return retained.length ? [...snapshot, ...retained] : snapshot;
+}
 
 export type SessionContextStatus =
   | "fresh"
@@ -161,6 +176,8 @@ export interface ConversationLibraryController {
   isPreflightRunning: boolean;
   setInputText: (text: string) => void;
   updateMessages: (updater: (prev: Message[]) => Message[]) => void;
+  prepareAgentSend: (identity: SendIdentity) => Promise<boolean>;
+  linkAgentRun: (identity: SendIdentity, goal: string, reference: { runId: string; createdAt: number }) => Promise<void>;
   /**
    * Capture the send identity and mark the preflight in flight. Returns
    * null when another send is still running for this conversation.
@@ -327,7 +344,9 @@ export function useConversationLibrary(
         ? await mutateConversationRecord(conversationId, (latest) => buildConversationRecord(latest, {
             id: conversationId,
             sessionId: snapshot.sessionId,
-            messages: persistedMessages,
+            // A Quick snapshot captured before a background create resolved
+            // must not discard the later accepted durable reference.
+            messages: retainLinkedAgentExchanges(latest.messages, persistedMessages),
             draft: snapshot.draft,
             // A completed-answer snapshot can be queued just before a user
             // toggles a bookmark. Its message/draft data is still useful,
@@ -552,7 +571,14 @@ export function useConversationLibrary(
         draftTimerRef.current !== null ||
         messagesRef.current.some((message) => message.isStreaming)
       ) return;
-      void loadConversationLibrary(sessionIdRef.current, activeIdRef.current).then((library) => {
+      const observed = { conversationId: activeIdRef.current, epoch: epochRef.current,
+        draft: inputTextRef.current, messages: messagesRef.current };
+      void loadConversationLibrary(sessionIdRef.current, observed.conversationId).then((library) => {
+        // A repository read admitted before a new draft/navigation must not
+        // replace that newer local intent when its promise resolves.
+        if (observed.epoch !== epochRef.current || observed.conversationId !== activeIdRef.current
+          || observed.draft !== inputTextRef.current || observed.messages !== messagesRef.current
+          || sendInFlightRef.current || draftTimerRef.current !== null) return;
         setConversations(library.conversations);
         setStorageMode(library.storageMode);
         setStorageWarning(library.warning);
@@ -646,7 +672,7 @@ export function useConversationLibrary(
   //   server still holds the session (reload of an unrecorded conversation).
   useEffect(() => {
     if (!isLibraryReady) return;
-    if (messages.length > 0) {
+    if (messages.some((message) => message.sender === "assistant" && !isAgentMessage(message))) {
       void recheckSessionContext();
       return;
     }
@@ -1143,6 +1169,34 @@ export function useConversationLibrary(
     setSessionContext("available");
   }, []);
 
+  const prepareAgentSend = useCallback(async (identity: SendIdentity) => {
+    if (!isIdentityActive(identity)) return false;
+    await persistConversation(identity.conversationId, "exchange", {
+      messages: normalizeStoredMessages(messagesRef.current), draft: inputTextRef.current,
+      sessionId: identity.sessionId, bookmarks: bookmarksRef.current, createdAt: conversationCreatedAtRef.current,
+    }, identity.epoch);
+    return isIdentityActive(identity) && listConversations().some((record) => record.id === identity.conversationId && !record.deletionPending);
+  }, [isIdentityActive, persistConversation]);
+
+  const linkAgentRun = useCallback(async (identity: SendIdentity, goal: string, reference: { runId: string; createdAt: number }) => {
+    const exchange: Message[] = [
+      { id: `agent-goal-${reference.runId}`, sender: "user", text: goal },
+      { id: `agent-message-${reference.runId}`, sender: "assistant", text: "", assistantExecution: { kind: "agent_research", ...reference } },
+    ];
+    const result = await mutateConversationRecord(identity.conversationId, (latest) => {
+      if (latest.messages.some((message) => isAgentMessage(message) && message.assistantExecution.runId === reference.runId)) return latest;
+      return { ...latest, updatedAt: Date.now(), messages: [...latest.messages, ...exchange], draft: latest.draft.trim() === goal ? "" : latest.draft };
+    });
+    if (result.status === "failed") throw new Error("Could not retain the accepted Agent reference.");
+    applyWriteResult(result, { setStorageMode, setStorageWarning });
+    syncConversationsFromRepository();
+    if (!isIdentityActive(identity)) return;
+    const latest = listConversations().find((record) => record.id === identity.conversationId);
+    if (!latest || latest.deletionPending) return;
+    setMessages(latest.messages);
+    if (inputTextRef.current.trim() === goal) setInputText("");
+  }, [isIdentityActive, setMessages, setInputText, syncConversationsFromRepository]);
+
   const activeRecord = useMemo(
     () => conversations.find((record) => record.id === activeConversationId) ?? null,
     [activeConversationId, conversations],
@@ -1175,6 +1229,8 @@ export function useConversationLibrary(
     isPreflightRunning,
     setInputText,
     updateMessages: setMessages,
+    prepareAgentSend,
+    linkAgentRun,
     beginSend,
     ensureSendable,
     finishSend,

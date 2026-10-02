@@ -36,6 +36,10 @@ interface ChatInputProps {
   onToggleComparative?: (enabled: boolean) => void;
   scopeOpen?: boolean;
   onScopeOpenChange?: (open: boolean) => void;
+  showScope?: boolean;
+  sendLabel?: string;
+  promptLabel?: string;
+  showReadOnlyNotice?: boolean;
 }
 
 export const ConnectionBanner = memo(
@@ -110,6 +114,10 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
   onToggleComparative = () => {},
   scopeOpen,
   onScopeOpenChange,
+  showScope = true,
+  sendLabel,
+  promptLabel,
+  showReadOnlyNotice = true,
 }) => {
   const { t, locale } = useLocale();
   const vi = locale === "vi";
@@ -201,7 +209,7 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
         )}
 
         {/* Read-only notice for saved conversations without backend context */}
-        {isReadOnly && readOnlyMessage && (
+        {showReadOnlyNotice && isReadOnly && readOnlyMessage && (
           <div
             className="flex items-center gap-2 p-2.5 rounded-lg border state-warning-border state-warning-surface state-warning-text text-xs font-semibold font-sans"
             role="status"
@@ -228,7 +236,7 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
             ref={textareaRef}
             id="chat-textarea"
             rows={1}
-            aria-label={t("input.question")}
+            aria-label={promptLabel ?? t("input.question")}
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onCompositionStart={() => {
@@ -239,6 +247,7 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
             }}
             onKeyDown={handleKeyDown}
             placeholder={
+              promptLabel ?? (
               isReadOnly
                 ? t("input.readOnly")
                 : isBackendConnected === null || isPipelineReady === null
@@ -247,7 +256,7 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
                   ? t("input.unavailable")
                   : !isPipelineReady
                     ? t("input.loading")
-                    : "Ask your documents... (Shift + Enter for new line)"
+                    : "Ask your documents... (Shift + Enter for new line)")
             }
             disabled={isTextareaDisabled}
             aria-describedby="chat-input-hint"
@@ -256,6 +265,7 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
 
           <div className="flex flex-wrap items-center justify-between gap-2 pt-2 mt-1 border-t border-[var(--border-subtle)]">
             <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+              {showScope && <>
               <ScopeEditor
                 scopeLabel={scopeLabel}
                 tickers={tickers}
@@ -283,16 +293,17 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
               >
                 <span>Hybrid Search</span>
               </span>
+              </>}
             </div>
 
             <div className="flex items-center gap-3 shrink-0">
-              <label className="flex items-center gap-2 text-xs font-medium text-[var(--text-secondary)] cursor-pointer select-none">
-                <span>{locale === "vi" ? "Nghiên cứu sâu" : "Deep Research"}</span>
+              {showScope && <label className="flex items-center gap-2 text-xs font-medium text-[var(--text-secondary)] cursor-pointer select-none">
+                <span>{locale === "vi" ? "Câu trả lời so sánh" : "Comparative answer"}</span>
                 <button
                   type="button"
                   role="switch"
                   aria-checked={enableComparative}
-                  aria-label={locale === "vi" ? "Bật hoặc tắt nghiên cứu sâu" : "Toggle Deep Research"}
+                  aria-label={locale === "vi" ? "Bật hoặc tắt câu trả lời so sánh" : "Toggle comparative answer"}
                   disabled={isLoading}
                   onClick={() => !isLoading && onToggleComparative(!enableComparative)}
                   className="relative inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
@@ -311,7 +322,7 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
                     />
                   </span>
                 </button>
-              </label>
+              </label>}
 
               {/* Character Counter */}
               {charCount > 0 && (
@@ -342,8 +353,8 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
                 <button
                   type="submit"
                   id="send-message-btn"
-                  title={t("input.ask")}
-                  aria-label={t("input.sendAria")}
+                  title={sendLabel ?? t("input.ask")}
+                  aria-label={sendLabel ?? t("input.sendAria")}
                   disabled={!isValidLength || isDisabled}
                   className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-150 ${
                     isValidLength && !isDisabled
@@ -352,7 +363,7 @@ const ChatInputBase: React.FC<ChatInputProps> = ({
                   }`}
                 >
                   <Send className="w-3.5 h-3.5" />
-                  <span className="sr-only">{t("input.ask")}</span>
+                  <span className="sr-only">{sendLabel ?? t("input.ask")}</span>
                 </button>
               )}
             </div>

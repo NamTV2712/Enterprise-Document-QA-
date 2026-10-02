@@ -306,7 +306,6 @@ test.describe("Truthful workbench reference receipts", () => {
 
     const views = await page.locator("[data-workbench-region='navigation'] [data-route-id]").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-route-id")));
     expect(views).toEqual([
-      "chat",
       "research",
       "documents",
       "search",

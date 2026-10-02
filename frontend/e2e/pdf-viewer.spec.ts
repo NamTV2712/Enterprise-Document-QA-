@@ -4,7 +4,7 @@ import { askQuestion, installApiFixtures, LONG_ANSWER } from "./fixtures";
 test.describe("PDF representation viewer", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test("renders real PDF.js bytes without fabricating an evidence overlay", async ({ page }) => {
+  test("renders real PDF.js bytes without fabricating an evidence overlay", async ({ page }, testInfo) => {
     await installApiFixtures(page, { pdf: true });
     await page.goto("/");
     await askQuestion(page, "What are the company's competition risks?");
@@ -43,12 +43,12 @@ test.describe("PDF representation viewer", () => {
     expect(firstPageMs).toBeLessThan(10_000);
     expect(searchMs).toBeLessThan(2_000);
 
-    await page.screenshot({ path: ".audit-runtime/pdf-viewer-1440x900.png" });
+    await page.screenshot({ path: testInfo.outputPath("pdf-viewer-1440x900.png") });
     await page.setViewportSize({ width: 1920, height: 1080 });
-    await page.screenshot({ path: ".audit-runtime/pdf-viewer-1920x1080.png" });
+    await page.screenshot({ path: testInfo.outputPath("pdf-viewer-1920x1080.png") });
     await page.setViewportSize({ width: 720, height: 900 });
     await expect(viewer).toHaveAttribute("data-pdf-state", "ready", { timeout: 20_000 });
     await expect(document.locator("[data-document-representation='pdf']")).toBeVisible();
-    await page.screenshot({ path: ".audit-runtime/pdf-viewer-720x900.png" });
+    await page.screenshot({ path: testInfo.outputPath("pdf-viewer-720x900.png") });
   });
 });

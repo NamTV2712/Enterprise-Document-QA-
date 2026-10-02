@@ -1250,6 +1250,8 @@ export interface ClearSessionResponse {
 
 // UI State interfaces
 export interface Message {
+  /** Missing on legacy Quick answers. Agent entries persist only a durable reference. */
+  assistantExecution?: { kind: "quick_answer" } | { kind: "agent_research"; runId: string; createdAt: number };
   id: string;
   sender: 'user' | 'assistant';
   text: string;

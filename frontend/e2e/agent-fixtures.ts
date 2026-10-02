@@ -19,6 +19,7 @@ export interface AgentFixture {
   cancelCount: () => number;
   createCount: () => number;
   forceConflictOnce: () => void;
+  advanceRun: (run: AgentRun) => void;
 }
 
 async function json(route: Route, status: number, body: unknown, headers: Record<string, string> = {}) {
@@ -40,7 +41,7 @@ function eventsFor(run: AgentRun): AgentEvent[] {
 }
 
 export async function installAgentFixture(page: Page, options: {
-  initialRuns?: AgentRun[]; executionEnabled?: boolean; mode?: "local" | "public";
+  initialRuns?: AgentRun[]; executionEnabled?: boolean; mode?: "local" | "public"; decisionProviderAvailable?: boolean; createdRun?: AgentRun;
 } = {}): Promise<AgentFixture> {
   await installApiFixtures(page);
   const mode = options.mode ?? "local";
@@ -59,7 +60,7 @@ export async function installAgentFixture(page: Page, options: {
   await page.route(`${API_ORIGIN}/system/configuration-status`, async (route) => {
     if (route.request().method() === "OPTIONS") { await route.fulfill({ status: 204, headers: CORS }); return; }
     if (!await privateAccess(route)) return;
-    await json(route, 200, { deployment_mode: "local", capabilities: {
+    await json(route, 200, { deployment_mode: "local", agent_decision_provider: { available: options.decisionProviderAvailable === true }, capabilities: {
       public_provider_free: true, local_workspace: true, execution_jobs: executionEnabled,
     } });
   });
@@ -87,7 +88,8 @@ export async function installAgentFixture(page: Page, options: {
       createCount += 1;
       const body = request.postDataJSON() as { goal: string; locale: "en" | "vi" };
       const id = `agent_created_${createCount}`;
-      const created: AgentRun = { ...agentProviderRun, run_id: id, frozen: { ...agentProviderRun.frozen, goal: body.goal, locale: body.locale }, revision: 4 };
+      const template = options.createdRun ?? agentProviderRun;
+      const created: AgentRun = { ...template, run_id: id, frozen: { ...template.frozen, goal: body.goal, locale: body.locale }, revision: options.createdRun?.revision ?? 4 };
       runs.set(id, created);
       events.set(id, eventsFor(created));
       await json(route, 201, { ...created, state: "queued", revision: 1, result: null, failure: null }, { ETag: '"1"' });
@@ -141,5 +143,11 @@ export async function installAgentFixture(page: Page, options: {
     }
     await json(route, 405, { detail: "Unsupported Agent request" });
   });
-  return { runs, calls, cancelCount: () => cancelCount, createCount: () => createCount, forceConflictOnce: () => { conflictOnce = true; } };
+  return { runs, calls, cancelCount: () => cancelCount, createCount: () => createCount, forceConflictOnce: () => { conflictOnce = true; },
+    advanceRun: (run) => {
+      runs.set(run.run_id, run);
+      const prior = events.get(run.run_id) ?? [];
+      events.set(run.run_id, [...prior, lifecycleEvent(run, (prior.at(-1)?.sequence ?? 0) + 1, "state_changed")]);
+    },
+  };
 }

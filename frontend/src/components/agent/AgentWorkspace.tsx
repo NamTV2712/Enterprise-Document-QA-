@@ -3,7 +3,7 @@ import { Activity, AlertTriangle, ArrowLeft, FileText, LockKeyhole, Plus, Refres
 
 import { useLocale } from "../../lib/i18n";
 import { ModalDialog } from "../ui/ModalDialog";
-import { agentCopy } from "./agentCopy";
+import { agentCopy, agentErrorMessage as errorMessage } from "./agentCopy";
 import { AgentEvaluation, AgentFinalResult, AgentResearch, AgentTrace, agentDate, agentStateLabel, agentToolLabel } from "./AgentRunSections";
 import { isTerminalAgentState, useAgentWorkspace } from "./useAgentWorkspace";
 
@@ -15,13 +15,6 @@ interface AgentWorkspaceProps {
 }
 
 interface ObjectiveDraft { question: string; ticker: string }
-
-function errorMessage(status: number | null, copy: typeof agentCopy.en | typeof agentCopy.vi, fallback: string): string {
-  if (status === 401 || status === 403) return copy.accessError;
-  if (status === 404) return copy.unavailableError;
-  if (status === 0) return copy.transportError;
-  return fallback;
-}
 
 export function AgentWorkspace({ selectedRunId, onSelectRun, onClearSelectedRun, onOpenDocument }: AgentWorkspaceProps) {
   const { locale } = useLocale();

@@ -32,7 +32,7 @@ describe("workspace navigation registry", () => {
     const shellRoutes = SHELL_NAVIGATION_SECTIONS.flatMap((section) => section.items.map((item) => item.routeId));
     expect(navigation.map((command) => command.routeId)).toEqual(shellRoutes);
     expect(navigation.find((command) => command.routeId === "research")?.labelKey).toBe("nav.research");
-    expect(navigation.find((command) => command.routeId === "chat")?.labelKey).toBe("nav.chat");
+    expect(navigation.some((command) => command.routeId === "chat")).toBe(false);
   });
 
   test("keeps tool introductions bound to registered icon and description metadata", () => {

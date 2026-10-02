@@ -5,6 +5,7 @@ __pycache__/
 data/
 .local/
 .audit-runtime/capacity-001/
+.audit-runtime/ux-agent-001/
 .ipynb_checkpoints/
 .DS_Store
 

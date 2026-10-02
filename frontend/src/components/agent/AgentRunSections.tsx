@@ -17,7 +17,7 @@ export function agentToolLabel(name: string, copy: AgentCopy): string {
     search_documents: copy.toolSearch, inspect_retrieval: copy.toolInspect,
     read_document: copy.toolRead, ask_rag: copy.toolRag,
   };
-  return Object.hasOwn(labels, name) ? labels[name as AgentToolName] : name;
+  return Object.hasOwn(labels, name) ? labels[name as AgentToolName] : copy.eventUnknown;
 }
 
 export function agentDate(value: string | null, locale: "en" | "vi", fallback: string): string {
@@ -72,16 +72,16 @@ function gapLabel(code: string, copy: AgentCopy): string {
   return labels[code] ?? code;
 }
 
-export function AgentResearch({ run, summary, copy, onOpenDocument }: {
-  run: AgentRun; summary: AgentResearchSummary | null; copy: AgentCopy; onOpenDocument: (documentId: string) => void;
+export function AgentResearch({ run, summary, copy, onOpenDocument, idPrefix = "agent" }: {
+  run: AgentRun; summary: AgentResearchSummary | null; copy: AgentCopy; onOpenDocument: (documentId: string) => void; idPrefix?: string;
 }) {
   const configured = run.frozen.research;
   if (!configured) return null;
   const statuses = new Map(summary?.objectives.map((item) => [item.objective_id, item]));
   const gaps = new Map(summary?.gaps.map((item) => [item.objective_id, item.code]));
   return <>
-    <section className="console-card agent-section" aria-labelledby="agent-objectives-title">
-      <div className="console-card__header"><h3 id="agent-objectives-title">{copy.researchObjectives}</h3></div>
+    <section className="console-card agent-section" aria-labelledby={`${idPrefix}-objectives-title`}>
+      <div className="console-card__header"><h3 id={`${idPrefix}-objectives-title`}>{copy.researchObjectives}</h3></div>
       <div className="agent-section-body agent-objectives">
         {configured.objectives.map((objective) => {
           const status = statuses.get(objective.objective_id);
@@ -97,14 +97,14 @@ export function AgentResearch({ run, summary, copy, onOpenDocument }: {
         })}
       </div>
     </section>
-    {summary && <section className="console-card agent-section" aria-labelledby="agent-gaps-title">
-      <div className="console-card__header"><h3 id="agent-gaps-title">{copy.researchGaps}</h3></div>
+    {summary && <section className="console-card agent-section" aria-labelledby={`${idPrefix}-gaps-title`}>
+      <div className="console-card__header"><h3 id={`${idPrefix}-gaps-title`}>{copy.researchGaps}</h3></div>
       <div className="agent-section-body">{summary.gaps.length ? <ul className="agent-gap-list">{summary.gaps.map((gap) =>
         <li key={gap.objective_id}><span className="agent-gap">{gapLabel(gap.code, copy)}</span><code>{gap.objective_id}</code></li>)}</ul>
         : <p className="agent-muted">{copy.noGaps}</p>}</div>
     </section>}
-    <section className="console-card agent-section" aria-labelledby="agent-evidence-title">
-      <div className="console-card__header"><h3 id="agent-evidence-title">{copy.evidence}</h3></div>
+    <section className="console-card agent-section" aria-labelledby={`${idPrefix}-evidence-title`}>
+      <div className="console-card__header"><h3 id={`${idPrefix}-evidence-title`}>{copy.evidence}</h3></div>
       <div className="agent-section-body">
         <p className="agent-muted">{copy.evidenceNote}</p>
         {summary?.evidence_capped && <p className="agent-notice">{copy.ledgerCapped}</p>}
@@ -176,7 +176,7 @@ export function AgentEvaluation({ report, copy, locale }: { report: AgentEvaluat
   </div>;
 }
 
-export function AgentFinalResult({ run, result, copy }: { run: AgentRun; result: AgentRunResult | null; copy: AgentCopy }) {
+export function AgentFinalResult({ run, result, copy, hideRefs = false }: { run: AgentRun; result: AgentRunResult | null; copy: AgentCopy; hideRefs?: boolean }) {
   const terminal = result?.result ?? run.result;
   const failureCode = terminal?.failure?.code ?? result?.failure?.code ?? run.failure?.code;
   return <div className="agent-section-body">
@@ -185,6 +185,6 @@ export function AgentFinalResult({ run, result, copy }: { run: AgentRun; result:
     {terminal?.agent_status === "completed" && terminal.answer !== null ? <>
       <h4>{copy.answer}</h4><div className="agent-answer">{terminal.answer}</div>
     </> : <p className="agent-muted">{run.state === "queued" || run.state === "running" || run.state === "cancelling" ? copy.noResult : copy.noAnswer}</p>}
-    {!!terminal?.evidence_refs.length && <div><h4>{copy.finalRefs}</h4><ul className="agent-final-refs">{terminal.evidence_refs.map((ref) => <li key={`${ref.kind}:${ref.value}`}><span>{ref.kind}</span><code>{ref.value}</code></li>)}</ul></div>}
+    {!hideRefs && !!terminal?.evidence_refs.length && <div><h4>{copy.finalRefs}</h4><ul className="agent-final-refs">{terminal.evidence_refs.map((ref) => <li key={`${ref.kind}:${ref.value}`}><span>{ref.kind}</span><code>{ref.value}</code></li>)}</ul></div>}
   </div>;
 }

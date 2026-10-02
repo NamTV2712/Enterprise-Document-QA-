@@ -253,7 +253,7 @@ describe("conversation store repository", () => {
   });
 
   it("locks localStorage writes when it holds a future-schema record and preserves the payload", async () => {
-    seedLocal([makeRecord({ id: "conversation-now", schemaVersion: 5, revision: 9 })]);
+    seedLocal([makeRecord({ id: "conversation-now", schemaVersion: 6, revision: 9 })]);
     const rawBefore = window.localStorage.getItem(V3_KEY);
     const store = await freshStore();
     const state = await store.loadConversationLibrary();
@@ -285,7 +285,7 @@ describe("conversation store repository", () => {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(["conversations", "tombstones"], "readwrite");
       tx.objectStore("conversations").put(
-        makeRecord({ id: "conversation-future", schemaVersion: 5, revision: 9 }),
+        makeRecord({ id: "conversation-future", schemaVersion: 6, revision: 9 }),
       );
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
@@ -767,7 +767,7 @@ describe("conversation store repository", () => {
     const store = await freshStore();
     const state = await store.loadConversationLibrary("session-legacy", "conversation-legacy");
     const record = state.conversations.find((item) => item.id === "conversation-legacy");
-    expect(record?.schemaVersion).toBe(4);
+    expect(record?.schemaVersion).toBe(5);
     expect(record?.titleMode).toBe("custom");
     expect(record?.title).toBe("My renamed research");
     expect(record?.bookmarkedMessageIds).toEqual(["a1"]);

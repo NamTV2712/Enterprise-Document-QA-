@@ -162,6 +162,43 @@ def _count(database: WorkspaceDatabase, table: str) -> int:
         return int(connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
 
 
+def _agent_conversation() -> dict:
+    record = _conversation()
+    record["schema_version"] = record["payload"]["schemaVersion"] = 5
+    record["payload"]["messages"].append({
+        "id": "agent-message-alpha", "sender": "assistant", "text": "",
+        "assistantExecution": {"kind": "agent_research", "runId": "agent_alpha", "createdAt": NOW},
+    })
+    return record
+
+
+def test_agent_reference_backup_round_trip_preserves_only_reference(service) -> None:
+    backup = _backup(conversations=[_agent_conversation()])
+    validated = validate_workspace_backup(backup)
+    assert validated.conversations[0]["payload"]["messages"][-1]["assistantExecution"]["runId"] == "agent_alpha"
+    # Existing transfer protocol stores an opaque browser reference; it does not
+    # hydrate a durable Agent result or grant execution permissions.
+    assert "result" not in validated.conversations[0]["payload"]["messages"][-1]
+
+
+@pytest.mark.parametrize("field,value", [
+    ("result", {"answer": "cached"}), ("events", []), ("state", "succeeded"), ("revision", 9),
+])
+def test_agent_reference_backup_rejects_authoritative_payload(field, value) -> None:
+    record = _agent_conversation()
+    record["payload"]["messages"][-1][field] = value
+    with pytest.raises(WorkspaceTransferError):
+        validate_workspace_backup(_backup(conversations=[record]))
+
+
+@pytest.mark.parametrize("run_id", ["../escape", "https://example.invalid", "agent_", "agent_a/b"])
+def test_agent_reference_backup_rejects_noncanonical_id(run_id) -> None:
+    record = _agent_conversation()
+    record["payload"]["messages"][-1]["assistantExecution"]["runId"] = run_id
+    with pytest.raises(WorkspaceTransferError):
+        validate_workspace_backup(_backup(conversations=[record]))
+
+
 def test_backup_schema_digest_and_supported_legacy_research_are_validated() -> None:
     backup = _backup(collections=[_collection(schema_version=1)], evidence_items=[_evidence_item(schema_version=1)])
     validated = validate_workspace_backup(backup)

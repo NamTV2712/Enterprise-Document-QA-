@@ -107,7 +107,7 @@ test("phone composer keeps its full prompt and a centered deep research switch",
   });
   expect(promptHeight.wraps).toBe(true);
   expect(promptHeight.actual).toBeGreaterThanOrEqual(promptHeight.required - 1);
-  const switchControl = page.getByRole("switch", { name: "Bật hoặc tắt nghiên cứu sâu" });
+  const switchControl = page.getByRole("switch", { name: "Bật hoặc tắt câu trả lời so sánh" });
   const track = switchControl.locator("[data-switch-track]");
   await expect(track).toBeVisible();
   expect(await track.evaluate(node => {

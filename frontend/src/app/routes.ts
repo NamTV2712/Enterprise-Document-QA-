@@ -74,7 +74,6 @@ export const APP_ROUTE_DEFINITIONS: readonly AppRouteDefinition[] = [
 export const SHELL_NAVIGATION_SECTIONS: readonly ShellNavigationSection[] = [
   {
     id: "workspace", labelKey: "nav.groupWorkspace", items: [
-      { routeId: "chat", path: "/chat", labelKey: "nav.chat", descriptionKey: "nav.chatDescription", icon: "conversation", accentFamily: "research", availability: "available" },
       { routeId: "research", path: "/research", labelKey: "nav.research", descriptionKey: "nav.researchDescription", icon: "research", accentFamily: "research", availability: "available" },
       { routeId: "documents", path: "/documents", labelKey: "nav.documents", descriptionKey: "nav.documentsDescription", icon: "documents", accentFamily: "documents", availability: "available" },
       { routeId: "search", path: "/search", labelKey: "nav.search", descriptionKey: "nav.searchDescription", icon: "search", accentFamily: "retrieval", availability: "available" },
@@ -152,7 +151,7 @@ export function resolveAppRoute(pathname: string, search = "", hash = ""): Resol
 }
 
 export function routePath(routeId: ShellRouteId): string {
-  return SHELL_NAVIGATION_SECTIONS.flatMap((section) => section.items).find((item) => item.routeId === routeId)?.path ?? "/research";
+  return APP_ROUTE_DEFINITIONS.find((route) => route.id === routeId)?.path ?? "/research";
 }
 
 export function routeIdForWorkspaceView(view: WorkspaceView): ShellRouteId {

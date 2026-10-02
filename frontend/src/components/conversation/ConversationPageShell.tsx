@@ -58,12 +58,12 @@ export const ConversationPageShell = memo(function ConversationPageShell({
               <ResearchInsightsRow message={insightMessage} />
             </div>
           )}
+          {canShowFollowUps && (
+            <FollowUpTiles mode={mode} suggestions={followUps} onSelect={onSelectFollowUp} />
+          )}
           {scrollButton}
         </div>
       </div>
-      {canShowFollowUps && (
-        <FollowUpTiles mode={mode} suggestions={followUps} onSelect={onSelectFollowUp} />
-      )}
       {composer}
     </div>
   );

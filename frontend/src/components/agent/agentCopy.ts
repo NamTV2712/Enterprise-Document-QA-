@@ -68,3 +68,10 @@ export const agentCopy = {
 } as const;
 
 export type AgentCopy = typeof agentCopy.en | typeof agentCopy.vi;
+
+export function agentErrorMessage(status: number | null, copy: AgentCopy, fallback: string): string {
+  if (status === 401 || status === 403) return copy.accessError;
+  if (status === 404) return copy.unavailableError;
+  if (status === 0) return copy.transportError;
+  return fallback;
+}

@@ -1,5 +1,21 @@
 # SEC Research Workspace Design Contract
 
+## Unified conversation controls (UX-AGENT-001)
+
+Research is the primary entry; legacy Chat routes use the same composer and
+message stream. Quick/Deep buttons are explicit keyboard-accessible controls,
+with Quick as the initial mode. Quick scope/comparison controls appear only in
+Quick. Deep explains the goal-only boundary and shows connection/consent before
+submission. Consent clears on mode, conversation or private-session changes.
+
+The compact Agent card gives status/activity and current-revision cancellation
+while active; the terminal answer and evidence lead after completion. A single
+collapsed disclosure contains safe trace, optional research ledger and native
+evaluation, with an advanced inspector link. Loading, disconnected, unavailable,
+error and cancellation states remain source-honest. Controls wrap at narrow
+widths; the existing conversation scroller and source reader keep ownership.
+No raw observations, provider bodies or hidden reasoning are presented.
+
 ## Product
 
 Enterprise Document QA is a SEC 10-K research workbench. Its primary job is to

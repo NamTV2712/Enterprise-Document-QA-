@@ -2,6 +2,7 @@ import {
   CONVERSATION_SCHEMA_VERSION,
   MAX_CONVERSATIONS,
   exportConversationWorkspaceSnapshot,
+  normalizeStoredMessages,
   type ConversationRecord,
   type TombstoneRecord,
 } from "./conversationStore";
@@ -233,7 +234,7 @@ export async function createWorkspaceBackup(
     revision: record.revision,
     created_at: record.createdAt,
     updated_at: record.updatedAt,
-    payload: cloneRecord(record) as unknown as Record<string, unknown>,
+    payload: cloneRecord({ ...record, messages: normalizeStoredMessages(record.messages) }) as unknown as Record<string, unknown>,
   })).sort((left, right) => compareUnicodeCodePoints(left.legacy_id, right.legacy_id));
   const collections = snapshot.collections.map(collectionRecord).sort((left, right) => compareUnicodeCodePoints(left.legacy_id, right.legacy_id));
   const evidenceItems = snapshot.collections.flatMap((collection) => collection.items.map((item) => evidenceItemRecord(collection, item)))
@@ -359,7 +360,7 @@ export async function validateWorkspaceBackup(value: unknown): Promise<Workspace
     }
     if ((record.payload as Record<string, unknown>).id !== record.legacy_id) throw new Error("Workspace backup record identity does not match its payload.");
   }
-  if (typed.conversations.some((record) => record.schema_version !== 4 || record.payload.schemaVersion !== 4)) throw new Error("Unsupported conversation schema version.");
+  if (typed.conversations.some((record) => ![4, CONVERSATION_SCHEMA_VERSION].includes(record.schema_version) || record.payload.schemaVersion !== record.schema_version)) throw new Error("Unsupported conversation schema version.");
   if ([...typed.collections, ...typed.evidence_items].some((record) => ![1, 2].includes(record.schema_version))) throw new Error("Unsupported evidence collection schema version.");
   const collectionIds = new Set(typed.collections.map((record) => record.legacy_id));
   if (typed.evidence_items.some((record) => !validOpaqueId(record.parent_legacy_id) || !collectionIds.has(record.parent_legacy_id))) throw new Error("Evidence item references a missing collection.");

@@ -1,3 +1,4 @@
+import { isAgentMessage, validAssistantExecution } from "./assistantExecution";
 import {
   ConversationRecord,
   CONVERSATION_SCHEMA_VERSION,
@@ -24,11 +25,17 @@ export function conversationToMarkdown(conversation: ConversationRecord): string
     "",
   ];
 
-  const messages = conversation.messages;
+  const messages = normalizeStoredMessages(conversation.messages);
   let question = "";
   for (const message of messages) {
     if (message.sender === "user") {
       question = message.text;
+      continue;
+    }
+    if (isAgentMessage(message)) {
+      lines.push("## Question", "", escapeMarkdown(question || "Question unavailable"), "",
+        "## Deep Research", "", `Run reference: ${message.assistantExecution.runId}`, "",
+        "Reconnect to the local workspace to read the authoritative run state and result.", "");
       continue;
     }
     if (!message.text) continue;
@@ -148,6 +155,7 @@ function isImportedMessage(value: unknown): boolean {
     requestSnapshot?: unknown;
     note?: unknown;
     feedback?: unknown;
+    assistantExecution?: unknown;
   };
   const validSources =
     message.sources === undefined ||
@@ -200,7 +208,7 @@ function isImportedMessage(value: unknown): boolean {
     (message.note === undefined || typeof message.note === "string") &&
     validSources &&
     validSnapshot &&
-    validFeedback
+    validFeedback && (message.assistantExecution === undefined || (message.sender === "assistant" && validAssistantExecution(message.assistantExecution)))
   );
 }
 
@@ -311,7 +319,7 @@ export function conversationsToJson(
     format: CONVERSATION_BACKUP_FORMAT,
     version: CONVERSATION_BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
-    conversations: conversations.map(({ deletionPending: _deletionPending, ...record }) => record),
+    conversations: conversations.map(({ deletionPending: _deletionPending, ...record }) => ({ ...record, messages: normalizeStoredMessages(record.messages) })),
     collections,
   };
   const text = `${JSON.stringify(backup, null, 2)}\n`;

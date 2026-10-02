@@ -21,7 +21,7 @@ function waitForNextBatch(signal: AbortSignal, ms: number): Promise<void> {
   });
 }
 
-export function useAgentWorkspace(selectedRunId: string | null) {
+export function useAgentWorkspace(selectedRunId: string | null, { loadList = true }: { loadList?: boolean } = {}) {
   const session = useLocalWorkspaceSession();
   const token = session.getToken();
   const [page, setPage] = useState(1);
@@ -63,7 +63,7 @@ export function useAgentWorkspace(selectedRunId: string | null) {
   useEffect(() => {
     const epoch = ++listEpoch.current;
     const controller = new AbortController();
-    if (!token) {
+    if (!token || !loadList) {
       setList(null);
       setListState("idle");
       setListError(null);
@@ -83,7 +83,7 @@ export function useAgentWorkspace(selectedRunId: string | null) {
       setListState("error");
     });
     return () => controller.abort();
-  }, [token, session.generation, session.invalidateIfCurrent, page, listRefresh]);
+  }, [token, loadList, session.generation, session.invalidateIfCurrent, page, listRefresh]);
 
   useEffect(() => {
     const epoch = ++detailEpoch.current;
@@ -228,7 +228,7 @@ export function useAgentWorkspace(selectedRunId: string | null) {
     }
   }, [selectedRunId, session, refreshList, refreshDetail]);
 
-  const create = useCallback(async (body: Parameters<typeof agentApi.createRun>[1]): Promise<AgentRun | null> => {
+  const create = useCallback(async (body: Parameters<typeof agentApi.createRun>[1], onAccepted?: (reference: { runId: string; createdAt: number }) => Promise<void>): Promise<AgentRun | null> => {
     const credential = session.getToken();
     if (!credential || !session.canExecute || createLock.current) return null;
     createLock.current = true;
@@ -237,6 +237,9 @@ export function useAgentWorkspace(selectedRunId: string | null) {
     const generation = session.generation;
     try {
       const created = await agentApi.createRun(credential, body, crypto.randomUUID());
+      // An accepted run retains its safe reference in the originating conversation,
+      // even if navigation or disconnection happened while POST was in flight.
+      await onAccepted?.({ runId: created.run_id, createdAt: Date.parse(created.created_at) || Date.now() });
       if (session.getToken() !== credential || generationRef.current !== generation) return null;
       refreshList();
       return created;

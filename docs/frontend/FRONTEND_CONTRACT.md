@@ -1,5 +1,44 @@
 # Frontend Contract
 
+## Unified Research execution (UX-AGENT-001)
+
+Research is the single primary navigation entry for conversations. `/chat` and
+saved Chat/Research route families remain compatible; presentation mode is
+separate from the explicit Quick/Deep execution choice. New conversation/reload
+defaults to Quick. Navigation and restoring a run never submit or execute it.
+
+Quick retains existing RAG submission, comparative decomposition, streaming,
+partial stop, citations, answer variants and backend session memory. The old
+comparative switch is labeled Comparative answer. Deep submits the explicit goal
+and locale to the generic durable Agent API, with optional explicit per-run
+decision permission. No Quick filters/history, generated objectives or additional
+planning calls are injected. Expired Quick memory does not prevent an authorized
+Deep run; actual Library deletion/legacy/writer restrictions still apply.
+
+`Message.assistantExecution` is optional for legacy Quick messages. Agent entries
+use `{kind: "agent_research", runId, createdAt}` plus message ID, assistant sender
+and empty text. Conversation record schema is v5; v1–v4 normalize compatibly,
+while the existing localStorage envelope v4 and IndexedDB version 2 remain.
+Agent messages are projected through a closed allowlist before persistence and
+JSON/Markdown/workspace export. State/result/events/evaluation/revision/bearer
+are never browser Agent authority. DATA-004 transfer accepts reference-only v5
+and unchanged v4 records; it does not resolve or authorize runs during import.
+
+`useConversationAgent` owns explicit mode/consent and uses the Library send lock;
+the Library reserves the origin before create and links the accepted run there.
+`AgentResearchMessage` reuses `useAgentWorkspace` with list loading disabled.
+One card keeps its exact run ID through queue, execution, cancellation and
+terminal result. Details are a keyboard-operable disclosure; the answer appears
+once. Disconnected restore requires the shared memory-only local connection;
+404 preserves the entry. Reconnect reads the same run, never recreates it.
+Research deeper pre-fills the visible Quick question and switches mode, with an
+explicit subsequent send. The advanced inspector remains at `/agent`.
+
+Follow-up tiles remain in the conversation scroller so the taller mode controls
+cannot obscure citation targets. The expired Quick session notice is shown once;
+its send guard remains enforced. Generic Agent goals display no invented
+structured objective coverage or gap report.
+
 ## Current route and authority index (UI-014)
 
 `frontend/src/app/routes.ts` owns the canonical navigation. Workspace routes

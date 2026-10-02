@@ -6,6 +6,31 @@ and engineering decisions, and `AGENTS.md` for repository operating rules.
 
 ## System Context
 
+### Unified Research conversation (UX-AGENT-001)
+
+The Research composer selects an explicit execution mode. Quick uses the
+existing RAG request/stream/session and answer renderer; Deep submits only the
+explicit goal and locale to the existing generic `POST /agent/runs` contract.
+It does not derive objectives, invoke another planner, pass Quick filters or
+transmit previous conversation answers as hidden context. `/chat` remains a
+compatible route family, and `/agent/runs/:id` retains the advanced inspector.
+
+Browser conversation schema v5 distinguishes a Quick answer (including legacy
+messages without a discriminator) from an Agent reference. An Agent entry stores
+only message identity, execution kind, exact run ID and creation time. Closed
+projection removes cached results/events/evaluation/state from storage and
+exports. The existing DATA-004 API supplies all authoritative run data. Backup
+transfer accepts v4 and v5 records; there is no SQLite migration or endpoint
+change. Older browser writers fail closed on v5 records.
+
+The Library owns draft, conversation identity and origin-bound reference linking.
+An accepted run links to its originating record even after navigation; deleted
+records are not recreated. A private-session generation and request epochs reject
+late detail/event updates. `useAgentWorkspace` owns the existing finite SSE
+resume, current-revision cancellation and API reads; conversation instances omit
+run-list requests. The shared bearer stays in memory and clears on reload or
+disconnect. Per-run decision-provider consent is neither persisted nor inherited.
+
 OBS-001 adds opt-in content-free timing at existing Agent API, repository,
 worker/provider/tool, native evaluation and SSE boundaries. Inclusive monotonic
 spans are bounded and discarded after a typed sampled API/all-worker summary is written to

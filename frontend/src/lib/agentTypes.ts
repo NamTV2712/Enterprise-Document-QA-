@@ -170,5 +170,6 @@ export interface AgentEvaluationReport {
 export interface AgentCreateRequest {
   goal: string;
   locale: "en" | "vi";
+  allow_decision_provider_execution?: boolean;
   research?: { version: "agent_research_v1"; objectives: AgentResearchObjective[] };
 }

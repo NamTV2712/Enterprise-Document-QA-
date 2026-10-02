@@ -371,7 +371,7 @@ def _validate_record(raw: Any, kind: str) -> dict[str, Any]:
         raise WorkspaceTransferError("backup record identity does not match its payload")
 
     if kind == "conversation":
-        if schema_version != 4 or payload.get("schemaVersion") != 4:
+        if schema_version not in {4, 5} or payload.get("schemaVersion") != schema_version:
             raise WorkspaceTransferError("unsupported conversation schema version")
         if payload.get("revision") != revision:
             raise WorkspaceTransferError("conversation revision does not match its payload")
@@ -383,6 +383,22 @@ def _validate_record(raw: Any, kind: str) -> dict[str, Any]:
             raise WorkspaceTransferError("conversation title mode is malformed")
         if not isinstance(payload.get("messages"), list) or len(payload["messages"]) > 5_000:
             raise WorkspaceTransferError("conversation messages are malformed or exceed limits")
+        for message in payload["messages"]:
+            if not isinstance(message, dict) or "assistantExecution" not in message:
+                continue
+            reference = _require_object(message["assistantExecution"], "assistant execution must be an object")
+            if reference.get("kind") == "quick_answer":
+                _require_exact_keys(reference, {"kind"})
+            elif schema_version == 5 and reference.get("kind") == "agent_research":
+                _require_exact_keys(reference, {"kind", "runId", "createdAt"})
+                _require_exact_keys(message, {"id", "sender", "text", "assistantExecution"})
+                if message.get("sender") != "assistant" or message.get("text") != "" or not isinstance(message.get("id"), str):
+                    raise WorkspaceTransferError("Agent conversation entry must contain only a reference")
+                if not isinstance(reference["runId"], str) or not re.fullmatch(r"agent_[A-Za-z0-9_-]{1,122}", reference["runId"]):
+                    raise WorkspaceTransferError("Agent run reference is malformed")
+                _timestamp(reference["createdAt"], "Agent reference creation time")
+            else:
+                raise WorkspaceTransferError("unsupported assistant execution kind")
         if not isinstance(payload.get("draft"), str) or not isinstance(payload.get("bookmarkedMessageIds"), list):
             raise WorkspaceTransferError("conversation state is malformed")
         notes = payload.get("notes", [])
@@ -522,7 +538,7 @@ def validate_workspace_backup(raw: Any) -> ValidatedBackup:
             raise WorkspaceTransferError("workspace source schemas are malformed")
         if values != sorted(set(values)):
             raise WorkspaceTransferError("workspace source schemas must be sorted and unique")
-    if any(version > 4 for version in source_schemas["conversations"]):
+    if any(version > 5 for version in source_schemas["conversations"]):
         raise WorkspaceTransferError("unsupported future conversation schema version")
     if any(version > 2 for version in source_schemas["evidence_collections"]):
         raise WorkspaceTransferError("unsupported future evidence collection schema version")

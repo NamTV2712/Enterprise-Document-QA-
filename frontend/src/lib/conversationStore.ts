@@ -1,3 +1,4 @@
+import { agentReference, isAgentMessage, validAssistantExecution } from "./assistantExecution";
 import {
   AnswerVariant,
   ConversationMode,
@@ -14,7 +15,7 @@ import {
  * Local conversation library repository.
  *
  * Storage model:
- * - IndexedDB holds `conversations` (schema-v4 records) and `tombstones` in
+ * - IndexedDB holds `conversations` (schema-v5 records) and `tombstones` in
  *   one transaction per write.
  * - localStorage holds one v4 envelope key (`records` + `tombstones`) so a
  *   mirror write is a single atomic setItem. The older v1/v2 keys are read
@@ -29,7 +30,7 @@ import {
  *   their own autosave or by another conversation's save.
  */
 
-export const CONVERSATION_SCHEMA_VERSION = 4;
+export const CONVERSATION_SCHEMA_VERSION = 5;
 export const LIBRARY_ENVELOPE_VERSION = 4;
 export const MAX_CONVERSATIONS = 100;
 export const MAX_LIBRARY_BYTES = 25 * 1024 * 1024;
@@ -362,6 +363,7 @@ function isMessage(value: unknown): value is Message {
     typeof message.id === "string" &&
     (message.sender === "user" || message.sender === "assistant") &&
     typeof message.text === "string"
+    && (message.assistantExecution === undefined || (message.sender === "assistant" && validAssistantExecution(message.assistantExecution)))
   );
 }
 
@@ -591,6 +593,7 @@ function normalizeVariants(value: unknown, messages: Message[]): AnswerVariant[]
  */
 export function normalizeStoredMessages(messages: Message[]): Message[] {
   return messages.filter(isMessage).map((message) => {
+    if (isAgentMessage(message)) return agentReference(message);
     const feedback = normalizeMessageFeedback(message.feedback);
     const normalized = feedback === null
       ? (() => {

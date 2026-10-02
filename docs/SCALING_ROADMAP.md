@@ -13,9 +13,28 @@ milestones remain complete. Starting HEAD: `b13fff6affc919a19f13bda3ddc730c319a7
 | WORKER-002 | Bounded queue/scheduling and admission fairness attribution with durable admission hints | COMPLETE |
 | CI-FIX-001 | Authoritative backend/frontend release gates and exact-SHA CI | COMPLETE |
 | CAPACITY-001 | Bounded Agent service capacity and provider concurrency policy | COMPLETE once exact-SHA Backend CI and local release gates pass; Frontend CI waived by user |
-| UX-AGENT-001 | Next bounded Agent UX task | NEXT |
-| FINAL-IMPROVE | Final current-round closure | NOT STARTED |
+| UX-AGENT-001 | Unified Research conversation with separate Quick/Agent execution | COMPLETE once exact-final Backend CI and local release gates pass; GitHub Frontend CI waived by user |
+| FINAL-IMPROVE | Final current-round closure | NEXT / NOT STARTED |
 | SCALE-003 | Future evidence-backed caching/resource work, outside current round | NOT STARTED / DEFERRED |
+
+## UX-AGENT-001: unified Research conversation
+
+[Receipt](UX_AGENT_001_FINAL_RECEIPT.md). Starting main `f607d2a…`. Research is
+primary, Quick defaults to unchanged RAG and Deep Research explicitly creates
+an existing durable generic Agent run. Goal-only semantics, per-run consent,
+one stable reference/card, reconnect/404/cancel behavior and advanced `/agent`
+remain explicit. Conversation record v5 retains only the safe run reference;
+DATA-004 remains authoritative. Legacy Quick and `/chat` routes stay compatible.
+The bounded draft/reference races, citation obstruction and dark text contrast
+defects were reproduced and repaired. Primary backend 1958, frontend 96/843,
+TypeScript/build and 20 new two-browser UX cases pass. Exact-final clean/full
+browser/harness gates, normal main push equality and Backend CI SUCCESS complete
+closure. GitHub Frontend CI is explicitly waived for this task by the user on
+2026-10-02; its configuration and local gates remain unchanged.
+
+Prior milestones and required roadmap remain COMPLETE. **FINAL-IMPROVE is NEXT
+but NOT STARTED. STOP after UX closure.** SCALE-003 remains deferred; no new
+roadmap item, performance campaign or deployment is started.
 
 ## CAPACITY-001: close capacity investigation
 

@@ -169,7 +169,7 @@ describe("App request cancellation", () => {
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
-    fireEvent.click(screen.getByRole("link", { name: "Chat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Return to conversation" }));
     expect(
       await screen.findByRole(
         "article",

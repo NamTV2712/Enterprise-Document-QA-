@@ -1,5 +1,60 @@
 # Project State
 
+## UX-AGENT-001 — unified Research conversation release (2026-10-02)
+
+Main-only starting `f607d2a56073555269fb619218678b5715ea8517`.
+The [receipt](docs/UX_AGENT_001_FINAL_RECEIPT.md) records architecture, all 22
+required behavioral cases, reproduced failures/repairs and exact-final closure
+requirements. Research is the primary entry: Quick defaults to existing RAG;
+explicit Deep Research submits only its visible generic goal and locale to the
+existing durable Agent API. No hidden history/filters, automatic objectives,
+planner change or cross-engine memory. Research deeper prepares a visible goal
+and requires another explicit submit. `/chat` remains compatible; `/agent` is
+the advanced inspector. One accepted run owns one reference/card through all
+states; cancel uses the current revision and reconciles conflict.
+
+Conversation record v4→v5 protects the closed Agent reference from older writers;
+storage envelope/IndexedDB versions and keys stay unchanged. Legacy Quick records
+retain meaning. DATA-004 owns result/state/events/evaluation/revision. Reload
+requires reconnect to the exact ID; 404 retains an unavailable reference. Bearer
+and per-run provider consent remain memory-only. Real browser storage checks
+after connect/create/persist/reload and poisoned export/import tests pass. The
+workspace-transfer validator accepts safe v4/v5 records without a DB migration.
+
+Reproduced and repaired: late repository reads overwriting newer drafts; older
+Quick snapshots dropping accepted Agent references; fixed follow-up tiles
+obscuring citations with the taller composer; two existing dark overview text
+contrast defects. Preserve old Quick cancellation/focus/layout budgets. A VI
+fixture initially selected locale incorrectly; corrected without a product or
+timeout change. Prior incomplete/failed browser candidates remain disclosed.
+
+Primary backend **1958 passed / 188 warnings**, transfer focused **24 passed**;
+frontend **96 files / 843 tests**, TypeScript/build PASS. New production UX
+Chromium/Firefox **20 passed**, seven required widths, EN/VI and light/dark;
+phone Agent/details screenshots inspected. HTTP/SSE **16**, Agent shell sweep
+**32** and durable Agent product harness **12** passed on Chromium/Firefox.
+Full browser and exact-final
+clean gates are required before closure and reported literally in the closing
+report. Main bundle **527.07 kB** retains the warning. Native zoom is manual/
+unverified; Collections/model-test bearer wiring staged; Ragas optional.
+
+On 2026-10-02 the user explicitly waived **GitHub Frontend CI for UX-AGENT-001**
+(“có thể bỏ CI frontend”). This is a new task-specific release waiver, not a
+green CI result or reuse of CAPACITY's historical waiver. Full local frontend,
+browser, HTTP/SSE and Agent harness gates remain required. Frontend workflow
+configuration is unchanged; Backend adds only the receipt path filter. Exact-final
+Backend CI SUCCESS, clean verification and normal push equality remain mandatory.
+
+Routes **90** (80 distinct paths), SQLite **v7/WAL/NORMAL/5000ms**, workers default
+**2**, supported **1–16**, ordinary recommendation **1–2** unchanged. No dependency,
+lockfile, endpoint, DB migration/index, retrieval/planner/provider algorithm change.
+Same 12 unrelated paths remain untracked. Preservation audit: 1,691/1,694 files
+unchanged; an inherited PDF test overwrote three prior diagnostic screenshots.
+It now writes to per-test output paths. The user explicitly accepted the three
+diagnostic-file exception on 2026-10-02; the receipt records it literally.
+Required roadmap and prior milestones COMPLETE. **UX-AGENT-001 is COMPLETE once
+its exact-final gates pass; FINAL-IMPROVE is NEXT. STOP before FINAL-IMPROVE.**
+
 ## CAPACITY-001 — operating policy and exact-SHA release gate (2026-10-01)
 
 Main-only starting `e6d4d0f66ae49cd5bc9911f46d58a3d4deda31f9`; accepted measured

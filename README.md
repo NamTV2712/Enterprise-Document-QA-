@@ -17,6 +17,21 @@ The system ingests a 50-company filing corpus, extracts key sections and financi
 
 ## Start here — current product
 
+Research is the primary conversation entry. Choose **Quick** (default) for the
+existing cited RAG answer, or **Deep Research** to submit the explicit goal to an
+existing durable Agent run. Deep requires the local workspace connection and,
+when a decision provider is configured, fresh permission for that run. Quick
+filters and previous answers are not silently passed to the Agent. The Quick
+comparison switch is labeled **Comparative answer**.
+
+One Agent run stays in one conversation card with server-owned status, result,
+evidence, cancellation and collapsed research details. **Research deeper** fills
+the goal from a completed Quick question; sending is a separate user action.
+Conversation storage/export holds only a run reference. Reload clears the bearer:
+reconnect to read the same run; an unavailable run keeps its reference. `/chat`
+links and saved conversations remain compatible; `/agent` is the full inspector.
+See the [UX-AGENT-001 receipt](docs/UX_AGENT_001_FINAL_RECEIPT.md).
+
 Optional content-free Agent performance attribution is disabled by default.
 For an authorized local workspace, set server-side
 `ENABLE_PERFORMANCE_ATTRIBUTION=true` to retain bounded sampled API/all-worker timing summaries
@@ -63,7 +78,7 @@ reported separately. The warm input check warms the control once before its
 Citation nodes retain focus across answer updates, and a new pointer or keyboard
 interaction cancels stale inspector focus restoration.
 
-The independent frontend exposes Chat, Research, Documents, Search, Collections,
+The independent frontend exposes Research (with compatible Chat links), Documents, Search, Collections,
 Retrieval, Models, Pipeline, Agent, Reranker, Evaluation, Analytics, Datasets,
 Settings, and Logs. FastAPI supplies public catalog/search/inspection/report reads; opt-in
 local mode adds a private SQLite workspace, queued Pipeline staging, frozen

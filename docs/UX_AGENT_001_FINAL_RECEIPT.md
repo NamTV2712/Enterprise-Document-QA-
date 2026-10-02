@@ -151,7 +151,9 @@ Groq quota or live provider calls were used.
   also preserves Escape focus restoration. Final full validation includes this
   bounded focus repair and adds one unit test (96 files / 844 tests).
 
-An interrupted full browser attempt is excluded. A completed earlier candidate
+The 147f342 browser attempt was interrupted before completion to freeze the
+measured bundle size in the receipt; it is excluded. An earlier interrupted full
+browser attempt is also excluded. A completed earlier candidate
 had 548 passes, four existing skips and six failures: two outdated Chat-primary
 navigation assertions, two citation obstructions and two shell geometry failures.
 The navigation expectations follow the deliberate primary-navigation change;
@@ -185,8 +187,8 @@ All other baseline files retain their original hashes.
 | Backend workspace-transfer focused | 24 passed |
 | Primary full backend | 1958 passed / 188 warnings / zero failed; 178.59s |
 | Frontend focused | 114 passed; new library race suite 14 passed |
-| Primary frontend TypeScript / full unit / build | Implementation PASS / 96 files, 843 tests PASS / PASS; final focus repair adds one test, exact-final gates required |
-| Build warning | Final main chunk 527.28 kB (implementation 527.07 kB); warning retained |
+| Primary frontend TypeScript / full unit / build | Focus-repair candidate PASS / 96 files, 844 tests PASS / PASS; exact-final source-clean gates required |
+| Build warning | Final main chunk 527.24 kB (implementation 527.07 kB; navigation candidate 527.28 kB); warning retained |
 | New UX production Chromium/Firefox | Expanded final suite 22 passed; all seven required widths in EN/VI light/dark |
 | Token contrast | PASS, unchanged thresholds |
 | Isolated performance / PDF output regression | 6 passed, one worker, both browsers |

@@ -53,7 +53,7 @@ clean frontend frozen install / TypeScript / 96 files, 843 tests / build PASS.
 Its full regular browser matrix **540 passed / 4 existing skips**, one worker.
 After the late-navigation fix, final-SHA full browser and clean gates are required
 before closure and reported literally in the closing
-report. Main bundle **527.28 kB** retains the warning. Native zoom is manual/
+report. Focus-repair main bundle **527.24 kB** retains the warning. Native zoom is manual/
 unverified; Collections/model-test bearer wiring staged; Ragas optional.
 
 On 2026-10-02 the user explicitly waived **GitHub Frontend CI for UX-AGENT-001**

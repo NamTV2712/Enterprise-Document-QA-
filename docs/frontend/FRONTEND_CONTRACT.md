@@ -39,6 +39,10 @@ history-adoption effect also checks the actual browser URL. React route state
 can lag a suspended transition; a newer tool route remains selected when the
 POST response arrives late.
 
+SelectField restores its trigger focus synchronously when closing a selection.
+It cannot schedule a stale focus callback that steals focus from a later field;
+Escape still closes the listbox and returns focus to its trigger.
+
 Follow-up tiles remain in the conversation scroller so the taller mode controls
 cannot obscure citation targets. The expired Quick session notice is shown once;
 its send guard remains enforced. Generic Agent goals display no invented

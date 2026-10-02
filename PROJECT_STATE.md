@@ -35,6 +35,14 @@ and history adoption while linking the accepted origin run. The strengthened
 22-case UX suite and full 96/843 unit suite pass after this fix.
 Prior incomplete/failed browser candidates remain disclosed.
 
+The f618733 full candidate had 541 passes / 4 existing skips / one Firefox
+template-context failure, with an empty required year in its error snapshot.
+Six isolated unchanged repetitions pass; causality remains unproven. A separate
+deterministic regression proves SelectField's deferred close focus can steal
+focus from the next field. Synchronous restoration fixes that bounded defect
+and preserves Escape focus. Final validation includes the additional unit test
+(96 files / 844 tests) and the unchanged complete browser gate.
+
 Primary backend **1958 passed / 188 warnings**, transfer focused **24 passed**;
 frontend **96 files / 843 tests**, TypeScript/build PASS. New production UX
 Chromium/Firefox **22 passed**, seven required widths, EN/VI and light/dark;

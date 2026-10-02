@@ -142,6 +142,14 @@ Groq quota or live provider calls were used.
   barrier now holds both the POST and Search module; the previous compiled code
   fails on both engines. Both barriers are released in finally. After the complete
   browser-history/URL fix, all 22 UX cases pass, including the suspended-route case.
+- The f618733 full candidate completed 541 passes, four existing skips and one
+  Firefox template-context failure. Its error snapshot showed an empty required
+  fiscal year. Six isolated unchanged repetitions passed; this does not establish
+  the cause of that browser failure. A deterministic unit regression separately
+  proved the shared SelectField's deferred close callback could steal focus from
+  the next field. Restore focus synchronously during close instead. The regression
+  also preserves Escape focus restoration. Final full validation includes this
+  bounded focus repair and adds one unit test (96 files / 844 tests).
 
 An interrupted full browser attempt is excluded. A completed earlier candidate
 had 548 passes, four existing skips and six failures: two outdated Chat-primary
@@ -177,13 +185,13 @@ All other baseline files retain their original hashes.
 | Backend workspace-transfer focused | 24 passed |
 | Primary full backend | 1958 passed / 188 warnings / zero failed; 178.59s |
 | Frontend focused | 114 passed; new library race suite 14 passed |
-| Primary frontend TypeScript / full unit / build | PASS / 96 files, 843 tests PASS / PASS |
+| Primary frontend TypeScript / full unit / build | Implementation PASS / 96 files, 843 tests PASS / PASS; final focus repair adds one test, exact-final gates required |
 | Build warning | Final main chunk 527.28 kB (implementation 527.07 kB); warning retained |
 | New UX production Chromium/Firefox | Expanded final suite 22 passed; all seven required widths in EN/VI light/dark |
 | Token contrast | PASS, unchanged thresholds |
 | Isolated performance / PDF output regression | 6 passed, one worker, both browsers |
 | Complete implementation-SHA regular browser matrix | 540 passed / 4 existing skips / zero failed, one worker, 17.8m |
-| Complete final-SHA regular browser matrix | Required after the suspended-route fix; literal result in closing report |
+| Complete final-SHA regular browser matrix | Required after the suspended-route and SelectField focus fixes; literal result in closing report |
 | Real HTTP/SSE | 16 passed, Chromium/Firefox, real FastAPI and fragmented SSE proxy |
 | Existing Agent shell sweep / local product harness | 32 passed, Chromium/Firefox |
 | Durable Agent product harness | 12 passed, Chromium/Firefox; real Agent routes, events, evaluation and cancellation |

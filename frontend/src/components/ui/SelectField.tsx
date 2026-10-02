@@ -87,7 +87,7 @@ export function SelectField({
 
   const closeAndReturnFocus = () => {
     setOpen(false);
-    requestAnimationFrame(() => triggerRef.current?.focus());
+    triggerRef.current?.focus();
   };
 
   const selectOption = (option: SelectOption) => {

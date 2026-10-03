@@ -54,6 +54,7 @@
   .ui-popover-enter,
   .ui-expand-enter,
   .ui-stagger-enter,
+  .console-view-enter > *,
   .overview-panel {
     animation: none !important;
   }

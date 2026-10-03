@@ -141,6 +141,11 @@ test.describe("UI-009 Models and Datasets", () => {
     for (const path of ["/models", "/datasets"]) {
       await page.goto(path);
       await settle(page);
+      await expect(page.getByRole("heading", { name: path === "/models" ? "Models" : "Datasets", exact: true })).toBeVisible();
+      for (const child of await page.locator(".console-view-enter > *").all()) {
+        await expect(child).toHaveCSS("animation-name", "none");
+        await expect(child).toHaveCSS("opacity", "1");
+      }
       const results = await new AxeBuilder({ page })
         .include("main")
         .options({ runOnly: ["color-contrast", "label", "button-name", "link-name", "aria-allowed-attr", "aria-required-attr"] })

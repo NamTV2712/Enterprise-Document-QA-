@@ -1,8 +1,8 @@
-# SEC Research Copilot — 5–7 Minute Demo
+# FilingScope — 5–7 Minute Demo
 
-Public display name: **SEC Research Copilot** (original repository: Enterprise Document QA).
+Public display name: **FilingScope** (original repository: Enterprise Document QA).
 
-A seven-minute recording plan with an executable provider-free path. See the
+A 6:45 recording plan with an executable provider-free path. See the
 [README](../README.md), [case study](PORTFOLIO_CASE_STUDY.md) and
 [release evidence](IMPROVEMENT_FINAL_RECEIPT.md).
 
@@ -40,13 +40,17 @@ chunking, embedding and indexing for this fixture demo. Use Bun 1.3.14 and a
 Python environment with the declared requirements. No real `.env`, private
 corpus, Groq key or model download is needed by the harness.
 
-Terminal A, from the repository root, PowerShell:
+Terminal A, from the repository root, PowerShell. Launch from a fresh runtime
+directory so the repository's `.env` is not loaded:
 
 ```powershell
 $env:TEST005_WORKSPACE_MODE = 'local'
 $env:TEST005_API_PORT = '8788'
 $env:TEST005_RUNTIME_DIR = Join-Path ([System.IO.Path]::GetTempPath()) ('edqa-portfolio-' + [guid]::NewGuid())
-.venv\Scripts\python.exe tests/integration/agent_product_server.py
+$demoRepo = (Get-Location).Path
+New-Item -ItemType Directory -Path $env:TEST005_RUNTIME_DIR | Out-Null
+Set-Location -LiteralPath $env:TEST005_RUNTIME_DIR
+& "$demoRepo\.venv\Scripts\python.exe" "$demoRepo\tests\integration\agent_product_server.py"
 ```
 
 The server binds only `127.0.0.1:8788`, uses the fresh runtime directory and
@@ -117,9 +121,13 @@ Invoke-RestMethod -Method Post -Uri "$demoApi/__test005__/agent/mode" `
 
 In the browser, choose English/light or dark, open Research and start with Quick.
 Use a separate demo browser profile/tab state if you want an empty conversation
-history; preserve your normal saved Library. Connect only when the script reaches
-Deep, using the **public synthetic fixture token** above. Never use a real token
-on camera. The input clears after connection and the bearer remains in memory.
+history; preserve your normal saved Library. After **New Research**, reload the
+Research landing page off-camera before connecting: the rehearsal encountered
+a stale in-tab session during preparation, resolved by this fresh load.
+Connect off-camera before the timed
+rehearsal using the **public synthetic fixture token** above, then return to Quick.
+Never use a real token on camera. The input clears after connection and the bearer
+remains in memory.
 
 ### 3. Rehearse once
 
@@ -147,10 +155,12 @@ model quality.”
 **Do not say:** Used by enterprises, production-ready as an absolute, or a
 guaranteed accurate financial assistant.
 
-### 0:30–1:15 — Architecture overview
+### 0:30–1:10 — Architecture overview
 
-**Click/show:** [README architecture](../README.md#architecture-at-a-glance).
-Point to the Quick branch, Deep branch, shared RAG stack and DATA-004 authority.
+**Click/show:** [README architecture](../README.md#architecture) and its
+[existing system image](architecture/sec-research-workspace.visual-check.2048x1320.light.png).
+Point out the RAG path. Explain Deep's shared infrastructure orally: the preserved
+image does not draw Agent workers or DATA-004. Keep narration within 40 seconds.
 
 **Say:** “BM25 and Qdrant rankings are fused, then cross-encoder reranking selects
 evidence for grounded generation. Deep uses bounded typed tools and a process-local
@@ -159,7 +169,7 @@ worker pool. SQLite owns Agent runs; the browser owns only their references.”
 **Do not say:** Each tool calls an independent microservice, the topology is
 distributed, or every Deep run uses every tool.
 
-### 1:15–2:30 — Quick answer and source
+### 1:10–2:20 — Quick answer and source
 
 **Click:** Keep **Quick** selected. Ask “What evidence is available for Apple?”
 and submit. Show streamed text, click a citation and inspect the source excerpt
@@ -174,10 +184,11 @@ and requires another explicit submission.”
 **Do not say:** The fixture proves financial accuracy, the source date is the
 number's fiscal period, or Research deeper automatically executes an Agent.
 
-### 2:30–4:30 — Deep lifecycle, result and evidence
+### 2:20–4:20 — Deep lifecycle, result and evidence
 
-**Click:** Connect the local workspace with the synthetic fixture token. With
-**Deep Research** selected, submit “Inspect current Apple risk evidence.”
+**Click:** Use the local workspace connected off-camera with the synthetic token. With
+**Deep Research** selected, replace the populated draft with
+“Inspect current Apple risk evidence.” and submit explicitly.
 If decision-provider consent is offered, grant it only for this fixture run.
 Observe one run card and **Running**; expand **Research details**. Click
 **Request cancellation** and show cancellation acknowledgement.
@@ -192,7 +203,8 @@ Invoke-RestMethod -Method Post -Uri "$demoApi/__test005__/agent/release"
 Return to the card and show **Cancelled**. Click **Open full run**, point out its
 run ID, then select the prepared completed “Find recorded Apple risk evidence.”
 entry from **Run history**. This keeps the current memory-only connection.
-Show final result, research evidence and the native metrics. Click **Open document**;
+The inspector labels the `succeeded` state **Completed** in English. Show final
+result, research evidence and the native metrics. Click **Open document**;
 if the catalog opens, choose AAPL's **Open document workspace** action. Show the
 canonical ID and unavailable full-source state honestly: this fixture retains
 indexed excerpts, not an admitted original filing. Quick's citation inspector
@@ -208,7 +220,7 @@ generic composer does not synthesize a hidden multi-objective plan.”
 **Do not say:** The two run IDs are one run, cancellation kills an external effect,
 safe activity is hidden chain-of-thought, or native metrics prove factual accuracy.
 
-### 4:30–5:30 — Engineering internals
+### 4:20–5:15 — Engineering internals
 
 **Click/show:** Retrieval design, [worker receipt](WORKER_002_FINAL_RECEIPT.md),
 DATA-004 ownership in [architecture](../ARCHITECTURE.md#state-and-persistence),
@@ -223,7 +235,7 @@ storage, cancellation and HTTP/SSE with provider-free tests.”
 **Do not say:** Exactly-once external effects, a global provider concurrency cap,
 or that this fixture performs real vector/model inference.
 
-### 5:30–6:30 — Measurements and validation
+### 5:15–6:15 — Measurements and validation
 
 **Click/show:** README measured improvements and Validation, then the receipts.
 
@@ -237,7 +249,7 @@ workflows succeeded.”
 **Do not say:** End-to-end internet latency, a production SLA, universal speedup,
 zero-warning certification, or that skipped cases passed.
 
-### 6:30–7:00 — Tradeoffs and close
+### 6:15–6:45 — Tradeoffs and close
 
 **Click/show:** README limitations and case-study lessons.
 
@@ -256,3 +268,9 @@ workspace/data intact. Do not publish tokens, private filings, diagnostic traces
 or generated test screenshots. Review the video for legible source IDs and the
 fixture disclosure. For a five-minute version, shorten internals and measurements;
 retain Quick/source inspection, Deep lifecycle, the prepared result and limitations.
+
+## Recording package
+
+- [Recording Cheat Sheet](DEMO_RECORDING_CHEATSHEET.md): the 6:45 narration timeline.
+- [Demo Questions](DEMO_QUESTIONS.md): four fixture-aware examples and fallbacks.
+- [DEMO-001 receipt](DEMO_001_RECEIPT.md): actual rehearsal outcomes and recording status.

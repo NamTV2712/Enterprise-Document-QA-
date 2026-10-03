@@ -1,4 +1,4 @@
-# SEC Research Copilot Documentation
+# FilingScope Documentation
 
 Start with the [product overview, Live Demo and setup](../README.md).
 The original repository is Enterprise Document QA; historical names and release
@@ -14,17 +14,25 @@ SHAs remain in engineering evidence.
 ## Architecture
 
 - [Full architecture and contracts](../ARCHITECTURE.md).
-- [Hero SVG](assets/sec-research-copilot-architecture.svg),
-  [showcase HTML](architecture/sec-research-copilot-showcase.html),
-  [reproducible source](architecture/sec-research-copilot-showcase.architecture.json).
-- Detailed interactive HTML: [System Architecture](architecture/sec-research-workspace.html),
+- [README architecture image](architecture/sec-research-workspace.visual-check.2048x1320.light.png):
+  existing validated light system view; [visual-check evidence](architecture/sec-research-workspace.visual-check.json).
+- Interactive HTML: [System Architecture](architecture/sec-research-workspace.html),
   [Query Data Flow](architecture/sec-research-query.html),
   [Research Workflow](architecture/sec-research-workflow.html).
 - [Frontend contract](frontend/FRONTEND_CONTRACT.md), [design](frontend/DESIGN.md),
   [Agent UX evidence](UX_AGENT_001_FINAL_RECEIPT.md).
 
 Download/open standalone HTML locally; GitHub file views do not execute it.
-Existing detailed RAG diagrams and their authored sources remain preserved.
+Existing detailed RAG diagrams and their authored sources remain preserved. The
+system image depicts the browser/backend/retrieval/evidence/provider path; durable
+Agent workers and DATA-004 are described in Full Architecture rather than drawn
+in that earlier view.
+
+Historical SHOWCASE-002 presentation evidence remains available: [simplified SVG](assets/sec-research-copilot-architecture.svg),
+[HTML](architecture/sec-research-copilot-showcase.html),
+[source](architecture/sec-research-copilot-showcase.architecture.json) and
+[receipt](SHOWCASE_002_RECEIPT.md). These retain their original names and are
+secondary to the existing system visualization.
 
 ## Engineering evidence
 

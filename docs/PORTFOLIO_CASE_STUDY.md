@@ -1,6 +1,6 @@
-# SEC Research Copilot — Engineering Case Study
+# FilingScope — Engineering Case Study
 
-Public display name: **SEC Research Copilot** (original repository: Enterprise Document QA).
+Public project name: **FilingScope**. Repository: **Enterprise Document QA**.
 
 An evidence-led portfolio project for SEC 10-K research, combining hybrid RAG
 with bounded, durable Agent execution. [Product overview](../README.md),

@@ -1,11 +1,6 @@
-# SEC Research Copilot
+# FilingScope
 
-> Hybrid RAG + Durable Deep Research Agent for SEC 10-K Filings
-
-Turn long financial filings into cited answers and inspectable research. Quick
-Research streams a conversational RAG answer; Deep Research runs a bounded Agent
-with durable progress, cancellation and evidence. This technical portfolio
-project combines retrieval, execution and an EN/VI research workspace.
+> Evidence-Grounded SEC Filing Research with Hybrid RAG & Durable Agents
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?logo=fastapi&logoColor=white)
@@ -18,6 +13,11 @@ project combines retrieval, execution and an EN/VI research workspace.
 [🚀 Live Demo](https://frontend-one-gamma-f9jf11u8ec.vercel.app) ·
 [🏗 Architecture](#architecture) · [📖 Case Study](docs/PORTFOLIO_CASE_STUDY.md) ·
 [▶ Demo Guide](docs/DEMO_SCRIPT.md) · [⚙ Setup](#local-setup)
+
+FilingScope is an evidence-first research workspace for SEC 10-K filings. Quick
+Research streams cited RAG answers; Deep Research runs a separately authorized,
+durable bounded Agent with inspectable evidence and cancellation. BM25, Qdrant,
+RRF and cross-encoder reranking select evidence before grounded generation.
 
 ## Live Demo
 
@@ -62,26 +62,30 @@ inherit Quick history/filters or create a hidden multi-objective plan.
 
 ## Architecture
 
-![SEC Research Copilot: separate Quick RAG and durable Deep Research paths sharing retrieval and evidence](docs/assets/sec-research-copilot-architecture.svg)
+![Existing SEC research system architecture: browser, FastAPI, hybrid retrieval, Qdrant, SEC corpus and Groq](docs/architecture/sec-research-workspace.visual-check.2048x1320.light.png)
 
-Quick and Deep share the SEC corpus, Qdrant retrieval and Groq infrastructure.
-Deep uses `search_documents`, `inspect_retrieval`, `read_document` and `ask_rag`;
-provider-backed decisions and `ask_rag` require their configured permission.
-DATA-004 owns durable Agent state. DATA-005 stores optional content-free telemetry
-in the shared workspace database. The browser keeps references; the default is
-**two fixed workers in one backend process** with a single bounded Agent
-orchestrator. This topology has no distributed or hidden multi-agent execution.
+This preserved system visualization shows the research/RAG path. Its historical
+title remains **SEC Research Workspace**; it does not depict Agent workers or
+DATA-004. The diagram's retained `KEY5-only` label means the primary-only
+credential policy identifier, not a fifth current credential.
 
-[Full architecture](ARCHITECTURE.md) ·
-[Open showcase HTML locally](docs/architecture/sec-research-copilot-showcase.html) ·
-[Reproducible source](docs/architecture/sec-research-copilot-showcase.architecture.json)
+- **Quick Research** follows React → FastAPI/HTTP/SSE → hybrid retrieval →
+  cross-encoder reranking → grounded generation → citations.
+- **Deep Research** uses Agent API → DATA-004 SQLite → two fixed process-local
+  workers → one bounded Agent → closed tools. The browser stores run references.
+- **Shared evidence:** `search_documents`, `inspect_retrieval`, `read_document`
+  and `ask_rag` reuse the corpus, retrieval and evidence services. Provider-backed
+  decisions and `ask_rag` require their independent configured permissions.
 
-Detailed interactive diagrams: [System Architecture](docs/architecture/sec-research-workspace.html),
-[Query Data Flow](docs/architecture/sec-research-query.html),
-[Research Workflow](docs/architecture/sec-research-workflow.html).
+[Interactive System Architecture](docs/architecture/sec-research-workspace.html) ·
+[Query Data Flow](docs/architecture/sec-research-query.html) ·
+[Research Workflow](docs/architecture/sec-research-workflow.html) ·
+[Full Architecture documentation](ARCHITECTURE.md)
+
 Download/open the standalone HTML files locally; GitHub's file view does not run
-them. These detailed diagrams document the existing research/RAG paths;
-[ARCHITECTURE.md](ARCHITECTURE.md) also covers durable Agent contracts.
+them. Full Architecture documents current durable Agent ownership and DATA-005
+content-free telemetry. The earlier simplified overview remains linked in the
+[historical SHOWCASE-002 receipt](docs/SHOWCASE_002_RECEIPT.md).
 
 ## Key features
 

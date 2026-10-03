@@ -1,6 +1,6 @@
-# SEC Research Copilot — Interview Guide
+# FilingScope — Interview Guide
 
-Public display name: **SEC Research Copilot** (original repository: Enterprise Document QA).
+Public project name: **FilingScope**. Repository: **Enterprise Document QA**.
 
 Answers describe the implemented project and its frozen code release
 `cbaacc3765f8dbca2ff04247cb24fd773751a0f9`. Use the

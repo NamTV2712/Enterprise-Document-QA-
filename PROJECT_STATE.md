@@ -1,5 +1,37 @@
 # Project State
 
+## PORTFOLIO-SHIP-001 — public showcase and silent demo (2026-10-03)
+
+Main-only starting `ce27af05a0ac4859c9cb27e37d3b6ef29d77fc91`. The
+[shipping receipt](docs/PORTFOLIO_SHIP_001_RECEIPT.md) records repository/source
+inspection, the independent README audit, evidence-based consolidation and video
+review. README foregrounds FilingScope, SEC 10-K research, Hybrid RAG and durable
+single-Agent execution. Quality, performance and frozen validation remain distinct;
+setup moves to `docs/SETUP.md`. Zero inventory-backed deletions were justified.
+
+The owner waived narration and the original 5–7 minute target, requesting a quick
+functional video. The reviewed **2:27.67**, 1600×900 silent H.264 asset is published
+in [FilingScope Portfolio Demo](https://github.com/NamTV2712/Enterprise-Document-QA-/releases/tag/demo-v1), tag `demo-v1`, with a real Watch Demo
+link and one selected unaltered product thumbnail. The video uses 511 native CUA
+browser frames, encoded at 30 FPS; screenshot sampling is lower. Cuts remove gaps.
+It shows Quick/source, explicit Deep cancellation, a separate prepared successful
+Agent run, tools/evidence/final references, native evaluation and discovery surfaces.
+Existing evidence is rendered as short documentation cards at the end.
+
+The isolated TEST-005 fixture has two companies/four chunks, synthetic corpus,
+ranking, generation and Agent decisions, and real HTTP/SSE, SQLite and workers.
+The production build passes; its ~527.24 kB warning remains. Full original fixture
+source is unavailable; indexed citation excerpts are visible. Earlier rehearsal
+activity-load errors resolved. Flawed capture candidates were rejected before
+publication. No live SEC/Groq/model calls or new accuracy campaign occurred.
+
+Offline benchmark reproduction retains the EVAL-PUBLIC-001 digest. Frozen release
+counts remain historical evidence. Product source, dependencies, locks, migrations,
+CI and provider configuration are unchanged. The 12 unrelated paths, 3,975 baseline
+files and 338 evaluation files are preserved. Final commit/push and actual remote
+render verification are recorded in the goal's closing report. Do not start
+CAREER-001 or reopen the required roadmap automatically.
+
 ## EVAL-PUBLIC-001 — historical native RAG quality publication (2026-10-03)
 
 Main-only starting `4fe40cc8e03684d149667c1961d51d932a65e60f`. The

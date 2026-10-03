@@ -1,9 +1,15 @@
 # FilingScope — Recording Cheat Sheet
 
-Companion to the [Demo Script](DEMO_SCRIPT.md) and the four
-[demo examples](DEMO_QUESTIONS.md). Target **6:45**; keep the architecture segment
-to **40 seconds**. Use the observed rehearsal outcomes in the
-[Demo Receipt](DEMO_001_RECEIPT.md), rather than assuming every prepared step worked.
+Companion to the [Demo Guide](DEMO_SCRIPT.md). The published demo is a
+**2:28 silent functional tour**, as requested by the owner:
+[Watch Demo](https://github.com/NamTV2712/Enterprise-Document-QA-/releases/tag/demo-v1). The original narrated 5–7 minute requirement was waived.
+
+Show Quick → citation/source → explicit Deep → Cancelling/Cancelled → a separate
+completed Agent run → tools/evidence/final references → native Agent evaluation
+→ Documents/Search/Retrieval Lab. Keep the synthetic fixture disclosure visible.
+Brief documentation cards cover historical quality, performance, frozen validation,
+architecture and limitations. The optional extended timeline below targets 6:50;
+it is not the actual published video's timeline.
 
 ## Before record
 
@@ -24,13 +30,15 @@ to **40 seconds**. Use the observed rehearsal outcomes in the
 - Complete one uninterrupted timed rehearsal. Record its actual duration and
   visible outcomes. Rehearsal readiness and a recorded final video are separate.
 
-## Timeline
+## Optional extended narrated timeline
 
 ### 0:00–0:30 — Problem
 
 Show **FilingScope** and its subtitle. Explain that long SEC filings spread
 evidence across narrative, tables and reporting periods. Quick gives cited
 answers; Deep adds separately authorized, inspectable execution.
+The app retains its historical **RAG System** header; FilingScope is the public
+project name. State that once if the header is visible.
 
 Say: “This demo uses deterministic local fixtures for repeatability and does not
 claim live financial-model accuracy.” FastAPI, HTTP/SSE, SQLite, workers and the
@@ -54,7 +62,7 @@ and chunk `AAPL_harness_0000`, then return to the answer. Click **Research deepe
 and pause on the populated Deep draft. No run has been submitted by that click.
 Skip the optional follow-up if it would crowd out source inspection.
 
-### 2:20–4:20 — Deep
+### 2:20–4:15 — Deep
 
 Replace the populated draft with “Inspect current Apple risk evidence.” and
 submit explicitly. Show one durable card,
@@ -66,11 +74,24 @@ Open the full run and select the **different** prepared successful run from Run
 history. Show its distinct ID, **Completed** (`succeeded`), final result, canonical evidence and
 21 native structural evaluation entries. The successful run used an explicit
 API research objective; the generic composer does not synthesize that objective.
-Open its document workspace. If the original source is unavailable, explain that
+Click **Open document**; if the catalog appears, click the Apple row's **Open
+document workspace** action. If the original source is unavailable, explain that
 the fixture supplies indexed excerpts; use Quick's citation inspector for the
 excerpt. Never present the cancelled run as the successful one.
 
-### 4:20–5:15 — Engineering
+### 4:15–5:10 — Evaluation
+
+Show the successful run's **21 native Agent structural/operational entries**,
+then README **RAG quality** and the linked benchmark. They are different surfaces.
+The historical 30-case benchmark reports faithfulness **1.0000**, relevancy
+**0.9917**, context precision **0.7613**, citation validity **1.0000 (27/30)**,
+keyword proxy **1.0000 (24/30)** and fallback correctness **1.0000 (30/30)**.
+Three citation/six keyword cases are N/A. Say **frozen historical outputs,
+label-assisted context packing, zero live calls for publication, not current
+runtime/general SEC accuracy**. Citation validity is structural; keyword proxy
+is not Recall@K. No overall score.
+
+### 5:10–5:55 — Performance / engineering
 
 Explain browser reference ownership versus DATA-004 state/result/event authority.
 SQLite claims are short and revisioned; provider work stays outside transactions.
@@ -78,15 +99,19 @@ Two fixed workers run in one process. Cancellation finishes at a supported safe
 boundary. SSE presents safe events; native evaluation reads terminal records
 without rerunning a model. Show the frozen release receipt, not a fresh-test claim.
 
-### 5:15–6:15 — Metrics
-
 Show the README measurement table and its linked receipts. Read50 client p95
 changed from 1967.995 to 982.813 ms; idle-confirmed queue p95 changed from
 502.753 to 9.340 ms. Warm navigation p95 was 63.30 ms in Chromium and 42.00 ms
 in Firefox. Say **controlled development measurements, not a production SLA**.
-Mention the frozen release's validation counts below. Do not read every metric.
+Do not read every metric.
 
-### 6:15–6:45 — Limitations / closing
+### 5:55–6:30 — Validation
+
+Show the frozen release receipt: 1958 primary backend passes, 844 frontend
+tests, 542 browser passes / four inherited skips, and its exact-release CI.
+These are recorded gates for that source release, not fresh tests of a docs edit.
+
+### 6:30–6:50 — Limitations / closing
 
 Show visible limitations: single-process workers, unverified production SLA and
 real Groq quota, bundle warning, manual zoom gate, staged bearer integrations and

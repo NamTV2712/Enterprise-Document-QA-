@@ -4,10 +4,20 @@ Start with the [product overview, Live Demo and setup](../README.md).
 The original repository is Enterprise Document QA; historical names and release
 SHAs remain in engineering evidence.
 
+## Start here
+
+- [RAG Quality Benchmark](RAG_QUALITY_BENCHMARK.md): all 30 historical cases,
+  native metric denominators, public frozen inputs and safe offline reproduction.
+- [Setup and Operations](SETUP.md): current installation, index provenance,
+  local Deep access and independent backend/frontend deployment.
+- [Demo Guide](DEMO_SCRIPT.md) and [Recording Cheat Sheet](DEMO_RECORDING_CHEATSHEET.md):
+  the published 2:28 silent tour and optional extended recording plan.
+- [Portfolio shipping receipt](PORTFOLIO_SHIP_001_RECEIPT.md): preparation,
+  actual video review, publication and preservation evidence.
+
 ## Portfolio
 
 - [Case Study](PORTFOLIO_CASE_STUDY.md): problem, implementation and tradeoffs.
-- [Demo Guide](DEMO_SCRIPT.md): actual 5–7 minute recording plan, fixture boundaries.
 - [CV / Portfolio Copy](PORTFOLIO_BULLETS.md): evidence-backed application language.
 - [Interview Guide](INTERVIEW_GUIDE.md): retrieval, authority, execution and testing.
 
@@ -49,12 +59,10 @@ Other protocols/receipts remain in this directory for deeper inspection.
 
 ## Setup and developer tooling
 
-- [Current local setup](../README.md#local-setup),
+- [Current local setup](SETUP.md),
   [frontend setup](../frontend/README.md), [local release runbook](LOCAL_RELEASE_RUNBOOK.md).
 - [Engineering reference](ENGINEERING_REFERENCE.md): relocated setup detail,
   API tables, benchmark history and past proposals from the long README.
-- [RAG quality benchmark](RAG_QUALITY_BENCHMARK.md): reproducible historical
-  30-case native metrics, denominators, frozen inputs and limitations.
 - [Security policy](../SECURITY.md), [MIT license](../LICENSE).
 - [Agent operating guide](../AGENTS.md), [skill provenance](../.agents/skills/SOURCES.md).
 

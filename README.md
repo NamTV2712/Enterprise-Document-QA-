@@ -1,151 +1,115 @@
 # FilingScope
 
-> Evidence-Grounded SEC Filing Research with Hybrid RAG & Durable Agents
+### Evidence-Grounded SEC Filing Research with Hybrid RAG & Durable AI Agents
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?logo=fastapi&logoColor=white)
-![React](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)
-![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB-DC244C)
 [![Backend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/backend.yml/badge.svg)](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/backend.yml)
 [![Frontend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/frontend.yml/badge.svg)](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/frontend.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-[🚀 Live Demo](https://frontend-one-gamma-f9jf11u8ec.vercel.app) ·
-[🏗 Architecture](#architecture) · [📖 Case Study](docs/PORTFOLIO_CASE_STUDY.md) ·
-[▶ Demo Guide](docs/DEMO_SCRIPT.md) · [⚙ Setup](#local-setup)
+[Live Demo](https://frontend-one-gamma-f9jf11u8ec.vercel.app) ·
+[Watch Demo](https://github.com/NamTV2712/Enterprise-Document-QA-/releases/tag/demo-v1) · [Architecture](#architecture) ·
+[Case Study](docs/PORTFOLIO_CASE_STUDY.md) · [Setup](#local-setup)
 
-FilingScope is an evidence-first research workspace for SEC 10-K filings. Quick
-Research streams cited RAG answers; Deep Research runs a separately authorized,
-durable bounded Agent with inspectable evidence and cancellation. BM25, Qdrant,
-RRF and cross-encoder reranking select evidence before grounded generation.
+Research SEC **10-K filings** while keeping the evidence behind each answer
+inspectable. **Quick Research** streams cited answers; **Deep Research** runs
+one bounded AI Agent with durable progress, evidence, results and cancellation.
+
+**Hybrid RAG:** BM25 + semantic vector search in Qdrant → RRF → cross-encoder
+reranking → evidence-grounded generation. Built with Python, FastAPI/SSE,
+React/TypeScript and SQLite; configured generation uses Groq.
 
 ## Live Demo
 
-**[Open the frontend preview](https://frontend-one-gamma-f9jf11u8ec.vercel.app).**
-The Vercel site resolves and loads the workspace, but the backend reported
-**API offline** in the 2026-10-03 audit. Live RAG requires the owner's backend
-and tunnel to be running. Private Deep execution requires the local workspace
-connection described below; Vercel alone does not provide it.
+[Open the frontend preview](https://frontend-one-gamma-f9jf11u8ec.vercel.app).
+The 2026-10-03 audit observed **API offline**: questions need the owner's backend
+and tunnel online. Private Deep execution requires an explicitly connected local
+workspace; the Vercel preview alone does not provide it.
 
-The [Demo Guide](docs/DEMO_SCRIPT.md) is a separate 5–7 minute recording plan
-using provider-free fixtures and real API/SQLite behavior. No demo video is
-published yet. The original repository name is **Enterprise Document QA**;
-the repository slug and product routes remain unchanged.
+[**Watch Demo — 2:28 silent functional tour**](https://github.com/NamTV2712/Enterprise-Document-QA-/releases/tag/demo-v1) · [Download MP4](https://github.com/NamTV2712/Enterprise-Document-QA-/releases/download/demo-v1/filingscope-portfolio-demo.mp4) · [Demo Guide](docs/DEMO_SCRIPT.md)
 
-## Product overview
+The **two-company / four-chunk fixture** demonstrates real HTTP/SSE, SQLite,
+workers and cancellation with synthetic corpus, ranking, generation and Agent
+decisions. The separate successful run is prepared in advance. It demonstrates
+product behavior; it does not establish live financial-model accuracy.
 
-Filings spread financial facts across narrative sections, tables, footnotes and
-reporting periods. Lexical search helps with exact accounting terms; semantic
-search helps with paraphrases. The workspace combines both, then reranks and
-generates against bounded evidence so readers can inspect what supports an answer.
+[![Watch the FilingScope demo: cited Quick answer and indexed source](docs/assets/filingscope-demo-preview.jpg)](https://github.com/NamTV2712/Enterprise-Document-QA-/releases/tag/demo-v1)
 
-Use Quick for a filing question or follow-up. Use Deep for an explicit research
-goal that needs an inspectable execution record. **Research deeper** prepares a
-visible draft from a completed Quick question and requires another submit.
+Real 16:9 product capture. The application retains its historical **RAG System**
+header; FilingScope is the public project name. Narration was omitted at the
+owner's request.
 
 ## Quick vs Deep Research
 
-| Dimension | Quick | Deep Research |
-|---|---|---|
-| Purpose | One conversational RAG turn | Bounded research execution |
-| Execution | FastAPI retrieval and streamed generation | Fixed worker → single Agent → closed tools |
-| Persistence | Browser Library conversation; transient server session/cache | DATA-004 SQLite state, ordered events, result and evaluation; browser run reference only |
-| Cancellation | Stops the active answer stream at supported boundaries | Revision-safe request; terminal acknowledgement at a safe boundary |
-| Evidence | Citations and source chunks | Canonical evidence, tool activity and native terminal evaluation |
-| Admission | Public RAG, subject to configured limits | Local connection, execution capability and per-run decision-provider consent |
-| Duration | Retrieval/generation dependent | Queue plus multiple decision/tool boundaries; no fixed duration promise |
+Filings spread facts across narrative, tables and reporting periods. Quick
+answers a question against selected evidence; Deep keeps a bounded execution
+record for a research goal.
 
-The generic Deep composer submits the visible goal and locale. It does not
-inherit Quick history/filters or create a hidden multi-objective plan.
+| | Quick | Deep Research |
+|---|---|---|
+| Start | Submit a question or follow-up | Explicitly submit a research goal |
+| Work | Retrieval, reranking, streamed generation | One Agent choosing from four typed tools |
+| Inspect | Answer citations and source excerpts | Activity, final references, evidence and terminal evaluation |
+| Persist | On-device conversation; transient server session | SQLite run, ordered events and result; browser stores a run reference |
+| Cancel | Stop the answer stream at supported boundaries | Request cancellation; terminal acknowledgement at a safe boundary |
+| Access | Public RAG with configured limits | Local connection, execution capability and per-run decision-provider consent |
+
+**Research deeper** fills a visible Deep draft; it does not submit a run.
+The generic composer submits goal and locale, without inheriting Quick
+history/filters or inventing a hidden multi-objective plan. Reload clears the
+memory-only local connection; reconnect to inspect the same durable run.
 
 <a id="architecture-at-a-glance"></a>
 
 ## Architecture
 
-![Existing SEC research system architecture: browser, FastAPI, hybrid retrieval, Qdrant, SEC corpus and Groq](docs/architecture/sec-research-workspace.visual-check.2048x1320.light.png)
+![SEC research infrastructure: browser, FastAPI, hybrid retrieval, Qdrant, corpus and Groq](docs/architecture/sec-research-workspace.visual-check.2048x1320.light.png)
 
-This preserved system visualization shows the research/RAG path. Its historical
-title remains **SEC Research Workspace**; it does not depict Agent workers or
-DATA-004. The diagram's retained `KEY5-only` label means the primary-only
-credential policy identifier, not a fifth current credential.
+This validated system view depicts the RAG path. Its historical title is
+**SEC Research Workspace**; `KEY5-only` names the retained primary-only credential
+policy, not a fifth current key. Durable Agent ownership is described below and
+in the [full architecture](ARCHITECTURE.md).
 
-- **Quick Research** follows React → FastAPI/HTTP/SSE → hybrid retrieval →
-  cross-encoder reranking → grounded generation → citations.
-- **Deep Research** uses Agent API → DATA-004 SQLite → two fixed process-local
-  workers → one bounded Agent → closed tools. The browser stores run references.
-- **Shared evidence:** `search_documents`, `inspect_retrieval`, `read_document`
-  and `ask_rag` reuse the corpus, retrieval and evidence services. Provider-backed
-  decisions and `ask_rag` require their independent configured permissions.
+**Quick:** React → FastAPI/HTTP/SSE → BM25 + vector retrieval → RRF →
+cross-encoder → bounded evidence → grounded answer and citations.
 
-[Interactive System Architecture](docs/architecture/sec-research-workspace.html) ·
+**Deep:** Agent API → SQLite authority → two fixed process-local workers →
+one bounded Agent → closed tools → durable evidence and result.
+
+The tools are `search_documents`, `inspect_retrieval`, `read_document` and
+`ask_rag`. They reuse existing services in-process. Strict inputs and capability
+policies gate invocation; decision-provider permission and RAG-provider permission
+are separate. Retrieved text remains untrusted data.
+
+[System Architecture](docs/architecture/sec-research-workspace.html) ·
 [Query Data Flow](docs/architecture/sec-research-query.html) ·
-[Research Workflow](docs/architecture/sec-research-workflow.html) ·
-[Full Architecture documentation](ARCHITECTURE.md)
+[Research Workflow](docs/architecture/sec-research-workflow.html)
 
-Download/open the standalone HTML files locally; GitHub's file view does not run
-them. Full Architecture documents current durable Agent ownership and DATA-005
-content-free telemetry. The earlier simplified overview remains linked in the
-[historical SHOWCASE-002 receipt](docs/SHOWCASE_002_RECEIPT.md).
+Download/open interactive HTML locally; GitHub's file view does not execute it.
 
-## Key features
+### Engineering highlights
 
-| Feature | What a reader can do |
-|---|---|
-| Quick Research | Stream cited answers, ask follow-ups and inspect source evidence |
-| Deep Research | Start a durable run, inspect bounded tool activity, cancel, and read terminal evidence/evaluation |
-| Hybrid retrieval | Combine BM25 and Qdrant candidates with RRF and cross-encoder reranking |
-| Evidence-first UX | Open canonical chunks and document readers from citations; inspect provenance and unavailable states |
-| Conversation and research | Use query rewrite/decomposition, scoped comparisons and EN/VI workspace controls |
-| Execution engineering | Inspect FastAPI/SSE contracts, SQLite authority, bounded workers and content-free observability |
+- **Evidence continuity:** canonical document/chunk identities follow context,
+  citations and source inspection. Acquisition, indexing and reader admission
+  are separate; unavailable originals stay visible.
+- **Durable execution:** short revisioned SQLite writes own runs and ordered
+  events. Provider work happens outside transactions. On restart, uncertain
+  claimed work becomes interrupted instead of replaying external effects.
+- **Bounded concurrency:** fixed consumers claim durable jobs; a payload-free
+  admission hint reduces idle delay while polling remains the fallback.
+- **Inspectable evaluation:** frozen evidence bindings support offline RAG
+  reproduction. Agent terminal evaluation reports 21 structural/operational
+  entries separately. Neither surface defines an overall AI score.
+- **Safe attribution:** optional content-free timings separate API, database,
+  worker, tool and provider stages without recording goals, answers or credentials.
 
-## Tech stack
-
-| Layer | Technologies |
-|---|---|
-| AI / retrieval | Sentence Transformers embeddings, BM25, Qdrant, RRF, cross-encoder, Groq |
-| Backend | Python, FastAPI, Pydantic, SQLite, SSE |
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS, Bun 1.3.14 |
-| Verification / operations | pytest, Vitest, Playwright, GitHub Actions, deterministic provider doubles |
-
-## Engineering highlights
-
-- **Complementary retrieval signals:** rank fusion combines lexical and semantic
-  candidates without treating unrelated scores as probabilities. Reranking
-  precedes bounded generation context; its score is not confidence.
-- **Traceable evidence:** canonical document/chunk identities survive context
-  construction and citations. Acquisition, ingestion and reader representations
-  have separate responsibilities; insufficient context stays visible.
-- **Durable authority:** short SQLite writes own revisions, events, results and
-  evaluation. Provider work runs outside transactions. Restart reconciliation
-  marks uncertain claimed work interrupted instead of replaying external effects.
-- **Bounded tools and cancellation:** typed closed tools validate arguments and
-  capabilities. Fixed consumers preserve the process boundary; requesting cancel
-  and reaching terminal cancellation are separate states.
-- **Measured operation:** optional DATA-005 records bounded timings, counts and
-  outcomes without goals, answers or credentials. Hermetic doubles exercise real
-  API, storage, HTTP/SSE and browser boundaries without live provider calls.
-
-## Measured results
-
-| Measurement | Recorded result | Evidence and scope |
-|---|---|---|
-| Configured corpus | 50 companies | Configuration, not customers; [coverage history](docs/ENGINEERING_REFERENCE.md#supported-corpus) |
-| Canonical local index | 10,053 chunks/points | Authorized unit-metadata rebuild; [corpus reference](docs/ENGINEERING_REFERENCE.md#financial-table-unit-preservation--canonical-rebuild-complete) |
-| Read50 client p95 | 1967.995 → 982.813 ms | Real HTTP/SQLite with synthetic dependencies, median trial statistics; [DB-SCALE receipt](docs/DB_SCALE_001_FINAL_RECEIPT.md) |
-| Idle-confirmed queue p95 | 502.753 → 9.340 ms | Two workers, 500ms polling fallback; [WORKER-002 receipt](docs/WORKER_002_FINAL_RECEIPT.md) |
-| Warm navigation p95 | Chromium 63.30 ms / Firefox 42.00 ms | 30 observations per engine, synthetic workload; [final receipt](docs/IMPROVEMENT_FINAL_RECEIPT.md) |
-
-**Controlled local/development measurements; not production SLA results.**
-The corpus is not bundled with a clean clone or inferred from the Vercel preview.
-Measurements describe different stages/populations. Saturated queues and mixed
-admission contention remain; more workers did not improve every workload.
-[Capacity tradeoffs](docs/CAPACITY_001_FINAL_RECEIPT.md) include counterevidence.
+The [case study](docs/PORTFOLIO_CASE_STUDY.md) explains the tradeoffs;
+the [interview guide](docs/INTERVIEW_GUIDE.md) links design decisions to evidence.
 
 ## RAG quality
 
-**Controlled development benchmark:** `filingscope-rag-public-v1`, the complete
-historical priority `<=2` cohort of **30 cases**. Recomputed with native v1 from
-frozen answers, exact evidence and verified judge scores; **zero live provider calls**.
+**Controlled development benchmark:** `filingscope-rag-public-v1`, all **30**
+historical priority `<=2` cases. Native v1 recomputation reuses frozen answers,
+exact evidence and verified judge scores; **zero live provider calls** for publication.
 
 | Metric | Result | Computed / total |
 |---|---:|---:|
@@ -157,349 +121,121 @@ frozen answers, exact evidence and verified judge scores; **zero live provider c
 | Fallback correctness | 1.0000 | 30 / 30 |
 
 Three citation cases and six keyword cases are N/A; none is unavailable or
-converted to zero. Historical context packing uses required-keyword donors, so
-this narrow cohort is **not fully label-blind or a current-runtime accuracy claim**.
-Citation validity is structural; keyword coverage is not Recall@K; judge estimates
-are not probabilities. No overall score. [Scope, provenance, limitations and safe
-reproduction](docs/RAG_QUALITY_BENCHMARK.md) explain these RAG quality metrics
-separately from system performance above and verification below.
+converted to zero. Historical context packing uses required-keyword donors:
+**label-assisted, not fully label-blind; not current-runtime or general SEC QA
+accuracy**. Citation validity is structural, keyword coverage is not Recall@K,
+and judge estimates are not probabilities. No overall score.
+
+[Scope, provenance, limitations and safe reproduction](docs/RAG_QUALITY_BENCHMARK.md).
+Agent's 21 terminal metrics describe recorded execution structure, not these RAG scores.
+
+<a id="system-performance"></a>
+
+## Measured results
+
+**Controlled local/development workloads, not production SLA results.**
+
+| Measurement | Recorded p95 | Evidence |
+|---|---:|---|
+| Read50 HTTP/SQLite client | 1967.995 → 982.813 ms | [DB-SCALE](docs/DB_SCALE_001_FINAL_RECEIPT.md) |
+| Idle-confirmed Agent queue | 502.753 → 9.340 ms | [Worker wake](docs/WORKER_002_FINAL_RECEIPT.md) |
+| Warm navigation | Chromium 63.30 / Firefox 42.00 ms | [Frozen release](docs/IMPROVEMENT_FINAL_RECEIPT.md) |
+
+Read50 reports median trial statistics with synthetic dependencies. Queue results
+use two workers and a 500ms polling fallback. Navigation uses 30 observations per
+engine. These measure different stages and populations; saturated queues and mixed
+admission contention remain. [Capacity findings](docs/CAPACITY_001_FINAL_RECEIPT.md)
+include workloads where more workers did not help.
+
+**Corpus reference:** 50 configured companies, 10,053 canonical local chunks;
+46 filings cover all four target sections, four remain degraded but searchable,
+and financial-table chunks exist for all 50. These documented index facts are
+separate from the 30-case benchmark and small demo fixture. Data is not bundled
+with a clean clone. [Coverage and provenance](docs/ENGINEERING_REFERENCE.md#supported-corpus).
 
 ## Validation
 
-Frozen **code release**: `cbaacc3765f8dbca2ff04247cb24fd773751a0f9`.
-These are recorded gates for that release, not fresh tests of this docs change.
+Recorded gates for frozen code release
+[`cbaacc3765f8dbca2ff04247cb24fd773751a0f9`](https://github.com/NamTV2712/Enterprise-Document-QA-/commit/cbaacc3765f8dbca2ff04247cb24fd773751a0f9):
 
 | Gate | Recorded result |
 |---|---|
-| Backend primary / clean checkout | 1958 passes / 1924 passes + 34 expected artifact-dependent skips |
-| Frontend unit / browser matrix | 96 files / 844 tests; 542 browser passes, 4 inherited skips, 0 failures |
-| HTTP/SSE / Agent shell / durable Agent harness | 16 / 32 / 12 passes in separate gates |
-| TypeScript / production build / contrast | PASS |
+| Backend | 1958 primary passes; clean checkout 1924 passes + 34 artifact-dependent skips |
+| Frontend | 96 Vitest files / 844 tests; TypeScript and production build PASS |
+| Chromium / Firefox matrix | 542 passes, 4 inherited skips, 0 failures |
+| Separate HTTP/SSE / Agent shell / durable Agent gates | 16 / 32 / 12 passes |
 | Exact code-release CI | [Backend SUCCESS](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/runs/37085104945) / [Frontend SUCCESS](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/runs/37085104875) |
 
-Skips are not passes. Backend warnings remain (188 primary; 149 clean).
-The [final receipt](docs/IMPROVEMENT_FINAL_RECEIPT.md) records candidate/closure
-provenance, warning/skip reasons and gate scopes. Browser and contrast checks do
-not imply a blanket accessibility certification. The docs showcase has its own
-[artifact quality receipt](docs/SHOWCASE_002_RECEIPT.md).
+These are frozen release results, not fresh tests of a documentation change.
+Skips are not passes; backend warnings remain (188 primary, 149 clean).
+[The receipt](docs/IMPROVEMENT_FINAL_RECEIPT.md) records provenance and gate scopes.
+Browser/contrast checks do not imply blanket accessibility certification.
+Hermetic tests use deterministic dependencies without live SEC/Groq calls.
 
-<a id="setup-and-usage"></a>
+## Tech stack
+
+| Layer | Technologies |
+|---|---|
+| Retrieval / generation | Sentence Transformers, BM25, Qdrant, RRF, cross-encoder, Groq |
+| Backend / authority | Python, FastAPI, SSE, Pydantic, SQLite |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS, Bun 1.3.14 |
+| Verification | pytest, Vitest, Playwright, GitHub Actions |
 
 ## Local Setup
 
-For a provider-free recording, use [the Demo Guide](docs/DEMO_SCRIPT.md), which
-needs no real `.env`, corpus or Groq request. For the product, follow the steps
-below. A clean clone excludes `data/`, credentials and model caches.
+- **Repeatable demo:** follow the [provider-free recording environment](docs/DEMO_SCRIPT.md#off-camera-preparation).
+  No real `.env`, SEC corpus, Groq key or model download is needed.
+- **Product:** follow [Setup and Operations](docs/SETUP.md) for Python/Node
+  installation, corpus/index provenance, API/frontend startup and explicit local
+  Deep access. Qdrant local mode requires one API worker.
+- **Deployment:** backend and frontend are independent. See the
+  [release runbook](docs/LOCAL_RELEASE_RUNBOOK.md) and
+  [Vercel/frontend instructions](frontend/README.md). Browser `VITE_*` values
+  must not contain secrets.
 
-### 1. Install the backend
-
-Use Python 3.10+; the backend CI uses Python 3.12. From the repository root:
-
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-.venv\Scripts\python.exe -m pip install -r requirements.txt
-Copy-Item .env.example .env
-```
-
-Edit `.env` locally. Keep the checked-in pinned embedding/reranker revisions;
-rebuild model/index provenance together if intentionally changing them.
-Important settings (values below are placeholders, not credentials):
-
-```text
-GROQ_API_KEY=your_primary_groq_key
-GROQ_API_KEY_FALL_BACK=optional_fallback_key
-GROQ_KEY_POLICY=key5_only
-QDRANT_MODE=local
-QDRANT_LOCAL_PATH=data/processed/qdrant
-QDRANT_INDEX_MANIFEST_PATH=data/processed/qdrant_index_manifest.json
-EMBEDDING_GENERATIONS_DIR=data/embedding_generations
-EMBEDDING_GENERATION_PATH=data/embedding_generations/<completed-generation-id>
-ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
-WORKSPACE_MODE=public
-ENABLE_WORKSPACE_EXECUTION=false
-```
-
-`key5_only` is a retained policy identifier selecting primary `GROQ_API_KEY`.
-`pool` selects primary then optional fallback with deduplication and bounded
-429 cooldown/failover for ordinary generation. Strict Agent decisions require
-primary, one HTTP attempt and no fallback rotation. Generation/judging share
-the credential policy but retain separate accounting. Keep real secrets out of
-Git, URLs, logs and `VITE_*` variables. See [.env.example](.env.example) for all
-settings and [credential history](docs/ENGINEERING_REFERENCE.md#local-setup).
-
-### 2. Prepare searchable artifacts
-
-Use an existing trusted local index or a complete Qdrant Cloud collection.
-For a new local corpus, build in this order from the repository root:
+Offline public benchmark reproduction, from the repository root:
 
 ```powershell
-.venv\Scripts\python.exe -m scripts.download_filings
-.venv\Scripts\python.exe -m scripts.chunk_filings
-.venv\Scripts\python.exe -m scripts.add_table_chunks
-.venv\Scripts\python.exe -m scripts.embed_chunks --generation-id <new-unused-generation-id>
-.venv\Scripts\python.exe -m scripts.index_chunks
+.venv\Scripts\python.exe -m scripts.reproduce_rag_public_benchmark --check
 ```
-
-These commands download/process filings and models; they are not needed for the
-fixture demo. Set a valid SEC User-Agent with your own contact identity in
-[`scripts/download_filings.py`](scripts/download_filings.py) before downloading.
-Rechunking can remove appended table chunks, so rerun table extraction,
-embedding and indexing in order. Do not assume old embeddings match new chunks.
-
-Trusted embedding requires the pinned `EMBEDDING_MODEL_REVISION` from
-`.env.example` and an unused generation ID. Embedding publishes an immutable
-completed generation with disk-validated metadata and hashes. Set
-`EMBEDDING_GENERATION_PATH` to that completed generation **before indexing**.
-Indexing verifies corpus/vector/model fingerprints and point counts before
-publishing its manifest; it does not fall back to older embedded JSONL.
-Reuse requires exact metadata, canonical payload, file hash and vector shape.
-[Full provenance/rebuild instructions](docs/ENGINEERING_REFERENCE.md#local-setup).
-
-### 3. Start the API and frontend
-
-Backend terminal, repository root:
-
-```powershell
-.venv\Scripts\python.exe -m uvicorn src.api.app:app --reload --port 8000
-```
-
-Use **one API worker with Qdrant local mode** because its storage has a file
-lock. Switch to Qdrant server/cloud before multiple API processes. Swagger is
-`http://localhost:8000/docs`; readiness is `/health/ready` (`503` until ready).
-Run `python -m scripts.diagnostics.rag_smoke_test` in the activated environment
-for the opt-in product smoke; it can use configured providers.
-
-Frontend terminal, repository root:
-
-```powershell
-cd frontend
-bun install --frozen-lockfile
-Copy-Item .env.example .env.local
-bun run dev
-```
-
-Set `VITE_API_BASE_URL=http://localhost:8000` in `frontend/.env.local`. Open
-`http://localhost:3000`, select **Research → Quick**, ask a filing question and
-open its citations. The frontend is a separate React/TypeScript application;
-do not run Python tools inside `frontend/`. See [frontend setup](frontend/README.md).
-
-### 4. Enable local Deep Research explicitly
-
-Public mode is the default and leaves private workspace reads/writes/jobs
-unavailable. For local research only, configure the server:
-
-```text
-WORKSPACE_MODE=local
-LOCAL_WORKSPACE_TOKEN=<dedicated-random-token-at-least-32-non-whitespace-characters>
-LOCAL_WORKSPACE_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
-LOCAL_WORKSPACE_ALLOWED_HOSTS=localhost,127.0.0.1,[::1]
-ENABLE_WORKSPACE_EXECUTION=true
-WORKSPACE_DB_PATH=.local/workbench/workspace.sqlite3
-WORKSPACE_RUNS_DIR=.local/workbench/runs
-WORKSPACE_SQLITE_BUSY_TIMEOUT_MS=5000
-```
-
-Access requires a direct loopback socket peer plus exact allowed Host, Origin
-and bearer. Forwarding headers do not bypass this boundary. Use a dedicated
-workspace token, never a provider key. Connect through the local workspace UI;
-the browser verifies access and retains the token only in memory. Disconnect or
-a full reload forgets it; reconnect to inspect saved runs.
-
-Choose **Deep Research**, submit the visible goal and explicitly permit decision
-provider use for that run. Configured model availability and remaining budget
-still apply. The full inspector is `/agent`. Its DATA-004 SQLite rows own the
-result/evidence/evaluation, while conversation cards contain safe references.
-The two fixed consumers start in one process. Do not use the public Vercel site
-as a substitute for the local access boundary.
-
-SQLite uses foreign keys, WAL where supported, bounded busy timeout and short
-serialized writes with ordered migrations. Relative workspace paths stay under
-ignored `.local/`, separate from canonical corpus/index/PDF data. Public mode
-does not open/create this private DB. Run/job history and telemetry are excluded
-from portable workspace backup. See [authority and persistence](ARCHITECTURE.md).
-
-### 5. Docker, cloud and public frontend
-
-The backend Docker image uses CPU-only PyTorch and **does not bundle or serve
-the frontend**. `.dockerignore` excludes `frontend/`. For local mode, corpus
-artifacts must exist on the host under `data/processed/` before Compose starts.
-Use the [local release runbook](docs/LOCAL_RELEASE_RUNBOOK.md) to bind the image
-and health receipt to the Git revision:
-
-```powershell
-$releaseSha = (git rev-parse HEAD).Trim()
-$env:GIT_REVISION = $releaseSha
-docker compose build --build-arg GIT_REVISION=$releaseSha
-docker tag edqa-api:local edqa-api:$releaseSha
-docker compose up -d --no-build
-```
-
-Verify `http://localhost:8000/health/ready` reports `pipeline_ready=true`.
-The release smoke checks readiness/ticker discovery without a query provider
-call. [Docker details](docs/ENGINEERING_REFERENCE.md#running-with-docker).
-
-For Qdrant Cloud, configure `QDRANT_CLOUD_URL` / `QDRANT_CLOUD_API_KEY`, run
-`scripts.migrate_to_qdrant_cloud`, then `scripts.verify_qdrant_cloud` before
-switching `QDRANT_MODE=cloud`. Migration upserts by default; `--recreate` replaces
-the collection and is only for an intentional rebuild. Cloud startup hydrates
-complete chunk payloads to rebuild BM25/structured lookup, so a stateless hosted
-image does not require ignored local corpus files.
-[Cloud migration commands](docs/ENGINEERING_REFERENCE.md#qdrant-cloud).
-
-Deploy Vercel with project root **`frontend`** and a reachable
-`VITE_API_BASE_URL` backend URL. Add the exact deployed frontend origin to
-`ALLOWED_ORIGINS`; never use wildcard CORS. CORS is not authentication.
-The existing public demo uses the owner's local Docker/ngrok services:
-
-```powershell
-.\scripts\start_demo.ps1
-# After the demonstration:
-.\scripts\stop_demo.ps1
-```
-
-The frontend stays available when those services stop; questions require them
-to be online. Ngrok browser fetches may require `ngrok-skip-browser-warning:
-true`, already supported by the frontend. Configure `TRUSTED_PROXY_CIDRS` only
-for actual proxy peers when public per-IP limits run behind a tunnel/proxy.
-[Demo operations](docs/ENGINEERING_REFERENCE.md#zero-cost-public-demo).
-
-### 6. Run local checks
-
-Backend, repository root:
-
-```powershell
-.venv\Scripts\python.exe -m pytest tests/ -v
-.venv\Scripts\python.exe -m compileall src scripts configs
-```
-
-The hermetic suite blocks unmocked external sockets. `live_network` is excluded
-by default; real SEC connectivity belongs in the opt-in
-`python -m scripts.diagnostics.sec_live_smoke`, not ordinary tests.
-
-Frontend, from `frontend/`:
-
-```bash
-bun install --frozen-lockfile
-bun run lint
-bun run test
-bun run build
-bun e2e/token-contrast.mjs
-bun run test:e2e
-bun run test:e2e-integration
-bun run test:e2e-product
-```
-
-Use `bun run test` (Vitest/jsdom), not Bun's native `bun test`. Browser gates
-serve production builds and mocked routes; HTTP/SSE and product gates use real
-FastAPI handlers with synthetic dependencies and isolated SQLite. Activate a
-backend test environment or set `HARNESS_PYTHON` for harness gates. No live
-Groq call is needed. The existing path-filtered Backend/Frontend CI is retained.
-[CI gate details](docs/ENGINEERING_REFERENCE.md#continuous-integration).
 
 ## Limitations
 
-- Single-process Agent workers; ordinary recommendation is 1–2. Capacity
-  results do not establish a distributed system, service SLA or live Groq quota
-  certification. Generic goals have no hidden automatic multi-objective planner.
-- The 50-company corpus has uneven extraction coverage. Four filings remain
-  degraded but searchable; table and annual-report layouts need source checking.
-  Canonical rebuilds do not automatically promote the protected quality benchmark.
-- Retrieval/citations improve auditability, not guaranteed correctness. Check
-  filing identity, period, units and supporting text. Native Agent evaluation is
-  structural and does not supply an overall factual-accuracy score.
-- Public API routes are unauthenticated. Exact CORS, input validation and
-  configured per-IP limits mitigate abuse but do not prevent every direct client.
-  Private capabilities require the loopback/Host/Origin/bearer boundary.
-- Server session memory and semantic cache are transient. Follow-up rewriting
-  adds a provider call; Groq `429` responses/cooldown can increase latency.
-- Collections and model-test browser bearer integration remain staged. Ragas is
-  optional. Do not weaken the server boundary to work around unavailable clients.
-- Native zoom at 125/150/200% is manual/unverified. The ~527.24 kB main bundle
-  warning and backend parser/dependency warnings remain.
-- The public website is a frontend preview when its backend is offline. No
-  always-on hosted RAG/Deep operation is implied.
+- **Evidence is inspectable, not guaranteed correct.** Check filing identity,
+  period, units and supporting passages; extraction coverage is uneven.
+- **Deep is bounded and single-process.** Ordinary worker recommendation is 1–2;
+  no distributed execution, production SLA or real Groq quota certification.
+- **Access and availability matter.** Public RAG is unauthenticated with configured
+  limits; private execution requires loopback/Host/Origin/bearer controls. The
+  public preview can stay online while its backend is offline.
+- **Sessions and integrations have limits.** Server conversation/cache state is
+  transient. Reload requires local reconnect. Collections/model-test browser
+  bearer wiring remains staged; Ragas is optional and native evaluation authoritative.
+- **Known validation gaps remain.** Native zoom at 125/150/200% is manual/unverified;
+  the ~527.24 kB main bundle warning and backend dependency warnings remain.
 
-[Detailed limitations/history](docs/ENGINEERING_REFERENCE.md#known-limitations) ·
+[Detailed limitations](docs/ENGINEERING_REFERENCE.md#known-limitations) ·
 [Case study tradeoffs](docs/PORTFOLIO_CASE_STUDY.md#tradeoffs-and-limitations)
-
-## Technical reference
-
-### Retrieval, generation and API
-
-BM25 and dense candidates are fused with RRF, then cross-encoder reranked.
-Query rewrite preserves follow-up meaning; decomposition supports comparative
-scope. Structured financial lookup and table unit preservation complement the
-passage pipeline. The generation renderer binds the same evidence to generation,
-deterministic metrics and judging. Its binding fingerprints prevent stale
-checkpoint resume after semantic changes. [Retrieval design](docs/ENGINEERING_REFERENCE.md#retrieval-design)
-and [generation design](docs/ENGINEERING_REFERENCE.md#generation-design).
-
-| API family | Representative routes / behavior |
-|---|---|
-| Health / metadata | `/health/live`, `/health/ready`, `/supported-tickers`, `/system/info`, `/models`, `/datasets` |
-| Quick / retrieval | `/query`, `/query/stream`, `/query/decomposed`, `/retrieval/inspect`, `/search` |
-| Evidence | `/documents`, `/documents/{document_id}/chunks`, `/chunks/{chunk_id}`; safe metadata/text, no machine paths |
-| Durable Agent | Protected Agent run admission, state, ordered events, cancellation, result/evidence/evaluation; [Agent contract](docs/frontend/FRONTEND_CONTRACT.md) |
-| Local operations | Protected Pipeline/Evaluation job history, analytics and logs; execution has a separate capability |
-| Sessions / cache | Transient server session history and semantic cache; cache clear disabled by default |
-
-Swagger at `/docs` is the runtime API reference. The frozen release has 90
-method/path pairs over 80 unique paths; historical endpoint tables are not a
-complete route inventory. [Detailed endpoint reference](docs/ENGINEERING_REFERENCE.md#api-endpoints).
-
-The non-streaming query timeout is 60s (`504`). Python cannot safely kill a
-running synchronous thread; a timed-out result may complete in the background
-and is discarded. Public query defaults are 10/minute and 100/day per IP;
-decomposed queries additionally use 5/minute. In-memory rate-limit storage
-matches the single-process local-Qdrant setup; multiple instances would require
-shared storage. Proxy identity trusts only explicitly configured socket peers.
-
-### Evaluation and evidence
-
-The official reported quality benchmark remains clean priority `<=2`, N=30,
-unless the journal explicitly supersedes it. It is distinct from the canonical
-corpus rebuild, native Agent structural metrics and local performance campaigns.
-Quota-skipped, checkpoint-mixed or provider-incomplete candidates are not final
-results. A generation checkpoint is append-only with one binding; changes require
-a fresh path. Judge checkpoints need complete per-case provenance checks.
-
-Phase 1 produces a deterministic offline retrieval artifact. Phase 2 generates
-and judges frozen contexts with binding-verified resume. Promotion requires a
-separate admission audit; the protected official result path refuses overwrite
-without the explicit override. Use fresh candidate checkpoint/output paths and
-configured provider budget for an intentional campaign.
-[Commands and historical results](docs/ENGINEERING_REFERENCE.md#evaluation-results) ·
-[Project journal](PROJECT_STATE.md).
 
 ## Detailed documentation
 
-- **Portfolio:** [Case Study](docs/PORTFOLIO_CASE_STUDY.md),
-  [Demo Guide](docs/DEMO_SCRIPT.md), [CV / Portfolio Copy](docs/PORTFOLIO_BULLETS.md),
-  [Interview Guide](docs/INTERVIEW_GUIDE.md).
-- **Architecture:** [System contracts](ARCHITECTURE.md),
-  [Frontend design](docs/frontend/DESIGN.md),
-  [Frontend contract](docs/frontend/FRONTEND_CONTRACT.md),
-  [Agent UX evidence](docs/UX_AGENT_001_FINAL_RECEIPT.md).
-- **Engineering evidence:** [Final improvement receipt](docs/IMPROVEMENT_FINAL_RECEIPT.md),
-  [DB read benchmark](docs/DB_SCALE_001_FINAL_RECEIPT.md),
-  [Worker wake benchmark](docs/WORKER_002_FINAL_RECEIPT.md),
-  [Capacity tradeoffs](docs/CAPACITY_001_FINAL_RECEIPT.md).
-- **Setup/history:** [Engineering reference](docs/ENGINEERING_REFERENCE.md),
-  [Local release runbook](docs/LOCAL_RELEASE_RUNBOOK.md),
-  [Frontend README](frontend/README.md), [Project state](PROJECT_STATE.md).
-- **Browse:** [Documentation index](docs/README.md), [Security policy](SECURITY.md),
-  [Agent operating guide](AGENTS.md). Developer tooling under `.agents/` and
-  historical receipts remain available without being prerequisites to the overview.
+- **Understand:** [Case Study](docs/PORTFOLIO_CASE_STUDY.md),
+  [Architecture](ARCHITECTURE.md), [Interview Guide](docs/INTERVIEW_GUIDE.md).
+- **Reproduce:** [RAG Quality Benchmark](docs/RAG_QUALITY_BENCHMARK.md),
+  [Demo Guide](docs/DEMO_SCRIPT.md), [Setup](docs/SETUP.md).
+- **Inspect:** [Engineering Reference](docs/ENGINEERING_REFERENCE.md),
+  [release evidence](docs/IMPROVEMENT_FINAL_RECEIPT.md),
+  [frontend contracts](docs/frontend/FRONTEND_CONTRACT.md).
+- **Browse:** [Documentation index](docs/README.md), [Project journal](PROJECT_STATE.md),
+  [Security policy](SECURITY.md), [Agent operating guide](AGENTS.md).
 
 ## License
 
-Project source and documentation are available under the [MIT license](LICENSE).
-Bundled third-party material retains its own licenses and notices, including
-[Archify's MIT notice](.agents/skills/archify/LICENSE) and
-[third-party notices](.agents/skills/archify/THIRD_PARTY_NOTICES.md).
-Dependencies and external SEC filing content are not relicensed by the root license.
-See [skill source provenance](.agents/skills/SOURCES.md).
+Project source and documentation use the [MIT license](LICENSE).
+External SEC content and dependencies retain their own terms. Bundled tooling
+retains [Archify's MIT notice](.agents/skills/archify/LICENSE),
+[third-party notices](.agents/skills/archify/THIRD_PARTY_NOTICES.md) and
+[source provenance](.agents/skills/SOURCES.md).
 
 <!-- Historical README links resolve here; detailed sections are preserved in the engineering reference. -->
 <a id="enterprise-document-qa"></a>
@@ -538,3 +274,14 @@ See [skill source provenance](.agents/skills/SOURCES.md).
 <a id="roadmap"></a>
 <a id="why-this-project-matters"></a>
 <a id="skill-governance"></a>
+<a id="product-overview"></a>
+<a id="key-features"></a>
+<a id="technical-reference"></a>
+<a id="retrieval-generation-and-api"></a>
+<a id="evaluation-and-evidence"></a>
+<a id="1-install-the-backend"></a>
+<a id="2-prepare-searchable-artifacts"></a>
+<a id="3-start-the-api-and-frontend"></a>
+<a id="4-enable-local-deep-research-explicitly"></a>
+<a id="5-docker-cloud-and-public-frontend"></a>
+<a id="6-run-local-checks"></a>

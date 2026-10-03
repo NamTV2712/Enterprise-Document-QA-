@@ -1,8 +1,8 @@
-# FilingScope — 5–7 Minute Demo
+# FilingScope — Demo Guide
 
 Public display name: **FilingScope** (original repository: Enterprise Document QA).
 
-A 6:45 recording plan with an executable provider-free path. See the
+An executable provider-free recording path. See the
 [README](../README.md), [case study](PORTFOLIO_CASE_STUDY.md) and
 [release evidence](IMPROVEMENT_FINAL_RECEIPT.md).
 
@@ -10,13 +10,32 @@ The [Live Demo](https://frontend-one-gamma-f9jf11u8ec.vercel.app) is the running
 frontend preview, separate from this recording guide. It reported **API offline**
 on 2026-10-03; use the prepared local environment below for the recording.
 
+## Published silent tour
+
+[Watch Demo](https://github.com/NamTV2712/Enterprise-Document-QA-/releases/tag/demo-v1) · [Download MP4](https://github.com/NamTV2712/Enterprise-Document-QA-/releases/download/demo-v1/filingscope-portfolio-demo.mp4)
+
+Published 2026-10-03: **2:27.67**, 1600×900, H.264, encoded 30 FPS, no audio.
+The owner requested a quick functional recording and waived narration and the
+original 5–7 minute length. Native browser frames are unaltered; cuts remove gaps
+between actions. Screenshot sampling is lower than the encoded frame rate.
+
+The tour shows Quick/citation/source, an explicit Deep submission and cancellation,
+a separate prepared successful Agent run, tools/evidence/final references, native
+Agent evaluation, Documents, Search and Retrieval Lab. Brief document cards show
+the historical RAG benchmark, measured performance, frozen validation and
+architecture; the closing card preserves their limitations. These cards render
+existing documentation and are not live measurement dashboards.
+
+The extended narrated timeline below is **optional**; it is not the published
+video's timeline. See the [shipping receipt](PORTFOLIO_SHIP_001_RECEIPT.md).
+
 ## Choose the demonstration environment
 
 The default below uses the existing TEST-005 local harness. It runs real FastAPI
 routes, access controls, DATA-004 SQLite, workers, events and native evaluation;
 corpus/model/provider dependencies are synthetic. Quick answer text and the
 successful Agent decisions are fixtures, not live inference or financial advice.
-Keep that distinction visible in the recording title or opening narration.
+Keep that distinction visible in the recording title or opening disclosure.
 
 The Deep composer sends a generic goal. The harness's successful research script
 requires an explicitly declared objective, so prepare that terminal run through
@@ -34,7 +53,7 @@ The recording does not require a live Groq call.
 
 ### 1. Dependencies and isolated backend
 
-Use the dependency-install portion of [Local Setup](../README.md#local-setup)
+Use the dependency-install portion of [Setup and Operations](SETUP.md#1-install-the-backend)
 and [frontend setup](../frontend/README.md#local-development). Skip SEC download,
 chunking, embedding and indexing for this fixture demo. Use Bun 1.3.14 and a
 Python environment with the declared requirements. No real `.env`, private
@@ -140,17 +159,20 @@ The harness may still display the production decision-provider-unavailable banne
 its test controls inject a scripted model without configuring a real provider.
 Explain that fixture distinction; do not present the banner as live model availability.
 
-## Recording flow
+## Optional extended narrated recording flow
 
 ### 0:00–0:30 — Problem and project
 
 **Click/show:** README title and product overview, then Research.
 
 **Say:** “Long financial filings are hard to search and compare while retaining
-source traceability. I built a production-style SEC research workspace with cited
+source traceability. I built FilingScope, an SEC research workspace with cited
 Quick RAG answers and separately admitted durable Deep Research. This recording
 uses deterministic local fixtures; it demonstrates product behavior, not live
 model quality.”
+
+The app retains its historical **RAG System** header; introduce FilingScope as
+the public project name without editing or compositing the application.
 
 **Do not say:** Used by enterprises, production-ready as an absolute, or a
 guaranteed accurate financial assistant.
@@ -184,7 +206,7 @@ and requires another explicit submission.”
 **Do not say:** The fixture proves financial accuracy, the source date is the
 number's fiscal period, or Research deeper automatically executes an Agent.
 
-### 2:20–4:20 — Deep lifecycle, result and evidence
+### 2:20–4:15 — Deep lifecycle, result and evidence
 
 **Click:** Use the local workspace connected off-camera with the synthetic token. With
 **Deep Research** selected, replace the populated draft with
@@ -220,7 +242,25 @@ generic composer does not synthesize a hidden multi-objective plan.”
 **Do not say:** The two run IDs are one run, cancellation kills an external effect,
 safe activity is hidden chain-of-thought, or native metrics prove factual accuracy.
 
-### 4:20–5:15 — Engineering internals
+### 4:15–5:10 — RAG quality and Agent evaluation
+
+**Click/show:** The separate successful run's native evaluation, then
+[README RAG quality](../README.md#rag-quality) and the
+[public benchmark](RAG_QUALITY_BENCHMARK.md).
+
+**Say:** “These 21 Agent entries check recorded execution structure and operation;
+they are not RAG accuracy. The separate RAG benchmark keeps all 30 historical
+cases: faithfulness 1.0000, answer relevancy 0.9917 and context precision 0.7613.
+Citation validity is 1.0000 on 27 cases, keyword coverage 1.0000 on 24, and
+fallback correctness 1.0000 on all 30. N/A cases remain disclosed. Publication
+reuses frozen answers, exact contexts and bound judge scores with zero live calls.
+Historical context packing uses required-keyword donors, so it is label-assisted,
+not current-runtime or general SEC QA accuracy. There is no overall score.”
+
+**Do not say:** 100% accurate, zero hallucination, Recall@K, factual citation
+support, confidence probabilities or that this small demo fixture produced the benchmark.
+
+### 5:10–5:55 — Performance and engineering
 
 **Click/show:** Retrieval design, [worker receipt](WORKER_002_FINAL_RECEIPT.md),
 DATA-004 ownership in [architecture](../ARCHITECTURE.md#state-and-persistence),
@@ -230,18 +270,19 @@ and [Frontend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/r
 **Say:** “Claims are atomic and short; provider work is outside transactions.
 Two fixed workers wake on a payload-free durable-admission hint, with polling
 fallback. Agent API events contain safe execution facts. I verified contracts,
-storage, cancellation and HTTP/SSE with provider-free tests.”
+storage, cancellation and HTTP/SSE with provider-free tests. In controlled local
+campaigns, Read50 client p95 changed from 1967.995 to 982.813ms; idle-confirmed
+queue p95 changed from 502.753 to 9.340ms. These are different workload stages,
+not end-to-end production latency. More workers did not help every capacity case.”
 
 **Do not say:** Exactly-once external effects, a global provider concurrency cap,
 or that this fixture performs real vector/model inference.
 
-### 5:15–6:15 — Measurements and validation
+### 5:55–6:30 — Validation and architecture depth
 
 **Click/show:** README measured improvements and Validation, then the receipts.
 
-**Say:** “In controlled local campaigns, read50 client p95 changed from
-1967.995 to 982.813ms, and idle-confirmed queue p95 from 502.753 to 9.340ms.
-These measure specific development workloads. The frozen code release has 1958
+**Say:** “The frozen code release has 1958
 primary backend passes, 1924 clean passes with 34 expected skips, 844 frontend
 unit tests and 542 browser passes with four inherited skips. Both exact-release
 workflows succeeded.”
@@ -249,7 +290,7 @@ workflows succeeded.”
 **Do not say:** End-to-end internet latency, a production SLA, universal speedup,
 zero-warning certification, or that skipped cases passed.
 
-### 6:15–6:45 — Tradeoffs and close
+### 6:30–6:50 — Tradeoffs and close
 
 **Click/show:** README limitations and case-study lessons.
 
@@ -271,6 +312,6 @@ retain Quick/source inspection, Deep lifecycle, the prepared result and limitati
 
 ## Recording package
 
-- [Recording Cheat Sheet](DEMO_RECORDING_CHEATSHEET.md): the 6:45 narration timeline.
+- [Recording Cheat Sheet](DEMO_RECORDING_CHEATSHEET.md): the silent tour and optional 6:50 narration timeline.
 - [Demo Questions](DEMO_QUESTIONS.md): four fixture-aware examples and fallbacks.
 - [DEMO-001 receipt](DEMO_001_RECEIPT.md): actual rehearsal outcomes and recording status.

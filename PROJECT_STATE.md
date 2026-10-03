@@ -1,5 +1,55 @@
 # Project State
 
+## FINAL-IMPROVE — current improvement round closure (2026-10-03)
+
+The [canonical receipt](docs/IMPROVEMENT_FINAL_RECEIPT.md) closes this round.
+Starting main `35a600359d6f78a684dfd206972af78fea90760a`; accepted source-clean
+runtime candidate `93ed516ff86a2588d533f1604db2646e823e8d65`. The closure commit
+is resolved from receipt history; its literal SHA and fresh Backend/Frontend
+run IDs are in the closing report. **FINAL-IMPROVE and the current improvement
+round are COMPLETE only upon both exact-final-SHA workflows completed/success,
+normal push equality and the final preservation/clean-tree gates.** Prior waivers
+are historical and do not satisfy this release gate.
+
+Fresh primary backend **1958 passed / 188 warnings**, clean candidate backend
+**1924 passed / 34 expected artifact skips / 149 warnings**, frontend **96 files /
+844 tests**, TypeScript/build/contrast PASS. Renewed full Chromium/Firefox matrix
+**542 passed / 4 inherited skips / 0 failed**, 16.3m; HTTP/SSE **16**, Agent
+shell **32**, durable Agent product **12**, extra memory-only browser audit **2**.
+Primary/focused backend ran at the starting SHA with identical backend blobs;
+the clean full/backend/frontend/browser/harness gates ran at committed `93ed516`.
+Exact-final lightweight verification and fresh full CI bind the closure SHA.
+
+The first full matrix reproduced one Models accessibility failure (541/4/1).
+Reduced-motion shortening retained entrance delays on console children. The
+strengthened unchanged case fails before the fix; one selector disables that
+animation for reduced motion, retaining normal animation. Full Models/Datasets
+14-case regression and renewed full matrix pass. No threshold, retry, skip,
+performance boundary, worker/provider policy, dependency, lockfile, API or DB
+migration changed. CI changes are only four exact receipt-path filter entries.
+
+Quick remains default RAG; explicit Deep creates one run/reference/card.
+Research deeper only fills a draft. DATA-004 owns Agent state/result/events/
+evaluation; conversation v5/envelope v4/IndexedDB v2 retain reference-only Agent
+records. Browser bearer stays memory-only through connect/create/save/history/
+reload/reconnect and actual exports. No credentials/raw provider bodies enter
+responses, logs, telemetry or committed artifacts. Route count **90** (80 paths),
+SQLite **v7/WAL/NORMAL/busy5000/integrity OK**, workers **2/500/5000**, range
+**1–16**, ordinary recommendation **1–2** remain.
+
+Task-start preservation baseline includes the previously accepted three PDF
+PNG differences. Final gates require all **3958 files unchanged** and the same
+**12 unrelated untracked paths**; no further exception. New diagnostics stay
+ignored in the task-owned clean checkout/audit directory. Main bundle warning
+**527.24 kB**, manual/unverified native zoom, staged Collections/model-test bearer
+wiring, optional Ragas, single-process workers, no real Groq quota or production
+SLA certification remain. Generic Deep is not a hidden multi-objective planner.
+
+CRED-001, OBS-001, DB-SCALE-001, WORKER-002, CI-FIX-001, CAPACITY-001 and
+UX-AGENT-001 remain COMPLETE. **SCALE-003 DEFERRED / NOT STARTED**, not an
+automatic next task. No further task from this round remains after release.
+**STOP.** Historical sections below retain their own populations and handoffs.
+
 ## UX-AGENT-001 — unified Research conversation release (2026-10-02)
 
 Main-only starting `f607d2a56073555269fb619218678b5715ea8517`.
@@ -32,7 +82,7 @@ ref did not cover suspension: its full candidate had 541 passes / 4 skips / one
 late-navigation failure. Holding the Search module makes the defect deterministic
 on both engines. Current browser history and URL now guard post-create navigation
 and history adoption while linking the accepted origin run. The strengthened
-22-case UX suite and full 96/843 unit suite pass after this fix.
+22-case UX suite and then-candidate 96/843 unit suite pass after this fix.
 Prior incomplete/failed browser candidates remain disclosed.
 
 The f618733 full candidate had 541 passes / 4 existing skips / one Firefox
@@ -43,7 +93,7 @@ focus from the next field. Synchronous restoration fixes that bounded defect
 and preserves Escape focus. Final validation includes the additional unit test
 (96 files / 844 tests) and the unchanged complete browser gate.
 
-Primary backend **1958 passed / 188 warnings**, transfer focused **24 passed**;
+Earlier implementation-candidate validation: primary backend **1958 passed / 188 warnings**, transfer focused **24 passed**;
 frontend **96 files / 843 tests**, TypeScript/build PASS. New production UX
 Chromium/Firefox **22 passed**, seven required widths, EN/VI and light/dark;
 phone Agent/details screenshots inspected. HTTP/SSE **16**, Agent shell sweep
@@ -51,9 +101,13 @@ phone Agent/details screenshots inspected. HTTP/SSE **16**, Agent shell sweep
 Implementation-SHA clean backend **1924 passed / 34 artifact skips / 149 warnings**;
 clean frontend frozen install / TypeScript / 96 files, 843 tests / build PASS.
 Its full regular browser matrix **540 passed / 4 existing skips**, one worker.
-After the late-navigation fix, final-SHA full browser and clean gates are required
-before closure and reported literally in the closing
-report. Focus-repair main bundle **527.24 kB** retains the warning. Native zoom is manual/
+Accepted final UX SHA **35a600359d6f78a684dfd206972af78fea90760a** passed primary
+1958/188 warnings, clean 1924/34 expected skips/149 warnings, frontend 96/844,
+TypeScript/build, full browser 542/4 inherited skips, HTTP/SSE 16, Agent shell 32
+and durable Agent product 12. Normal push equality and Backend CI 37079190129
+completed/success were verified; Frontend CI 37079190138 subsequently completed/
+success at the same SHA. These accepted final results supersede the candidate
+counts above. Focus-repair main bundle **527.24 kB** retains the warning. Native zoom is manual/
 unverified; Collections/model-test bearer wiring staged; Ragas optional.
 
 On 2026-10-02 the user explicitly waived **GitHub Frontend CI for UX-AGENT-001**
@@ -61,7 +115,8 @@ On 2026-10-02 the user explicitly waived **GitHub Frontend CI for UX-AGENT-001**
 green CI result or reuse of CAPACITY's historical waiver. Full local frontend,
 browser, HTTP/SSE and Agent harness gates remain required. Frontend workflow
 configuration is unchanged; Backend adds only the receipt path filter. Exact-final
-Backend CI SUCCESS, clean verification and normal push equality remain mandatory.
+Backend CI SUCCESS, clean verification and normal push equality passed. The
+historical waiver does not satisfy the separately authorized FINAL-IMPROVE gate.
 
 Routes **90** (80 distinct paths), SQLite **v7/WAL/NORMAL/5000ms**, workers default
 **2**, supported **1–16**, ordinary recommendation **1–2** unchanged. No dependency,
@@ -70,9 +125,8 @@ Same 12 unrelated paths remain untracked. Preservation audit: 1,691/1,694 files
 unchanged; an inherited PDF test overwrote three prior diagnostic screenshots.
 It now writes to per-test output paths. The user explicitly accepted the three
 diagnostic-file exception on 2026-10-02; the receipt records it literally.
-Required roadmap and prior milestones COMPLETE. **UX-AGENT-001 COMPLETE;
-FINAL-IMPROVE NEXT / NOT STARTED.** Publication closure still requires all
-exact-final gates above; STOP before FINAL-IMPROVE.
+Required roadmap and prior milestones COMPLETE. **UX-AGENT-001 COMPLETE.**
+FINAL-IMPROVE now owns current-round closure; SCALE-003 remains deferred.
 
 ## CAPACITY-001 — operating policy and exact-SHA release gate (2026-10-01)
 

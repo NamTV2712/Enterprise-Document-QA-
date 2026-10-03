@@ -12,10 +12,37 @@ milestones remain complete. Starting HEAD: `b13fff6affc919a19f13bda3ddc730c319a7
 | DB-SCALE-001 | Reduce repeated initialization and repository contention under mixed load | COMPLETE |
 | WORKER-002 | Bounded queue/scheduling and admission fairness attribution with durable admission hints | COMPLETE |
 | CI-FIX-001 | Authoritative backend/frontend release gates and exact-SHA CI | COMPLETE |
-| CAPACITY-001 | Bounded Agent service capacity and provider concurrency policy | COMPLETE once exact-SHA Backend CI and local release gates pass; Frontend CI waived by user |
-| UX-AGENT-001 | Unified Research conversation with separate Quick/Agent execution | COMPLETE; exact-final publication gates required; GitHub Frontend CI waived by user |
-| FINAL-IMPROVE | Final current-round closure | NEXT / NOT STARTED |
+| CAPACITY-001 | Bounded Agent service capacity and provider concurrency policy | COMPLETE; historical task-specific Frontend CI waiver retained |
+| UX-AGENT-001 | Unified Research conversation with separate Quick/Agent execution | COMPLETE |
+| FINAL-IMPROVE | Final current-round closure | COMPLETE upon exact-final publication gates below |
 | SCALE-003 | Future evidence-backed caching/resource work, outside current round | NOT STARTED / DEFERRED |
+
+## FINAL-IMPROVE: current improvement round COMPLETE
+
+[Canonical receipt](IMPROVEMENT_FINAL_RECEIPT.md). Starting main `35a6003…`,
+accepted committed runtime `93ed516…`. Primary backend 1958/188 warnings;
+clean backend 1924/34 expected skips/149 warnings; frontend 96/844,
+TypeScript/build/contrast PASS; Chromium/Firefox **542 passed / 4 inherited skips /
+0 failed**, 16.3m; HTTP/SSE 16, Agent shell 32, durable Agent product 12,
+extra memory-only browser security probe 2. The initial 541/4/1 matrix failure
+reproduced a reduced-motion entrance-delay defect; one selector and an existing
+case's strengthened readiness/style checks repair it. Default motion and all
+test budgets/retries/skips remain unchanged.
+
+**All eight current-round milestones and CURRENT IMPROVEMENT ROUND = COMPLETE
+upon both fresh Backend CI and Frontend CI completed/success at the exact final
+pushed SHA**, clean/preservation gates and local/upstream/remote equality 0/0.
+The closing report supplies literal SHA/run IDs; receipt history resolves the
+closure without a self-hash loop. Historical task waivers do not satisfy FINAL.
+Only documentation and four exact receipt-path CI filter entries accompany the
+bounded fix. No dependency, lockfile, migration, route, provider/worker/capacity
+policy or feature change. All 3958 task-start baseline files and 12 unrelated
+untracked paths must remain unchanged.
+
+**SCALE-003 = DEFERRED / NOT STARTED.** Deployment/distributed scaling/production
+SLA remain separately authorized backlog. No further current-round task remains
+after publication. **STOP.** Sections below retain historical measurements and
+recommendations; the current table and this closure govern present status.
 
 ## UX-AGENT-001: unified Research conversation
 
@@ -26,19 +53,21 @@ one stable reference/card, reconnect/404/cancel behavior and advanced `/agent`
 remain explicit. Conversation record v5 retains only the safe run reference;
 DATA-004 remains authoritative. Legacy Quick and `/chat` routes stay compatible.
 The bounded draft/reference races, citation obstruction and dark text contrast
-defects were reproduced and repaired. Primary backend 1958, frontend 96/843,
-TypeScript/build and 22 new two-browser UX cases pass. Implementation-SHA clean
-backend 1924/34 skips/149 warnings, frontend 96/843 and regular browser 540/4
-existing skips pass. A final navigation-key fix follows its failing regression;
+defects were reproduced and repaired. Earlier candidate frontend 96/843 and
+browser 540/4 results are historical. Accepted final main
+`35a600359d6f78a684dfd206972af78fea90760a` passed primary backend 1958/188 warnings,
+clean backend 1924/34 skips/149 warnings, frontend 96/844, TypeScript/build,
+full Chromium/Firefox 542/4 inherited skips, HTTP/SSE 16, Agent shell 32 and
+durable Agent product 12. A final navigation-key fix follows its failing regression;
 current browser history and URL protect suspended tool navigation while retaining
-the accepted origin reference. Exact-final clean/full
-browser/harness gates, normal main push equality and Backend CI SUCCESS complete
-closure. GitHub Frontend CI is explicitly waived for this task by the user on
-2026-10-02; its configuration and local gates remain unchanged.
+the accepted origin reference. Exact-final normal main push equality was verified.
+Backend CI 37079190129 and Frontend CI 37079190138 ultimately completed/success
+at that SHA. The user had explicitly waived Frontend CI for this historical task
+on 2026-10-02; the waiver is not a substitute for FINAL-IMPROVE's fresh gates.
 
-Prior milestones and required roadmap remain COMPLETE. **FINAL-IMPROVE is NEXT
-but NOT STARTED. STOP after UX closure.** SCALE-003 remains deferred; no new
-roadmap item, performance campaign or deployment is started.
+Prior milestones and required roadmap remain COMPLETE. FINAL-IMPROVE now owns
+current-round closure. SCALE-003 remains deferred, not an automatic next task;
+no new feature, performance campaign or deployment is started.
 
 ## CAPACITY-001: close capacity investigation
 
@@ -61,15 +90,14 @@ retrieval/schema/dependency change justified. No Groq quota or global Generator
 capacity claim, including synchronous query work surviving cancellation.
 
 18 new tests; primary 1949/188 warnings, frontend 94/819, TypeScript/build PASS.
-Final exact receipt-commit clean tests, normal main push equality and full
-GitHub Backend CI SUCCESS are required release closure, with literal SHA/results
-in the closing report. The user waived Frontend CI for CAPACITY-001 on 2026-10-01
+Final main `f607d2a56073555269fb619218678b5715ea8517` passed its exact release gates;
+Backend CI 36892326330 completed/success. The user waived Frontend CI for CAPACITY-001 on 2026-10-01
 after run 36886766285 was cancelled near its existing 30-minute limit; its browser
 suite is incomplete, not successful. Local final frontend gates remain required.
 Receipt paths trigger both unchanged complete workflows; no CI gate was weakened.
 Same 12 historical untracked paths preserved. Required and completed optional
-milestones remain complete. Performance investigation ends here; exactly
-**UX-AGENT-001 is NEXT**, then FINAL-IMPROVE. STOP; start neither automatically.
+milestones remain complete. The historical UX-AGENT-001 handoff is complete;
+FINAL-IMPROVE closes this round. No further capacity task starts automatically.
 
 ## WORKER-002: admission wake and remaining service capacity
 

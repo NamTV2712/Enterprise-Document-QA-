@@ -32,6 +32,11 @@ reconnect to read the same run; an unavailable run keeps its reference. `/chat`
 links and saved conversations remain compatible; `/agent` is the full inspector.
 See the [UX-AGENT-001 receipt](docs/UX_AGENT_001_FINAL_RECEIPT.md).
 
+The current improvement round closes with the
+[FINAL-IMPROVE receipt](docs/IMPROVEMENT_FINAL_RECEIPT.md). It binds local release
+evidence to a committed candidate and requires both Backend and Frontend CI on
+the final pushed SHA. Historical task-specific CI waivers do not satisfy that gate.
+
 Optional content-free Agent performance attribution is disabled by default.
 For an authorized local workspace, set server-side
 `ENABLE_PERFORMANCE_ATTRIBUTION=true` to retain bounded sampled API/all-worker timing summaries
@@ -843,6 +848,11 @@ of quota. The `--fresh` option is disabled so an existing receipt cannot be
 deleted accidentally.
 
 ### Frontend workspace UX and themes
+
+This subsection retains the pre-UX-AGENT-001 validation history. Current
+conversation records use schema v5 with reference-only Agent messages, while
+the storage envelope remains v4 and IndexedDB remains v2; see the current
+Research contract above. The older counts and schema below describe that history.
 
 The research workspace now uses a semantic financial-workspace palette across
 light and dark themes. The theme control cycles through system, light, and dark
@@ -1934,7 +1944,7 @@ Secrets are loaded from `.env` and should never be committed.
 | Multi-turn conversation memory | Complete |
 | Query decomposition | Integrated and validated for comparative and enumeration queries |
 | Docker deployment | Complete; CPU-only image supports local Qdrant or stateless Qdrant Cloud startup |
-| Vite frontend | Independent Chat/Research and twelve other primary routes, with local conversation Library, first-class Sources and shared Document inspection, synchronized light/dark/system themes, and responsive panes; TEST-004 exercised the built app against real FastAPI handlers and temporary SQLite |
+| Vite frontend | Independent Unified Research with explicit Quick/Deep execution, compatible Chat routes, durable Agent references and full inspector, local conversation Library, Sources and shared Document inspection, synchronized light/dark/system themes, and responsive panes; DATA-004 owns Agent state/result/events/evaluation |
 
 The required rebuild graph (API/DATA/UI through UI-013 and TEST-002/003/004) is
 complete. This is a validated local/product baseline, not an always-on hosting,
@@ -1961,7 +1971,7 @@ receipt above for exact test populations and exclusions.
 - The model-test browser wrapper likewise lacks bearer integration. Neither
   gap authorizes weakening local Host/Origin/loopback/bearer checks.
 - Native browser zoom at 125%, 150%, and 200% remains a manual, unverified
-  visual gate. The ~506.92 kB aggregate JS chunk warning and existing backend
+  visual gate. The ~527.24 kB main JS chunk warning and existing backend
   parser/dependency warnings are non-blocking tooling findings, not zero-warning
   or performance claims.
 - Multi-turn query rewriting adds one LLM call for follow-up questions.

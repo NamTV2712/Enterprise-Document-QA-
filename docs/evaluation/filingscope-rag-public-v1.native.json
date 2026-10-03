@@ -1,0 +1,1638 @@
+{
+  "schema_version": 1,
+  "published_at": "2026-10-03T14:06:52.580466Z",
+  "report": {
+    "aggregates": [
+      {
+        "denominator": 30,
+        "metric_id": "native.faithfulness",
+        "metric_version": 1,
+        "not_applicable_count": 0,
+        "status": "computed",
+        "total_cases": 30,
+        "unavailable_count": 0,
+        "value": 1.0
+      },
+      {
+        "denominator": 30,
+        "metric_id": "native.answer_relevancy",
+        "metric_version": 1,
+        "not_applicable_count": 0,
+        "status": "computed",
+        "total_cases": 30,
+        "unavailable_count": 0,
+        "value": 0.9917
+      },
+      {
+        "denominator": 30,
+        "metric_id": "native.context_precision",
+        "metric_version": 1,
+        "not_applicable_count": 0,
+        "status": "computed",
+        "total_cases": 30,
+        "unavailable_count": 0,
+        "value": 0.7613
+      },
+      {
+        "denominator": 27,
+        "metric_id": "native.citation_index_validity",
+        "metric_version": 1,
+        "not_applicable_count": 3,
+        "status": "computed",
+        "total_cases": 30,
+        "unavailable_count": 0,
+        "value": 1.0
+      },
+      {
+        "denominator": 24,
+        "metric_id": "native.keyword_recall_proxy",
+        "metric_version": 1,
+        "not_applicable_count": 6,
+        "status": "computed",
+        "total_cases": 30,
+        "unavailable_count": 0,
+        "value": 1.0
+      },
+      {
+        "denominator": 30,
+        "metric_id": "native.fallback_correctness",
+        "metric_version": 1,
+        "not_applicable_count": 0,
+        "status": "computed",
+        "total_cases": 30,
+        "unavailable_count": 0,
+        "value": 1.0
+      }
+    ],
+    "binding": {
+      "context_binding": "sha256:3ab1bf256e86f6b4d55c746c06c1183cff6e588c023e1634ae225d06ccd152ea",
+      "dataset_id": "evaluation-test-set",
+      "dataset_revision": "sha256:b7d6c623cb168a23b2285d20e95197f514fbf521d3c993aa99178fb5918b24bd",
+      "dataset_version": "evaluation-test-set-v1",
+      "embedding_fingerprint": "sha256:0c4ee35107188b2a2be36e33d8bea78a5c00c3f892eeb36ed22d2c38e7cb8a5e",
+      "engine_id": "native",
+      "engine_version": 1,
+      "generation_binding": "sha256:84bcae1c2418a4868db7086885a0c8022adfaa6b2f1dc1515c9e72f3537a1717",
+      "generation_prompt_sha256": "sha256:3866b231b1687f3896bd4194c8e2e975a8c79c64694ff8cb4ff3293fb1324ffd",
+      "generator_model_fingerprint": "sha256:66e0f11141d9a8ea3b85649d3beb8cacf88046ea45582d26fb19d6474b489882",
+      "generator_model_id": "openai/gpt-oss-120b",
+      "judge_binding": "sha256:91594105b77b6c42e47955b07b6189304cec905e3949f554d63f974be22e7cdc",
+      "judge_model_id": "openai/gpt-oss-120b",
+      "judge_prompt_sha256": "sha256:3b3b6a6ad1bcbab773e47e493b563ba41defa393dba72857955aa8e5acc05296",
+      "reranker_fingerprint": "sha256:16ff6fc9d4473d591ca105abf91ed15d99000abada9eb4e7119678723f2744db",
+      "retrieval_binding": "sha256:1ad021ce72af2116f9b4f7ad780d5c6e809fd5a01e46d30d0ae4bfecd62599d9",
+      "retrieval_config_fingerprint": "sha256:6bf7801a746aed3c1eea3d22362a699d659ed5e19626e27cfc1654178f5cca3a"
+    },
+    "cases": [
+      {
+        "case_id": "02e2fa02b29cca95eded556477ae0e50f3306240bda84d3222b51d47253fc06a",
+        "context_sha256": "sha256:9c315d97055848623dd0b70def83dff12b44f7deb90f3a11dc6262d95ccd569c",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 0.0
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": "no_citations",
+            "status": "not_applicable",
+            "value": null
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": "no_required_keywords",
+            "status": "not_applicable",
+            "value": null
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "0cbd5fb21e5b5cabb72f4df9acc70737dc7d6a273016032c6eecf860da7e53a8",
+        "context_sha256": "sha256:cbb711bf75a3995e3c247b99620e7dfd6efb2b8f630b759dddf3a23b15420ecb",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 0.67
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": "no_required_keywords",
+            "status": "not_applicable",
+            "value": null
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "16d81d640d48dac10643dcaa4f76c7eb32bf96087aa7acfa90997d3605830e0f",
+        "context_sha256": "sha256:a4f85e7bc2c347c822c13fffad7a125f7eb828be0e51070bbda703a8135bbcb8",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 0.0
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": "no_citations",
+            "status": "not_applicable",
+            "value": null
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": "no_required_keywords",
+            "status": "not_applicable",
+            "value": null
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "16f42100012a5b6f5b414d126de942245d04283bd4034cab0868bb106300b408",
+        "context_sha256": "sha256:ac3d67df78f7809154ce8a67f702b1fa43d8ebd8942f26ec46f6536ae76c9285",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 0.5
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "1d60dbdf56e3b3f668c33f0b8a894e9b35471c6675b41e77ddfaa9b6cc055054",
+        "context_sha256": "sha256:47c5a6b80ee6c65f1ee67cbae763267d43b809561c04796ff24718ebedd5ec10",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 0.67
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": "no_required_keywords",
+            "status": "not_applicable",
+            "value": null
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "1e59fdc5b901bff67eaeb3b09b1a130e6904a2de4c8d3221441ffbf8274a56cd",
+        "context_sha256": "sha256:b21e33c76573d2e07fa7aff73484e5b096dfa7520cedeb7a16077d8a4ac316e7",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 0.5
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "236eee38b31a0fb7832800dc2ebdf3887f8d6d41cc74623103dc55003da7a814",
+        "context_sha256": "sha256:8f60bd35d9c71da1ed6247f2b1f099de466dc2df66e46271b76134b488874e04",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 0.5
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "343c3b19d48c449f2ffaadc4397edf574a4c47762b2397ccf15274f8ad49ab90",
+        "context_sha256": "sha256:7bc0dc443314c80125dcb172334e47c0cd47add3303bc94911003ee3482238d5",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 0.9
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "399762f321876110ca29a71c0112a1012d9f11ac7fd246ec4ab0f25582e85aa2",
+        "context_sha256": "sha256:76c7ac2b85fe63416558035a0fef570cd02631f220920e46a329e80ae4f9d436",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "3b23558b14f2d5b3917c245e474b659abdc5c41cc35d54f89a13e9ae8f661662",
+        "context_sha256": "sha256:0e38d237ac583e0ec97fb443cb48a17b749811f0a3e6126a37fd552b1b6b68f7",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "4ef09a7a39fec2c8d64df438c01271c1ecf28a993bbea18edd56e8fa4a06f9ba",
+        "context_sha256": "sha256:837625cb5f2fc0877b658f7beda75cd2de05dca667379fb2dd1cc9e920f5d029",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "563630b6248fcc4dea0453c6dc251364279ab8ad415f5dd9ea002287ff86bfa8",
+        "context_sha256": "sha256:bbcb5ea2d31b8e9db7e7fd969147c1d15b0e969b6b25cf24b484f3cfb1387fdd",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 0.95
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "57f9f1ad1d226cee14145ab265841652458992c449f097e5757504df0223e321",
+        "context_sha256": "sha256:a2d0e5c1286784816fa0c29dd37506c34f40c4ddb3a7ede88edd2962571251fe",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 0.9
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "5a5013477d0b505c289a23c359bc50d9d0b6fd31a0e00fcdae31f492548795b2",
+        "context_sha256": "sha256:ced5b69a91609ec70b06fb13e9357047938b4f1a3970e188ae23901bebb25a00",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "5ef476e944b82f58b20e3b03afebdaba6868ee671a2425f5cbfa49b28fb98ce0",
+        "context_sha256": "sha256:02f973733860f7971e4d05ca5b03728f4fb73de288c7e67c372667bcd16e083a",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 0.5
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "7f0642b232a0b5c56ac284a5c0cefc806f49f065a6ca7728d59a86ad5478085e",
+        "context_sha256": "sha256:62aed96a9f87da531549919a6b674222cff23a9bf0f243b2f011fbd15d7503ab",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "8045e78ac0e1c988791aa315576647d05f0d43dd867327831416765d177ce11b",
+        "context_sha256": "sha256:3f371d833f16196a3a5d61a8344a5c17834479b7fcadbcd4c00ac4fcd138101f",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "a889d12726e5b0cb58dbe3b8e247f6e800f3a412b4ee09cbbdb5e8e8498d10ad",
+        "context_sha256": "sha256:837625cb5f2fc0877b658f7beda75cd2de05dca667379fb2dd1cc9e920f5d029",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "ac4052cc6d60cc1eed0c55a72211b569efc8a381ec9085f6a06e644eda814cdf",
+        "context_sha256": "sha256:e525b181208fabdaf4d2809564ec55ccff93bb3f94738dcbc93900507f9ee50d",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "adef5b8376b54e1b6c904fb2ed533ab4598ebc98abc231db979001035e3594a6",
+        "context_sha256": "sha256:41a0556d51ade5610bd04f7a3f0912236507883a21f4c3911783e78b0803221c",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "b1a0995be709a4a85038fee868aa5a59add6eaecb6f74bae0d2588ab86a604d1",
+        "context_sha256": "sha256:a2d0e5c1286784816fa0c29dd37506c34f40c4ddb3a7ede88edd2962571251fe",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "b6458500fcc4bbdfa93010069c60867aa6f76e5b0904a2ccdad3caaa86465c8f",
+        "context_sha256": "sha256:e8c5c30fa33274657a1ecfd3aa3b7855e53b5c105a3bd0c249ab13549a2fddae",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "c928d18bc8b38d2ce08c333f9c6799a6ec5a36d91115a42e3a815e1bb46cb8b0",
+        "context_sha256": "sha256:a2d0e5c1286784816fa0c29dd37506c34f40c4ddb3a7ede88edd2962571251fe",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "c93bbb6eff5b0e18f43f7f6002e176e7892c010063653d972f08b2b8a26b6630",
+        "context_sha256": "sha256:5a86623b726250f77443e6ceea932b9a7ecb903a4186e6f33720806eb2098b18",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 0.75
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "caa7ee8ac6fa95f83365dbd4899d5ff30b62244b90bd09302e694c649d277e5f",
+        "context_sha256": "sha256:f3d570fe1bf1148bfc8944def777442f4d873efcabf3368a98d582475c83130e",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "d19aae5b33ec255cba757a5d1bacbe9fa6f3e12fea03dd3db594a96ce1aeaeea",
+        "context_sha256": "sha256:a05d9c3ae5f6389a6f024c93d1931570e672349c5aa02efeaf7eaf36554cbfec",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 0.75
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": "no_required_keywords",
+            "status": "not_applicable",
+            "value": null
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "eb1765c2fe5e19414646a452f6974355f8f073c8390bb0ec21e092797b66ad08",
+        "context_sha256": "sha256:064d2dbe034d14b08e4fb50acd8a3700d343fb1962171ddc0f94af87a9122c94",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 0.5
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "f444865304280be2a9f876f62fe0ce7f230fad16aed154bf6acfb5172240e401",
+        "context_sha256": "sha256:3064cc2350d469385de1de689fe60125b6f0888a58097b4ec518b3e644d88bbe",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "f5c7b43e7dec91e0fe1321134020f80e68fa76406892b36f0b55bc5ba985fa53",
+        "context_sha256": "sha256:a0d7988af43714133e10483b493a493879862a6a0926591359d30abdb0832c5d",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 0.5
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "f7377a6684ea48a2efa6327e15323536f5b73c1e4b171abfe9d55aff79dcaa3d",
+        "context_sha256": "sha256:efb9303e1fe272b6ba5b4b7c9f784352b8bdd7524700d67cc7f3270cf47b8db6",
+        "metrics": [
+          {
+            "metric_id": "native.faithfulness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.answer_relevancy",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 1.0
+          },
+          {
+            "metric_id": "native.context_precision",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": 0.0
+          },
+          {
+            "metric_id": "native.citation_index_validity",
+            "metric_version": 1,
+            "reason_code": "no_citations",
+            "status": "not_applicable",
+            "value": null
+          },
+          {
+            "metric_id": "native.keyword_recall_proxy",
+            "metric_version": 1,
+            "reason_code": "no_required_keywords",
+            "status": "not_applicable",
+            "value": null
+          },
+          {
+            "metric_id": "native.fallback_correctness",
+            "metric_version": 1,
+            "reason_code": null,
+            "status": "computed",
+            "value": true
+          }
+        ]
+      }
+    ],
+    "digest": "sha256:e5c004215a69b5c4094a35467569d3c76f88e17803400881e728fc68c32c9d16",
+    "metric_definitions": [
+      {
+        "aggregate_kind": "mean",
+        "direction": "higher_is_better",
+        "label": "Faithfulness",
+        "maximum": 1.0,
+        "meaning": "Existing native judge estimate of answer claims supported by the same rendered evidence; not deterministic claim verification.",
+        "metric_id": "native.faithfulness",
+        "metric_version": 1,
+        "minimum": 0.0,
+        "required_inputs": [
+          "answer",
+          "rendered_context",
+          "ground_truth",
+          "bound_judge_score"
+        ],
+        "source": "precomputed_native_judge",
+        "value_kind": "ratio"
+      },
+      {
+        "aggregate_kind": "mean",
+        "direction": "higher_is_better",
+        "label": "Answer relevancy",
+        "maximum": 1.0,
+        "meaning": "Existing native judge estimate of how well the answer addresses the question against ground truth.",
+        "metric_id": "native.answer_relevancy",
+        "metric_version": 1,
+        "minimum": 0.0,
+        "required_inputs": [
+          "answer",
+          "rendered_context",
+          "ground_truth",
+          "bound_judge_score"
+        ],
+        "source": "precomputed_native_judge",
+        "value_kind": "ratio"
+      },
+      {
+        "aggregate_kind": "mean",
+        "direction": "higher_is_better",
+        "label": "Context precision",
+        "maximum": 1.0,
+        "meaning": "Existing native judge estimate of the fraction of retrieved chunks useful for the answer.",
+        "metric_id": "native.context_precision",
+        "metric_version": 1,
+        "minimum": 0.0,
+        "required_inputs": [
+          "answer",
+          "rendered_context",
+          "ground_truth",
+          "bound_judge_score"
+        ],
+        "source": "precomputed_native_judge",
+        "value_kind": "ratio"
+      },
+      {
+        "aggregate_kind": "mean",
+        "direction": "higher_is_better",
+        "label": "Citation index validity",
+        "maximum": 1.0,
+        "meaning": "Fraction of Source N references whose indices exist in the rendered evidence; not claim support.",
+        "metric_id": "native.citation_index_validity",
+        "metric_version": 1,
+        "minimum": 0.0,
+        "required_inputs": [
+          "answer",
+          "rendered_context"
+        ],
+        "source": "deterministic",
+        "value_kind": "ratio"
+      },
+      {
+        "aggregate_kind": "mean",
+        "direction": "higher_is_better",
+        "label": "Keyword recall proxy",
+        "maximum": 1.0,
+        "meaning": "Fraction of explicit required keywords found in rendered evidence; not Recall@K or semantic relevance.",
+        "metric_id": "native.keyword_recall_proxy",
+        "metric_version": 1,
+        "minimum": 0.0,
+        "required_inputs": [
+          "rendered_context",
+          "required_keywords"
+        ],
+        "source": "deterministic",
+        "value_kind": "ratio"
+      },
+      {
+        "aggregate_kind": "success_rate",
+        "direction": "higher_is_better",
+        "label": "Fallback correctness",
+        "maximum": 1.0,
+        "meaning": "Whether the answer's existing insufficient-information fallback phrase matches the case expectation.",
+        "metric_id": "native.fallback_correctness",
+        "metric_version": 1,
+        "minimum": 0.0,
+        "required_inputs": [
+          "answer",
+          "expects_fallback"
+        ],
+        "source": "deterministic",
+        "value_kind": "boolean"
+      }
+    ],
+    "protocol": "native-evaluation",
+    "protocol_version": 1,
+    "run_id": "filingscope-rag-public-v1",
+    "status": "complete"
+  }
+}

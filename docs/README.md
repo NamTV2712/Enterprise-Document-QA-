@@ -53,6 +53,8 @@ Other protocols/receipts remain in this directory for deeper inspection.
   [frontend setup](../frontend/README.md), [local release runbook](LOCAL_RELEASE_RUNBOOK.md).
 - [Engineering reference](ENGINEERING_REFERENCE.md): relocated setup detail,
   API tables, benchmark history and past proposals from the long README.
+- [RAG quality benchmark](RAG_QUALITY_BENCHMARK.md): reproducible historical
+  30-case native metrics, denominators, frozen inputs and limitations.
 - [Security policy](../SECURITY.md), [MIT license](../LICENSE).
 - [Agent operating guide](../AGENTS.md), [skill provenance](../.agents/skills/SOURCES.md).
 

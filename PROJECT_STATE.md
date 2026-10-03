@@ -1,5 +1,30 @@
 # Project State
 
+## EVAL-PUBLIC-001 — historical native RAG quality publication (2026-10-03)
+
+Main-only starting `4fe40cc8e03684d149667c1961d51d932a65e60f`. The
+[public benchmark](docs/RAG_QUALITY_BENCHMARK.md) explicitly adapts the protected
+official priority `<=2`, N=30 historical frozen run to native v1. All 30 original
+generation/judge bindings and admission context hashes were verified using
+compatible historical source `5c582b50774757b948cf783be1dc206422838246`.
+The protected legacy result hash `a5b3c16e43c44ea79199c525e6345acf837172d956d8b659e5a234dc4692a7ba`
+is unchanged. Current native metric implementation is unchanged; the new thin
+reporting wrapper blocks network and uses public curated frozen inputs.
+
+Native values: faithfulness 1.0000 (30/30), answer relevancy 0.9917 (30/30),
+context precision 0.7613 (30/30), citation index validity 1.0000 (27/30; 3 N/A),
+keyword recall proxy 1.0000 (24/30; 6 N/A), fallback correctness 1.0000 (30/30).
+No unavailable values or overall score. Original judge/model estimates are reused;
+zero live provider calls. Historical required-keyword donor selection is disclosed:
+not fully label-blind, not current-runtime/general SEC accuracy. Agent 21-metric
+evaluation remains distinct. The frozen full-dataset revision differs from later
+priority-3 label revisions and is preserved rather than relabelled as current.
+Two offline reruns produce report digest
+`sha256:e5c004215a69b5c4094a35467569d3c76f88e17803400881e728fc68c32c9d16`.
+Final documentation/privacy/preservation, normal commit/push and remote equality
+are recorded in the closing report. Product code, dependencies, lockfiles,
+migrations, CI and provider configuration remain unchanged. No new roadmap is opened.
+
 ## FINAL-IMPROVE — current improvement round closure (2026-10-03)
 
 The [canonical receipt](docs/IMPROVEMENT_FINAL_RECEIPT.md) closes this round.

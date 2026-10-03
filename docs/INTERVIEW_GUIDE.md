@@ -140,6 +140,9 @@ bind configuration and rendered context, and changed bindings require a fresh
 checkpoint. Quota-skipped or mixed checkpoints cannot become final metrics.
 See [evaluation results](ENGINEERING_REFERENCE.md#evaluation-results) and
 [project state](../PROJECT_STATE.md).
+The [public native adaptation](RAG_QUALITY_BENCHMARK.md) recomputes six metrics
+offline from all 30 frozen cases. Judge estimates are reused; historical packing
+uses required-keyword donors. It is not fully label-blind or current-runtime accuracy.
 
 ### 17. How is Agent behavior evaluated?
 

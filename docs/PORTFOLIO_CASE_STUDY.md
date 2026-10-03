@@ -229,6 +229,12 @@ verification; these are release observations, not new portfolio-task test runs.
 
 ## Tradeoffs and limitations
 
+The [public RAG quality benchmark](RAG_QUALITY_BENCHMARK.md) reports six native
+metrics over all 30 historical frozen cases with explicit computed/N/A counts
+and zero new provider calls. It is separate from latency and test evidence.
+Historical context packing preserves required-keyword donors, so these results
+do not establish independent retrieval quality or current-runtime accuracy.
+
 Capacity characterization justified keeping the default at two workers and an
 ordinary recommendation of one to two. In CAPACITY's zero-delay synthetic
 workload, throughput at one/eight workers was 17.603/13.923 jobs/s; extra

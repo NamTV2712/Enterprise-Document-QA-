@@ -141,6 +141,29 @@ Measurements describe different stages/populations. Saturated queues and mixed
 admission contention remain; more workers did not improve every workload.
 [Capacity tradeoffs](docs/CAPACITY_001_FINAL_RECEIPT.md) include counterevidence.
 
+## RAG quality
+
+**Controlled development benchmark:** `filingscope-rag-public-v1`, the complete
+historical priority `<=2` cohort of **30 cases**. Recomputed with native v1 from
+frozen answers, exact evidence and verified judge scores; **zero live provider calls**.
+
+| Metric | Result | Computed / total |
+|---|---:|---:|
+| Faithfulness | 1.0000 | 30 / 30 |
+| Answer relevancy | 0.9917 | 30 / 30 |
+| Context precision | 0.7613 | 30 / 30 |
+| Citation index validity | 1.0000 | 27 / 30 |
+| Keyword recall proxy | 1.0000 | 24 / 30 |
+| Fallback correctness | 1.0000 | 30 / 30 |
+
+Three citation cases and six keyword cases are N/A; none is unavailable or
+converted to zero. Historical context packing uses required-keyword donors, so
+this narrow cohort is **not fully label-blind or a current-runtime accuracy claim**.
+Citation validity is structural; keyword coverage is not Recall@K; judge estimates
+are not probabilities. No overall score. [Scope, provenance, limitations and safe
+reproduction](docs/RAG_QUALITY_BENCHMARK.md) explain these RAG quality metrics
+separately from system performance above and verification below.
+
 ## Validation
 
 Frozen **code release**: `cbaacc3765f8dbca2ff04247cb24fd773751a0f9`.

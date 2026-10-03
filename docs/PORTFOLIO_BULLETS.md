@@ -42,6 +42,8 @@ FilingScope — evidence-grounded SEC filing research with hybrid RAG, durable A
 - Queue measurement: [WORKER-002 receipt](WORKER_002_FINAL_RECEIPT.md).
 - Read measurement: [DB-SCALE receipt](DB_SCALE_001_FINAL_RECEIPT.md).
 - Release counts/skips and provenance: [final receipt](IMPROVEMENT_FINAL_RECEIPT.md).
+- RAG quality: [reproducible 30-case native benchmark](RAG_QUALITY_BENCHMARK.md),
+  historical frozen outputs with disclosed label-assisted contexts and no overall score.
 - Exact code release `cbaacc3765f8dbca2ff04247cb24fd773751a0f9`:
   [Backend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/runs/37085104945),
   [Frontend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/runs/37085104875).

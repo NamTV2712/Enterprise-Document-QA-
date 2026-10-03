@@ -1,5 +1,7 @@
 # Evidence-Grounded SEC Filing Research with Hybrid RAG & Durable AI Agents - FilingScope
 
+**BM25 · Semantic Vector Search · Qdrant · RRF · Cross-Encoder Reranking**<br>
+**Python · FastAPI · SSE · React 19 · TypeScript · Groq · SQLite**
 
 [![Backend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/backend.yml/badge.svg)](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/backend.yml)
 [![Frontend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/frontend.yml/badge.svg)](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/frontend.yml)

@@ -1,8 +1,14 @@
-# Enterprise Document QA — 5–7 Minute Demo
+# SEC Research Copilot — 5–7 Minute Demo
+
+Public display name: **SEC Research Copilot** (original repository: Enterprise Document QA).
 
 A seven-minute recording plan with an executable provider-free path. See the
 [README](../README.md), [case study](PORTFOLIO_CASE_STUDY.md) and
 [release evidence](IMPROVEMENT_FINAL_RECEIPT.md).
+
+The [Live Demo](https://frontend-one-gamma-f9jf11u8ec.vercel.app) is the running
+frontend preview, separate from this recording guide. It reported **API offline**
+on 2026-10-03; use the prepared local environment below for the recording.
 
 ## Choose the demonstration environment
 

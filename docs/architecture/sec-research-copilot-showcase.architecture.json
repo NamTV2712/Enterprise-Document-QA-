@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "SEC Research Copilot",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/NamTV2712/Enterprise-Document-QA-",
+      "revision": "9d7acf9c7c5bf1ad345f8a3783b97680c6c49035"
+    },
+    "viewBox": [1300, 690]
+  },
+  "components": [
+    {"id":"research-browser","type":"frontend","label":"React Research workspace","sublabel":"EN / VI · Agent references only","pos":[450,20],"size":[400,90],"sources":[{"path":"frontend/src/components/workbench/ResearchWorkbench.tsx"},{"path":"ARCHITECTURE.md","line":8}]},
+    {"id":"quick-api","type":"backend","label":"Quick RAG","sublabel":"FastAPI / SSE · conversational turn","pos":[70,170],"size":[380,90],"sources":[{"path":"src/api/pipeline.py"}]},
+    {"id":"shared-rag","type":"backend","label":"Shared RAG stack","sublabel":"Query · BM25 + Qdrant · RRF · rerank","tag":"SEC corpus · cross-encoder","pos":[70,320],"size":[380,100],"sources":[{"path":"ARCHITECTURE.md"}]},
+    {"id":"grounded-answer","type":"backend","label":"Grounded generation","sublabel":"Groq · bounded evidence context","pos":[70,470],"size":[380,90],"sources":[{"path":"ARCHITECTURE.md"}]},
+    {"id":"cited-evidence","type":"frontend","label":"Citations + evidence","sublabel":"Canonical documents / chunks","pos":[70,600],"size":[380,70],"sources":[{"path":"docs/frontend/FRONTEND_CONTRACT.md"}]},
+    {"id":"deep-admission","type":"backend","label":"Deep Research","sublabel":"Durable Agent API · explicit admission","pos":[850,170],"size":[380,90],"sources":[{"path":"ARCHITECTURE.md","line":8}]},
+    {"id":"durable-authority","type":"database","label":"DATA-004 · SQLite","sublabel":"State / events / result / evaluation","tag":"Shared DB: DATA-005 telemetry","pos":[850,320],"size":[380,100],"sources":[{"path":"ARCHITECTURE.md"}]},
+    {"id":"fixed-consumers","type":"backend","label":"WorkerSupervisor → single Agent","sublabel":"2 fixed workers · one process","tag":"Bounded decisions / cancellation","pos":[850,470],"size":[380,90],"sources":[{"path":"ARCHITECTURE.md","line":66},{"path":"src/agent/registry.py"}]},
+    {"id":"closed-research-tools","type":"backend","label":"Closed research tools","sublabel":"search · inspect · read · ask_rag","pos":[850,600],"size":[380,70],"sources":[{"path":"src/agent/registry.py"}]}
+  ],
+  "connections": [
+    {"id":"choose-quick","from":"research-browser","to":"quick-api","label":"Quick","variant":"emphasis","fromSide":"bottom","toSide":"top"},
+    {"id":"choose-deep","from":"research-browser","to":"deep-admission","label":"Deep","variant":"emphasis","fromSide":"bottom","toSide":"top"},
+    {"id":"quick-retrieve","from":"quick-api","to":"shared-rag"},
+    {"id":"context-generate","from":"shared-rag","to":"grounded-answer"},
+    {"id":"answer-citations","from":"grounded-answer","to":"cited-evidence"},
+    {"id":"persist-run","from":"deep-admission","to":"durable-authority"},
+    {"id":"claim-run","from":"durable-authority","to":"fixed-consumers"},
+    {"id":"validated-tools","from":"fixed-consumers","to":"closed-research-tools"},
+    {"id":"reuse-rag","from":"closed-research-tools","to":"shared-rag","label":"ask_rag with permission","fromSide":"left","toSide":"right","variant":"emphasis"}
+  ]
+}

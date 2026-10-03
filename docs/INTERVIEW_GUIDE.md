@@ -1,4 +1,6 @@
-# Enterprise Document QA — Interview Guide
+# SEC Research Copilot — Interview Guide
+
+Public display name: **SEC Research Copilot** (original repository: Enterprise Document QA).
 
 Answers describe the implemented project and its frozen code release
 `cbaacc3765f8dbca2ff04247cb24fd773751a0f9`. Use the
@@ -45,7 +47,7 @@ Generation instructions require an honest insufficient-context response rather
 than filling gaps from general knowledge. Context selection remains bounded,
 and numeric claims need the relevant period and units. Evaluation distinguishes
 retrieval coverage from answer correctness; prompt instructions alone are not
-an accuracy guarantee. See [generation design](../README.md#generation-design).
+an accuracy guarantee. See [generation design](ENGINEERING_REFERENCE.md#generation-design).
 
 ## Agent
 
@@ -136,7 +138,7 @@ judging. The official reported benchmark is the documented clean priority ≤2,
 N=30 run; later experiments retain their own provenance. Generation checkpoints
 bind configuration and rendered context, and changed bindings require a fresh
 checkpoint. Quota-skipped or mixed checkpoints cannot become final metrics.
-See [evaluation results](../README.md#evaluation-results) and
+See [evaluation results](ENGINEERING_REFERENCE.md#evaluation-results) and
 [project state](../PROJECT_STATE.md).
 
 ### 17. How is Agent behavior evaluated?

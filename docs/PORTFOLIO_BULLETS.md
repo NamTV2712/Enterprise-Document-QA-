@@ -1,4 +1,6 @@
-# Enterprise Document QA — Application Copy
+# SEC Research Copilot — Application Copy
+
+Public display name: **SEC Research Copilot** (original repository: Enterprise Document QA).
 
 Copy grounded in the [case study](PORTFOLIO_CASE_STUDY.md) and
 [frozen release evidence](IMPROVEMENT_FINAL_RECEIPT.md). Measurements below are
@@ -17,7 +19,7 @@ adoption or production SLA. Adjust first-person wording to your actual contribut
 
 ## B. LinkedIn / portfolio paragraph
 
-I built Enterprise Document QA, a production-style research workspace for SEC
+I built SEC Research Copilot, a production-style research workspace for SEC
 10-K filings configured for 50 companies. Quick Research combines BM25, Qdrant,
 Reciprocal Rank Fusion and cross-encoder reranking to produce cited RAG answers.
 Deep Research uses bounded durable Agent runs, with SQLite owning state, events
@@ -31,7 +33,7 @@ does not claim production SLA or real provider quota certification.
 
 ## C. GitHub repository description
 
-SEC 10-K research with hybrid RAG, cited Quick answers, durable Agent runs, React/FastAPI, and evidence-backed validation.
+SEC Research Copilot — hybrid RAG + durable Deep Research Agent for cited SEC 10-K analysis with FastAPI, Qdrant, React and Groq.
 
 ## Evidence for application and interview use
 

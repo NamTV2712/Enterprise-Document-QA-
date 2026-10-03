@@ -1,4 +1,4 @@
-# Evidence-Grounded SEC Filing Research with Hybrid RAG & Durable AI Agents --- FilingScope
+# Evidence-Grounded SEC Filing Research with Hybrid RAG & Durable AI Agents - FilingScope
 
 
 [![Backend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/backend.yml/badge.svg)](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/backend.yml)

@@ -1,226 +1,569 @@
 # Enterprise Document QA
 
-Public `/system/info` exposes bounded model/build identifiers, not local model
-paths or credential-shaped configuration values. Unsafe model identifiers are
-reported as null; unsafe build identifiers are omitted.
+**Traceable SEC filing research with hybrid RAG and durable, bounded Agent runs.**
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?style=for-the-badge&logo=fastapi&logoColor=white)
-![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB-DC244C?style=for-the-badge)
-![RAG](https://img.shields.io/badge/RAG-Hybrid_Retrieval-7C3AED?style=for-the-badge)
-![Groq](https://img.shields.io/badge/Groq-LLM_Generation-F55036?style=for-the-badge)
+Enterprise Document QA turns long SEC 10-K filings into a research workspace
+with cited answers and inspectable evidence. Quick streams a conversational RAG
+answer; Deep Research admits a separate durable Agent run with progress,
+cancellation and a persisted result. This is a technical portfolio project,
+configured for a 50-company corpus, with measured local engineering results.
+
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)
+![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB-DC244C)
 [![Backend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/backend.yml/badge.svg)](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/backend.yml)
 [![Frontend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/frontend.yml/badge.svg)](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/frontend.yml)
 
-Enterprise Document QA is a production-style Retrieval-Augmented Generation application for answering grounded questions over SEC 10-K filings.
-The system ingests a 50-company filing corpus, extracts key sections and financial tables, builds a hybrid search index, and serves cited financial answers through a Vite/React research workspace backed by FastAPI streaming, semantic caching, multi-turn memory, and query decomposition.
+[Demo script](docs/DEMO_SCRIPT.md) · [Architecture](#architecture-at-a-glance) ·
+[Setup](#setup-and-usage) · [Case study](docs/PORTFOLIO_CASE_STUDY.md) ·
+[CV / portfolio copy](docs/PORTFOLIO_BULLETS.md) · [Interview guide](docs/INTERVIEW_GUIDE.md)
 
-## Start here — current product
+## Why this project exists
 
-Research is the primary conversation entry. Choose **Quick** (default) for the
-existing cited RAG answer, or **Deep Research** to submit the explicit goal to an
-existing durable Agent run. Deep requires the local workspace connection and,
-when a decision provider is configured, fresh permission for that run. Quick
-filters and previous answers are not silently passed to the Agent. The Quick
-comparison switch is labeled **Comparative answer**.
+Financial filings spread facts across long narratives, tables and reporting
+periods. Naive LLM chat can produce plausible answers while losing the source,
+missing an exact accounting term or overlooking evidence needed for a comparison.
+This project combines lexical and semantic retrieval, reranking and grounded
+generation, then adds durable execution for longer research. A reader can inspect
+the evidence and the execution state behind an answer.
 
-One Agent run stays in one conversation card with server-owned status, result,
-evidence, cancellation and collapsed research details. **Research deeper** fills
-the goal from a completed Quick question; sending is a separate user action.
-Conversation storage/export holds only a run reference. Reload clears the bearer:
-reconnect to read the same run; an unavailable run keeps its reference. `/chat`
-links and saved conversations remain compatible; `/agent` is the full inspector.
-See the [UX-AGENT-001 receipt](docs/UX_AGENT_001_FINAL_RECEIPT.md).
+## What it does
 
-The current improvement round closes with the
-[FINAL-IMPROVE receipt](docs/IMPROVEMENT_FINAL_RECEIPT.md). It binds local release
-evidence to a committed candidate and requires both Backend and Frontend CI on
-the final pushed SHA. Historical task-specific CI waivers do not satisfy that gate.
+| Area | Visible capability |
+|---|---|
+| Quick Research | Streamed cited answers, source inspection, follow-up conversation, query rewriting and decomposition |
+| Deep Research | Explicit durable run, bounded tools, safe progress, cancellation, terminal evidence and native evaluation |
+| Retrieval | BM25 + Qdrant semantic candidates, RRF fusion and cross-encoder reranking; provider-free inspection |
+| Workspace | EN/VI React UI, Research conversation, Documents/Search/Library and a full Agent inspector; FastAPI and SQLite authority |
 
-Optional content-free Agent performance attribution is disabled by default.
-For an authorized local workspace, set server-side
-`ENABLE_PERFORMANCE_ATTRIBUTION=true` to retain bounded sampled API/all-worker timing summaries
-for 30 days in the existing DATA-005 SQLite database. Protected
-`/analytics/summary` exposes a separate performance population; public metrics
-and quality metrics retain their existing meanings. See the
-[OBS-001 protocol](docs/OBS_001_ATTRIBUTION_PROTOCOL.md) for phase definitions,
-bounds and the hermetic benchmark. Workers remain two with 500ms polling and
-5000ms shutdown grace. Authorized queued Agent admission also supplies a
-payload-free hint to the existing local worker owner after durable commit.
-Hints coalesce; missed hints and restart work are discovered through SQLite
-polling. This does not certify a production SLA.
+**Research deeper** prepares a visible Deep draft from a completed Quick question.
+It requires another explicit submit. The frontend and backend deploy independently;
+the backend Docker image does not bundle the frontend.
 
-Private workspace factories reuse integrity/schema validation for the same live
-database file and migration contract. Each operation still opens and closes its
-own SQLite connection; no job/event/result cache or connection pool is added.
-Multi-statement job and event reads use short WAL snapshot transactions, while
-mutations retain serialized `BEGIN IMMEDIATE` and revision checks. Explicit
-`WorkspaceDatabase.initialize()` still performs a full audit, including on reopen.
-See the [DB-SCALE-001 protocol](docs/DB_SCALE_001_PROTOCOL.md) for lifecycle and
-measurement boundaries. Public mode retains lazy private-storage refusal.
-The [final receipt](docs/DB_SCALE_001_FINAL_RECEIPT.md) records the comparable
-before/after campaign, snapshot correctness and finite admission contention
-tradeoff. Mixed event-append wait p95 falls from 350.401ms to 4.180ms.
-The [WORKER-002 receipt](docs/WORKER_002_FINAL_RECEIPT.md) records subsequent
-scheduling measurements: idle-confirmed default queue p95 falls from 502.753ms
-to 9.340ms; saturated queueing, finite admission overlap and some service tails
-remain. Worker and poll defaults are unchanged; larger synthetic worker counts
-also raise possible provider concurrency and local/API costs.
+## Quick vs Deep Research
 
-The [CI-FIX-001 receipt](docs/CI_FIX_001_FINAL_RECEIPT.md) records the release
-contract audit and exact-SHA GitHub evidence. OpenAPI verification normalizes
-the proven equivalent omitted/true extra-property rule on object responses and
-also freezes referenced request/response schemas. The route-cancellation fixture
-waits for the initial session check before sending, then verifies partial text,
-abort and rejection of late terminal events. Install declared Python requirements
-in a fresh environment and use Bun 1.3.14 with the frozen frontend lockfile for
-release validation; an existing development environment may contain other versions.
-CI runs the Agent shell sweep through its dedicated local fixture harness. Warm
-navigation checks retain the 200ms budget, native clicks and explicit assertions.
-Browser timestamps measure pointer input to visible routes; driver timing is
-reported separately. The warm input check warms the control once before its
-40 measured fills under the unchanged 100ms budget.
-Citation nodes retain focus across answer updates, and a new pointer or keyboard
-interaction cancels stale inspector focus restoration.
+| Dimension | Quick | Deep Research |
+|---|---|---|
+| Purpose | One conversational RAG turn | Bounded research execution with a durable record |
+| Latency expectation | Streams after retrieval and generation begin; workload dependent | Queue and multiple decision/tool boundaries; no fixed duration promise |
+| Execution | Existing RAG pipeline | Fixed worker → single Agent orchestrator → closed tools |
+| Persistence | Conversation in the browser Library; server memory/cache is transient | DATA-004 owns state/events/result; conversation stores a run reference |
+| Cancellation | Stops the active answer stream at supported boundaries | Revision-safe request, then terminal cancellation at a safe boundary |
+| Evidence | Citations and inspectable source chunks | Canonical evidence references plus tool activity and terminal evaluation |
+| Best use | Filing question, follow-up or scoped comparison | Explicit research goal requiring inspectable multi-step execution |
+| Admission | Public RAG capability, subject to configured limits | Local workspace connection, execution capability and per-run decision-provider consent |
 
-The independent frontend exposes Research (with compatible Chat links), Documents, Search, Collections,
-Retrieval, Models, Pipeline, Agent, Reranker, Evaluation, Analytics, Datasets,
-Settings, and Logs. FastAPI supplies public catalog/search/inspection/report reads; opt-in
-local mode adds a private SQLite workspace, queued Pipeline staging, frozen
-native Evaluation jobs, and content-free operational telemetry. Pipeline staging
-does not execute or promote the canonical corpus. Browser conversations and
-presentation preferences have separate on-device storage.
+The generic Deep composer submits the visible goal and locale. It does not
+silently inherit Quick history/filters or synthesize a hidden multi-objective plan.
 
-From a clean source checkout, install Python dependencies as described in
-[Local Setup](#local-setup), then start the backend and frontend in separate
-terminals (PowerShell examples):
+## Architecture at a glance
+
+```mermaid
+flowchart TD
+    UI["React Research workspace"] --> Quick
+    UI --> Deep
+    subgraph QuickPath["Quick answer path"]
+        Quick["FastAPI RAG / SSE"] --> Query["Query rewrite / decomposition"]
+        Query --> Hybrid["BM25 + Qdrant → RRF → cross-encoder"]
+        Hybrid --> Generate["Grounded generation + canonical citations"]
+    end
+    subgraph DeepPath["Durable Deep Research"]
+        Deep["Durable Agent API"] --> Runs["DATA-004: SQLite run authority"]
+        Runs --> Workers["WorkerSupervisor: 2 fixed consumers"]
+        Workers --> Agent["Bounded single Agent orchestrator"]
+        Agent --> Tools["Closed tools: search / inspect / read / ask_rag"]
+    end
+    Tools -->|ask_rag with permission| Query
+    Corpus["Indexed SEC corpus + canonical documents"] --> Hybrid
+    Corpus -->|provider-free reads| Tools
+    Groq["Groq provider"] --> Generate
+    Groq -->|structured decisions with consent| Agent
+    Quick -.-> Telemetry["DATA-005: content-free telemetry in SQLite"]
+    Workers -.-> Telemetry
+```
+
+Quick and Deep share evidence services and provider infrastructure. DATA-004
+remains the durable Agent authority for state, events, results and evaluation;
+browser cards are references. Workers live
+in one backend process, and the diagram does not imply distributed coordination.
+Tool names are `search_documents`, `inspect_retrieval`, `read_document`, `ask_rag`.
+See [full architecture](ARCHITECTURE.md) for ingestion, security and deployment.
+
+## Engineering highlights
+
+1. **Complementary retrieval signals.** BM25 keeps exact lexical matches while
+   dense retrieval handles paraphrases. RRF combines rankings without equating
+   unrelated score scales.
+2. **Reranking before bounded context.** A cross-encoder orders fused candidates
+   before generation. Its score is a ranking signal, not a confidence estimate.
+3. **Traceable generation.** Context retains canonical evidence identities and
+   citations; insufficient context remains an explicit state. Source acquisition
+   and ingestion have separate responsibilities.
+4. **Durable research authority.** SQLite owns Agent revisions, ordered events,
+   results and evaluation. Uncertain claimed work is interrupted on restart
+   rather than automatically replaying possible external effects.
+5. **Bounded execution.** Typed tools validate arguments and capabilities;
+   fixed consumers keep provider work outside short transactions. Cancellation
+   acknowledges a request and finishes at a supported boundary.
+6. **Performance attribution without content.** Optional DATA-005 telemetry
+   records bounded timings/counts/status without goals, answers or credentials.
+   Controlled campaigns isolate database contention and worker wake delay.
+7. **Deterministic verification.** Provider doubles exercise real API, SQLite,
+   HTTP/SSE and browser contracts. Frozen release CI and clean-checkout gates
+   distinguish reproducible behavior from tests needing local corpus artifacts.
+
+## Tech stack
+
+| Layer | Technologies used |
+|---|---|
+| AI / retrieval | Sentence Transformers embeddings, BM25, Qdrant, RRF, cross-encoder reranker, Groq LLM |
+| Backend | Python, FastAPI, Pydantic, SQLite, SSE |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS, Bun |
+| Verification / operations | pytest, Vitest, Playwright, GitHub Actions, deterministic provider doubles, content-free observability |
+
+## Measured engineering improvements
+
+| Measurement | Recorded result | Workload and evidence |
+|---|---|---|
+| Read50 client p95 | 1967.995 → 982.813 ms | Local real-HTTP/SQLite, synthetic dependencies; median trial statistics, three trials per point; [DB-SCALE](docs/DB_SCALE_001_FINAL_RECEIPT.md) |
+| Idle-confirmed queue p95 | 502.753 → 9.340 ms | Controlled idle wake campaign, two workers, 500ms polling fallback; [WORKER-002](docs/WORKER_002_FINAL_RECEIPT.md) |
+| Warm navigation p95 | Chromium 63.30 ms / Firefox 42.00 ms | 30 observations per engine, synthetic frontend workload, existing 200ms budget; [final receipt](docs/IMPROVEMENT_FINAL_RECEIPT.md) |
+
+**These are controlled development benchmarks, not production SLA measurements.**
+The campaigns measure different stages/populations. Mixed admission contention
+and saturated queue limits remain; more workers did not improve every workload.
+See [capacity tradeoffs](docs/CAPACITY_001_FINAL_RECEIPT.md).
+
+## Validation
+
+Frozen **code release**: `cbaacc3765f8dbca2ff04247cb24fd773751a0f9`.
+These counts describe its recorded gates, not a new test campaign for this
+documentation packaging change.
+
+| Gate | Recorded result |
+|---|---|
+| Backend primary | 1958 passed, 188 warnings |
+| Backend clean checkout | 1924 passed, 34 expected artifact-dependent skips, 149 warnings |
+| Frontend unit | 96 files / 844 tests |
+| Chromium / Firefox matrix | 542 passed, 4 inherited skips, 0 failed |
+| HTTP/SSE / Agent shell / durable Agent harness | 16 / 32 / 12 passed in separate gates |
+| TypeScript / build / contrast | PASS |
+| Routes / workspace schema | 90 method/path pairs; SQLite v7 |
+| Exact code-release CI | [Backend SUCCESS](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/runs/37085104945) / [Frontend SUCCESS](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/runs/37085104875) |
+
+The gates cover contracts, persistence, access policy, cancellation, browser
+workflows, HTTP/SSE and clean-checkout behavior. Skips are not passes; warnings
+are retained. See [canonical release receipt](docs/IMPROVEMENT_FINAL_RECEIPT.md)
+for exact candidate/closure provenance and [test evidence](#engineering-notes-and-evidence).
+
+## Setup and usage
+
+**For a provider-free demonstration:** follow [the demo script](docs/DEMO_SCRIPT.md).
+It uses the existing local TEST-005 harness with synthetic corpus/model/provider
+dependencies and real API/storage/lifecycle behavior. No live Groq call is needed.
+
+**For the product:** follow [Local Setup](#local-setup) below to install Python
+dependencies, configure `.env` and prepare or connect searchable artifacts. A
+clean clone does not contain the ignored filing corpus, embeddings or credentials.
+Then start the backend from the repository root:
 
 ```powershell
 .venv\Scripts\python.exe -m uvicorn src.api.app:app --reload --port 8000
 ```
 
+In a separate terminal, from the repository root:
+
 ```powershell
 cd frontend
 bun install --frozen-lockfile
+Copy-Item .env.example .env.local
 bun run dev
 ```
 
-Set `frontend/.env.local` from `frontend/.env.example` with
-`VITE_API_BASE_URL=http://localhost:8000`. Browser `VITE_*` values must never
-contain secrets. A data-free checkout can import the API and run the hermetic
-tests, but corpus-backed retrieval/answers need local `data/` artifacts and
-configured models; live generation additionally needs the documented
-server-side Groq configuration. No `.env` or `data/` is needed for the
-deterministic TEST-004 product harness.
+Set `VITE_API_BASE_URL=http://localhost:8000` in `frontend/.env.local`, then open
+the frontend at `http://localhost:3000`. Keep secrets server-side. Run one API
+worker with local Qdrant; use server/cloud Qdrant before multiple API processes.
 
-The default `WORKSPACE_MODE=public` does not open the private database. For
-local mode, configure a dedicated `LOCAL_WORKSPACE_TOKEN` (at least 32
-non-whitespace characters), loopback Host/Origin allowlists and, only for
-execution, `ENABLE_WORKSPACE_EXECUTION=true`. Enter the token in the app's
-Connection control: the shared Pipeline/Evaluation/Analytics/Logs/Settings
-session holds it only in memory and loses it on reload. The ordinary
-Collections and model-test browser wrappers are not yet connected to that
-bearer owner; their refusal states are intentional, not an auth bypass.
+Open **Research**, keep **Quick** selected, submit a filing question and inspect
+its citations. Use **Research deeper** to prepare a draft, or explicitly choose
+**Deep Research** and submit a visible goal after connecting the local workspace.
+Private execution requires the host/origin/bearer and execution settings in
+[Local Setup](#local-setup); default public mode keeps it unavailable. Deep
+decision calls require configured provider availability and per-run permission.
+The full inspector is `/agent`; reload requires reconnection to read saved runs.
 
-Core checks are `.venv\Scripts\python.exe -m pytest tests -q --tb=short` at
-the root and `bun run lint`, `bun run test`, `bun run build` under `frontend/`.
-`bun run test:e2e-product` uses real FastAPI public/local handlers and temporary
-SQLite with deterministic corpus/provider doubles; it is not a live-provider or
-load test. See [frontend setup](frontend/README.md), [architecture](ARCHITECTURE.md),
-[current state](PROJECT_STATE.md), and the [final product receipt](docs/TEST_004_FINAL_PRODUCT_RECEIPT.md).
-The required UI rebuild roadmap is complete through UI-013; EVAL-004/Ragas is
-optional, not a missing native-evaluation prerequisite.
+## Current boundaries
 
-The optional Agent extension includes typed in-process research tools, one
-bounded single-Agent orchestrator, private DATA-004 durable runs, and an
-optional bounded research policy. Research runs freeze up to six explicit
-objectives, gather canonical evidence across existing tools, track gaps and
-validate current-run citations before synthesis. Agent observations reject
-conflicting document/chunk source identities when the IDs encode a
-recognizable ticker or SEC filing accession. Invalid structured evidence ends
-the run with a typed `invalid_observation` result instead of entering the
-research ledger. The AGENT-005 adversarial checkpoint is documented in
-[the extension plan](docs/AGENT_EXTENSION_PLAN.md). The Agent run routes
-support queued creation, detail, results, ordered finite SSE events and
-revision-safe cancellation. Create and cancel require local execution access;
-reads require local bearer access. PROVIDER-001 adds a production Groq strict
-JSON Schema decision adapter for `openai/gpt-oss-120b` and `openai/gpt-oss-20b`.
-It reuses the generator default or loaded model identity and existing
-`GROQ_KEY_POLICY`/Groq credentials. Unsupported models or absent eligible keys
-remain `decision_provider_unavailable` without tool calls. The private
-`/agent` page reads durable runs, safe activity, research evidence and the
-native metric report after an explicit memory-only local connection. It can
-create a real recorded run when execution is enabled. The existing protected
-`/system/configuration-status` reports provider capability without contacting
-Groq. The create form requires explicit decision-provider consent; RAG tool
-provider permission remains separate and disabled in the form. New runs freeze
-safe provider/model/adapter/mechanism/key-policy provenance; changed bindings
-fail closed and historical unconfigured runs retain their original identity.
-The SDK makes one attempt per decision, with retries disabled, a 60 second
-total deadline and five second connect timeout. Cancellation waits for the
-existing safe boundary; restart never replays a claimed call. Strict format
-does not prove answer quality or model resistance to injected text: existing
-tool, evidence, objective and budget checks remain authoritative. No reasoning
-or raw transport payload is persisted. There is no multi-agent behavior.
-See [the provider plan](docs/AGENT_PRODUCTION_PROVIDER_PLAN.md) and [the extension plan](docs/AGENT_EXTENSION_PLAN.md)
-for research bounds, partial results and recovery.
+- Workers remain single-process; ordinary recommendation is 1–2. No distributed
+  execution, production SLA or real Groq quota certification is claimed.
+- Generic Deep goals have no hidden automatic multi-objective planner.
+- The ~527.24 kB main bundle warning and existing backend warnings remain.
+- Native zoom at 125/150/200% is manual/unverified; browser checks are not blanket
+  accessibility certification.
+- Collections and model-test browser bearer wiring remain staged. Ragas is optional.
+- Retrieval/citations improve auditability, not guaranteed correctness. Inspect
+  periods, units and sources; current setup does not promise an always-on public demo.
 
-CRED-001 consolidates server-side Groq configuration to one primary and one
-optional fallback. The historical `key5_only` identifier retains frozen Agent
-bindings and now selects primary only. See [Local Setup](#local-setup) and the
-[credential receipt](docs/CRED_001_FINAL_RECEIPT.md) for migration and compatibility
-checks; no live provider call or remote key revocation was required.
+[Detailed limitations](#known-limitations) · [Case study tradeoffs](docs/PORTFOLIO_CASE_STUDY.md#tradeoffs-and-limitations)
 
-SCALE-001 moves durable Agent execution to one application-lifespan worker pool.
-`POST /agent/runs` returns the accepted queued record (201 and its revision),
-independently of execution or client disconnect. The pool atomically claims
-only `agent / bounded_agent_run` from DATA-004 SQLite, oldest creation timestamp
-then job ID first. Two fixed asyncio workers are the default; queued rows do
-not allocate execution tasks. Startup requires `WORKSPACE_MODE=local`,
-`ENABLE_WORKSPACE_EXECUTION=true` and `WORKSPACE_WORKER_ENABLED=true`.
-Disabling workers leaves Agent work queued. Public mode starts no private worker
-and opens no private database. Model/provider resolution occurs after claim;
-the frozen decision and RAG grants still control execution independently.
+## Local Setup
 
-Worker settings are server-side: `WORKSPACE_WORKER_CONCURRENCY` (1–16, default
-2), `WORKSPACE_WORKER_POLL_INTERVAL_MS` (100–5000, default 500), and
-`WORKSPACE_WORKER_SHUTDOWN_GRACE_MS` (100–60000, default 5000). Shutdown stops
-new claims and grants active owners the configured grace; unresolved execution
-then becomes interrupted. Short SQLite claims/reconciliation finish within the
-existing busy-timeout discipline and are never abandoned after possible commit.
-An in-flight Python thread or provider effect cannot be forcibly killed; late
-output is discarded and no external effect is automatically replayed. Restart
-interrupts claimed running/cancelling work, while never-claimed queued Agent
-work remains eligible. This is one-process execution, not distributed or
-exactly-once external execution. Pipeline stays staging-only, Evaluation keeps
-its existing EVAL-003 response-attached executor/receipts, and model identity
-tests stay synchronous/provider-free. Existing readiness additionally reports
-the safe `worker_ready` flag while the pool exists and returns 503 if a worker
-dies. See [the separate scaling roadmap](docs/SCALING_ROADMAP.md).
+Create and activate a virtual environment:
 
-SCALE-002 records measured development capacity using real HTTP/workers/SQLite
-with mocked provider transport. See the [load characterization receipt](docs/SCALE_002_FINAL_RECEIPT.md)
-and [reproducible protocol](docs/SCALE_002_BENCHMARK_PROTOCOL.md) for environment,
-workloads, saturation evidence and limitations. No production SLA is certified.
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
 
-The provider-free `native-agent-evaluation` v1 protocol evaluates an existing
-terminal Agent run from its frozen plan, safe events and durable result. It
-returns separate versioned execution, tool, budget, evidence and research
-metrics with `computed`, `unavailable` and `not_applicable` states, plus a
-canonical report digest. It neither reruns the Agent nor judges factual
-correctness, and it exposes no overall Agent score. Reports are computed
-through one private read-only `GET /agent/runs/{run_id}/evaluation` route for
-terminal runs. No report storage is added; active runs return 409, and an
-inconsistent snapshot fails closed.
+Install dependencies:
 
-The optional Agent extension has a final cross-layer validation receipt in
-[TEST-005](docs/TEST_005_AGENT_FINAL_RECEIPT.md). It exercises the built
-frontend against real FastAPI Agent routes and temporary SQLite in Chromium
-and Firefox, alongside the closed-tool, lifecycle, adversarial, evaluation,
-access and data-free checkout gates. The scripted successful research model
-is test-only. The subsequent optional PROVIDER-001 extension has its own
-mocked-transport verification and provider plan; TEST-005 remains a completed
-historical baseline.
+```powershell
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+Create `.env`:
+
+```text
+GROQ_API_KEY=your_primary_groq_key
+GROQ_API_KEY_FALL_BACK=optional_serving_and_evaluation_fallback
+GROQ_KEY_POLICY=key5_only
+QDRANT_MODE=local
+QDRANT_LOCAL_PATH=data/processed/qdrant
+QDRANT_INDEX_MANIFEST_PATH=data/processed/qdrant_index_manifest.json
+QDRANT_CLOUD_URL=
+QDRANT_CLOUD_API_KEY=
+PDF_ARTIFACTS_DIR=data/generated/pdf
+PDF_GENERATION_ENABLED=true
+PDF_GENERATION_TIMEOUT_SECONDS=60
+PDF_GENERATION_CONCURRENCY=2
+EMBEDDING_MODEL_ID=nomic-ai/nomic-embed-text-v1.5
+EMBEDDING_MODEL_REVISION=<exact-hugging-face-commit>
+EMBEDDING_GENERATIONS_DIR=data/embedding_generations
+EMBEDDING_GENERATION_PATH=data/embedding_generations/<generation-id>
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+WORKSPACE_MODE=public
+LOCAL_WORKSPACE_TOKEN=
+LOCAL_WORKSPACE_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+LOCAL_WORKSPACE_ALLOWED_HOSTS=localhost,127.0.0.1,[::1]
+ENABLE_WORKSPACE_EXECUTION=false
+WORKSPACE_DB_PATH=.local/workbench/workspace.sqlite3
+WORKSPACE_RUNS_DIR=.local/workbench/runs
+WORKSPACE_SQLITE_BUSY_TIMEOUT_MS=5000
+LLM_RATE_LIMIT_BURST=10/minute
+LLM_RATE_LIMIT_DAILY=100/day
+DECOMPOSED_RATE_LIMIT=5/minute
+CACHE_TEST_RATE_LIMIT=10/minute
+ENABLE_CACHE_CLEAR=false
+TRUSTED_PROXY_CIDRS=
+```
+
+`GROQ_API_KEY` is the primary credential; `GROQ_API_KEY_FALL_BACK` is optional.
+`GROQ_KEY_POLICY=key5_only` is retained as a historical/frozen policy identifier
+and now selects only the primary `GROQ_API_KEY`. The `pool` policy resolves primary
+then fallback, removes duplicates, and permits fallback-only configuration for
+normal generation; strict Agent execution requires primary. Generator rotation
+and bounded 429 cooldown/failover remain unchanged; Agent decisions retain one
+HTTP attempt and never rotate to fallback. CRED-001 promoted the former KEY5
+secret to primary locally. Generation and judging now share this policy while
+retaining their separate accounting. `ALLOWED_ORIGINS` is a
+comma-separated allowlist. Add the final Vercel domain before public
+deployment; do not use `*`. `TRUSTED_PROXY_CIDRS` is empty by default; set it
+to the proxy CIDR ranges only when the API runs behind ngrok or another reverse
+proxy, as described in the rate-limit section above.
+
+`WORKSPACE_MODE=public` is the default and keeps private workspace reads,
+writes, and jobs unavailable. Local workspace access requires the explicit
+`local` mode, a dedicated bearer token of at least 32 non-whitespace
+characters, a direct loopback socket peer, and an exact allowlisted local Host
+and Origin. Keep `LOCAL_WORKSPACE_TOKEN` server-side; never expose it through a
+`VITE_*` variable or reuse a provider credential. Forwarding headers do not
+affect this local-only decision. Execution remains a separate, disabled-by-
+default capability controlled by `ENABLE_WORKSPACE_EXECUTION`.
+
+The local workspace persistence foundation uses Python's built-in SQLite at
+`WORKSPACE_DB_PATH`; run artifacts are reserved under `WORKSPACE_RUNS_DIR`.
+Relative paths must remain under `.local/`, which is git-ignored and isolated
+from canonical `data/`, evaluation, PDF, embedding, and Qdrant storage. The
+database uses explicit ordered migrations, foreign keys, WAL where supported,
+a bounded busy timeout, and short serialized writes. Public mode does not open
+or create the database. Browser import and collection workflows use the same
+authority; there is no browser-side persistence writer.
+
+Durable pipeline, evaluation, and model-test job state also lives in that one
+SQLite database. Jobs have opaque IDs, idempotent creation, optimistic
+revisions, ordered steps/events, bounded progress and result data, explicit
+cancellation acknowledgement, and restart reconciliation that marks only
+active work interrupted. Raw idempotency keys, credentials, absolute machine
+paths, and executable payload formats are not persisted. Job history and
+artifact references remain private/local and are excluded from portable
+workspace backups. Pipeline and Evaluation expose their own protected job
+routes; persistence itself still never runs provider or ingestion work.
+
+DATA-005 uses the existing `telemetry_events` table as the only durable
+terminal-request authority. Schema migration v6 adds typed subsystem, severity,
+outcome/correlation, safe error-code, and bounded allowlisted metadata fields.
+Only `/query`, `/query/decomposed`, their streaming variants, `/search`, and
+`/retrieval/inspect` create terminal records. JSON responses are measured at
+completion; SSE is measured only at done, safe error, timeout, disconnect, or
+incomplete close—not when headers open. A storage failure is best-effort and
+cannot change the source response. Records retain 30 days; `/logs` exposes only
+the most recent seven days. DATA-004 terminal jobs are projected directly from
+canonical job rows, so job events are never duplicated into telemetry.
+
+The three operational read routes require the same local bearer, loopback,
+Host, and Origin boundary as other private workspace reads. Public mode neither
+opens the database nor reveals whether telemetry exists. Analytics ranges,
+intervals, metrics, log category/level, cursor, and page size are closed and
+bounded. Empty duration populations use `null`; count zero remains zero. No
+cost, token count, provider health, resource usage, confidence, or quality
+metric is inferred. Telemetry and job/log history remain excluded from portable
+workspace backup and restore.
+
+`PDF_GENERATION_ENABLED` controls the optional provenance-bound PDF
+representation. Its artifacts remain under the git-ignored `data/` tree;
+generation is bounded by the timeout/concurrency settings and can be disabled
+when the deployment should expose only Structured/Normalized readers.
+
+Build local artifacts in order:
+
+```powershell
+.venv\Scripts\python.exe -m scripts.download_filings
+.venv\Scripts\python.exe -m scripts.chunk_filings
+.venv\Scripts\python.exe -m scripts.add_table_chunks
+.venv\Scripts\python.exe -m scripts.embed_chunks --generation-id <generation-id>
+.venv\Scripts\python.exe -m scripts.index_chunks
+```
+
+`EMBEDDING_MODEL_REVISION` is required for trusted embedding and index rebuilds.
+`scripts.embed_chunks` creates a new immutable directory under
+`EMBEDDING_GENERATIONS_DIR`; the generation ID must be safe and unused. It writes
+each file atomically and publishes its completion manifest only after reloading
+and validating every output from disk. Failed or incomplete generations are
+retained for audit and are never resumed or selected automatically.
+Use `--reuse-from <completed-generation>` to reuse vectors only when the pinned
+model metadata, file hash, vector shape, and canonical payload match exactly.
+
+Set `EMBEDDING_GENERATION_PATH` to the completed generation before running
+`scripts.index_chunks`. Indexing has no fallback to canonical embedded JSONL: it
+recomputes file, corpus, and vector fingerprints, verifies the active canonical
+corpus identity, and rejects invalid generations before opening Qdrant. The index
+manifest schema binds the validated generation fingerprint and takes model
+provenance directly from its manifest. It is published only after the final
+Qdrant point count is verified. If collection mutation fails, the old index
+manifest remains absent instead of making a stale trust claim.
+
+Run a smoke test:
+
+```powershell
+.venv\Scripts\python.exe -m scripts.diagnostics.rag_smoke_test
+```
+
+Run the two-phase evaluation (Phase 1 builds a deterministic offline
+retrieval artifact; Phase 2 generates and judges against frozen evidence
+with checkpointed, binding-verified resume):
+
+```powershell
+.venv\Scripts\python.exe -m scripts.run_evaluation_phase1 --priority 2 --output data/eval_artifacts/phase1_priority2.json --verify-determinism
+.venv\Scripts\python.exe -m scripts.run_evaluation_phase2 --priority 2 `
+  --gen-checkpoint data/eval_artifacts/phase2_gen_candidate.jsonl `
+  --judge-checkpoint data/eval_artifacts/phase2_judge_candidate.jsonl `
+  --output data/eval_artifacts/phase2_results_candidate.json `
+  --fresh
+```
+
+The runner refuses the protected official `selective_packed_v2` result path
+unless `--allow-official-overwrite` is explicitly supplied. Promotion is a
+separate, manual decision after the admission audit.
+
+The legacy single-phase runner remains available:
+
+```powershell
+.venv\Scripts\python.exe -m scripts.run_evaluation
+```
+
+## Continuous Integration
+
+GitHub Actions runs separate path-filtered quality gates for the backend and
+frontend. The backend job uses Python 3.12 with CPU-only PyTorch, runs the full
+quota-free test suite, and compiles `src`, `scripts`, and `configs`. Hugging Face
+offline flags prevent accidental model downloads. The frontend job uses the
+project-pinned Bun `1.3.14`, installs from `bun.lock`, type-checks, runs Vitest,
+builds the production bundle, runs the token contrast gate, and executes the
+Playwright browser suite (Chromium and Firefox) against fully mocked API
+routes, uploading traces and screenshots as artifacts on failure. A separate
+frontend job installs the Python harness dependencies and runs the real
+HTTP/SSE integration suite in Chromium and Firefox without provider calls.
+
+Run the same checks locally:
+
+```powershell
+.venv\Scripts\python.exe -m pytest tests/ -v
+.venv\Scripts\python.exe -m compileall src scripts configs
+```
+
+The backend suite is hermetic: a pytest socket guard fails any unmocked
+external network call, and `live_network` tests are deselected by default.
+Real SEC connectivity can be checked separately with the opt-in smoke
+`python -m scripts.diagnostics.sec_live_smoke`.
+
+```bash
+cd frontend
+bun install --frozen-lockfile
+bun run lint
+bun run test
+bun run build
+```
+
+Use `bun run test`, not `bun test`: the latter invokes Bun's native test runner
+instead of the repository's configured Vitest/jsdom environment.
+
+Browser verification is part of the frontend suite:
+
+```bash
+VITE_API_BASE_URL=http://127.0.0.1:8000 bun run test:e2e
+bun e2e/token-contrast.mjs
+```
+
+The Playwright run serves the production build with `vite preview` and mocks
+every backend route locally, so browser tests never reach a real API. Display
+assertions check real rendered state instead of forcing animation state, and
+the screenshot matrix covers Light and Dark themes at 390, 768, and 1440
+pixels for both Chromium and Firefox.
+
+The real HTTP/SSE integration suite is separate from the mocked browser suite:
+
+```bash
+bun run test:e2e-integration
+```
+
+It builds with a fixed loopback API origin, starts the deterministic FastAPI
+harness and byte-splitting proxy, and runs eight transport/session tests in
+each of Chromium and Firefox with one worker. The harness is provider-free.
+
+The TEST-004 product gate serves a separate production build against real
+FastAPI public/local handlers and an isolated temporary SQLite workspace:
+
+```bash
+bun run test:e2e-product
+```
+
+Its bounded corpus, retrieval and provider dependencies are deterministic test
+fixtures; it does not read the developer `.env` or require `data/` or live
+provider access. Activate a backend test environment first, or set
+`HARNESS_PYTHON` to its interpreter path.
+
+## Running With Docker
+
+Prerequisites: Docker Desktop installed and running, plus corpus artifacts already built locally under `data/processed/`.
+
+1. Copy `.env.example` to `.env` and configure `GROQ_API_KEY`; optionally configure `GROQ_API_KEY_FALL_BACK`. The historical `key5_only` identifier selects primary only. Choose `pool` explicitly for primary/fallback rotation with deduplication and bounded 429 cooldown/failover. Generation and judging use the same credential authority. Keep the pinned model revisions unless the index and image are intentionally rebuilt together.
+
+2. Build and run the backend with a provenance-bound image. See
+   [`docs/LOCAL_RELEASE_RUNBOOK.md`](docs/LOCAL_RELEASE_RUNBOOK.md) for the
+   complete PowerShell sequence:
+
+```powershell
+$releaseSha = (git rev-parse HEAD).Trim()
+$env:GIT_REVISION = $releaseSha
+docker compose build --build-arg GIT_REVISION=$releaseSha
+docker tag edqa-api:local edqa-api:$releaseSha
+docker compose up -d --no-build
+```
+
+3. Verify the API is ready:
+
+```bash
+curl http://localhost:8000/health/ready
+```
+
+The response should include `"pipeline_ready": true`.
+
+Docker notes:
+
+- The container uses CPU-only PyTorch for portability, so it runs on machines without an NVIDIA GPU. The provider-free release smoke checks readiness and ticker discovery only; use the receipt generator in the runbook to bind health to the image and Git commit. A query route is deliberately outside this smoke because it can spend provider quota.
+- Qdrant runs in local persistent mode and is mounted from `./data/processed` into `/app/data/processed`. The image does not bundle corpus data; `data/processed/` must exist on the host before running Docker.
+- The service uses one Uvicorn worker because Qdrant local mode uses a file lock and does not support multiple API worker processes reading the same local storage path. Use Qdrant server or Qdrant Cloud before enabling multi-worker deployment.
+
+## Qdrant Cloud
+
+Local Qdrant remains the default serving mode. To migrate the current local collection to Qdrant Cloud, create a Qdrant Cloud cluster and set:
+
+```text
+QDRANT_CLOUD_URL=https://your-cluster-id.cloud.qdrant.io:6333
+QDRANT_CLOUD_API_KEY=your_api_key
+```
+
+Migrate the local `sec_filings` collection:
+
+```powershell
+.venv\Scripts\python.exe -m scripts.migrate_to_qdrant_cloud
+```
+
+Use `--recreate` only when you intentionally want to replace the cloud collection:
+
+```powershell
+.venv\Scripts\python.exe -m scripts.migrate_to_qdrant_cloud --recreate
+```
+
+Verify local and cloud retrieval agree on a smoke query:
+
+```powershell
+.venv\Scripts\python.exe -m scripts.verify_qdrant_cloud
+```
+
+After verification passes, switch serving to cloud:
+
+```text
+QDRANT_MODE=cloud
+```
+
+In cloud mode, the API scrolls chunk payloads from Qdrant at startup to rebuild
+the in-memory BM25 index and structured-lookup inputs. A hosted container does
+not need the git-ignored `data/processed/` directory when the cloud collection
+contains complete payloads.
+
+## Zero-Cost Public Demo
+
+The frontend can remain online on Vercel while the backend runs locally through
+the reserved ngrok endpoint. Visitors need only open the Vercel site; the owner
+must start Docker and ngrok before a demo session.
+
+Demo frontend: `https://frontend-one-gamma-f9jf11u8ec.vercel.app`
+
+The workspace supports full legal company names, professional section labels,
+streamed conversation cards, collapsible filing evidence, a desktop evidence
+side panel, Overview/Conversation navigation, a searchable local Library with
+bookmarks, feedback, private notes, tags, saved answer variants, evidence
+collections, schema-versioned Markdown/JSON backup export, provider-free
+Retrieval Lab and Document Explorer views, safe System & provenance metadata,
+viewport-safe help tooltips, and a desktop sidebar that can be resized from
+`280` to `480` pixels. Library records write schema v4 and backup exports use
+format v2 while reading older records/backups. Browsers with Web Locks give one
+tab write ownership; secondary or unsupported-lock tabs remain read-only but
+can still read and export local research. Light, dark, and system theme choices
+share the same semantic blue/slate token system; reduced-motion preferences
+disable nonessential effects.
+
+```powershell
+.\scripts\start_demo.ps1
+```
+
+Stop all local demo services afterward:
+
+```powershell
+.\scripts\stop_demo.ps1
+```
+
+Configure Vercel with:
+
+```text
+VITE_API_BASE_URL=https://blog-making-bloated.ngrok-free.dev
+```
+
+Add the exact Vercel production origin to `ALLOWED_ORIGINS` in `.env`. The demo
+frontend remains reachable when the local backend is offline, but queries
+require the owner's machine, Docker Desktop, and ngrok tunnel to be running.
 
 ## Overview
 
@@ -250,6 +593,10 @@ Collection-list refusal is distinct from an unknown collection record.
 
 | Document | Purpose |
 |---|---|
+| [Portfolio case study](docs/PORTFOLIO_CASE_STUDY.md) | Problem, decisions, measurements and lessons |
+| [Demo script](docs/DEMO_SCRIPT.md) | Executable 5–7 minute provider-free recording plan |
+| [Application copy](docs/PORTFOLIO_BULLETS.md) | CV bullets, portfolio paragraph and repository description |
+| [Interview guide](docs/INTERVIEW_GUIDE.md) | Project-specific technical Q&A |
 | [`README.md`](README.md) | Public overview, setup, API contract, benchmark, and deployment instructions |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Stable component boundaries, data and request flows, state ownership, and extension paths |
 | [`PROJECT_STATE.md`](PROJECT_STATE.md) | Living engineering journal, measured decisions, rejected experiments, and current milestone state |
@@ -334,14 +681,13 @@ trusted-source path.
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for component boundaries, request flows,
 state ownership, reliability controls, deployment constraints, and extension
-paths. The source-controlled diagrams below are rendered from Archify IR and
-are also available as standalone interactive viewers:
+paths. The older viewers below focus on the RAG pipeline; the current
+Quick/Deep overview is [above](#architecture-at-a-glance). These viewers
+are rendered from Archify IR:
 
 - [System architecture](docs/architecture/sec-research-workspace.html)
 - [Query data flow](docs/architecture/sec-research-query.html)
 - [Research workflow](docs/architecture/sec-research-workflow.html)
-
-[![System architecture: browser request, FastAPI, hybrid retrieval, evidence stores, and Groq generation](docs/architecture/sec-research-workspace.visual-check.1440x900.light.png)](docs/architecture/sec-research-workspace.html)
 
 ```text
 SEC 10-K Filing
@@ -593,6 +939,261 @@ LLM provider:
 | Provider | Status |
 |---|---|
 | Groq | Only LLM provider; serves `openai/gpt-oss-120b` |
+
+## Repository Structure
+
+```text
+configs/              Environment-backed project settings
+frontend/             Independently deployed Vite/React/TypeScript client
+scripts/              Data pipeline, indexing, smoke test, and evaluation entry points
+src/api/              FastAPI bootstrap, transport schemas, and route groups
+src/evaluation/       LLM-as-judge evaluation framework
+src/generation/       RAG generation, streaming, and decomposition foundation
+src/ingestion/        SEC download, section extraction, and chunking
+src/memory/           Conversation memory and query rewriting
+src/retrieval/        Embeddings, vector store, hybrid retrieval, and semantic cache
+tests/                Unit tests
+ARCHITECTURE.md        Stable system design and component boundaries
+PROJECT_STATE.md      Detailed engineering handoff and milestone notes
+AGENTS.md             Stable operating guide for AI coding agents
+```
+
+## Data And Secrets
+
+Generated artifacts are intentionally ignored by git:
+
+- Raw SEC filings under `data/raw/`.
+- Extracted sections and chunks under `data/processed/`.
+- Embedded chunks.
+- Local Qdrant index.
+- Evaluation result JSON.
+
+Secrets are loaded from `.env` and should never be committed.
+
+## Engineering notes and evidence
+
+The sections below preserve the detailed implementation history and its original
+benchmark populations. Use the current [final release receipt](docs/IMPROVEMENT_FINAL_RECEIPT.md)
+for closure status and the individual receipts for each campaign:
+
+- [UX-AGENT-001](docs/UX_AGENT_001_FINAL_RECEIPT.md): unified Research contracts and browser validation.
+- [DB-SCALE-001](docs/DB_SCALE_001_FINAL_RECEIPT.md): SQLite lifecycle and contention measurements.
+- [WORKER-002](docs/WORKER_002_FINAL_RECEIPT.md): durable admission wake hint and polling fallback.
+- [CAPACITY-001](docs/CAPACITY_001_FINAL_RECEIPT.md): workload-dependent worker tradeoffs.
+- [OBS-001](docs/OBS_001_FINAL_RECEIPT.md): bounded content-free telemetry.
+- [CI-FIX-001](docs/CI_FIX_001_FINAL_RECEIPT.md): deterministic OpenAPI/CI behavior.
+- [CRED-001](docs/CRED_001_FINAL_RECEIPT.md): primary/fallback credentials and separate provider semantics.
+
+Public `/system/info` exposes bounded model/build identifiers, not local model
+paths or credential-shaped configuration values. Unsafe model identifiers are
+reported as null; unsafe build identifiers are omitted.
+
+## Start here — current product
+
+Research is the primary conversation entry. Choose **Quick** (default) for the
+existing cited RAG answer, or **Deep Research** to submit the explicit goal to an
+existing durable Agent run. Deep requires the local workspace connection and,
+when a decision provider is configured, fresh permission for that run. Quick
+filters and previous answers are not silently passed to the Agent. The Quick
+comparison switch is labeled **Comparative answer**.
+
+One Agent run stays in one conversation card with server-owned status, result,
+evidence, cancellation and collapsed research details. **Research deeper** fills
+the goal from a completed Quick question; sending is a separate user action.
+Conversation storage/export holds only a run reference. Reload clears the bearer:
+reconnect to read the same run; an unavailable run keeps its reference. `/chat`
+links and saved conversations remain compatible; `/agent` is the full inspector.
+See the [UX-AGENT-001 receipt](docs/UX_AGENT_001_FINAL_RECEIPT.md).
+
+The current improvement round closes with the
+[FINAL-IMPROVE receipt](docs/IMPROVEMENT_FINAL_RECEIPT.md). It binds local release
+evidence to a committed candidate and requires both Backend and Frontend CI on
+the final pushed SHA. Historical task-specific CI waivers do not satisfy that gate.
+
+Optional content-free Agent performance attribution is disabled by default.
+For an authorized local workspace, set server-side
+`ENABLE_PERFORMANCE_ATTRIBUTION=true` to retain bounded sampled API/all-worker timing summaries
+for 30 days in the existing DATA-005 SQLite database. Protected
+`/analytics/summary` exposes a separate performance population; public metrics
+and quality metrics retain their existing meanings. See the
+[OBS-001 protocol](docs/OBS_001_ATTRIBUTION_PROTOCOL.md) for phase definitions,
+bounds and the hermetic benchmark. Workers remain two with 500ms polling and
+5000ms shutdown grace. Authorized queued Agent admission also supplies a
+payload-free hint to the existing local worker owner after durable commit.
+Hints coalesce; missed hints and restart work are discovered through SQLite
+polling. This does not certify a production SLA.
+
+Private workspace factories reuse integrity/schema validation for the same live
+database file and migration contract. Each operation still opens and closes its
+own SQLite connection; no job/event/result cache or connection pool is added.
+Multi-statement job and event reads use short WAL snapshot transactions, while
+mutations retain serialized `BEGIN IMMEDIATE` and revision checks. Explicit
+`WorkspaceDatabase.initialize()` still performs a full audit, including on reopen.
+See the [DB-SCALE-001 protocol](docs/DB_SCALE_001_PROTOCOL.md) for lifecycle and
+measurement boundaries. Public mode retains lazy private-storage refusal.
+The [final receipt](docs/DB_SCALE_001_FINAL_RECEIPT.md) records the comparable
+before/after campaign, snapshot correctness and finite admission contention
+tradeoff. Mixed event-append wait p95 falls from 350.401ms to 4.180ms.
+The [WORKER-002 receipt](docs/WORKER_002_FINAL_RECEIPT.md) records subsequent
+scheduling measurements: idle-confirmed default queue p95 falls from 502.753ms
+to 9.340ms; saturated queueing, finite admission overlap and some service tails
+remain. Worker and poll defaults are unchanged; larger synthetic worker counts
+also raise possible provider concurrency and local/API costs.
+
+The [CI-FIX-001 receipt](docs/CI_FIX_001_FINAL_RECEIPT.md) records the release
+contract audit and exact-SHA GitHub evidence. OpenAPI verification normalizes
+the proven equivalent omitted/true extra-property rule on object responses and
+also freezes referenced request/response schemas. The route-cancellation fixture
+waits for the initial session check before sending, then verifies partial text,
+abort and rejection of late terminal events. Install declared Python requirements
+in a fresh environment and use Bun 1.3.14 with the frozen frontend lockfile for
+release validation; an existing development environment may contain other versions.
+CI runs the Agent shell sweep through its dedicated local fixture harness. Warm
+navigation checks retain the 200ms budget, native clicks and explicit assertions.
+Browser timestamps measure pointer input to visible routes; driver timing is
+reported separately. The warm input check warms the control once before its
+40 measured fills under the unchanged 100ms budget.
+Citation nodes retain focus across answer updates, and a new pointer or keyboard
+interaction cancels stale inspector focus restoration.
+
+The independent frontend exposes Research (with compatible Chat links), Documents, Search, Collections,
+Retrieval, Models, Pipeline, Agent, Reranker, Evaluation, Analytics, Datasets,
+Settings, and Logs. FastAPI supplies public catalog/search/inspection/report reads; opt-in
+local mode adds a private SQLite workspace, queued Pipeline staging, frozen
+native Evaluation jobs, and content-free operational telemetry. Pipeline staging
+does not execute or promote the canonical corpus. Browser conversations and
+presentation preferences have separate on-device storage.
+
+From a clean source checkout, install Python dependencies as described in
+[Local Setup](#local-setup), then start the backend and frontend in separate
+terminals (PowerShell examples):
+
+```powershell
+.venv\Scripts\python.exe -m uvicorn src.api.app:app --reload --port 8000
+```
+
+```powershell
+cd frontend
+bun install --frozen-lockfile
+bun run dev
+```
+
+Set `frontend/.env.local` from `frontend/.env.example` with
+`VITE_API_BASE_URL=http://localhost:8000`. Browser `VITE_*` values must never
+contain secrets. A data-free checkout can import the API and run the hermetic
+tests, but corpus-backed retrieval/answers need local `data/` artifacts and
+configured models; live generation additionally needs the documented
+server-side Groq configuration. No `.env` or `data/` is needed for the
+deterministic TEST-004 product harness.
+
+The default `WORKSPACE_MODE=public` does not open the private database. For
+local mode, configure a dedicated `LOCAL_WORKSPACE_TOKEN` (at least 32
+non-whitespace characters), loopback Host/Origin allowlists and, only for
+execution, `ENABLE_WORKSPACE_EXECUTION=true`. Enter the token in the app's
+Connection control: the shared Pipeline/Evaluation/Analytics/Logs/Settings
+session holds it only in memory and loses it on reload. The ordinary
+Collections and model-test browser wrappers are not yet connected to that
+bearer owner; their refusal states are intentional, not an auth bypass.
+
+Core checks are `.venv\Scripts\python.exe -m pytest tests -q --tb=short` at
+the root and `bun run lint`, `bun run test`, `bun run build` under `frontend/`.
+`bun run test:e2e-product` uses real FastAPI public/local handlers and temporary
+SQLite with deterministic corpus/provider doubles; it is not a live-provider or
+load test. See [frontend setup](frontend/README.md), [architecture](ARCHITECTURE.md),
+[current state](PROJECT_STATE.md), and the [final product receipt](docs/TEST_004_FINAL_PRODUCT_RECEIPT.md).
+The required UI rebuild roadmap is complete through UI-013; EVAL-004/Ragas is
+optional, not a missing native-evaluation prerequisite.
+
+The optional Agent extension includes typed in-process research tools, one
+bounded single-Agent orchestrator, private DATA-004 durable runs, and an
+optional bounded research policy. Research runs freeze up to six explicit
+objectives, gather canonical evidence across existing tools, track gaps and
+validate current-run citations before synthesis. Agent observations reject
+conflicting document/chunk source identities when the IDs encode a
+recognizable ticker or SEC filing accession. Invalid structured evidence ends
+the run with a typed `invalid_observation` result instead of entering the
+research ledger. The AGENT-005 adversarial checkpoint is documented in
+[the extension plan](docs/AGENT_EXTENSION_PLAN.md). The Agent run routes
+support queued creation, detail, results, ordered finite SSE events and
+revision-safe cancellation. Create and cancel require local execution access;
+reads require local bearer access. PROVIDER-001 adds a production Groq strict
+JSON Schema decision adapter for `openai/gpt-oss-120b` and `openai/gpt-oss-20b`.
+It reuses the generator default or loaded model identity and existing
+`GROQ_KEY_POLICY`/Groq credentials. Unsupported models or absent eligible keys
+remain `decision_provider_unavailable` without tool calls. The private
+`/agent` page reads durable runs, safe activity, research evidence and the
+native metric report after an explicit memory-only local connection. It can
+create a real recorded run when execution is enabled. The existing protected
+`/system/configuration-status` reports provider capability without contacting
+Groq. The create form requires explicit decision-provider consent; RAG tool
+provider permission remains separate and disabled in the form. New runs freeze
+safe provider/model/adapter/mechanism/key-policy provenance; changed bindings
+fail closed and historical unconfigured runs retain their original identity.
+The SDK makes one attempt per decision, with retries disabled, a 60 second
+total deadline and five second connect timeout. Cancellation waits for the
+existing safe boundary; restart never replays a claimed call. Strict format
+does not prove answer quality or model resistance to injected text: existing
+tool, evidence, objective and budget checks remain authoritative. No reasoning
+or raw transport payload is persisted. There is no multi-agent behavior.
+See [the provider plan](docs/AGENT_PRODUCTION_PROVIDER_PLAN.md) and [the extension plan](docs/AGENT_EXTENSION_PLAN.md)
+for research bounds, partial results and recovery.
+
+CRED-001 consolidates server-side Groq configuration to one primary and one
+optional fallback. The historical `key5_only` identifier retains frozen Agent
+bindings and now selects primary only. See [Local Setup](#local-setup) and the
+[credential receipt](docs/CRED_001_FINAL_RECEIPT.md) for migration and compatibility
+checks; no live provider call or remote key revocation was required.
+
+SCALE-001 moves durable Agent execution to one application-lifespan worker pool.
+`POST /agent/runs` returns the accepted queued record (201 and its revision),
+independently of execution or client disconnect. The pool atomically claims
+only `agent / bounded_agent_run` from DATA-004 SQLite, oldest creation timestamp
+then job ID first. Two fixed asyncio workers are the default; queued rows do
+not allocate execution tasks. Startup requires `WORKSPACE_MODE=local`,
+`ENABLE_WORKSPACE_EXECUTION=true` and `WORKSPACE_WORKER_ENABLED=true`.
+Disabling workers leaves Agent work queued. Public mode starts no private worker
+and opens no private database. Model/provider resolution occurs after claim;
+the frozen decision and RAG grants still control execution independently.
+
+Worker settings are server-side: `WORKSPACE_WORKER_CONCURRENCY` (1–16, default
+2), `WORKSPACE_WORKER_POLL_INTERVAL_MS` (100–5000, default 500), and
+`WORKSPACE_WORKER_SHUTDOWN_GRACE_MS` (100–60000, default 5000). Shutdown stops
+new claims and grants active owners the configured grace; unresolved execution
+then becomes interrupted. Short SQLite claims/reconciliation finish within the
+existing busy-timeout discipline and are never abandoned after possible commit.
+An in-flight Python thread or provider effect cannot be forcibly killed; late
+output is discarded and no external effect is automatically replayed. Restart
+interrupts claimed running/cancelling work, while never-claimed queued Agent
+work remains eligible. This is one-process execution, not distributed or
+exactly-once external execution. Pipeline stays staging-only, Evaluation keeps
+its existing EVAL-003 response-attached executor/receipts, and model identity
+tests stay synchronous/provider-free. Existing readiness additionally reports
+the safe `worker_ready` flag while the pool exists and returns 503 if a worker
+dies. See [the separate scaling roadmap](docs/SCALING_ROADMAP.md).
+
+SCALE-002 records measured development capacity using real HTTP/workers/SQLite
+with mocked provider transport. See the [load characterization receipt](docs/SCALE_002_FINAL_RECEIPT.md)
+and [reproducible protocol](docs/SCALE_002_BENCHMARK_PROTOCOL.md) for environment,
+workloads, saturation evidence and limitations. No production SLA is certified.
+
+The provider-free `native-agent-evaluation` v1 protocol evaluates an existing
+terminal Agent run from its frozen plan, safe events and durable result. It
+returns separate versioned execution, tool, budget, evidence and research
+metrics with `computed`, `unavailable` and `not_applicable` states, plus a
+canonical report digest. It neither reruns the Agent nor judges factual
+correctness, and it exposes no overall Agent score. Reports are computed
+through one private read-only `GET /agent/runs/{run_id}/evaluation` route for
+terminal runs. No report storage is added; active runs return 409, and an
+inconsistent snapshot fails closed.
+
+The optional Agent extension has a final cross-layer validation receipt in
+[TEST-005](docs/TEST_005_AGENT_FINAL_RECEIPT.md). It exercises the built
+frontend against real FastAPI Agent routes and temporary SQLite in Chromium
+and Firefox, alongside the closed-tool, lifecycle, adversarial, evaluation,
+access and data-free checkout gates. The scripted successful research model
+is test-only. The subsequent optional PROVIDER-001 extension has its own
+mocked-transport verification and provider plan; TEST-005 remains a completed
+historical baseline.
 
 ## Evaluation Results
 
@@ -1537,394 +2138,6 @@ Semantic cache validation:
 | Exact repeated `/query` latency | `0.1080s` |
 | Cached `/query/stream` completion | `0.1212s` |
 | Similarity threshold | `0.95` |
-
-## Local Setup
-
-Create and activate a virtual environment:
-
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-```
-
-Install dependencies:
-
-```powershell
-.venv\Scripts\python.exe -m pip install -r requirements.txt
-```
-
-Create `.env`:
-
-```text
-GROQ_API_KEY=your_primary_groq_key
-GROQ_API_KEY_FALL_BACK=optional_serving_and_evaluation_fallback
-GROQ_KEY_POLICY=key5_only
-QDRANT_MODE=local
-QDRANT_LOCAL_PATH=data/processed/qdrant
-QDRANT_INDEX_MANIFEST_PATH=data/processed/qdrant_index_manifest.json
-QDRANT_CLOUD_URL=
-QDRANT_CLOUD_API_KEY=
-PDF_ARTIFACTS_DIR=data/generated/pdf
-PDF_GENERATION_ENABLED=true
-PDF_GENERATION_TIMEOUT_SECONDS=60
-PDF_GENERATION_CONCURRENCY=2
-EMBEDDING_MODEL_ID=nomic-ai/nomic-embed-text-v1.5
-EMBEDDING_MODEL_REVISION=<exact-hugging-face-commit>
-EMBEDDING_GENERATIONS_DIR=data/embedding_generations
-EMBEDDING_GENERATION_PATH=data/embedding_generations/<generation-id>
-ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
-WORKSPACE_MODE=public
-LOCAL_WORKSPACE_TOKEN=
-LOCAL_WORKSPACE_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
-LOCAL_WORKSPACE_ALLOWED_HOSTS=localhost,127.0.0.1,[::1]
-ENABLE_WORKSPACE_EXECUTION=false
-WORKSPACE_DB_PATH=.local/workbench/workspace.sqlite3
-WORKSPACE_RUNS_DIR=.local/workbench/runs
-WORKSPACE_SQLITE_BUSY_TIMEOUT_MS=5000
-LLM_RATE_LIMIT_BURST=10/minute
-LLM_RATE_LIMIT_DAILY=100/day
-DECOMPOSED_RATE_LIMIT=5/minute
-CACHE_TEST_RATE_LIMIT=10/minute
-ENABLE_CACHE_CLEAR=false
-TRUSTED_PROXY_CIDRS=
-```
-
-`GROQ_API_KEY` is the primary credential; `GROQ_API_KEY_FALL_BACK` is optional.
-`GROQ_KEY_POLICY=key5_only` is retained as a historical/frozen policy identifier
-and now selects only the primary `GROQ_API_KEY`. The `pool` policy resolves primary
-then fallback, removes duplicates, and permits fallback-only configuration for
-normal generation; strict Agent execution requires primary. Generator rotation
-and bounded 429 cooldown/failover remain unchanged; Agent decisions retain one
-HTTP attempt and never rotate to fallback. CRED-001 promoted the former KEY5
-secret to primary locally. Generation and judging now share this policy while
-retaining their separate accounting. `ALLOWED_ORIGINS` is a
-comma-separated allowlist. Add the final Vercel domain before public
-deployment; do not use `*`. `TRUSTED_PROXY_CIDRS` is empty by default; set it
-to the proxy CIDR ranges only when the API runs behind ngrok or another reverse
-proxy, as described in the rate-limit section above.
-
-`WORKSPACE_MODE=public` is the default and keeps private workspace reads,
-writes, and jobs unavailable. Local workspace access requires the explicit
-`local` mode, a dedicated bearer token of at least 32 non-whitespace
-characters, a direct loopback socket peer, and an exact allowlisted local Host
-and Origin. Keep `LOCAL_WORKSPACE_TOKEN` server-side; never expose it through a
-`VITE_*` variable or reuse a provider credential. Forwarding headers do not
-affect this local-only decision. Execution remains a separate, disabled-by-
-default capability controlled by `ENABLE_WORKSPACE_EXECUTION`.
-
-The local workspace persistence foundation uses Python's built-in SQLite at
-`WORKSPACE_DB_PATH`; run artifacts are reserved under `WORKSPACE_RUNS_DIR`.
-Relative paths must remain under `.local/`, which is git-ignored and isolated
-from canonical `data/`, evaluation, PDF, embedding, and Qdrant storage. The
-database uses explicit ordered migrations, foreign keys, WAL where supported,
-a bounded busy timeout, and short serialized writes. Public mode does not open
-or create the database. Browser import and collection workflows use the same
-authority; there is no browser-side persistence writer.
-
-Durable pipeline, evaluation, and model-test job state also lives in that one
-SQLite database. Jobs have opaque IDs, idempotent creation, optimistic
-revisions, ordered steps/events, bounded progress and result data, explicit
-cancellation acknowledgement, and restart reconciliation that marks only
-active work interrupted. Raw idempotency keys, credentials, absolute machine
-paths, and executable payload formats are not persisted. Job history and
-artifact references remain private/local and are excluded from portable
-workspace backups. Pipeline and Evaluation expose their own protected job
-routes; persistence itself still never runs provider or ingestion work.
-
-DATA-005 uses the existing `telemetry_events` table as the only durable
-terminal-request authority. Schema migration v6 adds typed subsystem, severity,
-outcome/correlation, safe error-code, and bounded allowlisted metadata fields.
-Only `/query`, `/query/decomposed`, their streaming variants, `/search`, and
-`/retrieval/inspect` create terminal records. JSON responses are measured at
-completion; SSE is measured only at done, safe error, timeout, disconnect, or
-incomplete close—not when headers open. A storage failure is best-effort and
-cannot change the source response. Records retain 30 days; `/logs` exposes only
-the most recent seven days. DATA-004 terminal jobs are projected directly from
-canonical job rows, so job events are never duplicated into telemetry.
-
-The three operational read routes require the same local bearer, loopback,
-Host, and Origin boundary as other private workspace reads. Public mode neither
-opens the database nor reveals whether telemetry exists. Analytics ranges,
-intervals, metrics, log category/level, cursor, and page size are closed and
-bounded. Empty duration populations use `null`; count zero remains zero. No
-cost, token count, provider health, resource usage, confidence, or quality
-metric is inferred. Telemetry and job/log history remain excluded from portable
-workspace backup and restore.
-
-`PDF_GENERATION_ENABLED` controls the optional provenance-bound PDF
-representation. Its artifacts remain under the git-ignored `data/` tree;
-generation is bounded by the timeout/concurrency settings and can be disabled
-when the deployment should expose only Structured/Normalized readers.
-
-Build local artifacts in order:
-
-```powershell
-.venv\Scripts\python.exe -m scripts.download_filings
-.venv\Scripts\python.exe -m scripts.chunk_filings
-.venv\Scripts\python.exe -m scripts.add_table_chunks
-.venv\Scripts\python.exe -m scripts.embed_chunks --generation-id <generation-id>
-.venv\Scripts\python.exe -m scripts.index_chunks
-```
-
-`EMBEDDING_MODEL_REVISION` is required for trusted embedding and index rebuilds.
-`scripts.embed_chunks` creates a new immutable directory under
-`EMBEDDING_GENERATIONS_DIR`; the generation ID must be safe and unused. It writes
-each file atomically and publishes its completion manifest only after reloading
-and validating every output from disk. Failed or incomplete generations are
-retained for audit and are never resumed or selected automatically.
-Use `--reuse-from <completed-generation>` to reuse vectors only when the pinned
-model metadata, file hash, vector shape, and canonical payload match exactly.
-
-Set `EMBEDDING_GENERATION_PATH` to the completed generation before running
-`scripts.index_chunks`. Indexing has no fallback to canonical embedded JSONL: it
-recomputes file, corpus, and vector fingerprints, verifies the active canonical
-corpus identity, and rejects invalid generations before opening Qdrant. The index
-manifest schema binds the validated generation fingerprint and takes model
-provenance directly from its manifest. It is published only after the final
-Qdrant point count is verified. If collection mutation fails, the old index
-manifest remains absent instead of making a stale trust claim.
-
-Run a smoke test:
-
-```powershell
-.venv\Scripts\python.exe -m scripts.diagnostics.rag_smoke_test
-```
-
-Run the two-phase evaluation (Phase 1 builds a deterministic offline
-retrieval artifact; Phase 2 generates and judges against frozen evidence
-with checkpointed, binding-verified resume):
-
-```powershell
-.venv\Scripts\python.exe -m scripts.run_evaluation_phase1 --priority 2 --output data/eval_artifacts/phase1_priority2.json --verify-determinism
-.venv\Scripts\python.exe -m scripts.run_evaluation_phase2 --priority 2 `
-  --gen-checkpoint data/eval_artifacts/phase2_gen_candidate.jsonl `
-  --judge-checkpoint data/eval_artifacts/phase2_judge_candidate.jsonl `
-  --output data/eval_artifacts/phase2_results_candidate.json `
-  --fresh
-```
-
-The runner refuses the protected official `selective_packed_v2` result path
-unless `--allow-official-overwrite` is explicitly supplied. Promotion is a
-separate, manual decision after the admission audit.
-
-The legacy single-phase runner remains available:
-
-```powershell
-.venv\Scripts\python.exe -m scripts.run_evaluation
-```
-
-## Continuous Integration
-
-GitHub Actions runs separate path-filtered quality gates for the backend and
-frontend. The backend job uses Python 3.12 with CPU-only PyTorch, runs the full
-quota-free test suite, and compiles `src`, `scripts`, and `configs`. Hugging Face
-offline flags prevent accidental model downloads. The frontend job uses the
-project-pinned Bun `1.3.14`, installs from `bun.lock`, type-checks, runs Vitest,
-builds the production bundle, runs the token contrast gate, and executes the
-Playwright browser suite (Chromium and Firefox) against fully mocked API
-routes, uploading traces and screenshots as artifacts on failure. A separate
-frontend job installs the Python harness dependencies and runs the real
-HTTP/SSE integration suite in Chromium and Firefox without provider calls.
-
-Run the same checks locally:
-
-```powershell
-.venv\Scripts\python.exe -m pytest tests/ -v
-.venv\Scripts\python.exe -m compileall src scripts configs
-```
-
-The backend suite is hermetic: a pytest socket guard fails any unmocked
-external network call, and `live_network` tests are deselected by default.
-Real SEC connectivity can be checked separately with the opt-in smoke
-`python -m scripts.diagnostics.sec_live_smoke`.
-
-```bash
-cd frontend
-bun install --frozen-lockfile
-bun run lint
-bun run test
-bun run build
-```
-
-Use `bun run test`, not `bun test`: the latter invokes Bun's native test runner
-instead of the repository's configured Vitest/jsdom environment.
-
-Browser verification is part of the frontend suite:
-
-```bash
-VITE_API_BASE_URL=http://127.0.0.1:8000 bun run test:e2e
-bun e2e/token-contrast.mjs
-```
-
-The Playwright run serves the production build with `vite preview` and mocks
-every backend route locally, so browser tests never reach a real API. Display
-assertions check real rendered state instead of forcing animation state, and
-the screenshot matrix covers Light and Dark themes at 390, 768, and 1440
-pixels for both Chromium and Firefox.
-
-The real HTTP/SSE integration suite is separate from the mocked browser suite:
-
-```bash
-bun run test:e2e-integration
-```
-
-It builds with a fixed loopback API origin, starts the deterministic FastAPI
-harness and byte-splitting proxy, and runs eight transport/session tests in
-each of Chromium and Firefox with one worker. The harness is provider-free.
-
-The TEST-004 product gate serves a separate production build against real
-FastAPI public/local handlers and an isolated temporary SQLite workspace:
-
-```bash
-bun run test:e2e-product
-```
-
-Its bounded corpus, retrieval and provider dependencies are deterministic test
-fixtures; it does not read the developer `.env` or require `data/` or live
-provider access. Activate a backend test environment first, or set
-`HARNESS_PYTHON` to its interpreter path.
-
-## Running With Docker
-
-Prerequisites: Docker Desktop installed and running, plus corpus artifacts already built locally under `data/processed/`.
-
-1. Copy `.env.example` to `.env` and configure `GROQ_API_KEY`; optionally configure `GROQ_API_KEY_FALL_BACK`. The historical `key5_only` identifier selects primary only. Choose `pool` explicitly for primary/fallback rotation with deduplication and bounded 429 cooldown/failover. Generation and judging use the same credential authority. Keep the pinned model revisions unless the index and image are intentionally rebuilt together.
-
-2. Build and run the backend with a provenance-bound image. See
-   [`docs/LOCAL_RELEASE_RUNBOOK.md`](docs/LOCAL_RELEASE_RUNBOOK.md) for the
-   complete PowerShell sequence:
-
-```powershell
-$releaseSha = (git rev-parse HEAD).Trim()
-$env:GIT_REVISION = $releaseSha
-docker compose build --build-arg GIT_REVISION=$releaseSha
-docker tag edqa-api:local edqa-api:$releaseSha
-docker compose up -d --no-build
-```
-
-3. Verify the API is ready:
-
-```bash
-curl http://localhost:8000/health/ready
-```
-
-The response should include `"pipeline_ready": true`.
-
-Docker notes:
-
-- The container uses CPU-only PyTorch for portability, so it runs on machines without an NVIDIA GPU. The provider-free release smoke checks readiness and ticker discovery only; use the receipt generator in the runbook to bind health to the image and Git commit. A query route is deliberately outside this smoke because it can spend provider quota.
-- Qdrant runs in local persistent mode and is mounted from `./data/processed` into `/app/data/processed`. The image does not bundle corpus data; `data/processed/` must exist on the host before running Docker.
-- The service uses one Uvicorn worker because Qdrant local mode uses a file lock and does not support multiple API worker processes reading the same local storage path. Use Qdrant server or Qdrant Cloud before enabling multi-worker deployment.
-
-## Qdrant Cloud
-
-Local Qdrant remains the default serving mode. To migrate the current local collection to Qdrant Cloud, create a Qdrant Cloud cluster and set:
-
-```text
-QDRANT_CLOUD_URL=https://your-cluster-id.cloud.qdrant.io:6333
-QDRANT_CLOUD_API_KEY=your_api_key
-```
-
-Migrate the local `sec_filings` collection:
-
-```powershell
-.venv\Scripts\python.exe -m scripts.migrate_to_qdrant_cloud
-```
-
-Use `--recreate` only when you intentionally want to replace the cloud collection:
-
-```powershell
-.venv\Scripts\python.exe -m scripts.migrate_to_qdrant_cloud --recreate
-```
-
-Verify local and cloud retrieval agree on a smoke query:
-
-```powershell
-.venv\Scripts\python.exe -m scripts.verify_qdrant_cloud
-```
-
-After verification passes, switch serving to cloud:
-
-```text
-QDRANT_MODE=cloud
-```
-
-In cloud mode, the API scrolls chunk payloads from Qdrant at startup to rebuild
-the in-memory BM25 index and structured-lookup inputs. A hosted container does
-not need the git-ignored `data/processed/` directory when the cloud collection
-contains complete payloads.
-
-## Zero-Cost Public Demo
-
-The frontend can remain online on Vercel while the backend runs locally through
-the reserved ngrok endpoint. Visitors need only open the Vercel site; the owner
-must start Docker and ngrok before a demo session.
-
-Demo frontend: `https://frontend-one-gamma-f9jf11u8ec.vercel.app`
-
-The workspace supports full legal company names, professional section labels,
-streamed conversation cards, collapsible filing evidence, a desktop evidence
-side panel, Overview/Conversation navigation, a searchable local Library with
-bookmarks, feedback, private notes, tags, saved answer variants, evidence
-collections, schema-versioned Markdown/JSON backup export, provider-free
-Retrieval Lab and Document Explorer views, safe System & provenance metadata,
-viewport-safe help tooltips, and a desktop sidebar that can be resized from
-`280` to `480` pixels. Library records write schema v4 and backup exports use
-format v2 while reading older records/backups. Browsers with Web Locks give one
-tab write ownership; secondary or unsupported-lock tabs remain read-only but
-can still read and export local research. Light, dark, and system theme choices
-share the same semantic blue/slate token system; reduced-motion preferences
-disable nonessential effects.
-
-```powershell
-.\scripts\start_demo.ps1
-```
-
-Stop all local demo services afterward:
-
-```powershell
-.\scripts\stop_demo.ps1
-```
-
-Configure Vercel with:
-
-```text
-VITE_API_BASE_URL=https://blog-making-bloated.ngrok-free.dev
-```
-
-Add the exact Vercel production origin to `ALLOWED_ORIGINS` in `.env`. The demo
-frontend remains reachable when the local backend is offline, but queries
-require the owner's machine, Docker Desktop, and ngrok tunnel to be running.
-
-## Repository Structure
-
-```text
-configs/              Environment-backed project settings
-frontend/             Independently deployed Vite/React/TypeScript client
-scripts/              Data pipeline, indexing, smoke test, and evaluation entry points
-src/api/              FastAPI bootstrap, transport schemas, and route groups
-src/evaluation/       LLM-as-judge evaluation framework
-src/generation/       RAG generation, streaming, and decomposition foundation
-src/ingestion/        SEC download, section extraction, and chunking
-src/memory/           Conversation memory and query rewriting
-src/retrieval/        Embeddings, vector store, hybrid retrieval, and semantic cache
-tests/                Unit tests
-ARCHITECTURE.md        Stable system design and component boundaries
-PROJECT_STATE.md      Detailed engineering handoff and milestone notes
-AGENTS.md             Stable operating guide for AI coding agents
-```
-
-## Data And Secrets
-
-Generated artifacts are intentionally ignored by git:
-
-- Raw SEC filings under `data/raw/`.
-- Extracted sections and chunks under `data/processed/`.
-- Embedded chunks.
-- Local Qdrant index.
-- Evaluation result JSON.
-
-Secrets are loaded from `.env` and should never be committed.
 
 ## Current Status
 

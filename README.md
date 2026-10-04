@@ -1,22 +1,22 @@
 # Evidence-Grounded SEC Filing Research with Hybrid RAG & Durable AI Agents - FilingScope
 
+![Python](https://img.shields.io/badge/Python-3776ab?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178c6?logo=typescript&logoColor=white)
+![React 19](https://img.shields.io/badge/React-19-149eca?logo=react&logoColor=white)
+![SSE](https://img.shields.io/badge/Streaming-SSE-0891b2)
+![SQLite](https://img.shields.io/badge/SQLite-003b57?logo=sqlite&logoColor=white)
+<br>
 ![BM25](https://img.shields.io/badge/Retrieval-BM25-2563eb)
 ![Semantic Vector Search](https://img.shields.io/badge/Search-Semantic_Vector-2563eb)
 ![Qdrant](https://img.shields.io/badge/Vector_DB-Qdrant-dc244c)
 ![RRF](https://img.shields.io/badge/Fusion-RRF-7c3aed)
 ![Cross-Encoder Reranking](https://img.shields.io/badge/Reranking-Cross--Encoder-7c3aed)
-<br>
-![Python](https://img.shields.io/badge/Python-3776ab?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
-![SSE](https://img.shields.io/badge/Streaming-SSE-0891b2)
-![React 19](https://img.shields.io/badge/React-19-149eca?logo=react&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-3178c6?logo=typescript&logoColor=white)
 ![Groq](https://img.shields.io/badge/LLM-Groq-f55036)
-![SQLite](https://img.shields.io/badge/SQLite-003b57?logo=sqlite&logoColor=white)
 
+[![Skill: Archify](https://img.shields.io/badge/Skill-Archify-8b5cf6)](.agents/skills/archify/SKILL.md)
 [![Backend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/backend.yml/badge.svg)](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/backend.yml)
 [![Frontend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/frontend.yml/badge.svg)](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/frontend.yml)
-[![Skill: Archify](https://img.shields.io/badge/Skill-Archify-8b5cf6)](.agents/skills/archify/SKILL.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 [Live Demo](https://frontend-one-gamma-f9jf11u8ec.vercel.app) ·

@@ -139,7 +139,7 @@ N=30 run; later experiments retain their own provenance. Generation checkpoints
 bind configuration and rendered context, and changed bindings require a fresh
 checkpoint. Quota-skipped or mixed checkpoints cannot become final metrics.
 See [evaluation results](ENGINEERING_REFERENCE.md#evaluation-results) and
-[project state](../PROJECT_STATE.md).
+[frozen release receipt](IMPROVEMENT_FINAL_RECEIPT.md).
 The [public native adaptation](RAG_QUALITY_BENCHMARK.md) recomputes six metrics
 offline from all 30 frozen cases. Judge estimates are reused; historical packing
 uses required-keyword donors. It is not fully label-blind or current-runtime accuracy.
@@ -220,5 +220,5 @@ the approximately 527.24 kB bundle warning, manual/unverified native zoom,
 staged Collections/model-test browser bearer wiring and optional Ragas remain
 visible. The frontend began as a Google AI Studio generated application; describe
 your integration, fixes and validation contribution precisely rather than claiming
-every original component. The next presentation action is to
-[record the demo](DEMO_SCRIPT.md), not to promise a new engineering roadmap.
+every original component. The [published silent demo](DEMO_SCRIPT.md) shows the current product with
+its synthetic fixture and validation scope disclosed.

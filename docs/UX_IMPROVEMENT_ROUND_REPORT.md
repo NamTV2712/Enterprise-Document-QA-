@@ -88,9 +88,9 @@ architecture.
 
 | Artifact | Source IR | Standalone viewer |
 |---|---|---|
-| Workspace architecture | [`sec-research-workspace.architecture.json`](architecture/sec-research-workspace.architecture.json) | [`sec-research-workspace.html`](architecture/sec-research-workspace.html) |
-| Query dataflow | [`sec-research-query.dataflow.json`](architecture/sec-research-query.dataflow.json) | [`sec-research-query.html`](architecture/sec-research-query.html) |
-| Research workflow | [`sec-research-workflow.workflow.json`](architecture/sec-research-workflow.workflow.json) | [`sec-research-workflow.html`](architecture/sec-research-workflow.html) |
+| Workspace architecture | [`sec-research-workspace.architecture.json`](https://github.com/NamTV2712/Enterprise-Document-QA-/blob/5c52e28343d740b5ce11a113a6900959ca5b779e/docs/architecture/sec-research-workspace.architecture.json) | [`sec-research-workspace.html`](https://github.com/NamTV2712/Enterprise-Document-QA-/blob/5c52e28343d740b5ce11a113a6900959ca5b779e/docs/architecture/sec-research-workspace.html) |
+| Query dataflow | [`sec-research-query.dataflow.json`](https://github.com/NamTV2712/Enterprise-Document-QA-/blob/5c52e28343d740b5ce11a113a6900959ca5b779e/docs/architecture/sec-research-query.dataflow.json) | [`sec-research-query.html`](https://github.com/NamTV2712/Enterprise-Document-QA-/blob/5c52e28343d740b5ce11a113a6900959ca5b779e/docs/architecture/sec-research-query.html) |
+| Research workflow | [`sec-research-workflow.workflow.json`](https://github.com/NamTV2712/Enterprise-Document-QA-/blob/5c52e28343d740b5ce11a113a6900959ca5b779e/docs/architecture/sec-research-workflow.workflow.json) | [`sec-research-workflow.html`](https://github.com/NamTV2712/Enterprise-Document-QA-/blob/5c52e28343d740b5ce11a113a6900959ca5b779e/docs/architecture/sec-research-workflow.html) |
 
 Each artifact passed `archify validate --quality showcase` with zero errors and
 zero warnings. The final browser visual-check receipts passed Light/Dark at
@@ -135,7 +135,7 @@ the server loaded 10,053 indexed chunks. The six-case smoke returned:
 | Comparison/decomposed query | 2 | HTTP 200; 2 sources each |
 | Insufficient evidence | 2 | HTTP 200; explicit fallback each |
 
-The detailed redacted data is [`KEY5_SMOKE_RECEIPT.json`](KEY5_SMOKE_RECEIPT.json).
+The detailed redacted data is [`KEY5_SMOKE_RECEIPT.json`](https://github.com/NamTV2712/Enterprise-Document-QA-/blob/5c52e28343d740b5ce11a113a6900959ca5b779e/docs/KEY5_SMOKE_RECEIPT.json).
 No key value, request header, or secret was written to the repository. This was
 a bounded smoke only; it does not reclassify the official benchmark or claim
 that a provider campaign completed.

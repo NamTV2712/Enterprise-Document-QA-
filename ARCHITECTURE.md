@@ -1,8 +1,8 @@
 # Architecture
 
 This document describes the stable system design of Enterprise Document QA. Use
-`README.md` for setup and public status, `PROJECT_STATE.md` for current metrics
-and engineering decisions, and `AGENTS.md` for repository operating rules.
+the [README](README.md) for public status, [Setup](docs/SETUP.md) for operations,
+and the [frozen release receipt](docs/IMPROVEMENT_FINAL_RECEIPT.md) for validation provenance.
 
 ## System Context
 
@@ -165,9 +165,9 @@ provider call, Agent replay or storage mutation. UI-014 exposes that evaluator
 through one private terminal-run read, bringing the API inventory to 90 method/path
 pairs. The independent `/agent` frontend reuses the memory-only local bearer
 owner, reads durable run/result/event state and renders the 21 native metric
-results without calculating a score. See
-[`docs/AGENT_EXTENSION_PLAN.md`](docs/AGENT_EXTENSION_PLAN.md) for the separate
-optional sequence.
+results without calculating a score. See the
+[pipeline guide](docs/architecture/FULL_PIPELINE.md#3-private-deep-research-execution)
+for execution ownership and access boundaries.
 
 ### Durable Agent worker ownership (SCALE-001)
 
@@ -216,7 +216,7 @@ that thread/provider shutdown contract is separately scoped. The new registry
 never steals Evaluation jobs. Pipeline remains queue/staging-only; model tests
 remain bounded synchronous provider-free identity checks. Product routes stay
 90; SQLite v7 and dependencies stay unchanged. No broker/distributed topology
-or load/SLA claim is added. See [SCALING_ROADMAP](docs/SCALING_ROADMAP.md).
+or load/SLA claim is added. See the [worker receipt](docs/SCALE_001_FINAL_RECEIPT.md).
 
 `src/api/app.py` owns FastAPI creation, lifespan/bootstrap, shared runtime
 state, middleware, exception handling, and route registration. Existing
@@ -550,8 +550,8 @@ Checkpoint records are filtered to the selected test questions before aggregatio
 Fresh runs can explicitly remove the active checkpoint. A run with skipped cases
 exits unsuccessfully and must not replace official reported metrics.
 
-The official benchmark and current scores belong in `README.md` and
-`PROJECT_STATE.md`, not this architecture document.
+The official benchmark and reported scores are published in the
+[README](README.md) and [benchmark guide](docs/RAG_QUALITY_BENCHMARK.md).
 
 ## Intentional Boundaries
 
@@ -579,5 +579,5 @@ The architecture supports these upgrades without redesigning the entire system:
 - Add true decomposed SSE events while preserving existing response contracts.
 
 Any upgrade that changes retrieval behavior, evaluation methodology, ingestion
-order, or deployment topology should first be recorded with evidence in
-`PROJECT_STATE.md`.
+order, or deployment topology should first be recorded with evidence and
+matching reproducibility instructions.

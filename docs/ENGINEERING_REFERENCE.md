@@ -7,7 +7,7 @@ milestone descriptions are not new release claims. In particular, older Library
 schema descriptions and proposed roadmap items are historical.
 
 Use the [current product overview and setup](../README.md),
-[architecture](../ARCHITECTURE.md), [project journal](../PROJECT_STATE.md) and
+[architecture](../ARCHITECTURE.md) and
 [frozen final release receipt](IMPROVEMENT_FINAL_RECEIPT.md) for current authority.
 No product behavior or benchmark was changed by relocating this text.
 
@@ -412,13 +412,9 @@ Collection-list refusal is distinct from an unknown collection record.
 |---|---|
 | [Portfolio case study](../docs/PORTFOLIO_CASE_STUDY.md) | Problem, decisions, measurements and lessons |
 | [Demo script](../docs/DEMO_SCRIPT.md) | Executable 5–7 minute provider-free recording plan |
-| [Application copy](../docs/PORTFOLIO_BULLETS.md) | CV bullets, portfolio paragraph and repository description |
 | [Interview guide](../docs/INTERVIEW_GUIDE.md) | Project-specific technical Q&A |
 | [`README.md`](../README.md) | Public overview, setup, API contract, benchmark, and deployment instructions |
 | [`ARCHITECTURE.md`](../ARCHITECTURE.md) | Stable component boundaries, data and request flows, state ownership, and extension paths |
-| [`PROJECT_STATE.md`](../PROJECT_STATE.md) | Living engineering journal, measured decisions, rejected experiments, and current milestone state |
-| [`TODO.md`](../TODO.md) | Optional post-roadmap deployment, diagnostics, and evidence-gated backlog work |
-| [`AGENTS.md`](../AGENTS.md) | Stable repository rules and operational traps for coding agents |
 | [`frontend/README.md`](../frontend/README.md) | Frontend-specific local development, Vercel setup, and API usage |
 | [`docs/LOCAL_RELEASE_RUNBOOK.md`](../docs/LOCAL_RELEASE_RUNBOOK.md) | Provider-free local Docker build, smoke test, provenance, and receipt |
 | [`docs/ARCHITECTURE_API_GUIDE.md`](../docs/ARCHITECTURE_API_GUIDE.md) | Retrieval flow, read-only API surfaces, and frontend state boundaries |
@@ -502,9 +498,9 @@ paths. The older viewers below focus on the RAG pipeline; the current
 Quick/Deep overview is [above](#architecture-at-a-glance). These viewers
 are rendered from Archify IR:
 
-- [System architecture](../docs/architecture/sec-research-workspace.html)
-- [Query data flow](../docs/architecture/sec-research-query.html)
-- [Research workflow](../docs/architecture/sec-research-workflow.html)
+- [System architecture](architecture/full-pipeline.html)
+- [Query data flow](architecture/hybrid-search.html)
+- [Research workflow](architecture/full-pipeline.html)
 
 ```text
 SEC 10-K Filing
@@ -771,8 +767,6 @@ src/memory/           Conversation memory and query rewriting
 src/retrieval/        Embeddings, vector store, hybrid retrieval, and semantic cache
 tests/                Unit tests
 ARCHITECTURE.md        Stable system design and component boundaries
-PROJECT_STATE.md      Detailed engineering handoff and milestone notes
-AGENTS.md             Stable operating guide for AI coding agents
 ```
 
 ## Data And Secrets
@@ -917,7 +911,7 @@ the root and `bun run lint`, `bun run test`, `bun run build` under `frontend/`.
 `bun run test:e2e-product` uses real FastAPI public/local handlers and temporary
 SQLite with deterministic corpus/provider doubles; it is not a live-provider or
 load test. See [frontend setup](../frontend/README.md), [architecture](../ARCHITECTURE.md),
-[current state](../PROJECT_STATE.md), and the [final product receipt](../docs/TEST_004_FINAL_PRODUCT_RECEIPT.md).
+[current state](https://github.com/NamTV2712/Enterprise-Document-QA-/blob/5c52e28343d740b5ce11a113a6900959ca5b779e/PROJECT_STATE.md), and the [final product receipt](../docs/TEST_004_FINAL_PRODUCT_RECEIPT.md).
 The required UI rebuild roadmap is complete through UI-013; EVAL-004/Ragas is
 optional, not a missing native-evaluation prerequisite.
 
@@ -930,7 +924,7 @@ conflicting document/chunk source identities when the IDs encode a
 recognizable ticker or SEC filing accession. Invalid structured evidence ends
 the run with a typed `invalid_observation` result instead of entering the
 research ledger. The AGENT-005 adversarial checkpoint is documented in
-[the extension plan](../docs/AGENT_EXTENSION_PLAN.md). The Agent run routes
+[the extension plan](https://github.com/NamTV2712/Enterprise-Document-QA-/blob/5c52e28343d740b5ce11a113a6900959ca5b779e/docs/AGENT_EXTENSION_PLAN.md). The Agent run routes
 support queued creation, detail, results, ordered finite SSE events and
 revision-safe cancellation. Create and cancel require local execution access;
 reads require local bearer access. PROVIDER-001 adds a production Groq strict
@@ -952,7 +946,7 @@ existing safe boundary; restart never replays a claimed call. Strict format
 does not prove answer quality or model resistance to injected text: existing
 tool, evidence, objective and budget checks remain authoritative. No reasoning
 or raw transport payload is persisted. There is no multi-agent behavior.
-See [the provider plan](../docs/AGENT_PRODUCTION_PROVIDER_PLAN.md) and [the extension plan](../docs/AGENT_EXTENSION_PLAN.md)
+See [the provider plan](https://github.com/NamTV2712/Enterprise-Document-QA-/blob/5c52e28343d740b5ce11a113a6900959ca5b779e/docs/AGENT_PRODUCTION_PROVIDER_PLAN.md) and [the extension plan](https://github.com/NamTV2712/Enterprise-Document-QA-/blob/5c52e28343d740b5ce11a113a6900959ca5b779e/docs/AGENT_EXTENSION_PLAN.md)
 for research bounds, partial results and recovery.
 
 CRED-001 consolidates server-side Groq configuration to one primary and one
@@ -986,7 +980,7 @@ exactly-once external execution. Pipeline stays staging-only, Evaluation keeps
 its existing EVAL-003 response-attached executor/receipts, and model identity
 tests stay synchronous/provider-free. Existing readiness additionally reports
 the safe `worker_ready` flag while the pool exists and returns 503 if a worker
-dies. See [the separate scaling roadmap](../docs/SCALING_ROADMAP.md).
+dies. See [the separate scaling roadmap](https://github.com/NamTV2712/Enterprise-Document-QA-/blob/5c52e28343d740b5ce11a113a6900959ca5b779e/docs/SCALING_ROADMAP.md).
 
 SCALE-002 records measured development capacity using real HTTP/workers/SQLite
 with mocked provider transport. See the [load characterization receipt](../docs/SCALE_002_FINAL_RECEIPT.md)
@@ -2056,15 +2050,7 @@ This project demonstrates the engineering work required to move RAG beyond a sim
 
 The goal is not to hide the hard parts of enterprise document QA, but to expose them, measure them, and improve them systematically.
 
-### Skill governance
-
-Project-local agent contracts live under `.agents/skills/`. `rag-ui-ux` remains
-the frontend/product authority; the focused `rag-core`, `rag-retrieval-quality`,
-`rag-evaluation`, `rag-security`, `rag-performance`, and
-`rag-document-provenance` skills own their named RAG boundaries. Routing and
-external-source provenance are recorded in `.agents/skills/ROUTING.md` and
-`.agents/skills/SOURCES.md`. These contracts do not install remote skills or
-change application behavior.
+### Source reader boundaries
 
 The reader is local-only and exposes representation-specific availability.
 Indexed excerpts, normalized text, structured content, and PDF availability

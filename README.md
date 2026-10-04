@@ -294,16 +294,13 @@ Offline public benchmark reproduction, from the repository root:
 - **Inspect:** [Engineering Reference](docs/ENGINEERING_REFERENCE.md),
   [release evidence](docs/IMPROVEMENT_FINAL_RECEIPT.md),
   [frontend contracts](docs/frontend/FRONTEND_CONTRACT.md).
-- **Browse:** [Documentation index](docs/README.md), [Project journal](PROJECT_STATE.md),
-  [Security policy](SECURITY.md), [Agent operating guide](AGENTS.md).
+- **Browse:** [Documentation index](docs/README.md), [Security policy](SECURITY.md).
 
 ## License
 
 Project source and documentation use the [MIT license](LICENSE).
-External SEC content and dependencies retain their own terms. Bundled tooling
-retains [Archify's MIT notice](.agents/skills/archify/LICENSE),
-[third-party notices](.agents/skills/archify/THIRD_PARTY_NOTICES.md) and
-[source provenance](.agents/skills/SOURCES.md).
+External SEC content and dependencies retain their own terms. Generated diagram
+viewers and brand marks retain their [third-party notices](docs/licenses/DIAGRAM_NOTICES.md).
 
 <!-- Historical README links resolve here; detailed sections are preserved in the engineering reference. -->
 <a id="enterprise-document-qa"></a>

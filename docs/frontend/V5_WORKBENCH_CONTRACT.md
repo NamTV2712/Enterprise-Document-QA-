@@ -165,8 +165,8 @@ fallback. The phase receipt and known renderer limitation are maintained in
 
 Baseline visual evidence:
 
-- [Chromium 1440×900 baseline](../../frontend/e2e/screenshots/v5-00-baseline-chromium-1440x900.png)
-- [Chromium 1920×1080 baseline](../../frontend/e2e/screenshots/v5-00-baseline-chromium-1920x1080.png)
+- Chromium 1440×900 and 1920×1080 baseline captures are generated locally by
+  the baseline test; screenshot outputs are ignored and not bundled in a clone.
 - Firefox captures have the same measured composition and are written beside
   the Chromium captures by the baseline test.
 - Repository visual reference:

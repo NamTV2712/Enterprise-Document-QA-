@@ -274,6 +274,5 @@ was the integrated Research behavior, typed contracts, state boundaries and
 verification recorded in this repository, rather than a claim of hand-authoring
 every initial UI element.
 
-For a presentation, use the [seven-minute demo](DEMO_SCRIPT.md). For application
-materials, use [portfolio bullets](PORTFOLIO_BULLETS.md); for technical discussion,
-use the [interview guide](INTERVIEW_GUIDE.md).
+For a presentation, use the [published silent demo](DEMO_SCRIPT.md); for technical
+discussion, use the [interview guide](INTERVIEW_GUIDE.md).

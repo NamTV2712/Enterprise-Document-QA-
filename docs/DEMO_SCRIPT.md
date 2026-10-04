@@ -27,7 +27,7 @@ architecture; the closing card preserves their limitations. These cards render
 existing documentation and are not live measurement dashboards.
 
 The extended narrated timeline below is **optional**; it is not the published
-video's timeline. See the [shipping receipt](PORTFOLIO_SHIP_001_RECEIPT.md).
+video's timeline.
 
 ## Choose the demonstration environment
 
@@ -180,7 +180,7 @@ guaranteed accurate financial assistant.
 ### 0:30–1:10 — Architecture overview
 
 **Click/show:** [README architecture](../README.md#architecture) and its
-[existing system image](architecture/sec-research-workspace.visual-check.2048x1320.light.png).
+[full pipeline image](architecture/full-pipeline.png).
 Point out the RAG path. Explain Deep's shared infrastructure orally: the preserved
 image does not draw Agent workers or DATA-004. Keep narration within 40 seconds.
 
@@ -312,6 +312,5 @@ retain Quick/source inspection, Deep lifecycle, the prepared result and limitati
 
 ## Recording package
 
-- [Recording Cheat Sheet](DEMO_RECORDING_CHEATSHEET.md): the silent tour and optional 6:50 narration timeline.
 - [Demo Questions](DEMO_QUESTIONS.md): four fixture-aware examples and fallbacks.
 - [DEMO-001 receipt](DEMO_001_RECEIPT.md): actual rehearsal outcomes and recording status.

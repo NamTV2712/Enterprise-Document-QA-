@@ -24,7 +24,7 @@ and security configuration were preserved.
 ## Existing architecture
 
 README and rehearsal use
-[the existing 2048×1320 light system capture](architecture/sec-research-workspace.visual-check.2048x1320.light.png).
+[the existing 2048×1320 light system capture](https://github.com/NamTV2712/Enterprise-Document-QA-/blob/5c52e28343d740b5ce11a113a6900959ca5b779e/docs/architecture/sec-research-workspace.visual-check.2048x1320.light.png).
 Both themes at 1440×900 and 2048×1320 were inspected. The selected light image
 has clearer muted labels and more pixels for component names at README width.
 Its SHA256 is
@@ -37,11 +37,11 @@ The image depicts the RAG infrastructure, not Agent workers/DATA-004. Adjacent
 README text and the 40-second narration script explain current Deep ownership
 and the retained primary-only `KEY5-only` policy identifier. The screen segment
 including transition occupied approximately 47 seconds; audio narration was not
-captured. [System HTML](architecture/sec-research-workspace.html),
-[query flow](architecture/sec-research-query.html),
-[workflow](architecture/sec-research-workflow.html) and
+captured. [System HTML](https://github.com/NamTV2712/Enterprise-Document-QA-/blob/5c52e28343d740b5ce11a113a6900959ca5b779e/docs/architecture/sec-research-workspace.html),
+[query flow](https://github.com/NamTV2712/Enterprise-Document-QA-/blob/5c52e28343d740b5ce11a113a6900959ca5b779e/docs/architecture/sec-research-query.html),
+[workflow](https://github.com/NamTV2712/Enterprise-Document-QA-/blob/5c52e28343d740b5ce11a113a6900959ca5b779e/docs/architecture/sec-research-workflow.html) and
 [full architecture](../ARCHITECTURE.md) remain linked. SHOWCASE-002's simplified
-source/HTML/SVG and its [historical receipt](SHOWCASE_002_RECEIPT.md) remain intact
+source/HTML/SVG and its [historical receipt](https://github.com/NamTV2712/Enterprise-Document-QA-/blob/5c52e28343d740b5ce11a113a6900959ca5b779e/docs/SHOWCASE_002_RECEIPT.md) remain intact
 as secondary evidence.
 
 ## Environment and preparation
@@ -127,7 +127,7 @@ accepted three PDF-image differences are part of this task's starting baseline.
 ## Files and validation
 
 Modified: README, docs index, case study, demo script, portfolio copy and interview
-guide. Created: [Recording Cheat Sheet](DEMO_RECORDING_CHEATSHEET.md),
+guide. Created: [Recording Cheat Sheet](https://github.com/NamTV2712/Enterprise-Document-QA-/blob/5c52e28343d740b5ce11a113a6900959ca5b779e/docs/DEMO_RECORDING_CHEATSHEET.md),
 [four Demo Questions](DEMO_QUESTIONS.md) and this receipt. Deleted: none.
 README LF-normalized UTF-8 size: **27,205→27,438 bytes**. It retains Live Demo
 and Demo Guide; no Watch Demo or fabricated video URL was added.

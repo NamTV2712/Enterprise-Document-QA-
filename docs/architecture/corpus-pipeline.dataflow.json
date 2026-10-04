@@ -1,0 +1,196 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "SEC Filing to Searchable Evidence",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1080,
+      500
+    ],
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "default": {
+          "label": "data transformation"
+        },
+        "emphasis": {
+          "label": "index publication"
+        },
+        "database": {
+          "label": "stored artifacts"
+        }
+      }
+    }
+  },
+  "stages": [
+    {
+      "label": "Acquire"
+    },
+    {
+      "label": "Extract"
+    },
+    {
+      "label": "Chunk"
+    },
+    {
+      "label": "Embed"
+    },
+    {
+      "label": "Index"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "edgar-source",
+      "type": "external",
+      "label": "SEC EDGAR",
+      "sublabel": "requests / retry",
+      "stage": 0,
+      "row": 0
+    },
+    {
+      "id": "raw-filing",
+      "type": "database",
+      "label": "Filing HTML",
+      "sublabel": "identity + provenance",
+      "stage": 0,
+      "row": 1
+    },
+    {
+      "id": "html-extraction",
+      "type": "backend",
+      "label": "HTML extraction",
+      "sublabel": "BeautifulSoup / lxml",
+      "stage": 1,
+      "row": 1
+    },
+    {
+      "id": "narrative-chunks",
+      "type": "backend",
+      "label": "Text chunks",
+      "sublabel": "tiktoken / overlap",
+      "stage": 2,
+      "row": 0
+    },
+    {
+      "id": "financial-chunks",
+      "type": "backend",
+      "label": "Financial rows",
+      "sublabel": "units / periods / IDs",
+      "stage": 2,
+      "row": 2
+    },
+    {
+      "id": "nomic-vectors",
+      "type": "backend",
+      "label": "Nomic vectors",
+      "sublabel": "Sentence Transformers",
+      "stage": 3,
+      "row": 1
+    },
+    {
+      "id": "sealed-generation",
+      "type": "database",
+      "label": "Sealed vectors",
+      "sublabel": "hashes / manifest",
+      "stage": 3,
+      "row": 2
+    },
+    {
+      "id": "qdrant-index",
+      "type": "database",
+      "label": "Qdrant index",
+      "sublabel": "vectors + payloads",
+      "stage": 4,
+      "row": 2
+    }
+  ],
+  "flows": [
+    {
+      "id": "download-html",
+      "from": "edgar-source",
+      "to": "raw-filing",
+      "label": "HTML",
+      "labelAt": [
+        100,
+        200
+      ]
+    },
+    {
+      "id": "read-html",
+      "from": "raw-filing",
+      "to": "html-extraction",
+      "label": "parse"
+    },
+    {
+      "id": "split-sections",
+      "from": "html-extraction",
+      "to": "narrative-chunks",
+      "label": "sections"
+    },
+    {
+      "id": "extract-tables",
+      "from": "html-extraction",
+      "to": "financial-chunks",
+      "label": "tables"
+    },
+    {
+      "id": "encode-narrative",
+      "from": "narrative-chunks",
+      "to": "nomic-vectors",
+      "label": "text"
+    },
+    {
+      "id": "encode-tables",
+      "from": "financial-chunks",
+      "to": "nomic-vectors",
+      "label": "rows"
+    },
+    {
+      "id": "publish-generation",
+      "from": "nomic-vectors",
+      "to": "sealed-generation",
+      "label": "seal",
+      "variant": "emphasis",
+      "labelAt": [
+        745,
+        314
+      ]
+    },
+    {
+      "id": "validate-index",
+      "from": "sealed-generation",
+      "to": "qdrant-index",
+      "label": "upsert",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Acquire and extract",
+      "items": [
+        "SEC access uses an identified User-Agent and retries.",
+        "Extract filing sections and eligible financial tables."
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Preserve meaning and identity",
+      "items": [
+        "Token-aware narrative chunks retain overlap.",
+        "Table chunks retain row labels, units and periods."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Publish a verified index",
+      "items": [
+        "Pin Nomic revisions; seal a fresh embedding generation.",
+        "Check fingerprints and counts before index publication."
+      ]
+    }
+  ]
+}

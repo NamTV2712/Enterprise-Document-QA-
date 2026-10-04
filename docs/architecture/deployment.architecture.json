@@ -1,0 +1,337 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "FilingScope Deployment and Access",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1200,
+      620
+    ],
+    "repository": {
+      "url": "https://github.com/NamTV2712/Enterprise-Document-QA-",
+      "revision": "d8afc4b78bb2dd24c2c815067044a33b58c2dc14"
+    }
+  },
+  "components": [
+    {
+      "id": "public-browser",
+      "type": "external",
+      "label": "Public browser",
+      "sublabel": "Quick Research",
+      "pos": [
+        30,
+        120
+      ],
+      "size": [
+        150,
+        74
+      ]
+    },
+    {
+      "id": "vercel-static",
+      "type": "frontend",
+      "label": "Vercel frontend",
+      "sublabel": "Vite / React / TS",
+      "brand": "vercel",
+      "pos": [
+        270,
+        120
+      ],
+      "size": [
+        150,
+        74
+      ],
+      "sources": [
+        {
+          "path": "frontend/vercel.json",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "id": "ngrok-ingress",
+      "type": "cloud",
+      "label": "ngrok tunnel",
+      "sublabel": "owner-operated HTTPS",
+      "pos": [
+        510,
+        120
+      ],
+      "size": [
+        150,
+        74
+      ],
+      "sources": [
+        {
+          "path": "scripts/start_demo.ps1",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "id": "docker-api",
+      "type": "backend",
+      "label": "Docker API",
+      "sublabel": "FastAPI / 1 worker",
+      "brand": "docker",
+      "pos": [
+        750,
+        120
+      ],
+      "size": [
+        150,
+        74
+      ],
+      "sources": [
+        {
+          "path": "Dockerfile",
+          "line": 1
+        },
+        {
+          "path": "docker-compose.yml",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "id": "groq-provider",
+      "type": "cloud",
+      "label": "Groq generation",
+      "sublabel": "server-side credentials",
+      "pos": [
+        990,
+        120
+      ],
+      "size": [
+        170,
+        74
+      ],
+      "sources": [
+        {
+          "path": "src/generation/generator.py",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "id": "public-corpus-volume",
+      "type": "database",
+      "label": "Corpus volume",
+      "sublabel": "Qdrant local / payloads",
+      "pos": [
+        990,
+        365
+      ],
+      "size": [
+        170,
+        74
+      ],
+      "sources": [
+        {
+          "path": "docker-compose.yml",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "id": "local-vite-client",
+      "type": "frontend",
+      "label": "Local workspace UI",
+      "sublabel": "Bun / Vite / React",
+      "pos": [
+        30,
+        365
+      ],
+      "size": [
+        150,
+        74
+      ],
+      "sources": [
+        {
+          "path": "frontend/package.json",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "id": "local-access-guard",
+      "type": "security",
+      "label": "Local access guard",
+      "sublabel": "peer / Host / Origin",
+      "tag": "memory-only bearer",
+      "pos": [
+        270,
+        365
+      ],
+      "size": [
+        150,
+        74
+      ],
+      "sources": [
+        {
+          "path": "docs/SETUP.md",
+          "line": 103
+        }
+      ]
+    },
+    {
+      "id": "private-python-runtime",
+      "type": "backend",
+      "label": "Local Python API",
+      "sublabel": "2 Agent consumers",
+      "pos": [
+        510,
+        365
+      ],
+      "size": [
+        150,
+        74
+      ],
+      "sources": [
+        {
+          "path": "src/workspace/worker.py",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "id": "private-workspace-db",
+      "type": "database",
+      "label": "Private SQLite",
+      "sublabel": "runs / events / results",
+      "brand": "sqlite",
+      "pos": [
+        510,
+        500
+      ],
+      "size": [
+        150,
+        74
+      ],
+      "sources": [
+        {
+          "path": "src/workspace/database.py",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "id": "private-groq-provider",
+      "type": "cloud",
+      "label": "Groq decisions / RAG",
+      "sublabel": "separate provider consent",
+      "pos": [
+        990,
+        500
+      ],
+      "size": [
+        170,
+        74
+      ],
+      "sources": [
+        {
+          "path": "src/agent/provider.py",
+          "line": 1
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "fetch-static-ui",
+      "from": "public-browser",
+      "to": "vercel-static",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "public-rag-traffic",
+      "from": "vercel-static",
+      "to": "ngrok-ingress",
+      "label": "HTTP/SSE",
+      "variant": "emphasis"
+    },
+    {
+      "id": "forward-public-api",
+      "from": "ngrok-ingress",
+      "to": "docker-api",
+      "label": "8000",
+      "variant": "emphasis"
+    },
+    {
+      "id": "call-generation",
+      "from": "docker-api",
+      "to": "groq-provider",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "mount-corpus",
+      "from": "docker-api",
+      "to": "public-corpus-volume",
+      "label": "bind mount",
+      "labelAt": [
+        945,
+        270
+      ]
+    },
+    {
+      "id": "direct-loopback",
+      "from": "local-vite-client",
+      "to": "local-access-guard",
+      "label": "loopback",
+      "variant": "security"
+    },
+    {
+      "id": "admit-private-run",
+      "from": "local-access-guard",
+      "to": "private-python-runtime",
+      "label": "authorize",
+      "variant": "security"
+    },
+    {
+      "id": "persist-private-work",
+      "from": "private-python-runtime",
+      "to": "private-workspace-db",
+      "label": "SQL",
+      "labelAt": [
+        585,
+        465
+      ]
+    },
+    {
+      "id": "private-provider-call",
+      "from": "private-python-runtime",
+      "to": "private-groq-provider",
+      "label": "per-run consent"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Public demo topology",
+      "items": [
+        "Vercel serves frontend assets; the API runs locally.",
+        "Docker and ngrok must be online for public questions."
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Private execution topology",
+      "items": [
+        "Deep requires direct local access and explicit consent.",
+        "SQLite owns durable work; the browser stores run IDs."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Build and storage choices",
+      "items": [
+        "GitHub Actions checks; Vercel and Compose deploy separately.",
+        "Qdrant Cloud is a supported storage alternative."
+      ]
+    }
+  ]
+}

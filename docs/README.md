@@ -24,7 +24,12 @@ SHAs remain in engineering evidence.
 ## Architecture
 
 - [Full architecture and contracts](../ARCHITECTURE.md).
-- [README architecture image](architecture/sec-research-workspace.visual-check.2048x1320.light.png):
+- [Full pipeline guide](architecture/FULL_PIPELINE.md): technologies, commands,
+  corpus lineage, Quick/Deep execution, deployment modes and diagram verification.
+- New interactive views: [Full pipeline](architecture/full-pipeline.html),
+  [SEC corpus preparation](architecture/corpus-pipeline.html),
+  [Deployment and private access](architecture/deployment.html).
+- [Earlier RAG system image](architecture/sec-research-workspace.visual-check.2048x1320.light.png):
   existing validated light system view; [visual-check evidence](architecture/sec-research-workspace.visual-check.json).
 - Interactive HTML: [System Architecture](architecture/sec-research-workspace.html),
   [Query Data Flow](architecture/sec-research-query.html),
@@ -34,9 +39,8 @@ SHAs remain in engineering evidence.
 
 Download/open standalone HTML locally; GitHub file views do not execute it.
 Existing detailed RAG diagrams and their authored sources remain preserved. The
-system image depicts the browser/backend/retrieval/evidence/provider path; durable
-Agent workers and DATA-004 are described in Full Architecture rather than drawn
-in that earlier view.
+earlier system image covers the RAG path; the new pipeline includes durable Agent
+ownership and verified corpus preparation. The contracts remain in Full Architecture.
 
 Historical SHOWCASE-002 presentation evidence remains available: [simplified SVG](assets/sec-research-copilot-architecture.svg),
 [HTML](architecture/sec-research-copilot-showcase.html),

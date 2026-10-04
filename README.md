@@ -19,7 +19,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 [Live Demo](https://frontend-one-gamma-f9jf11u8ec.vercel.app) ·
-[Watch Demo](https://github.com/NamTV2712/Enterprise-Document-QA-/releases/tag/demo-v1) · [Pipeline](#how-hybrid-search-works) · [Architecture](ARCHITECTURE.md) ·
+[Watch Demo](https://github.com/NamTV2712/Enterprise-Document-QA-/releases/tag/demo-v1) · [Pipeline](#architecture) · [Architecture](ARCHITECTURE.md) ·
 [Case Study](docs/PORTFOLIO_CASE_STUDY.md) · [Setup](#local-setup)
 
 Research SEC **10-K filings** while keeping the evidence behind each answer
@@ -94,12 +94,12 @@ can additionally promote a structured match before top-k selection.
 
 ## Architecture
 
-![SEC research infrastructure: browser, FastAPI, hybrid retrieval, Qdrant, corpus and Groq](docs/architecture/sec-research-workspace.visual-check.2048x1320.light.png)
+![Full FilingScope pipeline: SEC preparation and index, browser and API, Hybrid RAG, Groq, bounded Agent and SQLite](docs/architecture/full-pipeline.png)
 
-This validated system view depicts the RAG path. Its historical title is
-**SEC Research Workspace**; `KEY5-only` names the retained primary-only credential
-policy, not a fifth current key. Durable Agent ownership is described below and
-in the [full architecture](ARCHITECTURE.md).
+The top rail prepares the corpus, the middle rail serves **Quick research**, and
+the lower branch executes **private Deep research**. This service overview combines configuration modes. The public
+ngrok route serves RAG; private Agent execution requires the separate local
+connection shown in the deployment view below.
 
 **Quick:** React → FastAPI/HTTP/SSE → BM25 + vector retrieval → RRF →
 cross-encoder → bounded evidence → grounded answer and citations.
@@ -112,11 +112,47 @@ The tools are `search_documents`, `inspect_retrieval`, `read_document` and
 policies gate invocation; decision-provider permission and RAG-provider permission
 are separate. Retrieved text remains untrusted data.
 
-[System Architecture](docs/architecture/sec-research-workspace.html) ·
-[RAG Pipeline / Query Data Flow](docs/architecture/sec-research-query.html) ·
-[Research Workflow](docs/architecture/sec-research-workflow.html)
+[Interactive full pipeline](docs/architecture/full-pipeline.html) ·
+[Technology, commands and source map](docs/architecture/FULL_PIPELINE.md) ·
+[Full architecture and contracts](ARCHITECTURE.md)
 
 Download/open interactive HTML locally; GitHub's file view does not execute it.
+
+### From SEC filings to a verified index
+
+![SEC corpus pipeline: download HTML, parse sections and tables, create text and financial chunks, embed with Nomic, seal a generation and index in Qdrant](docs/architecture/corpus-pipeline.png)
+
+Python `requests` acquires filings; **BeautifulSoup/lxml** extracts sections and
+tables. **tiktoken** bounds narrative chunks, while financial chunks preserve row
+labels, units and periods. **SentenceTransformers + Nomic** embeds both. A fresh,
+hash-verified generation is sealed before Qdrant index publication.
+
+[Interactive corpus pipeline](docs/architecture/corpus-pipeline.html) ·
+[Preparation commands](docs/SETUP.md#2-prepare-searchable-artifacts)
+
+### Deployment and private access
+
+![Deployment: Vercel frontend calls ngrok and Docker FastAPI for public RAG; direct local access guards private Python Agent execution and SQLite persistence](docs/architecture/deployment.png)
+
+| Layer | Technology | How it runs |
+|---|---|---|
+| Browser workspace | React 19, TypeScript, Tailwind, PDF.js | Vite builds static assets; Vercel hosts the frontend |
+| Public API | Python 3.12, FastAPI, Uvicorn, SSE | Docker Compose on the owner's machine; ngrok exposes HTTPS |
+| Embedding / reranking | Nomic / MS MARCO cross-encoder, SentenceTransformers | Pinned models; CPU-only PyTorch in Docker |
+| Search storage | Qdrant vectors + chunk payloads; in-memory BM25 | Compose mounts `data/processed`; Qdrant Cloud is a supported alternative |
+| Generation | Groq | Server-side provider calls; credentials stay on the backend |
+| Private Deep research | Two process-local Python consumers, SQLite WAL | Explicit local runtime and access policy; durable runs/events/results |
+| Automated checks | GitHub Actions, pytest, Bun, Vitest, Playwright | Check workflows; frontend and backend deploy independently |
+
+The owner-operated API and tunnel must be online for public questions. Local Deep
+requires peer/Host/Origin checks, a memory-only bearer and per-run provider consent.
+The public Compose configuration does not provision private workspace persistence.
+Use one API worker with Qdrant local mode; separate processes must not share its
+locked storage directory.
+
+[Interactive deployment view](docs/architecture/deployment.html) ·
+[Deployment instructions](docs/SETUP.md#5-docker-cloud-and-public-frontend) ·
+[Detailed pipeline guide](docs/architecture/FULL_PIPELINE.md)
 
 ### Engineering highlights
 

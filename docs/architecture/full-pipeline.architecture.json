@@ -1,0 +1,370 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "FilingScope: Data, Research and Deployment",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1380,
+      720
+    ],
+    "repository": {
+      "url": "https://github.com/NamTV2712/Enterprise-Document-QA-",
+      "revision": "d8afc4b78bb2dd24c2c815067044a33b58c2dc14"
+    }
+  },
+  "components": [
+    {
+      "id": "sec-origin",
+      "type": "external",
+      "label": "SEC EDGAR",
+      "sublabel": "10-K filing sources",
+      "pos": [
+        40,
+        90
+      ],
+      "size": [
+        174,
+        76
+      ]
+    },
+    {
+      "id": "prepare-corpus",
+      "type": "backend",
+      "label": "Prepare filings",
+      "sublabel": "Python / bs4 / lxml",
+      "pos": [
+        270,
+        90
+      ],
+      "size": [
+        174,
+        76
+      ],
+      "sources": [
+        {
+          "path": "scripts/download_filings.py",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "id": "embed-corpus",
+      "type": "backend",
+      "label": "Embed + index",
+      "sublabel": "Nomic embeddings",
+      "pos": [
+        500,
+        90
+      ],
+      "size": [
+        174,
+        76
+      ],
+      "sources": [
+        {
+          "path": "src/retrieval/embedder.py",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "id": "vector-store",
+      "type": "database",
+      "label": "Qdrant",
+      "sublabel": "vectors + payloads",
+      "pos": [
+        960,
+        90
+      ],
+      "size": [
+        174,
+        76
+      ],
+      "sources": [
+        {
+          "path": "src/retrieval/vector_store.py",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "id": "researcher",
+      "type": "external",
+      "label": "Researcher",
+      "sublabel": "browser / source reader",
+      "pos": [
+        40,
+        305
+      ],
+      "size": [
+        174,
+        76
+      ]
+    },
+    {
+      "id": "hosted-ui",
+      "type": "frontend",
+      "label": "Research workspace",
+      "sublabel": "React / TS / Vercel",
+      "pos": [
+        270,
+        305
+      ],
+      "size": [
+        174,
+        76
+      ],
+      "sources": [
+        {
+          "path": "frontend/package.json",
+          "line": 1
+        }
+      ],
+      "brand": "vercel"
+    },
+    {
+      "id": "public-tunnel",
+      "type": "cloud",
+      "label": "Public demo tunnel",
+      "sublabel": "ngrok HTTPS tunnel",
+      "pos": [
+        500,
+        305
+      ],
+      "size": [
+        174,
+        76
+      ],
+      "sources": [
+        {
+          "path": "scripts/start_demo.ps1",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "id": "api-process",
+      "type": "backend",
+      "label": "FastAPI service",
+      "sublabel": "FastAPI / Uvicorn",
+      "pos": [
+        730,
+        305
+      ],
+      "size": [
+        174,
+        76
+      ],
+      "sources": [
+        {
+          "path": "Dockerfile",
+          "line": 1
+        }
+      ],
+      "brand": "fastapi",
+      "tag": "Docker / CPU PyTorch"
+    },
+    {
+      "id": "rag-services",
+      "type": "backend",
+      "label": "Hybrid RAG",
+      "sublabel": "BM25 / RRF / rerank",
+      "pos": [
+        960,
+        305
+      ],
+      "size": [
+        174,
+        76
+      ],
+      "sources": [
+        {
+          "path": "src/retrieval/hybrid_retriever.py",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "id": "provider-api",
+      "type": "cloud",
+      "label": "Groq",
+      "sublabel": "RAG + decision LLM",
+      "pos": [
+        1190,
+        305
+      ],
+      "size": [
+        174,
+        76
+      ],
+      "sources": [
+        {
+          "path": "src/generation/generator.py",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "id": "durable-agent",
+      "type": "backend",
+      "label": "Bounded Agent",
+      "sublabel": "2 Python consumers",
+      "pos": [
+        730,
+        545
+      ],
+      "size": [
+        174,
+        76
+      ],
+      "sources": [
+        {
+          "path": "src/agent/durable.py",
+          "line": 1
+        },
+        {
+          "path": "src/workspace/worker.py",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "id": "workspace-db",
+      "type": "database",
+      "label": "SQLite workspace",
+      "sublabel": "durable runs + events",
+      "pos": [
+        500,
+        545
+      ],
+      "size": [
+        174,
+        76
+      ],
+      "sources": [
+        {
+          "path": "src/workspace/repository.py",
+          "line": 1
+        }
+      ],
+      "brand": "sqlite"
+    }
+  ],
+  "connections": [
+    {
+      "id": "filings-acquired",
+      "from": "sec-origin",
+      "to": "prepare-corpus",
+      "label": "filings"
+    },
+    {
+      "id": "chunks-embedded",
+      "from": "prepare-corpus",
+      "to": "embed-corpus",
+      "label": "chunks"
+    },
+    {
+      "id": "index-upsert",
+      "from": "embed-corpus",
+      "to": "vector-store",
+      "label": "upsert vectors + payloads"
+    },
+    {
+      "id": "ui-load",
+      "from": "researcher",
+      "to": "hosted-ui",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "public-api-request",
+      "from": "hosted-ui",
+      "to": "public-tunnel",
+      "label": "HTTP/SSE",
+      "variant": "emphasis"
+    },
+    {
+      "id": "tunnel-forward",
+      "from": "public-tunnel",
+      "to": "api-process",
+      "label": "forward",
+      "variant": "emphasis"
+    },
+    {
+      "id": "quick-research",
+      "from": "api-process",
+      "to": "rag-services",
+      "label": "Quick",
+      "variant": "emphasis"
+    },
+    {
+      "id": "search-storage",
+      "from": "rag-services",
+      "to": "vector-store",
+      "label": "search / hydrate"
+    },
+    {
+      "id": "grounded-generation",
+      "from": "rag-services",
+      "to": "provider-api",
+      "label": "evidence",
+      "variant": "emphasis"
+    },
+    {
+      "id": "local-deep-admission",
+      "from": "api-process",
+      "to": "durable-agent",
+      "label": "local Deep",
+      "labelAt": [
+        817,
+        415
+      ]
+    },
+    {
+      "id": "durable-records",
+      "from": "durable-agent",
+      "to": "workspace-db",
+      "label": "SQL"
+    },
+    {
+      "id": "closed-tool-invocation",
+      "from": "durable-agent",
+      "to": "rag-services",
+      "label": "typed tools"
+    },
+    {
+      "id": "agent-decisions",
+      "from": "durable-agent",
+      "to": "provider-api",
+      "label": "decision consent"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Offline corpus pipeline",
+      "items": [
+        "Prepare filings, narrative/table chunks and embeddings.",
+        "Index vectors and identity-bearing payloads in Qdrant."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Quick and private Deep",
+      "items": [
+        "Quick streams cited answers and inspectable sources.",
+        "Private Deep uses SQLite authority and four typed tools."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Independent deployment",
+      "items": [
+        "Vercel hosts the frontend; Docker runs the local API.",
+        "ngrok forwards public RAG; private Deep uses local access."
+      ]
+    }
+  ]
+}

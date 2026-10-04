@@ -1,5 +1,16 @@
 # Project State
 
+## Full pipeline and deployment diagrams (2026-10-04)
+
+README now presents the complete service overview, SEC corpus preparation and
+deployment/access diagrams alongside the focused Hybrid Search view. Technology
+and source mappings distinguish Vercel static hosting, owner-operated Docker/ngrok
+public RAG, explicitly configured local Deep execution and optional Qdrant Cloud.
+The public Compose configuration is not represented as a private SQLite deployment.
+[The pipeline guide](docs/architecture/FULL_PIPELINE.md) records artifact bindings
+and browser review. Documentation-only; no product, provider, corpus, CI or deploy
+configuration changes. Existing roadmap and milestones remain complete.
+
 ## Hybrid Search explainer diagram (2026-10-04)
 
 README now includes a dedicated Hybrid Search image and interactive HTML alongside

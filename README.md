@@ -1,14 +1,26 @@
 # Evidence-Grounded SEC Filing Research with Hybrid RAG & Durable AI Agents - FilingScope
 
-**BM25 · Semantic Vector Search · Qdrant · RRF · Cross-Encoder Reranking**<br>
-**Python · FastAPI · SSE · React 19 · TypeScript · Groq · SQLite**
+![BM25](https://img.shields.io/badge/Retrieval-BM25-2563eb)
+![Semantic Vector Search](https://img.shields.io/badge/Search-Semantic_Vector-2563eb)
+![Qdrant](https://img.shields.io/badge/Vector_DB-Qdrant-dc244c)
+![RRF](https://img.shields.io/badge/Fusion-RRF-7c3aed)
+![Cross-Encoder Reranking](https://img.shields.io/badge/Reranking-Cross--Encoder-7c3aed)
+<br>
+![Python](https://img.shields.io/badge/Python-3776ab?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![SSE](https://img.shields.io/badge/Streaming-SSE-0891b2)
+![React 19](https://img.shields.io/badge/React-19-149eca?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178c6?logo=typescript&logoColor=white)
+![Groq](https://img.shields.io/badge/LLM-Groq-f55036)
+![SQLite](https://img.shields.io/badge/SQLite-003b57?logo=sqlite&logoColor=white)
 
 [![Backend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/backend.yml/badge.svg)](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/backend.yml)
 [![Frontend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/frontend.yml/badge.svg)](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/frontend.yml)
+[![Skill: Archify](https://img.shields.io/badge/Skill-Archify-8b5cf6)](.agents/skills/archify/SKILL.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 [Live Demo](https://frontend-one-gamma-f9jf11u8ec.vercel.app) ·
-[Watch Demo](https://github.com/NamTV2712/Enterprise-Document-QA-/releases/tag/demo-v1) · [Architecture](#architecture) ·
+[Watch Demo](https://github.com/NamTV2712/Enterprise-Document-QA-/releases/tag/demo-v1) · [Pipeline](#architecture) · [Architecture](ARCHITECTURE.md) ·
 [Case Study](docs/PORTFOLIO_CASE_STUDY.md) · [Setup](#local-setup)
 
 Research SEC **10-K filings** while keeping the evidence behind each answer
@@ -81,8 +93,10 @@ The tools are `search_documents`, `inspect_retrieval`, `read_document` and
 policies gate invocation; decision-provider permission and RAG-provider permission
 are separate. Retrieved text remains untrusted data.
 
+Diagrams generated with the repository's [Archify skill](.agents/skills/archify/SKILL.md):
+
 [System Architecture](docs/architecture/sec-research-workspace.html) ·
-[Query Data Flow](docs/architecture/sec-research-query.html) ·
+[RAG Pipeline / Query Data Flow](docs/architecture/sec-research-query.html) ·
 [Research Workflow](docs/architecture/sec-research-workflow.html)
 
 Download/open interactive HTML locally; GitHub's file view does not execute it.

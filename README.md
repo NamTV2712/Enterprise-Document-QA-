@@ -14,7 +14,6 @@
 ![Cross-Encoder Reranking](https://img.shields.io/badge/Reranking-Cross--Encoder-7c3aed)
 ![Groq](https://img.shields.io/badge/LLM-Groq-f55036)
 
-[![Skill: Archify](https://img.shields.io/badge/Skill-Archify-8b5cf6)](.agents/skills/archify/SKILL.md)
 [![Backend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/backend.yml/badge.svg)](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/backend.yml)
 [![Frontend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/frontend.yml/badge.svg)](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/frontend.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -92,8 +91,6 @@ The tools are `search_documents`, `inspect_retrieval`, `read_document` and
 `ask_rag`. They reuse existing services in-process. Strict inputs and capability
 policies gate invocation; decision-provider permission and RAG-provider permission
 are separate. Retrieved text remains untrusted data.
-
-Diagrams generated with the repository's [Archify skill](.agents/skills/archify/SKILL.md):
 
 [System Architecture](docs/architecture/sec-research-workspace.html) ·
 [RAG Pipeline / Query Data Flow](docs/architecture/sec-research-query.html) ·

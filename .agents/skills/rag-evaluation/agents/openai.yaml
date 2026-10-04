@@ -1,0 +1,4 @@
+interface:
+  display_name: "SEC RAG Evaluation"
+  short_description: "Evaluate SEC RAG quality with reproducible evidence"
+  default_prompt: "Use $rag-evaluation to design or interpret a reproducible SEC RAG evaluation."

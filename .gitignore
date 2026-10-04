@@ -27,8 +27,7 @@ frontend/test-results/
 frontend/playwright-report/
 frontend/e2e/screenshots/
 
-# Local agent tooling, journals, completed plans and publication drafts
-/.agents/
+# Local journals, completed plans and publication drafts
 /TODO.md
 /PROJECT_STATE.md
 /AGENTS.md

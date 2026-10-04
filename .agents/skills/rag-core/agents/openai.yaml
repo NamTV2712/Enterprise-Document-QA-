@@ -1,0 +1,4 @@
+interface:
+  display_name: "SEC RAG Core"
+  short_description: "Trace SEC RAG architecture and cross-layer contracts"
+  default_prompt: "Use $rag-core to review this SEC RAG architecture or contract change."

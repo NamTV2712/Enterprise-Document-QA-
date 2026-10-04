@@ -19,7 +19,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 [Live Demo](https://frontend-one-gamma-f9jf11u8ec.vercel.app) ·
-[Watch Demo](https://github.com/NamTV2712/Enterprise-Document-QA-/releases/tag/demo-v1) · [Pipeline](#architecture) · [Architecture](ARCHITECTURE.md) ·
+[Watch Demo](https://github.com/NamTV2712/Enterprise-Document-QA-/releases/tag/demo-v1) · [Pipeline](#how-hybrid-search-works) · [Architecture](ARCHITECTURE.md) ·
 [Case Study](docs/PORTFOLIO_CASE_STUDY.md) · [Setup](#local-setup)
 
 Research SEC **10-K filings** while keeping the evidence behind each answer
@@ -69,6 +69,26 @@ record for a research goal.
 The generic composer submits goal and locale, without inheriting Quick
 history/filters or inventing a hidden multi-objective plan. Reload clears the
 memory-only local connection; reconnect to inspect the same durable run.
+
+## How Hybrid Search Works
+
+![Hybrid Search: scoped query branches into BM25, Qdrant vector search and optional lexical ladder, then RRF fusion, cross-encoder reranking, bounded evidence and a cited answer](docs/architecture/hybrid-search.png)
+
+- **Retrieve complementary evidence:** BM25 matches words, vector search matches
+  meaning, and the optional lexical ladder adds phrase/term/fuzzy candidates.
+- **Fuse, then rerank:** RRF merges ranks by chunk identity using
+  `sum(1 / (60 + rank))`, with ranks starting at 1. The cross-encoder scores
+  query/passage pairs; relevance filtering and top-k selection narrow the evidence.
+- **Ground the answer:** bounded source excerpts feed generation, and citations
+  connect the answer to inspectable evidence.
+
+This focused view follows a cache miss. Branches show independent ranked lists;
+the retriever executes its stages sequentially. Eligible financial-table queries
+can additionally promote a structured match before top-k selection.
+
+[Open the interactive pipeline](docs/architecture/hybrid-search.html)
+(download and open locally) · [Implementation](src/retrieval/hybrid_retriever.py) ·
+[Diagram source and verification](docs/architecture/HYBRID_SEARCH.md)
 
 <a id="architecture-at-a-glance"></a>
 

@@ -1,0 +1,213 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "How Hybrid Search Finds Evidence",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1080,
+      500
+    ],
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "default": {
+          "label": "retrieval flow"
+        },
+        "emphasis": {
+          "label": "main path"
+        },
+        "database": {
+          "label": "vector index"
+        }
+      }
+    }
+  },
+  "stages": [
+    {
+      "label": "Scope"
+    },
+    {
+      "label": "Retrieve"
+    },
+    {
+      "label": "Fuse"
+    },
+    {
+      "label": "Rerank"
+    },
+    {
+      "label": "Ground"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "scoped-question",
+      "type": "frontend",
+      "label": "Research query",
+      "sublabel": "ticker + section filters",
+      "stage": 0,
+      "row": 1
+    },
+    {
+      "id": "keyword-ranking",
+      "type": "backend",
+      "label": "BM25",
+      "sublabel": "keyword relevance",
+      "stage": 1,
+      "row": 0
+    },
+    {
+      "id": "semantic-ranking",
+      "type": "database",
+      "label": "Vector search",
+      "sublabel": "embedding / Qdrant",
+      "stage": 1,
+      "row": 1
+    },
+    {
+      "id": "lexical-ranking",
+      "type": "backend",
+      "label": "Lexical ladder",
+      "sublabel": "phrase / term / fuzzy",
+      "stage": 1,
+      "row": 2,
+      "tag": "optional"
+    },
+    {
+      "id": "rank-fusion",
+      "type": "backend",
+      "label": "RRF fusion",
+      "sublabel": "merge by chunk identity",
+      "stage": 2,
+      "row": 1,
+      "tag": "k = 60"
+    },
+    {
+      "id": "pair-reranker",
+      "type": "backend",
+      "label": "Cross-encoder",
+      "sublabel": "query + passage pairs",
+      "stage": 3,
+      "row": 1
+    },
+    {
+      "id": "bounded-evidence",
+      "type": "backend",
+      "label": "Evidence context",
+      "sublabel": "bounded source excerpts",
+      "stage": 4,
+      "row": 1
+    },
+    {
+      "id": "cited-response",
+      "type": "cloud",
+      "label": "Grounded answer",
+      "sublabel": "Groq + source citations",
+      "stage": 4,
+      "row": 2
+    }
+  ],
+  "flows": [
+    {
+      "id": "query-keywords",
+      "from": "scoped-question",
+      "to": "keyword-ranking",
+      "label": "tokens"
+    },
+    {
+      "id": "query-vector",
+      "from": "scoped-question",
+      "to": "semantic-ranking",
+      "label": "vector",
+      "variant": "emphasis",
+      "labelAt": [
+        235,
+        226
+      ]
+    },
+    {
+      "id": "query-lexical",
+      "from": "scoped-question",
+      "to": "lexical-ranking",
+      "label": "hints",
+      "variant": "default"
+    },
+    {
+      "id": "keywords-fusion",
+      "from": "keyword-ranking",
+      "to": "rank-fusion",
+      "label": "ranks"
+    },
+    {
+      "id": "vectors-fusion",
+      "from": "semantic-ranking",
+      "to": "rank-fusion",
+      "label": "ranks",
+      "variant": "emphasis",
+      "labelAt": [
+        450,
+        226
+      ]
+    },
+    {
+      "id": "lexical-fusion",
+      "from": "lexical-ranking",
+      "to": "rank-fusion",
+      "label": "ranks",
+      "variant": "default"
+    },
+    {
+      "id": "fusion-reranker",
+      "from": "rank-fusion",
+      "to": "pair-reranker",
+      "label": "candidates",
+      "variant": "emphasis"
+    },
+    {
+      "id": "reranker-evidence",
+      "from": "pair-reranker",
+      "to": "bounded-evidence",
+      "label": "top-k",
+      "variant": "emphasis"
+    },
+    {
+      "id": "evidence-answer",
+      "from": "bounded-evidence",
+      "to": "cited-response",
+      "label": "prompt",
+      "variant": "emphasis",
+      "labelAt": [
+        960,
+        314
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Complementary retrieval",
+      "items": [
+        "BM25 matches words; vectors match meaning.",
+        "Optional lexical hints contribute a third list."
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Ranks, not raw scores",
+      "items": [
+        "RRF sums 1 / (60 + rank), using ranks from 1.",
+        "The cross-encoder then scores query/passage pairs."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Evidence stays inspectable",
+      "items": [
+        "Select top-k after relevance filtering.",
+        "Generate from bounded excerpts with citations."
+      ]
+    }
+  ]
+}

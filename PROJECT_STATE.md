@@ -1,5 +1,17 @@
 # Project State
 
+## Hybrid Search explainer diagram (2026-10-04)
+
+README now includes a dedicated Hybrid Search image and interactive HTML alongside
+the existing system architecture. The focused cache-miss view traces scoped BM25,
+Qdrant vectors and optional lexical candidates through rank-based RRF (k=60),
+cross-encoder reranking, evidence context and cited generation. Branches represent
+independent rank sources; retrieval stages execute sequentially. Structured-match
+promotion is disclosed separately. Source, artifact bindings, deterministic
+validation and bounded browser review are recorded in
+[the diagram note](docs/architecture/HYBRID_SEARCH.md). This is documentation-only;
+the required roadmap and completed optional milestones remain closed.
+
 ## PORTFOLIO-SHIP-001 — public showcase and silent demo (2026-10-03)
 
 Main-only starting `ce27af05a0ac4859c9cb27e37d3b6ef29d77fc91`. The

@@ -6,6 +6,7 @@
 ![React 19](https://img.shields.io/badge/React-19-149eca?logo=react&logoColor=white)
 ![SSE](https://img.shields.io/badge/Streaming-SSE-0891b2)
 ![SQLite](https://img.shields.io/badge/SQLite-003b57?logo=sqlite&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
 <br>
 ![BM25](https://img.shields.io/badge/Retrieval-BM25-2563eb)
 ![Semantic Vector Search](https://img.shields.io/badge/Search-Semantic_Vector-2563eb)
@@ -13,7 +14,7 @@
 ![RRF](https://img.shields.io/badge/Fusion-RRF-7c3aed)
 ![Cross-Encoder Reranking](https://img.shields.io/badge/Reranking-Cross--Encoder-7c3aed)
 ![Groq](https://img.shields.io/badge/LLM-Groq-f55036)
-
+<br>
 [![Backend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/backend.yml/badge.svg)](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/backend.yml)
 [![Frontend CI](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/frontend.yml/badge.svg)](https://github.com/NamTV2712/Enterprise-Document-QA-/actions/workflows/frontend.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)

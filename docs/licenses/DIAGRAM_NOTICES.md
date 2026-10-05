@@ -2,8 +2,10 @@
 
 Published standalone diagram HTML includes viewer code from Archify 2.17,
 based on Cocoon AI architecture-diagram-generator. These notices accompany
-the generated diagram artifacts; the local authoring toolkit is not distributed
-in this repository.
+the generated diagram artifacts. The repository also retains its local skill
+bundle under `.agents/skills/`, including that toolkit's own notices. The static
+`system-map.svg` poster uses original diagram shapes and text labels; its PNG is
+a raster export of the same SVG.
 
 ## Viewer code license
 

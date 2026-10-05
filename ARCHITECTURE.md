@@ -4,6 +4,10 @@ This document describes the stable system design of Enterprise Document QA. Use
 the [README](README.md) for public status, [Setup](docs/SETUP.md) for operations,
 and the [frozen release receipt](docs/IMPROVEMENT_FINAL_RECEIPT.md) for validation provenance.
 
+[Architecture poster](docs/architecture/system-map.png) ·
+[Editable SVG](docs/architecture/system-map.svg) ·
+[Diagram reading guide](docs/architecture/SYSTEM_MAP.md)
+
 ## System Context
 
 ### Unified Research conversation (UX-AGENT-001)

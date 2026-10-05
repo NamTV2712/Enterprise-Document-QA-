@@ -95,6 +95,24 @@ can additionally promote a structured match before top-k selection.
 
 ## Architecture
 
+[![FilingScope architecture poster: offline SEC ingestion, Quick Hybrid RAG with cache and reranking, private durable Agent execution, technology stack and deployment](docs/architecture/system-map.png)](docs/architecture/system-map.png)
+
+Read the numbered bands from **offline corpus preparation** through **Quick
+Research**, **private Deep Research** and **deployment**. Each stage names its
+technology, data and responsibility. Open the image for the full-resolution
+poster or use the editable SVG below.
+
+The public ngrok route serves RAG. Private Agent execution requires a separate
+local connection, access checks and provider consent; the public Compose setup
+does not provision the private SQLite workspace.
+
+[Full-resolution PNG](docs/architecture/system-map.png) ·
+[Editable SVG](docs/architecture/system-map.svg) ·
+[Interactive overview](docs/architecture/system-map.html) ·
+[Poster reading guide and source map](docs/architecture/SYSTEM_MAP.md)
+
+### Service overview
+
 ![Full FilingScope pipeline: SEC preparation and index, browser and API, Hybrid RAG, Groq, bounded Agent and SQLite](docs/architecture/full-pipeline.png)
 
 The top rail prepares the corpus, the middle rail serves **Quick research**, and

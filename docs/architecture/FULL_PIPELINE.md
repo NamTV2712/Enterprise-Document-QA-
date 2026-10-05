@@ -5,6 +5,7 @@ describes repository configuration, not a fresh audit of live service availabili
 
 | View | Image | Interactive HTML | Editable specification |
 |---|---|---|---|
+| Detailed architecture poster | [PNG](system-map.png) | [Component overview](system-map.html) | [SVG](system-map.svg) / [JSON overview](system-map.architecture.json) |
 | Full service pipeline | [PNG](full-pipeline.png) | [HTML](full-pipeline.html) | [JSON](full-pipeline.architecture.json) |
 | SEC corpus preparation | [PNG](corpus-pipeline.png) | [HTML](corpus-pipeline.html) | [JSON](corpus-pipeline.dataflow.json) |
 | Deployment and access | [PNG](deployment.png) | [HTML](deployment.html) | [JSON](deployment.architecture.json) |
@@ -13,6 +14,9 @@ describes repository configuration, not a fresh audit of live service availabili
 Download the standalone HTML and open it locally. It supports node inspection,
 source links where authored, relationship tracing, zoom, themes and clean exports.
 GitHub displays the PNGs but does not execute HTML from its file viewer.
+
+The [poster reading guide](SYSTEM_MAP.md) explains the detailed numbered bands,
+cache bypass, private Agent boundary and diagram verification.
 
 ## 1. Offline corpus preparation
 
